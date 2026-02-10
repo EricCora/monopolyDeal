@@ -39,6 +39,12 @@ export function CardView({
   }
 
   const model = getCardVisualModel(cardId);
+  const metaParts: string[] = [];
+  if (model.setSize) metaParts.push(`Set ${model.setSize}`);
+  if (model.rentScale && model.rentScale.length > 0) {
+    metaParts.push(`Rent $${model.rentScale.join('/$')}`);
+  }
+  const metaText = metaParts.join(' • ');
   const style: CSSProperties = {
     ['--card-accent' as string]: model.accent,
     ['--card-accent-split' as string]: model.splitAccent ?? model.accent,
@@ -55,12 +61,9 @@ export function CardView({
     >
       <span className="card-face">
         <span className="card-value">{model.valueBadge}</span>
-        <span className="card-title">{model.title}</span>
-        <span className="card-subtitle">{model.subtitle}</span>
-        {model.setSize ? <span className="card-meta">Set {model.setSize}</span> : null}
-        {model.rentScale && model.rentScale.length > 0 ? (
-          <span className="card-meta">Rent ${model.rentScale.join('/$')}</span>
-        ) : null}
+        <span className="card-title" title={model.title}>{model.title}</span>
+        <span className="card-subtitle" title={model.subtitle}>{model.subtitle}</span>
+        {metaText ? <span className="card-meta" title={metaText}>{metaText}</span> : null}
         {annotation ? <span className="card-annotation">{annotation}</span> : null}
       </span>
     </button>

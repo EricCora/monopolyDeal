@@ -25,6 +25,7 @@ import { applyMatchToLifetime, buildMatchRecord, type LifetimeStatsV1, type Matc
 import { CardView } from './ui/components/CardView';
 import { HandFan } from './ui/components/HandFan';
 import { PlayChooser, type ActionVariantView } from './ui/components/PlayChooser';
+import { RecentEvents } from './ui/components/RecentEvents';
 import './App.css';
 
 type Screen = 'home' | 'setup' | 'game' | 'stats';
@@ -616,19 +617,7 @@ function App() {
 
         <div className="players-grid">{renderPlayerBoard(game)}</div>
 
-        <section>
-          <h3>Recent Events</h3>
-          <ul className="log-list">
-            {game.history
-              .slice(-12)
-              .reverse()
-              .map((event, index) => (
-                <li key={`${event.timestamp}-${index}`}>
-                  <strong>{event.type}</strong> {event.message}
-                </li>
-              ))}
-          </ul>
-        </section>
+        <RecentEvents events={game.history} />
 
         {chooser && (
           <PlayChooser
