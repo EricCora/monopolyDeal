@@ -344,4 +344,40 @@ describe('engine basics', () => {
     expect(legal.length).toBeGreaterThan(0);
     expect(legal.every((item) => !item.label.includes('#'))).toBe(true);
   });
+
+  it('does not allow double rent without a playable rent follow-up', () => {
+    const state = mkState();
+    state.players[0].hand = ['double_rent#d1', 'money_1#m1'];
+    state.players[0].properties.brown = [{ cardId: 'brown_1#p1b1', assignedColor: 'brown' }];
+
+    const legal = getLegalActions(state, 'p1');
+    expect(legal.some((item) => item.action.type === 'play_action' && item.action.cardId === 'double_rent#d1')).toBe(false);
+
+    const result = applyAction(state, {
+      type: 'play_action',
+      playerId: 'p1',
+      cardId: 'double_rent#d1',
+    });
+    expect(result.error?.code).toBe('invalid_action');
+    expect(result.state.players[0].hand).toContain('double_rent#d1');
+  });
+
+  it('does not allow double rent when only one play remains', () => {
+    const state = mkState();
+    state.turn.playsUsed = 2;
+    state.players[0].hand = ['double_rent#d1', 'rent_color#r1'];
+    state.players[0].properties.brown = [{ cardId: 'brown_1#p1b1', assignedColor: 'brown' }];
+
+    const legal = getLegalActions(state, 'p1');
+    expect(legal.some((item) => item.action.type === 'play_action' && item.action.cardId === 'double_rent#d1')).toBe(false);
+  });
+
+  it('allows double rent only when a rent card can still be played this turn', () => {
+    const state = mkState();
+    state.players[0].hand = ['double_rent#d1', 'rent_color#r1'];
+    state.players[0].properties.brown = [{ cardId: 'brown_1#p1b1', assignedColor: 'brown' }];
+
+    const legal = getLegalActions(state, 'p1');
+    expect(legal.some((item) => item.action.type === 'play_action' && item.action.cardId === 'double_rent#d1')).toBe(true);
+  });
 });

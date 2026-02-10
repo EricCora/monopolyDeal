@@ -242,6 +242,26 @@ function canCardBePlacedInColor(card: CardDefinition, color: PropertyColor): boo
   return false;
 }
 
+function hasPlayableRentCard(player: PlayerState, excludedCardId?: string): boolean {
+  for (const handCardId of player.hand) {
+    if (handCardId === excludedCardId) continue;
+    const handCard = getCardDefinition(handCardId);
+    if (handCard.kind !== 'action') continue;
+    if (handCard.actionKind !== 'rent' && handCard.actionKind !== 'rent_wild') continue;
+    const allowedColors = Object.keys(handCard.rentMatrix ?? {}) as PropertyColor[];
+    if (allowedColors.some((color) => player.properties[color].length > 0)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function canPlayDoubleRent(state: GameState, player: PlayerState, excludedCardId: string): boolean {
+  const hasPlayBudgetForCombo = state.turn.playsUsed <= MAX_PLAYS_PER_TURN - 2;
+  if (!hasPlayBudgetForCombo) return false;
+  return hasPlayableRentCard(player, excludedCardId);
+}
+
 function discard(state: GameState, cardId: string): void {
   state.discardPile.push(cardId);
 }
@@ -522,11 +542,21 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
         const actionKind = card.actionKind as ActionKind;
         if (actionKind === 'just_say_no') continue;
 
-        if (actionKind === 'pass_go' || actionKind === 'double_rent' || actionKind === 'its_my_birthday') {
+        if (actionKind === 'pass_go' || actionKind === 'its_my_birthday') {
           actions.push({
             label: `Play ${card.name}`,
             action: { type: 'play_action', playerId: player.id, cardId },
           });
+          continue;
+        }
+
+        if (actionKind === 'double_rent') {
+          if (canPlayDoubleRent(state, player, cardId)) {
+            actions.push({
+              label: `Play ${card.name}`,
+              action: { type: 'play_action', playerId: player.id, cardId },
+            });
+          }
           continue;
         }
 
@@ -783,6 +813,12 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
 
       if (actionKind === 'deal_breaker' && validatedTarget && completeSetColors(validatedTarget).length === 0) {
         return setErr(error('invalid_action', 'Target has no complete property sets.'));
+      }
+
+      if (actionKind === 'double_rent') {
+        if (!canPlayDoubleRent(state, player, action.cardId)) {
+          return setErr(error('invalid_action', 'Double Rent requires a playable rent card this turn.'));
+        }
       }
 
       if (actionKind === 'rent' || actionKind === 'rent_wild') {

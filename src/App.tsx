@@ -571,8 +571,6 @@ function App() {
     if (!game || !prompt) return null;
     const over = isGameOver(game);
     const winner = game.players.find((player) => player.id === over.winnerId);
-    const topPanelActions = isMandatoryPrompt ? [] : contextualActions;
-
     return (
       <section className="panel game-panel">
         <div className="game-top">
@@ -601,28 +599,17 @@ function App() {
 
         <section className="action-panel">
           <h3>Turn Actions</h3>
-          <div className="actions action-list">
-            {topPanelActions.map((item, index) => (
-              <button key={`${item.label}-${index}`} onClick={() => runAction(item.action)} disabled={over.done}>
-                {item.label}
-              </button>
-            ))}
-            {topPanelActions.length === 0 && (
-              <p>{isMandatoryPrompt ? 'Resolve the required action in the active player panel.' : 'Play cards from your hand.'}</p>
-            )}
-          </div>
+          <p>{isMandatoryPrompt ? 'Resolve the required action in the active player panel.' : 'Use the active player panel below to play cards.'}</p>
           <div className="debug-actions">
             <button type="button" onClick={() => setShowDebugActions((prev) => !prev)}>
               {showDebugActions ? 'Hide' : 'Show'} All Legal Actions ({legalActions.length})
             </button>
             {showDebugActions && (
-              <div className="actions action-list">
+              <ul className="debug-action-list">
                 {legalActions.map((item, index) => (
-                  <button key={`debug-${item.label}-${index}`} onClick={() => runAction(item.action)} disabled={over.done}>
-                    {item.label}
-                  </button>
+                  <li key={`debug-${item.label}-${index}`}>{item.label}</li>
                 ))}
-              </div>
+              </ul>
             )}
           </div>
         </section>
