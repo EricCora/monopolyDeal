@@ -192,6 +192,14 @@ button:disabled {
   text-align: left;
 }
 
+.actions button,
+.play-option,
+.play-cancel {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+
 .action-detail {
   display: block;
   margin-top: 0.16rem;
@@ -217,6 +225,17 @@ button:disabled {
 
 .debug-actions {
   margin-top: 0.55rem;
+}
+
+.debug-action-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.debug-action-list li {
+  margin: 0.2rem 0;
 }
 
 .error {
@@ -342,6 +361,10 @@ footer {
   font-size: 0.72rem;
   line-height: 1.2;
   color: #1f2b34;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .card-subtitle {
@@ -350,12 +373,19 @@ footer {
   line-height: 1.2;
   color: #5c6973;
   text-transform: capitalize;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .card-meta {
   font-size: 0.56rem;
   line-height: 1.2;
   color: #314452;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-annotation {
