@@ -47,6 +47,7 @@ export interface PaymentRequest {
   amount: number;
   reason: string;
   actionCardId: string;
+  remainingTargetPlayerIds?: PlayerId[];
 }
 
 export interface CounterRequest {
@@ -145,6 +146,10 @@ export type Action =
 export interface LegalAction {
   label: string;
   action: Action;
+  targetPlayerId?: PlayerId;
+  requestedAmount?: number;
+  collectibleCap?: number;
+  requiresPropertyTransfer?: boolean;
 }
 
 export interface ApplyResult {

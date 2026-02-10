@@ -9,6 +9,22 @@
   --button-ink: #f7fff9;
   --button-alt: #e4d6bc;
   --error: #8d1b1b;
+  --table: #2d7a5e;
+
+  --card-color-brown: #8b5a2b;
+  --card-color-light-blue: #8fd2ff;
+  --card-color-pink: #f8a1d1;
+  --card-color-orange: #f6a247;
+  --card-color-red: #dc4a4a;
+  --card-color-yellow: #f3cf53;
+  --card-color-green: #4ab36e;
+  --card-color-dark-blue: #2953b7;
+  --card-color-railroad: #34363a;
+  --card-color-utility: #6e8ca1;
+  --card-money: #1d8c5f;
+  --card-action: #315d9b;
+  --card-rent-any: #2e8a7e;
+  --card-building: #804f99;
 }
 
 * {
@@ -34,6 +50,7 @@ main {
 
 .game-panel {
   position: relative;
+  background: linear-gradient(180deg, #f9f5eb, #f5efe1);
 }
 
 h1,
@@ -93,18 +110,18 @@ button:disabled {
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.55rem;
-  margin-top: 1rem;
+  gap: 0.45rem;
+  margin-top: 0.6rem;
 }
 
 .action-list {
-  max-height: 260px;
+  max-height: 220px;
   overflow: auto;
 }
 
 .players-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
   gap: 0.8rem;
   margin-top: 1rem;
 }
@@ -113,7 +130,7 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 0.8rem;
-  background: #fff;
+  background: #ffffff;
 }
 
 .player.active {
@@ -127,6 +144,10 @@ button:disabled {
   padding-left: 1rem;
 }
 
+.player section {
+  margin-top: 0.7rem;
+}
+
 .game-top {
   display: flex;
   justify-content: space-between;
@@ -135,11 +156,67 @@ button:disabled {
 }
 
 .action-panel {
-  margin: 1rem 0;
-  padding: 0.9rem;
+  margin: 0.7rem 0 0.8rem;
+  padding: 0.75rem;
   border: 1px dashed var(--line);
   border-radius: 12px;
   background: #fff;
+  position: sticky;
+  top: 0.4rem;
+  z-index: 12;
+}
+
+.action-panel h3 {
+  margin-bottom: 0.35rem;
+}
+
+.inline-action-panel {
+  margin-top: 0.65rem;
+  padding: 0.55rem;
+  border: 1px solid #d8ccb6;
+  border-radius: 10px;
+  background: #fffaf0;
+}
+
+.inline-must-act {
+  margin: 0.15rem 0;
+  color: #915d0e;
+  font-weight: 700;
+}
+
+.inline-prompt-text {
+  margin: 0.2rem 0 0.35rem;
+}
+
+.inline-actions button {
+  text-align: left;
+}
+
+.action-detail {
+  display: block;
+  margin-top: 0.16rem;
+  font-size: 0.74rem;
+  opacity: 0.9;
+}
+
+.payment-panel {
+  margin-bottom: 0.55rem;
+  border: 1px solid #d9cfbf;
+  border-radius: 10px;
+  background: #f8f3e8;
+  padding: 0.55rem 0.65rem;
+}
+
+.payment-panel p {
+  margin: 0.2rem 0;
+}
+
+.payment-selected {
+  font-size: 0.86rem;
+}
+
+.debug-actions {
+  margin-top: 0.55rem;
 }
 
 .error {
@@ -185,6 +262,252 @@ footer {
   margin-top: 1rem;
 }
 
+.card-view {
+  border-radius: 12px;
+  border: 1px solid #d8ccb6;
+  background: #fff;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+  padding: 0;
+  text-align: left;
+  color: #1f2b34;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.card-size-sm {
+  width: 72px;
+  height: 104px;
+}
+
+.card-size-md {
+  width: 84px;
+  height: 120px;
+}
+
+.card-size-lg {
+  width: 108px;
+  height: 152px;
+}
+
+.card-face {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  height: 100%;
+  padding: 0.4rem;
+  background: linear-gradient(165deg, #fff, #f5f3ee);
+  border-top: 10px solid var(--card-accent);
+}
+
+.theme-wild .card-face {
+  border-top: 10px solid transparent;
+  background:
+    linear-gradient(90deg, var(--card-accent) 0 50%, var(--card-accent-split) 50% 100%) top / 100% 10px no-repeat,
+    linear-gradient(165deg, #fff, #f5f3ee);
+}
+
+.theme-rent-wild .card-face {
+  border-top: 10px solid transparent;
+  background:
+    linear-gradient(90deg, var(--card-accent) 0 50%, var(--card-accent-split) 50% 100%) top / 100% 10px no-repeat,
+    linear-gradient(165deg, #fff, #f5f3ee);
+}
+
+.theme-rent-any .card-face {
+  border-top: 10px solid transparent;
+  background:
+    linear-gradient(
+      90deg,
+      var(--card-color-brown) 0 10%,
+      var(--card-color-light-blue) 10% 20%,
+      var(--card-color-pink) 20% 30%,
+      var(--card-color-orange) 30% 40%,
+      var(--card-color-red) 40% 50%,
+      var(--card-color-yellow) 50% 60%,
+      var(--card-color-green) 60% 70%,
+      var(--card-color-dark-blue) 70% 80%,
+      var(--card-color-railroad) 80% 90%,
+      var(--card-color-utility) 90% 100%
+    ) top / 100% 10px no-repeat,
+    linear-gradient(165deg, #fff, #f5f3ee);
+}
+
+.card-value {
+  justify-self: end;
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+.card-title {
+  font-weight: 700;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: #1f2b34;
+}
+
+.card-subtitle {
+  align-self: start;
+  font-size: 0.64rem;
+  line-height: 1.2;
+  color: #5c6973;
+  text-transform: capitalize;
+}
+
+.card-meta {
+  font-size: 0.56rem;
+  line-height: 1.2;
+  color: #314452;
+}
+
+.card-annotation {
+  margin-top: auto;
+  font-size: 0.58rem;
+  color: #7f4f12;
+  background: #f4e1bf;
+  border-radius: 999px;
+  display: inline-block;
+  padding: 0.12rem 0.34rem;
+}
+
+.card-back {
+  background: radial-gradient(circle at 25% 25%, #7dc0ea 0%, #2e5f94 48%, #1f3a5e 100%);
+  border: 1px solid #1a3251;
+  color: #eef8ff;
+  display: grid;
+  place-items: center;
+}
+
+.card-back-mark {
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  font-size: 0.95rem;
+}
+
+.card-view.is-playable {
+  box-shadow: 0 0 0 2px rgba(25, 132, 87, 0.26), 0 10px 18px rgba(0, 0, 0, 0.14);
+}
+
+.card-view.is-unplayable {
+  opacity: 0.68;
+}
+
+.card-view.is-interactive {
+  cursor: pointer;
+}
+
+.card-view.is-selected {
+  transform: translateY(-8px);
+  box-shadow: 0 0 0 2px rgba(215, 155, 47, 0.45), 0 14px 20px rgba(0, 0, 0, 0.2);
+}
+
+.card-view:focus-visible {
+  outline: 2px solid #184c8c;
+  outline-offset: 2px;
+}
+
+.hand-fan {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 0.9rem 0.35rem 0.4rem;
+  min-height: 186px;
+  margin-top: 0.45rem;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(45, 122, 94, 0.12), rgba(45, 122, 94, 0.03));
+}
+
+.hand-fan-card {
+  margin-left: -42px;
+  transform-origin: bottom center;
+  transition: transform 130ms ease;
+}
+
+.hand-fan-card:first-child {
+  margin-left: 0;
+}
+
+.hand-fan-card:hover,
+.hand-fan-card:focus-within {
+  transform: translateY(-10px) !important;
+}
+
+.hidden-hand-wrap {
+  margin-top: 0.35rem;
+}
+
+.hidden-hand {
+  position: relative;
+  min-height: 124px;
+}
+
+.hidden-hand-card {
+  position: absolute;
+  top: 0;
+}
+
+.zone-bank,
+.zone-properties {
+  margin-top: 0.35rem;
+}
+
+.zone-bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.property-lane {
+  border: 1px solid #e5dbc8;
+  border-radius: 10px;
+  background: #fbf8f2;
+  padding: 0.45rem;
+  margin-top: 0.45rem;
+}
+
+.property-lane p {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+.property-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.play-chooser-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(9, 14, 20, 0.72);
+  display: grid;
+  place-items: center;
+}
+
+.play-chooser {
+  width: min(460px, calc(100% - 2rem));
+  border-radius: 14px;
+  border: 2px solid #d7c295;
+  background: #fffaf0;
+  padding: 1rem;
+}
+
+.play-options {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.play-option {
+  text-align: left;
+  border-radius: 12px;
+}
+
+.play-cancel {
+  margin-top: 0.8rem;
+  background: #7e6140;
+}
+
 @keyframes reveal {
   from {
     opacity: 0;
@@ -203,5 +526,28 @@ footer {
 
   .game-top {
     flex-direction: column;
+  }
+
+  .players-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .action-panel {
+    position: static;
+  }
+
+  .hand-fan {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 0.8rem;
+  }
+
+  .hand-fan-card {
+    margin-left: -30px;
+  }
+
+  .card-size-lg {
+    width: 94px;
+    height: 134px;
   }
 }
