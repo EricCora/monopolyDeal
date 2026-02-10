@@ -1,73 +1,84 @@
-# React + TypeScript + Vite
+# Monopoly Deal (Local Web App)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A browser-based Monopoly Deal game built with React + TypeScript.
 
-Currently, two official plugins are available:
+This project focuses on local, pass-and-play gameplay with a rules engine, persistent saves, and match stats.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## React Compiler
+- 2 to 4 player local matches with custom player names
+- Turn flow enforcement (draw, up to 3 plays, discard to 7, pass)
+- Play handling for money, properties, wild cards, and action cards
+- Counter flow with `Just Say No` chains
+- Payment flow for card effects (including multi-opponent effects like `It's My Birthday`)
+- Winner detection at 3 complete property sets
+- Undo for reversible plays during the active turn
+- Match history and lifetime win stats
+- Auto-save + resume via `localStorage`
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Tech Stack
 
-## Expanding the ESLint configuration
+- React 19
+- TypeScript
+- Vite
+- Vitest + Testing Library
+- ESLint
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Quick Start
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Prerequisites
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+- Node.js 20+ (Node.js 22 recommended)
+- npm
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Install
+
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Run the app
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+Open the local URL shown by Vite (usually `http://localhost:5173`).
+
+## Scripts
+
+- `npm run dev` - start local dev server
+- `npm run build` - type-check and build production assets
+- `npm run preview` - preview the production build locally
+- `npm run lint` - run ESLint
+- `npm run test` - run tests once
+- `npm run test:watch` - run tests in watch mode
+
+## Project Structure
+
+```text
+src/
+  engine/        # Core game rules and action resolution
+  cards/         # Card catalog and metadata
+  ui/            # UI helpers and React components
+  persistence/   # localStorage save/load helpers
+  stats/         # Match records and lifetime stat aggregation
+  test/          # Engine and UI tests
+```
+
+## Persistence
+
+Game state and stats are stored in browser `localStorage` under versioned keys:
+
+- `monopolyDeal.activeGame.v1`
+- `monopolyDeal.matchHistory.v1`
+- `monopolyDeal.lifetimeStats.v1`
+
+## Current Scope
+
+- Local multiplayer only (single device, pass-and-play)
+- No backend, login, or online matchmaking
+
+## License
+
+No license file is currently defined in this repository.
