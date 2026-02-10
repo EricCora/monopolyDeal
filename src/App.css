@@ -187,6 +187,16 @@ button:disabled {
   margin: 0.2rem 0 0.35rem;
 }
 
+.inline-discard-hint {
+  margin: 0.2rem 0 0.35rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #e1c58e;
+  background: #fff3dc;
+  color: #6e4a12;
+  font-size: 0.88rem;
+}
+
 .inline-actions button {
   text-align: left;
 }
@@ -224,6 +234,23 @@ button:disabled {
 
 .debug-actions {
   margin-top: 0.55rem;
+}
+
+.turn-status {
+  margin: 0.15rem 0 0.45rem;
+  padding: 0.42rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid #d2c8b7;
+  background: #f7f3ea;
+  color: #4c5c67;
+  font-size: 0.92rem;
+}
+
+.turn-status.is-required {
+  border-color: #ddb067;
+  background: #fff5df;
+  color: #6a4a16;
+  font-weight: 600;
 }
 
 .debug-action-list {

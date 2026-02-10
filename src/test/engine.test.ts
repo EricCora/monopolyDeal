@@ -323,6 +323,45 @@ describe('engine basics', () => {
     expect(targetC?.requiresPropertyTransfer).toBe(true);
   });
 
+  it('requires discard when ending a turn above hand limit', () => {
+    const state = createGame({
+      seed: 29,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.currentPlayerIndex = 0;
+    state.turn.phase = 'action';
+    state.turn.playsUsed = 3;
+    state.pending = null;
+    state.players[0].hand = [
+      'money_1#x1',
+      'money_2#x2',
+      'money_3#x3',
+      'money_4#x4',
+      'money_5#x5',
+      'pass_go#x6',
+      'rent_color#x7',
+      'debt_collector#x8',
+    ];
+
+    const blockedPass = applyAction(state, { type: 'pass_turn', playerId: 'p1' });
+    expect(blockedPass.error?.code).toBe('hand_limit');
+
+    const legal = getLegalActions(state, 'p1');
+    expect(legal.length).toBe(8);
+    expect(legal.every((item) => item.action.type === 'discard_card')).toBe(true);
+
+    const afterDiscard = applyAction(state, { type: 'discard_card', playerId: 'p1', cardId: 'money_1#x1' }).state;
+    expect(afterDiscard.players[0].hand.length).toBe(7);
+    expect(afterDiscard.discardPile).toContain('money_1#x1');
+
+    const passAfterDiscard = applyAction(afterDiscard, { type: 'pass_turn', playerId: 'p1' });
+    expect(passAfterDiscard.error).toBeUndefined();
+    expect(passAfterDiscard.state.currentPlayerIndex).toBe(1);
+  });
+
   it('uses friendly labels in forced deal pending actions', () => {
     const state = createGame({
       seed: 25,
