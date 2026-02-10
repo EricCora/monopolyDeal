@@ -47,6 +47,7 @@ export interface PaymentRequest {
   amount: number;
   reason: string;
   actionCardId: string;
+  remainingTargetPlayerIds?: PlayerId[];
 }
 
 export interface CounterRequest {

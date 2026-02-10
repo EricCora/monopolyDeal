@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { type PropertyColor } from './cards/catalog';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getCardDefinition, getCardDisplayName, type PropertyColor } from './cards/catalog';
 import {
   applyAction,
   createGame,
@@ -21,6 +21,9 @@ import {
   saveMatchHistory,
 } from './persistence/storage';
 import { applyMatchToLifetime, buildMatchRecord, type LifetimeStatsV1, type MatchRecordV1 } from './stats';
+import { CardView } from './ui/components/CardView';
+import { HandFan } from './ui/components/HandFan';
+import { PlayChooser, type ActionVariantView } from './ui/components/PlayChooser';
 import './App.css';
 
 type Screen = 'home' | 'setup' | 'game' | 'stats';
@@ -28,6 +31,16 @@ type Screen = 'home' | 'setup' | 'game' | 'stats';
 interface SetupState {
   playerCount: number;
   playerNames: string[];
+}
+
+interface CardActionVariant extends ActionVariantView {
+  action: Action;
+}
+
+interface PlayChooserState {
+  cardId: string;
+  cardLabel: string;
+  variants: CardActionVariant[];
 }
 
 function initialSetup(): SetupState {
@@ -41,6 +54,23 @@ function colorLabel(color: PropertyColor): string {
   return color.replace('_', ' ');
 }
 
+function actionToCardId(action: Action): string | null {
+  if (action.type === 'play_to_bank') return action.cardId;
+  if (action.type === 'play_property') return action.cardId;
+  if (action.type === 'play_action') return action.cardId;
+  if (action.type === 'counter_response' && action.useJustSayNo && action.cardId) return action.cardId;
+  return null;
+}
+
+function actionVariantId(action: Action): string {
+  return JSON.stringify(action);
+}
+
+function cardMoneyValue(cardId: string): number {
+  const def = getCardDefinition(cardId);
+  return def.moneyValue ?? def.value;
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [game, setGame] = useState<GameState | null>(null);
@@ -49,6 +79,10 @@ function App() {
   const [revealedPlayerId, setRevealedPlayerId] = useState<string | null>(null);
   const [history, setHistory] = useState<MatchRecordV1[]>(() => loadMatchHistory());
   const [lifetime, setLifetime] = useState<LifetimeStatsV1>(() => loadLifetimeStats());
+  const [chooser, setChooser] = useState<PlayChooserState | null>(null);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [selectedPaymentCards, setSelectedPaymentCards] = useState<string[]>([]);
+  const [showDebugActions, setShowDebugActions] = useState(false);
   const finalizedMatchRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -68,6 +102,86 @@ function App() {
     return getLegalActions(game, prompt.playerId);
   }, [game, prompt]);
 
+  const playerNameById = useCallback((playerId: string): string => {
+    if (!game) return playerId;
+    return game.players.find((player) => player.id === playerId)?.name ?? playerId;
+  }, [game]);
+
+  const describeCardAction = useCallback((action: Action): string => {
+    if (action.type === 'play_to_bank') {
+      const def = getCardDefinition(action.cardId);
+      return `Bank as $${def.moneyValue ?? def.value}`;
+    }
+
+    if (action.type === 'play_property') {
+      return `Play to ${colorLabel(action.color)}`;
+    }
+
+    if (action.type === 'play_action') {
+      const targetName = action.targetPlayerId ? playerNameById(action.targetPlayerId) : null;
+      if (action.color && targetName) return `Use on ${targetName} (${colorLabel(action.color)} rent)`;
+      if (targetName) return `Use on ${targetName}`;
+      if (action.color) return `Charge rent on ${colorLabel(action.color)}`;
+      return `Play ${getCardDefinition(action.cardId).name}`;
+    }
+
+    if (action.type === 'counter_response' && action.useJustSayNo) {
+      return 'Play Just Say No';
+    }
+
+    return 'Play card';
+  }, [playerNameById]);
+
+  const cardActionVariants = useMemo(() => {
+    const variants = new Map<string, CardActionVariant[]>();
+    legalActions.forEach((item, index) => {
+      const cardId = actionToCardId(item.action);
+      if (!cardId) return;
+      const option: CardActionVariant = {
+        id: `${actionVariantId(item.action)}-${index}`,
+        label: describeCardAction(item.action),
+        action: item.action,
+      };
+      const existing = variants.get(cardId) ?? [];
+      existing.push(option);
+      variants.set(cardId, existing);
+    });
+    return variants;
+  }, [describeCardAction, legalActions]);
+
+  const playableCardIds = useMemo(() => new Set(cardActionVariants.keys()), [cardActionVariants]);
+
+  const contextualActions = useMemo(
+    () => legalActions.filter((item) => !actionToCardId(item.action)),
+    [legalActions],
+  );
+
+  const pendingPayment = game?.pending?.kind === 'payment' ? game.pending.payload : null;
+  const pendingPaymentPlayer = useMemo(() => {
+    if (!game || !pendingPayment) return null;
+    return game.players.find((player) => player.id === pendingPayment.targetPlayerId) ?? null;
+  }, [game, pendingPayment]);
+
+  const pendingPaymentCardIds = useMemo(() => {
+    if (!pendingPaymentPlayer) return [];
+    const propertyCards = (Object.keys(pendingPaymentPlayer.properties) as PropertyColor[]).flatMap((color) =>
+      pendingPaymentPlayer.properties[color].map((entry) => entry.cardId),
+    );
+    return [...pendingPaymentPlayer.bank, ...propertyCards];
+  }, [pendingPaymentPlayer]);
+
+  const selectedPaymentTotal = useMemo(
+    () => selectedPaymentCards.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
+    [selectedPaymentCards],
+  );
+  const totalPayableValue = useMemo(
+    () => pendingPaymentCardIds.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
+    [pendingPaymentCardIds],
+  );
+  const paymentCanSubmit = pendingPayment
+    ? selectedPaymentCards.length > 0 && (selectedPaymentTotal >= pendingPayment.amount || totalPayableValue < pendingPayment.amount)
+    : false;
+
   const startNewGame = () => {
     const players: PlayerConfig[] = setup.playerNames.slice(0, setup.playerCount).map((name, index) => ({
       id: `p${index + 1}`,
@@ -79,6 +193,9 @@ function App() {
     setRevealedPlayerId(null);
     setScreen('game');
     setError(null);
+    setChooser(null);
+    setSelectedCardId(null);
+    setSelectedPaymentCards([]);
   };
 
   const resumeGame = () => {
@@ -91,6 +208,9 @@ function App() {
     setRevealedPlayerId(null);
     setScreen('game');
     setError(null);
+    setChooser(null);
+    setSelectedCardId(null);
+    setSelectedPaymentCards([]);
   };
 
   const finalizeIfGameOver = (nextState: GameState) => {
@@ -117,9 +237,50 @@ function App() {
       return;
     }
     setError(null);
-    setRevealedPlayerId(null);
+    const previousPromptPlayerId = prompt?.playerId ?? null;
+    const nextPromptPlayerId = getNextPrompt(result.state).playerId;
+    if (previousPromptPlayerId && previousPromptPlayerId !== nextPromptPlayerId) {
+      setRevealedPlayerId(null);
+    }
+    setChooser(null);
+    setSelectedCardId(null);
+    setSelectedPaymentCards([]);
     setGame(result.state);
     finalizeIfGameOver(result.state);
+  };
+
+  const handleCardClick = (cardId: string) => {
+    if (!game || !prompt) return;
+    if (isGameOver(game).done) return;
+    if (revealedPlayerId !== prompt.playerId) return;
+
+    const variants = cardActionVariants.get(cardId) ?? [];
+    if (variants.length === 0) return;
+
+    setSelectedCardId(cardId);
+
+    if (variants.length === 1) {
+      runAction(variants[0].action);
+      return;
+    }
+
+    const def = getCardDefinition(cardId);
+    const cardLabel = def.kind === 'money' ? `$${def.value}` : def.name;
+    setChooser({ cardId, cardLabel, variants });
+  };
+
+  const handlePaymentCardToggle = (cardId: string) => {
+    if (!pendingPayment || !pendingPaymentCardIds.includes(cardId)) return;
+    setSelectedPaymentCards((prev) => (prev.includes(cardId) ? prev.filter((id) => id !== cardId) : [...prev, cardId]));
+  };
+
+  const submitSelectedPayment = () => {
+    if (!pendingPayment || !paymentCanSubmit) return;
+    runAction({
+      type: 'pay_request',
+      playerId: pendingPayment.targetPlayerId,
+      cards: selectedPaymentCards,
+    });
   };
 
   const renderHome = () => (
@@ -177,34 +338,107 @@ function App() {
     </section>
   );
 
+  const renderHiddenHand = (cardCount: number) => {
+    const visibleBacks = Math.min(5, cardCount);
+    return (
+      <div className="hidden-hand-wrap">
+        <div className="hidden-hand" aria-label={`Hidden hand with ${cardCount} cards`}>
+          {Array.from({ length: visibleBacks }, (_, index) => (
+            <div key={`hidden-${index}`} className="hidden-hand-card" style={{ left: `${index * 18}px`, zIndex: index + 1 }}>
+              <CardView cardId="money_1#0" faceUp={false} size="md" />
+            </div>
+          ))}
+        </div>
+        <p>{cardCount} cards</p>
+      </div>
+    );
+  };
+
   const renderPlayerBoard = (state: GameState) =>
     state.players.map((player) => {
       const canSeeHand = revealedPlayerId === player.id;
+      const isCurrent = state.players[state.currentPlayerIndex].id === player.id;
+      const handInteractive = Boolean(canSeeHand && prompt?.playerId === player.id && !isGameOver(state).done);
+      const isPaymentPayer = pendingPayment?.targetPlayerId === player.id;
+      const paymentSelectionEnabled = Boolean(isPaymentPayer && revealedPlayerId === player.id && !isGameOver(state).done);
+      const propertyColors = (Object.keys(player.properties) as PropertyColor[]).filter((color) => player.properties[color].length > 0);
+
       return (
-        <article className={`player ${state.players[state.currentPlayerIndex].id === player.id ? 'active' : ''}`} key={player.id}>
+        <article className={`player ${isCurrent ? 'active' : ''}`} key={player.id}>
           <header>
             <h3>{player.name}</h3>
             <p>{getSetCompletionCount(player)} complete sets</p>
           </header>
+
           <section>
             <strong>Hand</strong>
-            <p>{canSeeHand ? player.hand.join(', ') || 'Empty' : `${player.hand.length} cards`}</p>
+            {canSeeHand ? (
+              player.hand.length > 0 ? (
+                <HandFan
+                  cards={player.hand}
+                  playableCardIds={playableCardIds}
+                  selectedCardId={selectedCardId}
+                  onCardClick={handleCardClick}
+                  interactive={handInteractive}
+                />
+              ) : (
+                <p>Empty</p>
+              )
+            ) : (
+              renderHiddenHand(player.hand.length)
+            )}
           </section>
+
           <section>
             <strong>Bank</strong>
-            <p>{player.bank.join(', ') || 'Empty'}</p>
+            <div className="zone-bank">
+              {player.bank.length > 0 ? (
+                player.bank.map((cardId) => (
+                  <CardView
+                    key={`${player.id}-bank-${cardId}`}
+                    cardId={cardId}
+                    size="sm"
+                    interactive={paymentSelectionEnabled}
+                    playable={paymentSelectionEnabled}
+                    selected={selectedPaymentCards.includes(cardId)}
+                    onClick={() => handlePaymentCardToggle(cardId)}
+                  />
+                ))
+              ) : (
+                <p>Empty</p>
+              )}
+            </div>
           </section>
+
           <section>
             <strong>Properties</strong>
-            <ul>
-              {(Object.keys(player.properties) as PropertyColor[])
-                .filter((color) => player.properties[color].length > 0)
-                .map((color) => (
-                  <li key={`${player.id}-${color}`}>
-                    <span>{colorLabel(color)}:</span> {player.properties[color].map((card) => card.cardId).join(', ')}
-                  </li>
-                ))}
-            </ul>
+            <div className="zone-properties">
+              {propertyColors.length > 0 ? (
+                propertyColors.map((color) => (
+                  <div className="property-lane" key={`${player.id}-${color}`}>
+                    <p>
+                      <span>{colorLabel(color)}:</span>
+                    </p>
+                    <div className="property-cards">
+                      {player.properties[color].map((entry) => (
+                        <CardView
+                          key={`${player.id}-${color}-${entry.cardId}`}
+                          cardId={entry.cardId}
+                          size="sm"
+                          interactive={paymentSelectionEnabled}
+                          playable={paymentSelectionEnabled}
+                          selected={selectedPaymentCards.includes(entry.cardId)}
+                          onClick={() => handlePaymentCardToggle(entry.cardId)}
+                          annotation={entry.assignedColor !== color ? `as ${colorLabel(entry.assignedColor)}` : undefined}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p>Empty</p>
+              )}
+            </div>
           </section>
         </article>
       );
@@ -214,6 +448,9 @@ function App() {
     if (!game || !prompt) return null;
     const over = isGameOver(game);
     const winner = game.players.find((player) => player.id === over.winnerId);
+    const contextualButtons = pendingPayment
+      ? contextualActions.filter((item) => item.action.type !== 'pay_request')
+      : contextualActions;
 
     return (
       <section className="panel game-panel">
@@ -241,19 +478,53 @@ function App() {
           </div>
         </div>
 
-        <div className="players-grid">{renderPlayerBoard(game)}</div>
-
         <section className="action-panel">
-          <h3>Legal Actions ({legalActions.length})</h3>
+          <h3>{pendingPayment ? 'Payment Required' : 'Turn Actions'}</h3>
+          {pendingPayment && pendingPaymentPlayer ? (
+            <div className="payment-panel">
+              <p>
+                <strong>{pendingPaymentPlayer.name}</strong> owes <strong>${pendingPayment.amount}</strong> for{' '}
+                <strong>{pendingPayment.reason}</strong>.
+              </p>
+              <p>
+                Selected total: <strong>${selectedPaymentTotal}</strong> of ${pendingPayment.amount}
+                {totalPayableValue < pendingPayment.amount ? ' (not enough assets available)' : ''}
+              </p>
+              {selectedPaymentCards.length > 0 ? (
+                <p className="payment-selected">Selected: {selectedPaymentCards.map(getCardDisplayName).join(', ')}</p>
+              ) : (
+                <p className="payment-selected">Click cards in {pendingPaymentPlayer.name}&apos;s bank/properties to pay.</p>
+              )}
+              <button type="button" onClick={submitSelectedPayment} disabled={!paymentCanSubmit || over.done}>
+                Confirm Payment
+              </button>
+            </div>
+          ) : null}
           <div className="actions action-list">
-            {legalActions.map((item, index) => (
+            {contextualButtons.map((item, index) => (
               <button key={`${item.label}-${index}`} onClick={() => runAction(item.action)} disabled={over.done}>
                 {item.label}
               </button>
             ))}
-            {legalActions.length === 0 && <p>No available actions for current prompt.</p>}
+            {contextualButtons.length === 0 && !pendingPayment && <p>Play cards from your hand.</p>}
+          </div>
+          <div className="debug-actions">
+            <button type="button" onClick={() => setShowDebugActions((prev) => !prev)}>
+              {showDebugActions ? 'Hide' : 'Show'} All Legal Actions ({legalActions.length})
+            </button>
+            {showDebugActions && (
+              <div className="actions action-list">
+                {legalActions.map((item, index) => (
+                  <button key={`debug-${item.label}-${index}`} onClick={() => runAction(item.action)} disabled={over.done}>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </section>
+
+        <div className="players-grid">{renderPlayerBoard(game)}</div>
 
         <section>
           <h3>Recent Events</h3>
@@ -268,6 +539,23 @@ function App() {
               ))}
           </ul>
         </section>
+
+        {chooser && (
+          <PlayChooser
+            cardId={chooser.cardId}
+            cardLabel={chooser.cardLabel}
+            options={chooser.variants}
+            onChoose={(id) => {
+              const selected = chooser.variants.find((variant) => variant.id === id);
+              if (!selected) return;
+              runAction(selected.action);
+            }}
+            onClose={() => {
+              setChooser(null);
+              setSelectedCardId(null);
+            }}
+          />
+        )}
 
         {shouldShowShield && !over.done && (
           <div className="shield" role="dialog" aria-modal="true">
@@ -334,7 +622,7 @@ function App() {
       {screen === 'stats' && renderStats()}
 
       <footer>
-        <small>Deck cards resolve by instance id.</small>
+        <small>Monopoly Deal local pass-and-play.</small>
       </footer>
     </main>
   );

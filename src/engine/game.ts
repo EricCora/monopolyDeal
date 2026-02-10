@@ -1,6 +1,7 @@
 import {
   CARD_DEFINITIONS,
   PROPERTY_SET_SIZES,
+  getCardDisplayName,
   getCardDefinition,
   type ActionKind,
   type CardDefinition,
@@ -122,6 +123,14 @@ function removePropertyCard(player: PlayerState, color: PropertyColor, cardId: s
 function cardMoneyValue(cardId: string): number {
   const card = getCardDefinition(cardId);
   return card.moneyValue ?? card.value;
+}
+
+function cardLabel(cardId: string): string {
+  return getCardDisplayName(cardId);
+}
+
+function colorLabel(color: PropertyColor): string {
+  return color.replace('_', ' ');
 }
 
 function countCompleteSets(player: PlayerState): number {
@@ -296,6 +305,30 @@ function maybeOpenCounter(
   return true;
 }
 
+function continuePaymentChain(state: GameState, request: { sourcePlayerId: PlayerId; amount: number; reason: string; actionCardId: string; remainingTargetPlayerIds?: PlayerId[] }, events: GameEvent[]): void {
+  const remaining = [...(request.remainingTargetPlayerIds ?? [])];
+  while (remaining.length > 0) {
+    const nextTargetPlayerId = remaining.shift();
+    if (!nextTargetPlayerId) continue;
+    if (!getPlayer(state, nextTargetPlayerId)) continue;
+    const nextEffect: PendingEffect = {
+      kind: 'payment',
+      payload: {
+        sourcePlayerId: request.sourcePlayerId,
+        targetPlayerId: nextTargetPlayerId,
+        amount: request.amount,
+        reason: request.reason,
+        actionCardId: request.actionCardId,
+        remainingTargetPlayerIds: remaining.length > 0 ? [...remaining] : undefined,
+      },
+    };
+    if (!maybeOpenCounter(state, request.sourcePlayerId, nextTargetPlayerId, request.actionCardId, nextEffect)) {
+      resolveEffect(state, nextEffect, events);
+    }
+    return;
+  }
+}
+
 function checkWinner(state: GameState): void {
   const winner = state.players.find((player) => countCompleteSets(player) >= 3);
   if (winner) {
@@ -321,7 +354,7 @@ function legalForPending(state: GameState, player: PlayerState): LegalAction[] {
     ];
     for (const cardId of jsn) {
       actions.push({
-        label: `Play Just Say No (${cardId})`,
+        label: `Play Just Say No (${cardLabel(cardId)})`,
         action: { type: 'counter_response', playerId: player.id, useJustSayNo: true, cardId },
       });
     }
@@ -333,7 +366,7 @@ function legalForPending(state: GameState, player: PlayerState): LegalAction[] {
     const paymentOptions = generatePaymentOptions(player, pending.payload.amount);
     return paymentOptions.map((cards, idx) => ({
       label: cards.length
-        ? `Pay option ${idx + 1}: ${cards.join(', ')}`
+        ? `Pay option ${idx + 1}: ${cards.map(cardLabel).join(', ')}`
         : 'Cannot pay (no cards)',
       action: { type: 'pay_request', playerId: player.id, cards },
     }));
@@ -424,7 +457,7 @@ function legalForPending(state: GameState, player: PlayerState): LegalAction[] {
     const target = getPlayer(state, req.targetPlayerId);
     if (!target) return [];
     return completeSetColors(target).map((color) => ({
-      label: `Take complete ${color} set`,
+      label: `Take complete ${colorLabel(color)} set`,
       action: { type: 'deal_breaker_pick', playerId: player.id, color },
     }));
   }
@@ -446,7 +479,7 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
     const moneyPlayable = card.kind === 'money' || card.kind === 'action' || card.kind === 'building' || card.kind === 'wild';
     if (moneyPlayable) {
       actions.push({
-        label: `Bank ${card.name} (${cardId})`,
+        label: `Bank ${card.name}`,
         action: { type: 'play_to_bank', playerId: player.id, cardId },
       });
     }
@@ -454,7 +487,7 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
     if (card.kind === 'property' || card.kind === 'wild') {
       for (const color of PROPERTY_COLORS.filter((candidate) => canCardBePlacedInColor(card, candidate))) {
         actions.push({
-          label: `Play ${card.name} to ${color}`,
+          label: `Play ${card.name} to ${colorLabel(color)}`,
           action: { type: 'play_property', playerId: player.id, cardId, color },
         });
       }
@@ -464,7 +497,7 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
       for (const color of PROPERTY_COLORS) {
         if (!isCompleteSet(player, color)) continue;
         actions.push({
-          label: `Play ${card.name} on ${color}`,
+          label: `Play ${card.name} on ${colorLabel(color)}`,
           action: { type: 'play_property', playerId: player.id, cardId, color },
         });
       }
@@ -497,7 +530,7 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
         for (const color of allowedColors) {
           if (player.properties[color].length === 0) continue;
           actions.push({
-            label: `Play ${card.name} for ${color} rent`,
+            label: `Play ${card.name} for ${colorLabel(color)} rent`,
             action: { type: 'play_action', playerId: player.id, cardId, color },
           });
         }
@@ -511,7 +544,7 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
       if (def.kind !== 'wild') continue;
       for (const targetColor of PROPERTY_COLORS.filter((candidate) => canCardBePlacedInColor(def, candidate) && candidate !== color)) {
         actions.push({
-          label: `Move ${placement.cardId} from ${color} to ${targetColor}`,
+          label: `Move ${cardLabel(placement.cardId)} from ${colorLabel(color)} to ${colorLabel(targetColor)}`,
           action: {
             type: 'move_wild',
             playerId: player.id,
@@ -637,7 +670,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
     player.bank.push(action.cardId);
     consumePlay(state);
-    pushEvent(events, 'bank', `${player.name} banked ${action.cardId}.`);
+    pushEvent(events, 'bank', `${player.name} banked ${cardLabel(action.cardId)}.`);
   }
 
   if (action.type === 'play_property') {
@@ -659,7 +692,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
 
     addToProperty(player, action.cardId, action.color);
     consumePlay(state);
-    pushEvent(events, 'property', `${player.name} placed ${action.cardId} in ${action.color}.`);
+    pushEvent(events, 'property', `${player.name} placed ${cardLabel(action.cardId)} in ${colorLabel(action.color)}.`);
   }
 
   if (action.type === 'move_wild') {
@@ -673,7 +706,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
       return setErr(error('invalid_action', 'Card cannot move to target color.'));
     }
     addToProperty(player, action.cardId, action.toColor);
-    pushEvent(events, 'wild_move', `${player.name} moved ${action.cardId} to ${action.toColor}.`);
+    pushEvent(events, 'wild_move', `${player.name} moved ${cardLabel(action.cardId)} to ${colorLabel(action.toColor)}.`);
   }
 
   if (action.type === 'play_action') {
@@ -722,23 +755,23 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
       }
 
       if (actionKind === 'its_my_birthday') {
-        for (const target of state.players) {
-          if (target.id === player.id) continue;
+        const birthdayTargets = state.players.filter((target) => target.id !== player.id).map((target) => target.id);
+        if (birthdayTargets.length > 0) {
+          const firstTarget = birthdayTargets[0];
           const paymentEffect: PendingEffect = {
             kind: 'payment',
             payload: {
               sourcePlayerId: player.id,
-              targetPlayerId: target.id,
+              targetPlayerId: firstTarget,
               amount: 2,
               reason: "It's My Birthday",
               actionCardId: action.cardId,
+              remainingTargetPlayerIds: birthdayTargets.slice(1),
             },
           };
-          if (maybeOpenCounter(state, player.id, target.id, action.cardId, paymentEffect)) {
-            break;
+          if (!maybeOpenCounter(state, player.id, firstTarget, action.cardId, paymentEffect)) {
+            resolveEffect(state, paymentEffect, events);
           }
-          resolveEffect(state, paymentEffect, events);
-          break;
         }
         pushEvent(events, 'action', `${player.name} played It's My Birthday.`);
       }
@@ -778,7 +811,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
             amount,
           },
         };
-        pushEvent(events, 'action', `${player.name} played rent for ${action.color} at $${amount}.`);
+        pushEvent(events, 'action', `${player.name} played rent for ${colorLabel(action.color)} at $${amount}.`);
       }
 
       if (actionKind === 'sly_deal') {
@@ -847,6 +880,9 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
         resolveEffect(state, pending.effect, events);
         pushEvent(events, 'counter', 'Action resolved after counter chain.');
       } else {
+        if (pending.effect.kind === 'payment') {
+          continuePaymentChain(state, pending.effect.payload, events);
+        }
         pushEvent(events, 'counter', 'Action canceled by Just Say No chain.');
       }
     }
@@ -892,6 +928,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
 
     state.pending = null;
     pushEvent(events, 'payment', `${payer.name} paid ${collector.name} $${Math.min(total, req.amount)} (${req.reason}).`);
+    continuePaymentChain(state, req, events);
   }
 
   if (action.type === 'sly_deal_pick') {
@@ -912,7 +949,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
 
     addToProperty(source, action.cardId, action.destinationColor);
     state.pending = null;
-    pushEvent(events, 'sly_deal', `${source.name} took ${action.cardId} from ${target.name}.`);
+    pushEvent(events, 'sly_deal', `${source.name} took ${cardLabel(action.cardId)} from ${target.name}.`);
   }
 
   if (action.type === 'forced_deal_pick') {
@@ -944,7 +981,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     addToProperty(target, give.cardId, targetDestColor);
 
     state.pending = null;
-    pushEvent(events, 'forced_deal', `${source.name} swapped ${action.giveCardId} for ${action.takeCardId}.`);
+    pushEvent(events, 'forced_deal', `${source.name} swapped ${cardLabel(action.giveCardId)} for ${cardLabel(action.takeCardId)}.`);
   }
 
   if (action.type === 'deal_breaker_pick') {
