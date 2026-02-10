@@ -218,4 +218,130 @@ describe('engine basics', () => {
     expect(next.players[0].bank).toEqual(expect.arrayContaining(['money_2#p3m1']));
     expect(next.currentPlayerIndex).toBe(0);
   });
+
+  it('does not expose hand play actions after 3 plays are used', () => {
+    const state = mkState();
+    state.turn.playsUsed = 3;
+    state.players[0].hand = ['money_1#x1', 'debt_collector#x2'];
+
+    const legal = getLegalActions(state, 'p1');
+    const handPlayActions = legal.filter((item) =>
+      item.action.type === 'play_to_bank' || item.action.type === 'play_property' || item.action.type === 'play_action',
+    );
+
+    expect(handPlayActions).toHaveLength(0);
+    expect(legal.some((item) => item.action.type === 'pass_turn')).toBe(true);
+  });
+
+  it('filters impossible targeted action options from legal actions', () => {
+    const state = createGame({
+      seed: 22,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.currentPlayerIndex = 0;
+    state.turn.phase = 'action';
+    state.turn.playsUsed = 0;
+    state.pending = null;
+    state.players[0].hand = ['sly_deal#s1', 'forced_deal#f1', 'deal_breaker#d1'];
+    state.players[0].properties.brown = [];
+    state.players[1].properties.brown = [];
+
+    const legal = getLegalActions(state, 'p1');
+    const targeted = legal.filter((item) => item.action.type === 'play_action');
+
+    expect(targeted).toHaveLength(0);
+  });
+
+  it('rejects invalid targeted action before consuming action card', () => {
+    const state = createGame({
+      seed: 23,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.currentPlayerIndex = 0;
+    state.turn.phase = 'action';
+    state.turn.playsUsed = 0;
+    state.pending = null;
+    state.players[0].hand = ['forced_deal#f1'];
+    state.players[0].properties.brown = [];
+    state.players[1].properties.brown = [];
+
+    const result = applyAction(state, {
+      type: 'play_action',
+      playerId: 'p1',
+      cardId: 'forced_deal#f1',
+      targetPlayerId: 'p2',
+    });
+
+    expect(result.error?.code).toBe('invalid_action');
+    expect(result.state.players[0].hand).toContain('forced_deal#f1');
+    expect(result.state.discardPile).not.toContain('forced_deal#f1');
+  });
+
+  it('includes rent metadata for each target and flags likely property transfer', () => {
+    const state = createGame({
+      seed: 24,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+        { id: 'p3', name: 'C' },
+      ],
+    });
+    state.currentPlayerIndex = 0;
+    state.turn.phase = 'action';
+    state.turn.playsUsed = 0;
+    state.pending = null;
+    state.players[0].hand = ['rent_color#r1'];
+    state.players[0].properties.brown = [{ cardId: 'brown_1#p1b1', assignedColor: 'brown' }];
+    state.players[1].bank = ['money_1#p2m1'];
+    state.players[1].properties.brown = [];
+    state.players[2].bank = [];
+    state.players[2].properties.brown = [{ cardId: 'brown_1#p3b1', assignedColor: 'brown' }];
+
+    const afterRent = applyAction(state, {
+      type: 'play_action',
+      playerId: 'p1',
+      cardId: 'rent_color#r1',
+      color: 'brown',
+    }).state;
+
+    const legal = getLegalActions(afterRent, 'p1').filter((item) => item.action.type === 'play_action');
+    const targetB = legal.find((item) => item.targetPlayerId === 'p2');
+    const targetC = legal.find((item) => item.targetPlayerId === 'p3');
+
+    expect(targetB?.requestedAmount).toBe(1);
+    expect(targetB?.collectibleCap).toBe(1);
+    expect(targetB?.requiresPropertyTransfer).toBe(false);
+
+    expect(targetC?.requestedAmount).toBe(1);
+    expect(targetC?.collectibleCap).toBe(1);
+    expect(targetC?.requiresPropertyTransfer).toBe(true);
+  });
+
+  it('uses friendly labels in forced deal pending actions', () => {
+    const state = createGame({
+      seed: 25,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.currentPlayerIndex = 0;
+    state.turn.phase = 'action';
+    state.pending = {
+      kind: 'forced_deal',
+      payload: { sourcePlayerId: 'p1', targetPlayerId: 'p2', actionCardId: 'forced_deal#fd1' },
+    };
+    state.players[0].properties.brown = [{ cardId: 'brown_1#p1b1', assignedColor: 'brown' }];
+    state.players[1].properties.light_blue = [{ cardId: 'light_blue_1#p2l1', assignedColor: 'light_blue' }];
+
+    const legal = getLegalActions(state, 'p1');
+    expect(legal.length).toBeGreaterThan(0);
+    expect(legal.every((item) => !item.label.includes('#'))).toBe(true);
+  });
 });

@@ -112,7 +112,7 @@ const actionCards: CardDefinition[] = [
   },
   {
     id: 'rent_brown_light_blue',
-    name: 'Rent BR/LB',
+    name: 'Rent Brown/Light Blue',
     kind: 'action',
     actionKind: 'rent_wild',
     value: 1,
@@ -122,7 +122,7 @@ const actionCards: CardDefinition[] = [
   },
   {
     id: 'rent_pink_orange',
-    name: 'Rent PK/OR',
+    name: 'Rent Pink/Orange',
     kind: 'action',
     actionKind: 'rent_wild',
     value: 1,
@@ -132,7 +132,7 @@ const actionCards: CardDefinition[] = [
   },
   {
     id: 'rent_red_yellow',
-    name: 'Rent RD/YL',
+    name: 'Rent Red/Yellow',
     kind: 'action',
     actionKind: 'rent_wild',
     value: 1,
@@ -142,7 +142,7 @@ const actionCards: CardDefinition[] = [
   },
   {
     id: 'rent_green_dark_blue',
-    name: 'Rent GN/DB',
+    name: 'Rent Green/Dark Blue',
     kind: 'action',
     actionKind: 'rent_wild',
     value: 1,
@@ -152,7 +152,7 @@ const actionCards: CardDefinition[] = [
   },
   {
     id: 'rent_railroad_utility',
-    name: 'Rent RR/UT',
+    name: 'Rent Railroad/Utility',
     kind: 'action',
     actionKind: 'rent_wild',
     value: 1,
@@ -201,6 +201,10 @@ export function getRentScale(color: PropertyColor): number[] {
 
 function colorLabel(color: PropertyColor): string {
   return color.replace('_', ' ').replace(/\b\w/g, (value) => value.toUpperCase());
+}
+
+export function formatPropertyColor(color: PropertyColor): string {
+  return colorLabel(color);
 }
 
 export function getCardDisplayName(instanceId: string): string {

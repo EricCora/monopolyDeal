@@ -54,6 +54,21 @@ function themeFromCard(card: CardDefinition): { themeClass: string; accent: stri
     return { themeClass: 'theme-building', accent: 'var(--card-building)' };
   }
 
+  if (card.kind === 'action' && card.actionKind === 'rent') {
+    return { themeClass: 'theme-rent-any', accent: 'var(--card-rent-any)' };
+  }
+
+  if (card.kind === 'action' && card.actionKind === 'rent_wild') {
+    const rentColors = Object.keys(card.rentMatrix ?? {});
+    const first = rentColors[0] ? normalizeColor(rentColors[0] as PropertyColor) : 'action';
+    const second = rentColors[1] ? normalizeColor(rentColors[1] as PropertyColor) : first;
+    return {
+      themeClass: 'theme-rent-wild',
+      accent: `var(--card-color-${first})`,
+      splitAccent: `var(--card-color-${second})`,
+    };
+  }
+
   return { themeClass: 'theme-action', accent: 'var(--card-action)' };
 }
 

@@ -21,6 +21,18 @@ describe('Card UI', () => {
     expect(screen.getByText(/rent \$1\/\$2/i)).toBeInTheDocument();
   });
 
+  it('uses dedicated rent card themes instead of generic action blue', () => {
+    render(
+      <>
+        <CardView cardId="rent_color#1" />
+        <CardView cardId="rent_pink_orange#1" />
+      </>,
+    );
+
+    expect(screen.getByRole('button', { name: /rent \(any color\) card/i })).toHaveClass('theme-rent-any');
+    expect(screen.getByRole('button', { name: /rent pink\/orange card/i })).toHaveClass('theme-rent-wild');
+  });
+
   it('renders card back when face down', () => {
     render(<CardView cardId="money_1#1" faceUp={false} />);
 

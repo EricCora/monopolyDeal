@@ -146,6 +146,10 @@ export type Action =
 export interface LegalAction {
   label: string;
   action: Action;
+  targetPlayerId?: PlayerId;
+  requestedAmount?: number;
+  collectibleCap?: number;
+  requiresPropertyTransfer?: boolean;
 }
 
 export interface ApplyResult {

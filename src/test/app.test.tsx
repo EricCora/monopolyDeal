@@ -160,7 +160,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /start match/i }));
     fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
 
-    expect(screen.getByText(/payment required/i)).toBeInTheDocument();
+    expect(screen.getByText(/required: resolve this step/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /\$2 card/i }));
     fireEvent.click(screen.getByRole('button', { name: /confirm payment/i }));
 
@@ -169,5 +169,43 @@ describe('App', () => {
       playerId: 'p2',
       cards: ['money_2#b2'],
     });
+  });
+
+  it('ignores hand clicks for unplayable cards after 3 plays are used', () => {
+    const lockedState: GameState = {
+      ...structuredClone(baseState),
+      turn: { ...baseState.turn, playsUsed: 3 },
+    };
+    mockedCreateGame.mockImplementationOnce(() => lockedState);
+    mockedGetNextPrompt.mockImplementation(() => ({ playerId: 'p1', text: 'Alpha turn', kind: 'main' }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Pass turn',
+        action: { type: 'pass_turn', playerId: 'p1' },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+
+    expect(mockedApplyAction).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: /choose how to play/i })).not.toBeInTheDocument();
+  });
+
+  it('shows and uses undo controls for reversible plays in the same turn', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+
+    expect(screen.getByRole('button', { name: /undo last play/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /undo last play/i }));
+    expect(screen.queryByRole('button', { name: /undo last play/i })).not.toBeInTheDocument();
   });
 });

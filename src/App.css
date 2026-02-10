@@ -23,6 +23,7 @@
   --card-color-utility: #6e8ca1;
   --card-money: #1d8c5f;
   --card-action: #315d9b;
+  --card-rent-any: #2e8a7e;
   --card-building: #804f99;
 }
 
@@ -169,6 +170,35 @@ button:disabled {
   margin-bottom: 0.35rem;
 }
 
+.inline-action-panel {
+  margin-top: 0.65rem;
+  padding: 0.55rem;
+  border: 1px solid #d8ccb6;
+  border-radius: 10px;
+  background: #fffaf0;
+}
+
+.inline-must-act {
+  margin: 0.15rem 0;
+  color: #915d0e;
+  font-weight: 700;
+}
+
+.inline-prompt-text {
+  margin: 0.2rem 0 0.35rem;
+}
+
+.inline-actions button {
+  text-align: left;
+}
+
+.action-detail {
+  display: block;
+  margin-top: 0.16rem;
+  font-size: 0.74rem;
+  opacity: 0.9;
+}
+
 .payment-panel {
   margin-bottom: 0.55rem;
   border: 1px solid #d9cfbf;
@@ -272,6 +302,32 @@ footer {
   border-top: 10px solid transparent;
   background:
     linear-gradient(90deg, var(--card-accent) 0 50%, var(--card-accent-split) 50% 100%) top / 100% 10px no-repeat,
+    linear-gradient(165deg, #fff, #f5f3ee);
+}
+
+.theme-rent-wild .card-face {
+  border-top: 10px solid transparent;
+  background:
+    linear-gradient(90deg, var(--card-accent) 0 50%, var(--card-accent-split) 50% 100%) top / 100% 10px no-repeat,
+    linear-gradient(165deg, #fff, #f5f3ee);
+}
+
+.theme-rent-any .card-face {
+  border-top: 10px solid transparent;
+  background:
+    linear-gradient(
+      90deg,
+      var(--card-color-brown) 0 10%,
+      var(--card-color-light-blue) 10% 20%,
+      var(--card-color-pink) 20% 30%,
+      var(--card-color-orange) 30% 40%,
+      var(--card-color-red) 40% 50%,
+      var(--card-color-yellow) 50% 60%,
+      var(--card-color-green) 60% 70%,
+      var(--card-color-dark-blue) 70% 80%,
+      var(--card-color-railroad) 80% 90%,
+      var(--card-color-utility) 90% 100%
+    ) top / 100% 10px no-repeat,
     linear-gradient(165deg, #fff, #f5f3ee);
 }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getCardDefinition, getCardDisplayName, type PropertyColor } from './cards/catalog';
+import { formatPropertyColor, getCardDefinition, getCardDisplayName, type PropertyColor } from './cards/catalog';
 import {
   applyAction,
   createGame,
@@ -9,6 +9,7 @@ import {
   isGameOver,
   type Action,
   type GameState,
+  type LegalAction,
   type PlayerConfig,
 } from './engine';
 import {
@@ -43,6 +44,8 @@ interface PlayChooserState {
   variants: CardActionVariant[];
 }
 
+type ReversibleActionType = 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
+
 function initialSetup(): SetupState {
   return {
     playerCount: 2,
@@ -51,7 +54,7 @@ function initialSetup(): SetupState {
 }
 
 function colorLabel(color: PropertyColor): string {
-  return color.replace('_', ' ');
+  return formatPropertyColor(color);
 }
 
 function actionToCardId(action: Action): string | null {
@@ -71,6 +74,18 @@ function cardMoneyValue(cardId: string): number {
   return def.moneyValue ?? def.value;
 }
 
+function isReversibleActionType(actionType: Action['type']): actionType is ReversibleActionType {
+  return actionType === 'play_to_bank' || actionType === 'play_property' || actionType === 'play_action' || actionType === 'move_wild';
+}
+
+function shouldRetainTurnSnapshots(nextState: GameState, nextPromptPlayerId: string): boolean {
+  if (isGameOver(nextState).done) return false;
+  if (nextState.turn.phase !== 'action') return false;
+  if (nextState.players[nextState.currentPlayerIndex]?.id !== nextPromptPlayerId) return false;
+  if (!nextState.pending) return true;
+  return nextState.pending.kind === 'rent' || nextState.pending.kind === 'sly_deal' || nextState.pending.kind === 'forced_deal' || nextState.pending.kind === 'deal_breaker';
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [game, setGame] = useState<GameState | null>(null);
@@ -83,6 +98,7 @@ function App() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [selectedPaymentCards, setSelectedPaymentCards] = useState<string[]>([]);
   const [showDebugActions, setShowDebugActions] = useState(false);
+  const [turnSnapshots, setTurnSnapshots] = useState<GameState[]>([]);
   const finalizedMatchRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -94,6 +110,17 @@ function App() {
   }, [game]);
 
   const prompt = useMemo(() => (game ? getNextPrompt(game) : null), [game]);
+
+  useEffect(() => {
+    if (!game || !prompt) {
+      if (turnSnapshots.length > 0) setTurnSnapshots([]);
+      return;
+    }
+    if (turnSnapshots.length === 0) return;
+    if (!shouldRetainTurnSnapshots(game, prompt.playerId)) {
+      setTurnSnapshots([]);
+    }
+  }, [game, prompt, turnSnapshots.length]);
 
   const shouldShowShield = Boolean(game && prompt && !isGameOver(game).done && revealedPlayerId !== prompt.playerId);
 
@@ -155,6 +182,10 @@ function App() {
     () => legalActions.filter((item) => !actionToCardId(item.action)),
     [legalActions],
   );
+  const isMandatoryPrompt = Boolean(prompt && (prompt.kind === 'payment' || prompt.kind === 'selection' || prompt.kind === 'response'));
+  const mainPhaseExhausted = Boolean(
+    game && prompt?.kind === 'main' && game.turn.phase === 'action' && game.turn.playsUsed >= 3 && !game.pending,
+  );
 
   const pendingPayment = game?.pending?.kind === 'payment' ? game.pending.payload : null;
   const pendingPaymentPlayer = useMemo(() => {
@@ -196,6 +227,7 @@ function App() {
     setChooser(null);
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
+    setTurnSnapshots([]);
   };
 
   const resumeGame = () => {
@@ -211,6 +243,7 @@ function App() {
     setChooser(null);
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
+    setTurnSnapshots([]);
   };
 
   const finalizeIfGameOver = (nextState: GameState) => {
@@ -231,6 +264,8 @@ function App() {
 
   const runAction = (action: Action) => {
     if (!game) return;
+    const shouldSnapshot = isReversibleActionType(action.type) && prompt?.playerId === action.playerId;
+    const snapshotBeforeAction = shouldSnapshot ? structuredClone(game) : null;
     const result = applyAction(game, action);
     if (result.error) {
       setError(result.error.message);
@@ -242,6 +277,12 @@ function App() {
     if (previousPromptPlayerId && previousPromptPlayerId !== nextPromptPlayerId) {
       setRevealedPlayerId(null);
     }
+    if (snapshotBeforeAction) {
+      setTurnSnapshots((prev) => [...prev, snapshotBeforeAction]);
+    }
+    if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId)) {
+      setTurnSnapshots([]);
+    }
     setChooser(null);
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
@@ -249,10 +290,33 @@ function App() {
     finalizeIfGameOver(result.state);
   };
 
+  const undoLastPlay = () => {
+    if (turnSnapshots.length === 0) return;
+    const previousState = turnSnapshots[turnSnapshots.length - 1];
+    setGame(previousState);
+    setTurnSnapshots((prev) => prev.slice(0, -1));
+    setChooser(null);
+    setSelectedCardId(null);
+    setSelectedPaymentCards([]);
+    setError(null);
+  };
+
+  const resetTurnPlays = () => {
+    if (turnSnapshots.length === 0) return;
+    const firstState = turnSnapshots[0];
+    setGame(firstState);
+    setTurnSnapshots([]);
+    setChooser(null);
+    setSelectedCardId(null);
+    setSelectedPaymentCards([]);
+    setError(null);
+  };
+
   const handleCardClick = (cardId: string) => {
     if (!game || !prompt) return;
     if (isGameOver(game).done) return;
     if (revealedPlayerId !== prompt.playerId) return;
+    if (!playableCardIds.has(cardId)) return;
 
     const variants = cardActionVariants.get(cardId) ?? [];
     if (variants.length === 0) return;
@@ -281,6 +345,12 @@ function App() {
       playerId: pendingPayment.targetPlayerId,
       cards: selectedPaymentCards,
     });
+  };
+
+  const actionDetailText = (item: LegalAction): string | null => {
+    if (item.requestedAmount == null || item.collectibleCap == null) return null;
+    const detail = `Ask $${item.requestedAmount}, likely collect up to $${item.collectibleCap}`;
+    return item.requiresPropertyTransfer ? `${detail} (likely requires property transfer)` : detail;
   };
 
   const renderHome = () => (
@@ -358,9 +428,13 @@ function App() {
     state.players.map((player) => {
       const canSeeHand = revealedPlayerId === player.id;
       const isCurrent = state.players[state.currentPlayerIndex].id === player.id;
+      const isPromptPlayer = prompt?.playerId === player.id;
       const handInteractive = Boolean(canSeeHand && prompt?.playerId === player.id && !isGameOver(state).done);
       const isPaymentPayer = pendingPayment?.targetPlayerId === player.id;
       const paymentSelectionEnabled = Boolean(isPaymentPayer && revealedPlayerId === player.id && !isGameOver(state).done);
+      const inlineActions = isPromptPlayer
+        ? (pendingPayment ? contextualActions.filter((item) => item.action.type !== 'pay_request') : contextualActions)
+        : [];
       const propertyColors = (Object.keys(player.properties) as PropertyColor[]).filter((color) => player.properties[color].length > 0);
 
       return (
@@ -369,6 +443,55 @@ function App() {
             <h3>{player.name}</h3>
             <p>{getSetCompletionCount(player)} complete sets</p>
           </header>
+
+          {isPromptPlayer && canSeeHand && !isGameOver(state).done ? (
+            <section className="inline-action-panel">
+              {isMandatoryPrompt && <p className="inline-must-act">Required: resolve this step before anything else.</p>}
+              {mainPhaseExhausted && (
+                <p className="inline-must-act">3/3 plays used. Pass turn or use non-play actions.</p>
+              )}
+              {prompt && <p className="inline-prompt-text">{prompt.text}</p>}
+              {isPaymentPayer && pendingPayment ? (
+                <div className="payment-panel">
+                  <p>
+                    <strong>{player.name}</strong> owes <strong>${pendingPayment.amount}</strong> for{' '}
+                    <strong>{pendingPayment.reason}</strong>.
+                  </p>
+                  <p>
+                    Selected total: <strong>${selectedPaymentTotal}</strong> of ${pendingPayment.amount}
+                    {totalPayableValue < pendingPayment.amount ? ' (not enough assets available)' : ''}
+                  </p>
+                  {selectedPaymentCards.length > 0 ? (
+                    <p className="payment-selected">Selected: {selectedPaymentCards.map(getCardDisplayName).join(', ')}</p>
+                  ) : (
+                    <p className="payment-selected">Click cards in {player.name}&apos;s bank/properties to pay.</p>
+                  )}
+                  <button type="button" onClick={submitSelectedPayment} disabled={!paymentCanSubmit}>
+                    Confirm Payment
+                  </button>
+                </div>
+              ) : null}
+              <div className="actions action-list inline-actions">
+                {inlineActions.map((item, index) => (
+                  <button key={`inline-${item.label}-${index}`} onClick={() => runAction(item.action)}>
+                    {item.label}
+                    {actionDetailText(item) ? <span className="action-detail">{actionDetailText(item)}</span> : null}
+                  </button>
+                ))}
+                {inlineActions.length === 0 && !pendingPayment && <p>Play cards from your hand.</p>}
+              </div>
+              {turnSnapshots.length > 0 && prompt?.kind === 'main' ? (
+                <div className="actions inline-actions">
+                  <button type="button" onClick={undoLastPlay}>
+                    Undo Last Play
+                  </button>
+                  <button type="button" onClick={resetTurnPlays}>
+                    Reset Turn Plays
+                  </button>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
 
           <section>
             <strong>Hand</strong>
@@ -448,9 +571,7 @@ function App() {
     if (!game || !prompt) return null;
     const over = isGameOver(game);
     const winner = game.players.find((player) => player.id === over.winnerId);
-    const contextualButtons = pendingPayment
-      ? contextualActions.filter((item) => item.action.type !== 'pay_request')
-      : contextualActions;
+    const topPanelActions = isMandatoryPrompt ? [] : contextualActions;
 
     return (
       <section className="panel game-panel">
@@ -479,34 +600,16 @@ function App() {
         </div>
 
         <section className="action-panel">
-          <h3>{pendingPayment ? 'Payment Required' : 'Turn Actions'}</h3>
-          {pendingPayment && pendingPaymentPlayer ? (
-            <div className="payment-panel">
-              <p>
-                <strong>{pendingPaymentPlayer.name}</strong> owes <strong>${pendingPayment.amount}</strong> for{' '}
-                <strong>{pendingPayment.reason}</strong>.
-              </p>
-              <p>
-                Selected total: <strong>${selectedPaymentTotal}</strong> of ${pendingPayment.amount}
-                {totalPayableValue < pendingPayment.amount ? ' (not enough assets available)' : ''}
-              </p>
-              {selectedPaymentCards.length > 0 ? (
-                <p className="payment-selected">Selected: {selectedPaymentCards.map(getCardDisplayName).join(', ')}</p>
-              ) : (
-                <p className="payment-selected">Click cards in {pendingPaymentPlayer.name}&apos;s bank/properties to pay.</p>
-              )}
-              <button type="button" onClick={submitSelectedPayment} disabled={!paymentCanSubmit || over.done}>
-                Confirm Payment
-              </button>
-            </div>
-          ) : null}
+          <h3>Turn Actions</h3>
           <div className="actions action-list">
-            {contextualButtons.map((item, index) => (
+            {topPanelActions.map((item, index) => (
               <button key={`${item.label}-${index}`} onClick={() => runAction(item.action)} disabled={over.done}>
                 {item.label}
               </button>
             ))}
-            {contextualButtons.length === 0 && !pendingPayment && <p>Play cards from your hand.</p>}
+            {topPanelActions.length === 0 && (
+              <p>{isMandatoryPrompt ? 'Resolve the required action in the active player panel.' : 'Play cards from your hand.'}</p>
+            )}
           </div>
           <div className="debug-actions">
             <button type="button" onClick={() => setShowDebugActions((prev) => !prev)}>
