@@ -208,4 +208,45 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /undo last play/i }));
     expect(screen.queryByRole('button', { name: /undo last play/i })).not.toBeInTheDocument();
   });
+
+  it('treats discard as a required prompt and discards selected hand card', () => {
+    const discardState: GameState = {
+      ...structuredClone(baseState),
+      players: [
+        {
+          ...structuredClone(baseState.players[0]),
+          hand: ['money_1#a1', 'money_2#a2', 'money_3#a3', 'money_4#a4', 'money_5#a5', 'pass_go#a6', 'rent_color#a7', 'debt_collector#a8'],
+        },
+        structuredClone(baseState.players[1]),
+      ],
+      turn: { ...baseState.turn, playsUsed: 3 },
+    };
+    mockedCreateGame.mockImplementationOnce(() => discardState);
+    mockedGetNextPrompt.mockImplementation(() => ({
+      playerId: 'p1',
+      text: 'Alpha: discard down to 7 cards to end your turn.',
+      kind: 'discard',
+    }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Discard $1 Money',
+        action: { type: 'discard_card', playerId: 'p1', cardId: 'money_1#a1' },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+
+    expect(screen.getByText(/required: resolve this step/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'discard_card',
+      playerId: 'p1',
+      cardId: 'money_1#a1',
+    });
+  });
 });

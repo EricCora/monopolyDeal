@@ -23,7 +23,7 @@ import type {
   TurnPrompt,
 } from './types';
 
-const MAX_HAND_AT_END_TURN = 7;
+export const MAX_HAND_AT_END_TURN = 7;
 const MAX_PLAYS_PER_TURN = 3;
 const PROPERTY_COLORS = Object.keys(PROPERTY_SET_SIZES) as PropertyColor[];
 
@@ -270,10 +270,14 @@ function nextPlayerIndex(state: GameState, fromIndex = state.currentPlayerIndex)
   return (fromIndex + 1) % state.players.length;
 }
 
+function requiresEndTurnDiscard(state: GameState, player: PlayerState): boolean {
+  return !state.pending && state.turn.phase === 'action' && getCurrentPlayer(state).id === player.id && player.hand.length > MAX_HAND_AT_END_TURN;
+}
+
 function finishTurn(state: GameState, events: GameEvent[]): RuleError | undefined {
   const current = getCurrentPlayer(state);
   if (current.hand.length > MAX_HAND_AT_END_TURN) {
-    return error('invalid_action', `You must discard to 7 cards or fewer (currently ${current.hand.length}).`);
+    return error('hand_limit', `You must discard to 7 cards or fewer (currently ${current.hand.length}).`);
   }
   state.currentPlayerIndex = nextPlayerIndex(state);
   state.turn = { phase: 'draw', playsUsed: 0, doubleRentMultiplier: 1 };
@@ -665,6 +669,13 @@ export function getLegalActions(state: GameState, playerId: PlayerId): LegalActi
   if (!player) return [];
   if (state.winnerId) return [];
 
+  if (requiresEndTurnDiscard(state, player)) {
+    return player.hand.map((cardId) => ({
+      label: `Discard ${cardLabel(cardId)}`,
+      action: { type: 'discard_card', playerId, cardId },
+    }));
+  }
+
   const pendingActions = legalForPending(state, player);
   if (pendingActions.length > 0) return pendingActions;
   if (state.pending) return [];
@@ -712,6 +723,13 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     if (state.turn.phase !== 'action') return setErr(error('invalid_phase', 'Cannot pass now.'));
     const err = finishTurn(state, events);
     if (err) return setErr(err);
+  }
+
+  if (action.type === 'discard_card') {
+    if (!requiresEndTurnDiscard(state, player)) return setErr(error('invalid_action', 'Discard is only allowed when over the hand limit at end of turn.'));
+    if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
+    discard(state, action.cardId);
+    pushEvent(events, 'discard', `${player.name} discarded ${cardLabel(action.cardId)}.`);
   }
 
   if (action.type === 'play_to_bank') {
@@ -1103,6 +1121,14 @@ export function isGameOver(state: GameState): { done: boolean; winnerId?: Player
 
 export function getNextPrompt(state: GameState): TurnPrompt {
   const currentPlayer = getCurrentPlayer(state);
+  if (requiresEndTurnDiscard(state, currentPlayer)) {
+    return {
+      playerId: currentPlayer.id,
+      text: `${currentPlayer.name}: discard down to ${MAX_HAND_AT_END_TURN} cards to end your turn.`,
+      kind: 'discard',
+    };
+  }
+
   if (state.pending?.kind === 'counter') {
     const pendingPlayer = getPlayer(state, state.pending.payload.awaitingPlayerId);
     return {

@@ -62,6 +62,7 @@ function actionToCardId(action: Action): string | null {
   if (action.type === 'play_to_bank') return action.cardId;
   if (action.type === 'play_property') return action.cardId;
   if (action.type === 'play_action') return action.cardId;
+  if (action.type === 'discard_card') return action.cardId;
   if (action.type === 'counter_response' && action.useJustSayNo && action.cardId) return action.cardId;
   return null;
 }
@@ -183,10 +184,32 @@ function App() {
     () => legalActions.filter((item) => !actionToCardId(item.action)),
     [legalActions],
   );
-  const isMandatoryPrompt = Boolean(prompt && (prompt.kind === 'payment' || prompt.kind === 'selection' || prompt.kind === 'response'));
+  const isMandatoryPrompt = Boolean(
+    prompt && (prompt.kind === 'payment' || prompt.kind === 'selection' || prompt.kind === 'response' || prompt.kind === 'discard'),
+  );
   const mainPhaseExhausted = Boolean(
     game && prompt?.kind === 'main' && game.turn.phase === 'action' && game.turn.playsUsed >= 3 && !game.pending,
   );
+  const discardOverLimitCount = useMemo(() => {
+    if (!game || !prompt || prompt.kind !== 'discard') return 0;
+    const activePlayer = game.players.find((player) => player.id === prompt.playerId);
+    if (!activePlayer) return 0;
+    return Math.max(activePlayer.hand.length - 7, 0);
+  }, [game, prompt]);
+  const turnStatusText = useMemo(() => {
+    if (!prompt) return '';
+    if (prompt.kind === 'discard') {
+      return discardOverLimitCount > 0
+        ? `Discard ${discardOverLimitCount} card${discardOverLimitCount === 1 ? '' : 's'} to end turn.`
+        : 'Discard step complete. You can pass turn.';
+    }
+    if (prompt.kind === 'payment') return 'Payment is required before any other action.';
+    if (prompt.kind === 'response') return 'Respond to Just Say No chain.';
+    if (prompt.kind === 'selection') return 'Resolve the pending card effect.';
+    if (prompt.kind === 'draw') return 'Draw to start the turn.';
+    if (mainPhaseExhausted) return '3/3 plays used. Pass turn or use non-play actions.';
+    return 'Play cards from hand or pass turn.';
+  }, [discardOverLimitCount, mainPhaseExhausted, prompt]);
 
   const pendingPayment = game?.pending?.kind === 'payment' ? game.pending.payload : null;
   const pendingPaymentPlayer = useMemo(() => {
@@ -451,6 +474,12 @@ function App() {
               {mainPhaseExhausted && (
                 <p className="inline-must-act">3/3 plays used. Pass turn or use non-play actions.</p>
               )}
+              {prompt?.kind === 'discard' && (
+                <p className="inline-discard-hint">
+                  Hand size: <strong>{player.hand.length}</strong> | Limit: <strong>7</strong> | Need to discard:{' '}
+                  <strong>{Math.max(player.hand.length - 7, 0)}</strong>
+                </p>
+              )}
               {prompt && <p className="inline-prompt-text">{prompt.text}</p>}
               {isPaymentPayer && pendingPayment ? (
                 <div className="payment-panel">
@@ -479,7 +508,9 @@ function App() {
                     {actionDetailText(item) ? <span className="action-detail">{actionDetailText(item)}</span> : null}
                   </button>
                 ))}
-                {inlineActions.length === 0 && !pendingPayment && <p>Play cards from your hand.</p>}
+                {inlineActions.length === 0 && !pendingPayment && (
+                  <p>{prompt?.kind === 'discard' ? 'Discard from your hand to continue.' : 'Play cards from your hand.'}</p>
+                )}
               </div>
               {turnSnapshots.length > 0 && prompt?.kind === 'main' ? (
                 <div className="actions inline-actions">
@@ -600,6 +631,7 @@ function App() {
 
         <section className="action-panel">
           <h3>Turn Actions</h3>
+          <p className={`turn-status ${isMandatoryPrompt ? 'is-required' : ''}`}>{turnStatusText}</p>
           <p>{isMandatoryPrompt ? 'Resolve the required action in the active player panel.' : 'Use the active player panel below to play cards.'}</p>
           <div className="debug-actions">
             <button type="button" onClick={() => setShowDebugActions((prev) => !prev)}>

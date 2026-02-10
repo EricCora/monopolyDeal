@@ -119,6 +119,7 @@ export type RuleErrorCode =
   | 'invalid_phase'
   | 'invalid_turn'
   | 'invalid_action'
+  | 'hand_limit'
   | 'invalid_target'
   | 'illegal_play_limit'
   | 'insufficient_cards'
@@ -137,6 +138,7 @@ export type Action =
   | { type: 'play_property'; playerId: PlayerId; cardId: string; color: PropertyColor }
   | { type: 'move_wild'; playerId: PlayerId; cardId: string; fromColor: PropertyColor; toColor: PropertyColor }
   | { type: 'play_action'; playerId: PlayerId; cardId: string; targetPlayerId?: PlayerId; color?: PropertyColor }
+  | { type: 'discard_card'; playerId: PlayerId; cardId: string }
   | { type: 'counter_response'; playerId: PlayerId; useJustSayNo: boolean; cardId?: string }
   | { type: 'pay_request'; playerId: PlayerId; cards: string[] }
   | { type: 'sly_deal_pick'; playerId: PlayerId; cardId: string; sourceColor: PropertyColor; destinationColor: PropertyColor }
@@ -161,5 +163,5 @@ export interface ApplyResult {
 export interface TurnPrompt {
   playerId: PlayerId;
   text: string;
-  kind: 'draw' | 'main' | 'response' | 'payment' | 'selection';
+  kind: 'draw' | 'main' | 'response' | 'payment' | 'selection' | 'discard';
 }
