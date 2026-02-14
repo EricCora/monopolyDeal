@@ -10,12 +10,13 @@ Purpose: give coding agents enough context to make correct, low-regression chang
 - `src/cards/`
   - Card catalog, set sizes, rent scales, display helpers.
 - `src/persistence/`
-  - `localStorage` read/write wrappers for active game, stats, and UI preferences.
+  - `localStorage` read/write wrappers for active game, manual saved slots, stats, and UI preferences.
 - `src/stats/`
   - Match record creation, lifetime aggregation, and dev fixture data.
 - `src/ui/` + `src/App.tsx`
   - `App.tsx` owns state/actions and passes typed props to screen containers.
   - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition.
+  - `src/ui/screens/SavedGamesScreen.tsx` manages manual save slots (load/save-over/rename/delete).
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
   - `src/ui/components/ActionConfirmDialog.tsx` handles risky-action confirmation flow.
   - `src/ui/components/RulesDrawer.tsx` provides in-game rules/set/rent quick reference.
@@ -116,6 +117,7 @@ Do not model multiple simultaneous pending effects.
 - `src/engine/game.ts` is large; regressions are likely when changing shared helpers.
 - `src/App.tsx` coordinates many UI states (chooser, payment selection, pass-and-play shield, pause state, settings routing, undo snapshots).
 - Card rendering/fit is split between `src/ui/components/CardView.tsx`, `src/ui/components/HandFan.tsx`, and `src/ui/theme/components/cards.css`.
+- Draw-phase prompt intentionally uses rail hand layout for readability; non-draw prompts still use auto-fit.
 - Rent/double-rent/counter interactions are edge-case heavy.
 
 ## Milestone Gate Checklist
@@ -166,6 +168,7 @@ Validation:
 - Save/load: `src/persistence/storage.ts`
 - Risky-action confirm modal: `src/ui/components/ActionConfirmDialog.tsx`
 - Rules quick reference modal: `src/ui/components/RulesDrawer.tsx`
+- Saved slots manager screen: `src/ui/screens/SavedGamesScreen.tsx`
 - Match/lifetime models: `src/stats/types.ts`
 - Match aggregation: `src/stats/records.ts`
 - Dev fixture data: `src/stats/devFixture.ts`

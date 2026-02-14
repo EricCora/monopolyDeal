@@ -92,6 +92,7 @@ const MATCH_HISTORY_KEY = 'monopolyDeal.matchHistory.v1';
 const LIFETIME_STATS_KEY = 'monopolyDeal.lifetimeStats.v1';
 const GROWTH_METRICS_KEY = 'monopolyDeal.growthMetrics.v1';
 const UI_PREFERENCES_KEY = 'monopolyDeal.uiPreferences.v1';
+const SAVED_GAMES_KEY = 'monopolyDeal.savedGames.v1';
 
 vi.mock('../engine', () => {
   const clone = () => structuredClone(baseState);
@@ -186,6 +187,11 @@ describe('App', () => {
       configurable: true,
       writable: true,
       value: vi.fn(() => true),
+    });
+    Object.defineProperty(window, 'prompt', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(() => 'Renamed Slot'),
     });
   });
 
@@ -418,6 +424,7 @@ describe('App', () => {
     expect(screen.getByLabelText(/turn phase progress/i)).toHaveTextContent(/1\.\s*Draw/i);
     expect(screen.getByText(/draw to start the turn/i)).toBeInTheDocument();
     expect(screen.getByText(/play up to 3 cards \(0\/3\)/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/player hand/i)).toHaveAttribute('data-layout', 'rail');
   });
 
   it('renders pending selection play actions in inline actions and runs target choice', () => {
@@ -751,6 +758,64 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: /game table/i })).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: /game paused/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^resume$/i })).toBeInTheDocument();
+  });
+
+  it('opens saved games screen from home and returns back', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /saved games/i }));
+    expect(screen.getByRole('heading', { name: /saved games/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
+    expect(screen.getByRole('heading', { name: /monopoly deal local/i })).toBeInTheDocument();
+  });
+
+  it('saves current game to a slot and loads it from saved games', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save current game/i }));
+
+    const saved = JSON.parse(localStorage.getItem(SAVED_GAMES_KEY) ?? '{}');
+    expect(saved.version).toBe(1);
+    expect(saved.slots).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /home/i }));
+    fireEvent.click(screen.getByRole('button', { name: /saved games/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^load$/i }));
+
+    expect(screen.getByRole('heading', { name: /game table/i })).toBeInTheDocument();
+  });
+
+  it('renames and deletes saved game slots', () => {
+    localStorage.setItem(
+      SAVED_GAMES_KEY,
+      JSON.stringify({
+        version: 1,
+        slots: [
+          {
+            id: 'slot_1',
+            name: 'Original Slot',
+            createdAt: 1,
+            updatedAt: 1,
+            gameState: baseState,
+          },
+        ],
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /saved games/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^rename$/i }));
+
+    let saved = JSON.parse(localStorage.getItem(SAVED_GAMES_KEY) ?? '{}');
+    expect(saved.slots[0].name).toBe('Renamed Slot');
+
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+    saved = JSON.parse(localStorage.getItem(SAVED_GAMES_KEY) ?? '{}');
+    expect(saved.slots).toHaveLength(0);
   });
 
   it('does not carry paused state into a new match', () => {

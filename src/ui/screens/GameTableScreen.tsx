@@ -54,6 +54,7 @@ interface GameTableScreenProps {
   actionDetailText: (item: LegalAction) => string | null;
   onPauseToggle: () => void;
   onOpenRules: () => void;
+  onOpenSavedGames: () => void;
   onOpenSettings: () => void;
   onToggleDebugActions: () => void;
   onRunAction: (action: Action, source?: LegalAction) => void;
@@ -114,6 +115,7 @@ export function GameTableScreen({
   actionDetailText,
   onPauseToggle,
   onOpenRules,
+  onOpenSavedGames,
   onOpenSettings,
   onToggleDebugActions,
   onRunAction,
@@ -146,6 +148,7 @@ export function GameTableScreen({
           <>
             <button onClick={onNavigateHome}>Home</button>
             <button onClick={onOpenRules}>Rules Reference</button>
+            <button onClick={onOpenSavedGames}>Save Game</button>
             <button onClick={onOpenSettings}>Settings</button>
             <button onClick={onPauseToggle}>{isPaused ? 'Resume' : 'Pause'}</button>
           </>
@@ -173,6 +176,7 @@ export function GameTableScreen({
               const canSeeHand = revealedPlayerId === player.id;
               const isCurrent = game.players[game.currentPlayerIndex].id === player.id;
               const isPromptPlayer = prompt.playerId === player.id;
+              const handFitMode = isPromptPlayer && prompt.kind === 'draw' ? 'rail' : 'auto';
               const handInteractive = Boolean(canSeeHand && prompt.playerId === player.id && !over.done && !isPaused);
               const isPaymentPayer = pendingPayment?.targetPlayerId === player.id;
               const paymentSelectionEnabled = Boolean(isPaymentPayer && revealedPlayerId === player.id && !over.done && !isPaused);
@@ -277,7 +281,7 @@ export function GameTableScreen({
                           selectedCardId={selectedCardId}
                           onCardClick={onCardClick}
                           interactive={handInteractive}
-                          fitMode="auto"
+                          fitMode={handFitMode}
                         />
                       ) : (
                         <p>Empty</p>

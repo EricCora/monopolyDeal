@@ -2,15 +2,30 @@ import type { GameState } from '../engine';
 import type { GrowthMetricEvent, GrowthMetricsV1, LifetimeStatsV1, MatchRecordV1 } from '../stats/types';
 
 const ACTIVE_GAME_KEY = 'monopolyDeal.activeGame.v1';
+const SAVED_GAMES_KEY = 'monopolyDeal.savedGames.v1';
 const MATCH_HISTORY_KEY = 'monopolyDeal.matchHistory.v1';
 const LIFETIME_STATS_KEY = 'monopolyDeal.lifetimeStats.v1';
 const GROWTH_METRICS_KEY = 'monopolyDeal.growthMetrics.v1';
 const UI_PREFERENCES_KEY = 'monopolyDeal.uiPreferences.v1';
+const MAX_SAVED_GAME_SLOTS = 5;
 
 export interface SavedGameV1 {
   version: 1;
   timestamp: number;
   gameState: GameState;
+}
+
+export interface SavedGameSlotV1 {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  gameState: GameState;
+}
+
+export interface SavedGamesCollectionV1 {
+  version: 1;
+  slots: SavedGameSlotV1[];
 }
 
 export interface UiPreferencesV1 {
@@ -48,6 +63,135 @@ export function loadActiveGame(): SavedGameV1 | null {
 
 export function clearActiveGame(): void {
   localStorage.removeItem(ACTIVE_GAME_KEY);
+}
+
+function defaultSavedGamesCollection(): SavedGamesCollectionV1 {
+  return { version: 1, slots: [] };
+}
+
+function sanitizeSavedGameSlots(rawSlots: unknown): SavedGameSlotV1[] {
+  if (!Array.isArray(rawSlots)) return [];
+  const sanitized: SavedGameSlotV1[] = [];
+  for (const item of rawSlots) {
+    if (!item || typeof item !== 'object') continue;
+    const candidate = item as Partial<SavedGameSlotV1>;
+    if (typeof candidate.id !== 'string' || candidate.id.length === 0) continue;
+    if (typeof candidate.name !== 'string' || candidate.name.length === 0) continue;
+    if (!candidate.gameState || typeof candidate.gameState !== 'object') continue;
+    const createdAt = Number(candidate.createdAt);
+    const updatedAt = Number(candidate.updatedAt);
+    sanitized.push({
+      id: candidate.id,
+      name: candidate.name,
+      createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
+      updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now(),
+      gameState: candidate.gameState as GameState,
+    });
+  }
+  return sanitized
+    .sort((left, right) => right.updatedAt - left.updatedAt)
+    .slice(0, MAX_SAVED_GAME_SLOTS);
+}
+
+function saveSlotNameFallback(): string {
+  return `Saved Game ${new Date().toLocaleString()}`;
+}
+
+export function loadSavedGames(): SavedGamesCollectionV1 {
+  const raw = localStorage.getItem(SAVED_GAMES_KEY);
+  if (!raw) return defaultSavedGamesCollection();
+  try {
+    const parsed = JSON.parse(raw) as Partial<SavedGamesCollectionV1>;
+    if (parsed.version !== 1) return defaultSavedGamesCollection();
+    return {
+      version: 1,
+      slots: sanitizeSavedGameSlots(parsed.slots),
+    };
+  } catch {
+    return defaultSavedGamesCollection();
+  }
+}
+
+export function saveSavedGames(collection: SavedGamesCollectionV1): void {
+  const sanitized: SavedGamesCollectionV1 = {
+    version: 1,
+    slots: sanitizeSavedGameSlots(collection.slots),
+  };
+  localStorage.setItem(SAVED_GAMES_KEY, JSON.stringify(sanitized));
+}
+
+function nextSlotId(): string {
+  return `slot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function upsertSavedGameSlot(input: { id?: string; name?: string; gameState: GameState }): SavedGamesCollectionV1 {
+  const current = loadSavedGames();
+  const now = Date.now();
+  if (input.id) {
+    const found = current.slots.find((slot) => slot.id === input.id);
+    if (found) {
+      const next: SavedGamesCollectionV1 = {
+        version: 1,
+        slots: current.slots.map((slot) => (slot.id === input.id
+          ? {
+              ...slot,
+              name: input.name?.trim() || slot.name,
+              updatedAt: now,
+              gameState: input.gameState,
+            }
+          : slot)),
+      };
+      saveSavedGames(next);
+      return loadSavedGames();
+    }
+  }
+
+  if (current.slots.length >= MAX_SAVED_GAME_SLOTS) {
+    throw new Error('save_slots_full');
+  }
+
+  const nextSlot: SavedGameSlotV1 = {
+    id: nextSlotId(),
+    name: input.name?.trim() || saveSlotNameFallback(),
+    createdAt: now,
+    updatedAt: now,
+    gameState: input.gameState,
+  };
+
+  const next: SavedGamesCollectionV1 = {
+    version: 1,
+    slots: [nextSlot, ...current.slots],
+  };
+  saveSavedGames(next);
+  return loadSavedGames();
+}
+
+export function deleteSavedGameSlot(id: string): SavedGamesCollectionV1 {
+  const current = loadSavedGames();
+  const next: SavedGamesCollectionV1 = {
+    version: 1,
+    slots: current.slots.filter((slot) => slot.id !== id),
+  };
+  saveSavedGames(next);
+  return loadSavedGames();
+}
+
+export function renameSavedGameSlot(id: string, name: string): SavedGamesCollectionV1 {
+  const trimmed = name.trim();
+  if (!trimmed) return loadSavedGames();
+  const current = loadSavedGames();
+  const now = Date.now();
+  const next: SavedGamesCollectionV1 = {
+    version: 1,
+    slots: current.slots.map((slot) => (slot.id === id ? { ...slot, name: trimmed, updatedAt: now } : slot)),
+  };
+  saveSavedGames(next);
+  return loadSavedGames();
+}
+
+export function loadSavedGameSlot(id: string): SavedGameSlotV1 | null {
+  const collection = loadSavedGames();
+  return collection.slots.find((slot) => slot.id === id) ?? null;
 }
 
 export function loadMatchHistory(): MatchRecordV1[] {

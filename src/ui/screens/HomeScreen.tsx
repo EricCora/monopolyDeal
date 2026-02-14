@@ -2,11 +2,12 @@ interface HomeScreenProps {
   error: string | null;
   onNewGame: () => void;
   onResumeGame: () => void;
+  onOpenSavedGames: () => void;
   onOpenStats: () => void;
   onOpenSettings: () => void;
 }
 
-export function HomeScreen({ error, onNewGame, onResumeGame, onOpenStats, onOpenSettings }: HomeScreenProps) {
+export function HomeScreen({ error, onNewGame, onResumeGame, onOpenSavedGames, onOpenStats, onOpenSettings }: HomeScreenProps) {
   return (
     <section className="panel home-screen card-enter">
       <div className="home-hero">
@@ -18,6 +19,7 @@ export function HomeScreen({ error, onNewGame, onResumeGame, onOpenStats, onOpen
       <div className="home-actions actions" aria-label="Home actions">
         <button onClick={onNewGame}>New Game</button>
         <button onClick={onResumeGame}>Resume Saved Game</button>
+        <button onClick={onOpenSavedGames}>Saved Games</button>
         <button onClick={onOpenStats}>Stats & History</button>
         <button onClick={onOpenSettings}>Settings</button>
       </div>

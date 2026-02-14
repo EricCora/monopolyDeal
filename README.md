@@ -25,6 +25,7 @@ This project focuses on local, pass-and-play gameplay with a rules engine, persi
 - Payment assistant auto-select for pending payment flows
 - In-game rules reference drawer with property set/rent lookup and pending-flow help
 - Stats filters (player/winner/date range) and settings data controls for clearing local stats/history
+- Manual saved-game slots (up to 5) with load/save-over/rename/delete controls
 - Auto-save + resume via `localStorage`
 
 ## Tech Stack
@@ -77,6 +78,12 @@ Use the `Settings` screen from Home (or the in-game top bar) to control:
 - Dev Mode toggle and sample data reseed tools
 - Local data controls (clear match history + lifetime stats)
 
+## Saved Games
+
+- `Resume Saved Game` on Home is a quick-resume shortcut for the active autosave.
+- `Saved Games` opens manual slots (up to 5) with `Load`, `Save Here`, `Rename`, and `Delete`.
+- In-game `Save Game` opens the same slot manager and can save the current match to a new or existing slot.
+
 When a live match is open, the top bar includes `Pause` / `Resume`. Paused state is persisted, so reopening a saved match restores the paused overlay until resumed.
 
 ## Project Structure
@@ -106,6 +113,7 @@ For AI coding agents working on this repository:
 Game state and stats are stored in browser `localStorage` under versioned keys:
 
 - `monopolyDeal.activeGame.v1`
+- `monopolyDeal.savedGames.v1`
 - `monopolyDeal.matchHistory.v1`
 - `monopolyDeal.lifetimeStats.v1`
 - `monopolyDeal.growthMetrics.v1`

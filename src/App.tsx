@@ -16,15 +16,21 @@ import {
   clearLifetimeStats,
   clearMatchHistory,
   clearActiveGame,
+  deleteSavedGameSlot,
   incrementGrowthMetric,
   loadActiveGame,
+  loadSavedGameSlot,
+  loadSavedGames,
   loadLifetimeStats,
   loadMatchHistory,
   loadUiPreferences,
+  renameSavedGameSlot,
   saveActiveGame,
+  upsertSavedGameSlot,
   saveLifetimeStats,
   saveMatchHistory,
   saveUiPreferences,
+  type SavedGameSlotV1,
   type UiPreferencesV1,
 } from './persistence/storage';
 import {
@@ -43,6 +49,7 @@ import { RulesDrawer } from './ui/components/RulesDrawer';
 import { GameTableScreen } from './ui/screens/GameTableScreen';
 import { HomeScreen } from './ui/screens/HomeScreen';
 import { PostGameScreen } from './ui/screens/PostGameScreen';
+import { SavedGamesScreen } from './ui/screens/SavedGamesScreen';
 import { SettingsScreen } from './ui/screens/SettingsScreen';
 import { SetupScreen } from './ui/screens/SetupScreen';
 import { StatsScreen } from './ui/screens/StatsScreen';
@@ -50,8 +57,9 @@ import { generatePostGameSharePng, postGameShareFilename } from './ui/share/post
 import type { RiskyActionConfirmation, SetupViewModel, ShareStatus } from './ui/types';
 import './App.css';
 
-type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'game_over';
+type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over';
 type SettingsBackScreen = 'home' | 'game';
+type SavedGamesBackScreen = 'home' | 'game';
 type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
 
 interface CardActionVariant extends ActionVariantView {
@@ -133,9 +141,17 @@ function gameIdentity(game: GameState): string {
   return `${game.createdAt}`;
 }
 
+function autoSlotName(game: GameState): string {
+  const names = game.players.map((player) => player.name);
+  const prefix = names.length > 1 ? `${names[0]} vs ${names.slice(1).join(', ')}` : names[0] ?? 'Saved Game';
+  const trimmed = prefix.length > 54 ? `${prefix.slice(0, 54)}...` : prefix;
+  return `${trimmed} - Turn ${game.turnCount}`;
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [settingsBackScreen, setSettingsBackScreen] = useState<SettingsBackScreen>('home');
+  const [savedGamesBackScreen, setSavedGamesBackScreen] = useState<SavedGamesBackScreen>('home');
   const [game, setGame] = useState<GameState | null>(null);
   const [postGameSummary, setPostGameSummary] = useState<PostGameSummary | null>(null);
   const [setup, setSetup] = useState<SetupViewModel>(initialSetup);
@@ -143,6 +159,7 @@ function App() {
   const [revealedPlayerId, setRevealedPlayerId] = useState<string | null>(null);
   const [history, setHistory] = useState<MatchRecordV1[]>(() => loadMatchHistory());
   const [lifetime, setLifetime] = useState<LifetimeStatsV1>(() => loadLifetimeStats());
+  const [savedSlots, setSavedSlots] = useState<SavedGameSlotV1[]>(() => loadSavedGames().slots);
   const [chooser, setChooser] = useState<PlayChooserState | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [selectedPaymentCards, setSelectedPaymentCards] = useState<string[]>([]);
@@ -326,6 +343,7 @@ function App() {
   }, [discardOverLimitCount, mainPhaseExhausted, prompt]);
 
   const pendingPayment = game?.pending?.kind === 'payment' ? game.pending.payload : null;
+  const canSaveCurrentGame = Boolean(game && !isGameOver(game).done);
   const pendingPaymentPlayer = useMemo(() => {
     if (!game || !pendingPayment) return null;
     return game.players.find((player) => player.id === pendingPayment.targetPlayerId) ?? null;
@@ -357,6 +375,13 @@ function App() {
     setError(null);
   }, []);
 
+  const openSavedGames = useCallback((backScreen: SavedGamesBackScreen) => {
+    setSavedGamesBackScreen(backScreen);
+    setSavedSlots(loadSavedGames().slots);
+    setScreen('saved_games');
+    setError(null);
+  }, []);
+
   const closeSettings = useCallback(() => {
     if (settingsBackScreen === 'game' && game) {
       setScreen('game');
@@ -364,6 +389,14 @@ function App() {
     }
     setScreen('home');
   }, [game, settingsBackScreen]);
+
+  const closeSavedGames = useCallback(() => {
+    if (savedGamesBackScreen === 'game' && game) {
+      setScreen('game');
+      return;
+    }
+    setScreen('home');
+  }, [game, savedGamesBackScreen]);
 
   const togglePause = useCallback(() => {
     if (!currentGameId) return;
@@ -442,6 +475,78 @@ function App() {
       return;
     }
     openGame(saved.gameState);
+  };
+
+  const loadSavedSlotGame = (slotId: string) => {
+    const slot = loadSavedGameSlot(slotId);
+    if (!slot) {
+      setError('Saved slot no longer exists.');
+      return;
+    }
+    if (isGameOver(slot.gameState).done) {
+      const loadedLifetime = loadLifetimeStats();
+      setLifetime(loadedLifetime);
+      setGame(slot.gameState);
+      setPostGameSummary(buildPostGameSummary(slot.gameState, loadedLifetime));
+      setScreen('game_over');
+      setError(null);
+      return;
+    }
+    openGame(slot.gameState);
+  };
+
+  const saveCurrentToNewSlot = () => {
+    if (!game || isGameOver(game).done) return;
+    try {
+      const next = upsertSavedGameSlot({
+        name: autoSlotName(game),
+        gameState: game,
+      });
+      setSavedSlots(next.slots);
+      setError(null);
+    } catch (slotError) {
+      if (slotError instanceof Error && slotError.message === 'save_slots_full') {
+        setError('All 5 save slots are full. Overwrite an existing slot.');
+        return;
+      }
+      setError('Could not save the current game.');
+    }
+  };
+
+  const saveCurrentToExistingSlot = (slotId: string) => {
+    if (!game || isGameOver(game).done) return;
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm('Overwrite this saved slot with the current game?');
+      if (!confirmed) return;
+    }
+    const existing = savedSlots.find((slot) => slot.id === slotId);
+    const next = upsertSavedGameSlot({
+      id: slotId,
+      name: existing?.name ?? autoSlotName(game),
+      gameState: game,
+    });
+    setSavedSlots(next.slots);
+    setError(null);
+  };
+
+  const renameSavedSlot = (slotId: string) => {
+    const target = savedSlots.find((slot) => slot.id === slotId);
+    if (!target || typeof window === 'undefined') return;
+    const nextName = window.prompt('Rename saved slot', target.name);
+    if (!nextName) return;
+    const next = renameSavedGameSlot(slotId, nextName);
+    setSavedSlots(next.slots);
+    setError(null);
+  };
+
+  const removeSavedSlot = (slotId: string) => {
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm('Delete this saved slot?');
+      if (!confirmed) return;
+    }
+    const next = deleteSavedGameSlot(slotId);
+    setSavedSlots(next.slots);
+    setError(null);
   };
 
   const finalizeIfGameOver = (nextState: GameState) => {
@@ -735,6 +840,7 @@ function App() {
           error={error}
           onNewGame={() => setScreen('setup')}
           onResumeGame={resumeGame}
+          onOpenSavedGames={() => openSavedGames('home')}
           onOpenStats={() => setScreen('stats')}
           onOpenSettings={() => openSettings('home')}
         />
@@ -786,6 +892,7 @@ function App() {
             setShowRulesDrawer(true);
             incrementGrowthMetric('rules_drawer_opened');
           }}
+          onOpenSavedGames={() => openSavedGames('game')}
           onOpenSettings={() => openSettings('game')}
           onToggleDebugActions={() => {
             if (isPaused) return;
@@ -812,6 +919,20 @@ function App() {
       ) : null}
 
       {screen === 'stats' ? <StatsScreen history={history} lifetime={lifetime} onBack={() => setScreen('home')} /> : null}
+
+      {screen === 'saved_games' ? (
+        <SavedGamesScreen
+          slots={savedSlots}
+          canSaveCurrent={canSaveCurrentGame}
+          error={error}
+          onSaveCurrentToNewSlot={saveCurrentToNewSlot}
+          onLoadSlot={loadSavedSlotGame}
+          onSaveToExistingSlot={saveCurrentToExistingSlot}
+          onRenameSlot={renameSavedSlot}
+          onDeleteSlot={removeSavedSlot}
+          onBack={closeSavedGames}
+        />
+      ) : null}
 
       {screen === 'settings' ? (
         <SettingsScreen
