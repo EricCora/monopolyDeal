@@ -1,0 +1,43 @@
+.play-chooser-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-chooser);
+  background: rgba(6, 11, 17, 0.76);
+  display: grid;
+  place-items: center;
+}
+
+.play-chooser {
+  width: min(460px, calc(100% - 2rem));
+  border-radius: 14px;
+  border: 1px solid #3e5b73;
+  background: linear-gradient(180deg, #102133, #0c1b2a);
+  padding: 1rem;
+  box-shadow: var(--shadow-md);
+}
+
+.play-chooser-head h3 {
+  color: var(--text-main);
+}
+
+.play-chooser-head p {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+}
+
+.play-options {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.play-option {
+  text-align: left;
+  border-radius: 12px;
+}
+
+.play-cancel {
+  margin-top: 0.8rem;
+  background: linear-gradient(140deg, #735d49, #5e4a39);
+  border-color: rgba(189, 163, 140, 0.5);
+}

@@ -14,6 +14,7 @@ This project focuses on local, pass-and-play gameplay with a rules engine, persi
 - Winner detection at 3 complete property sets
 - Undo for reversible plays during the active turn
 - Match history and lifetime win stats
+- Post-game brag image share (clipboard with download fallback)
 - Auto-save + resume via `localStorage`
 
 ## Tech Stack
@@ -60,7 +61,10 @@ Open the local URL shown by Vite (usually `http://localhost:5173`).
 src/
   engine/        # Core game rules and action resolution
   cards/         # Card catalog and metadata
-  ui/            # UI helpers and React components
+  ui/            # UI components, screen containers, and theme modules
+    layout/      # Shared shell/top-bar/action-rail primitives
+    screens/     # Home/setup/game/stats/post-game screen components
+    theme/       # Tokenized CSS split by base/components/screens
   persistence/   # localStorage save/load helpers
   stats/         # Match records and lifetime stat aggregation
   test/          # Engine and UI tests
@@ -80,6 +84,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - `monopolyDeal.activeGame.v1`
 - `monopolyDeal.matchHistory.v1`
 - `monopolyDeal.lifetimeStats.v1`
+- `monopolyDeal.growthMetrics.v1`
 
 ## Current Scope
 

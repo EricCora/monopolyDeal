@@ -1,11 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { formatPropertyColor, getCardDefinition, getCardDisplayName, type PropertyColor } from './cards/catalog';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formatPropertyColor, getCardDefinition, type PropertyColor } from './cards/catalog';
 import {
   applyAction,
   createGame,
   getLegalActions,
   getNextPrompt,
-  getSetCompletionCount,
   isGameOver,
   type Action,
   type GameState,
@@ -14,12 +13,16 @@ import {
 } from './engine';
 import {
   clearActiveGame,
+  incrementGrowthMetric,
   loadActiveGame,
   loadLifetimeStats,
   loadMatchHistory,
+  loadUiPreferences,
   saveActiveGame,
   saveLifetimeStats,
   saveMatchHistory,
+  saveUiPreferences,
+  type UiPreferencesV1,
 } from './persistence/storage';
 import {
   applyMatchToLifetime,
@@ -29,22 +32,18 @@ import {
   type MatchRecordV1,
   type PostGameSummary,
 } from './stats';
-import { CardView } from './ui/components/CardView';
-import { HandFan } from './ui/components/HandFan';
 import { PlayChooser, type ActionVariantView } from './ui/components/PlayChooser';
-import { RecentEvents } from './ui/components/RecentEvents';
+import { GameShell } from './ui/layout/GameShell';
+import { GameTableScreen } from './ui/screens/GameTableScreen';
+import { HomeScreen } from './ui/screens/HomeScreen';
+import { PostGameScreen } from './ui/screens/PostGameScreen';
+import { SetupScreen } from './ui/screens/SetupScreen';
+import { StatsScreen } from './ui/screens/StatsScreen';
+import { generatePostGameSharePng, postGameShareFilename } from './ui/share/postGameShare';
+import type { SetupViewModel, ShareStatus } from './ui/types';
 import './App.css';
 
-const StatsDashboard = lazy(() =>
-  import('./ui/components/StatsDashboard').then((module) => ({ default: module.StatsDashboard })),
-);
-
 type Screen = 'home' | 'setup' | 'game' | 'stats' | 'game_over';
-
-interface SetupState {
-  playerCount: number;
-  playerNames: string[];
-}
 
 interface CardActionVariant extends ActionVariantView {
   action: Action;
@@ -58,7 +57,7 @@ interface PlayChooserState {
 
 type ReversibleActionType = 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
 
-function initialSetup(): SetupState {
+function initialSetup(): SetupViewModel {
   return {
     playerCount: 2,
     playerNames: ['Player 1', 'Player 2', 'Player 3', 'Player 4'],
@@ -113,7 +112,7 @@ function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [game, setGame] = useState<GameState | null>(null);
   const [postGameSummary, setPostGameSummary] = useState<PostGameSummary | null>(null);
-  const [setup, setSetup] = useState<SetupState>(initialSetup);
+  const [setup, setSetup] = useState<SetupViewModel>(initialSetup);
   const [error, setError] = useState<string | null>(null);
   const [revealedPlayerId, setRevealedPlayerId] = useState<string | null>(null);
   const [history, setHistory] = useState<MatchRecordV1[]>(() => loadMatchHistory());
@@ -122,9 +121,11 @@ function App() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [selectedPaymentCards, setSelectedPaymentCards] = useState<string[]>([]);
   const [showDebugActions, setShowDebugActions] = useState(false);
-  const [reduceCelebrationEffects, setReduceCelebrationEffects] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareStatus, setShareStatus] = useState<ShareStatus>(null);
   const [turnSnapshots, setTurnSnapshots] = useState<GameState[]>([]);
+  const [uiPreferences, setUiPreferences] = useState<UiPreferencesV1>(() => loadUiPreferences());
   const postGameTitleRef = useRef<HTMLHeadingElement | null>(null);
   const finalizedMatchRef = useRef<string | null>(null);
 
@@ -135,6 +136,10 @@ function App() {
     }, 220);
     return () => window.clearTimeout(handle);
   }, [game]);
+
+  useEffect(() => {
+    saveUiPreferences(uiPreferences);
+  }, [uiPreferences]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -156,7 +161,13 @@ function App() {
     postGameTitleRef.current?.focus();
   }, [screen, postGameSummary?.endedAt]);
 
+  useEffect(() => {
+    setIsSharing(false);
+    setShareStatus(null);
+  }, [postGameSummary?.endedAt, screen]);
+
   const prompt = useMemo(() => (game ? getNextPrompt(game) : null), [game]);
+  const reduceCelebrationEffects = uiPreferences.reducedEffects;
   const celebrationEnabled = Boolean(postGameSummary && !prefersReducedMotion && !reduceCelebrationEffects);
 
   useEffect(() => {
@@ -471,6 +482,8 @@ function App() {
     setSelectedPaymentCards([]);
     setTurnSnapshots([]);
     setShowDebugActions(false);
+    setIsSharing(false);
+    setShareStatus(null);
   }, []);
 
   const startRematch = useCallback(() => {
@@ -483,462 +496,152 @@ function App() {
         name,
       })),
     );
+    setIsSharing(false);
+    setShareStatus(null);
   }, [game, startGameWithPlayers, syncSetupPlayerNames]);
 
-  const renderGameOver = () => {
-    if (!postGameSummary) return null;
-
-    const endedLabel = new Date(postGameSummary.endedAt).toLocaleString();
-
-    return (
-      <section className={`panel postgame-panel card-enter ${celebrationEnabled ? 'has-celebration' : ''}`} aria-labelledby="postgame-title">
-        {celebrationEnabled && (
-          <div className="postgame-celebration" aria-hidden="true">
-            {Array.from({ length: 18 }, (_, index) => (
-              <span key={`confetti-${index}`} className="confetti-dot" />
-            ))}
-          </div>
-        )}
-
-        <header className="postgame-hero">
-          <p className="postgame-kicker">Match Complete</p>
-          <h2 id="postgame-title" ref={postGameTitleRef} tabIndex={-1}>
-            {postGameSummary.winnerName ?? 'Unknown Player'} Wins!
-          </h2>
-          <p>
-            {postGameSummary.winnerName ?? 'The winner'} completed three full property sets and closed out the match.
-          </p>
-          <p className="postgame-meta">Finished {endedLabel}</p>
-        </header>
-
-        <section className="postgame-kpis" aria-label="Match stats">
-          <article className="postgame-kpi">
-            <h3>Turns</h3>
-            <p>{postGameSummary.turnCount}</p>
-          </article>
-          <article className="postgame-kpi">
-            <h3>Duration</h3>
-            <p>{formatDuration(postGameSummary.durationSec)}</p>
-          </article>
-          <article className="postgame-kpi">
-            <h3>Total Events</h3>
-            <p>{postGameSummary.totalEvents}</p>
-          </article>
-        </section>
-
-        <section className="postgame-standings" aria-labelledby="standings-title">
-          <div className="postgame-heading-row">
-            <h3 id="standings-title">Final Standings</h3>
-          </div>
-          <ul className="postgame-standing-list">
-            {postGameSummary.players.map((row) => (
-              <li key={row.playerId} className={`postgame-standing ${row.isWinner ? 'is-winner' : ''}`}>
-                <div className="postgame-standing-head">
-                  <p className="postgame-rank">#{row.rank}</p>
-                  <p className="postgame-name">{row.name}</p>
-                </div>
-                <div className="postgame-standing-stats">
-                  <span>{row.completeSets} complete sets</span>
-                  <span>${row.bankValue} bank value</span>
-                  <span>{row.propertyCardCount} property cards</span>
-                  <span>{row.handCount} cards in hand</span>
-                  <span>${row.totalCardValue} total card value</span>
-                  <span>
-                    Lifetime: {row.lifetimeWins} wins / {row.lifetimeGamesPlayed} games
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="postgame-highlights" aria-labelledby="highlights-title">
-          <h3 id="highlights-title">Highlights</h3>
-          <p>
-            <strong>Final swing:</strong> {postGameSummary.finalSwing}
-          </p>
-          <ul>
-            {postGameSummary.recentEvents.map((event, index) => (
-              <li key={`${event.timestamp}-${event.type}-${index}`}>
-                {event.message}
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="postgame-accessibility">
-          <label className="postgame-toggle">
-            <input
-              type="checkbox"
-              checked={reduceCelebrationEffects}
-              onChange={(event) => setReduceCelebrationEffects(event.target.checked)}
-            />
-            Reduce celebration effects
-          </label>
-          {prefersReducedMotion && (
-            <small>System reduced-motion preference is enabled.</small>
-          )}
-        </section>
-
-        <div className="actions postgame-actions">
-          <button className="postgame-primary-action" onClick={startRematch} disabled={!game}>
-            Play Rematch
-          </button>
-          <button
-            onClick={() => {
-              const names = game?.players.map((player) => player.name);
-              if (names && names.length > 0) {
-                syncSetupPlayerNames(names);
-              }
-              setScreen('setup');
-              setPostGameSummary(null);
-              setError(null);
-            }}
-          >
-            New Match Setup
-          </button>
-          <button onClick={() => setScreen('stats')}>View Stats</button>
-          <button onClick={goHome}>Home</button>
-        </div>
-      </section>
-    );
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.rel = 'noopener';
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
   };
 
-  const renderHome = () => (
-    <section className="panel card-enter">
-      <h1>Monopoly Deal Local</h1>
-      <p>Pass-and-play on one laptop for 2-4 players.</p>
-      <div className="actions">
-        <button onClick={() => setScreen('setup')}>New Game</button>
-        <button onClick={resumeGame}>Resume Saved Game</button>
-        <button onClick={() => setScreen('stats')}>Stats & History</button>
-      </div>
-      {error && <p className="error">{error}</p>}
-    </section>
-  );
-
-  const renderSetup = () => (
-    <section className="panel card-enter">
-      <h2>New Local Game</h2>
-      <label>
-        Total Players
-        <select
-          value={setup.playerCount}
-          onChange={(event) =>
-            setSetup((prev) => ({
-              ...prev,
-              playerCount: Number(event.target.value),
-            }))
-          }
-        >
-          <option value={2}>2</option>
-          <option value={3}>3</option>
-          <option value={4}>4</option>
-        </select>
-      </label>
-      {setup.playerNames.slice(0, setup.playerCount).map((name, index) => (
-        <label key={`player-name-${index + 1}`}>
-          Player {index + 1} Name
-          <input
-            value={name}
-            onChange={(event) => {
-              const value = event.target.value;
-              setSetup((prev) => {
-                const nextNames = [...prev.playerNames];
-                nextNames[index] = value;
-                return { ...prev, playerNames: nextNames };
-              });
-            }}
-          />
-        </label>
-      ))}
-      <div className="actions">
-        <button onClick={startNewGame}>Start Match</button>
-        <button onClick={() => setScreen('home')}>Back</button>
-      </div>
-    </section>
-  );
-
-  const renderHiddenHand = (cardCount: number) => {
-    const visibleBacks = Math.min(5, cardCount);
-    return (
-      <div className="hidden-hand-wrap">
-        <div className="hidden-hand" aria-label={`Hidden hand with ${cardCount} cards`}>
-          {Array.from({ length: visibleBacks }, (_, index) => (
-            <div key={`hidden-${index}`} className="hidden-hand-card" style={{ left: `${index * 18}px`, zIndex: index + 1 }}>
-              <CardView cardId="money_1#0" faceUp={false} size="md" />
-            </div>
-          ))}
-        </div>
-        <p>{cardCount} cards</p>
-      </div>
-    );
+  const copyImageToClipboard = async (blob: Blob): Promise<boolean> => {
+    const clipboardWithWrite = (navigator.clipboard as Clipboard & { write?: (items: ClipboardItem[]) => Promise<void> } | undefined);
+    if (!clipboardWithWrite?.write || typeof window.ClipboardItem !== 'function') {
+      return false;
+    }
+    const item = new window.ClipboardItem({ 'image/png': blob });
+    await clipboardWithWrite.write([item]);
+    return true;
   };
 
-  const renderPlayerBoard = (state: GameState) =>
-    state.players.map((player) => {
-      const canSeeHand = revealedPlayerId === player.id;
-      const isCurrent = state.players[state.currentPlayerIndex].id === player.id;
-      const isPromptPlayer = prompt?.playerId === player.id;
-      const handInteractive = Boolean(canSeeHand && prompt?.playerId === player.id && !isGameOver(state).done);
-      const isPaymentPayer = pendingPayment?.targetPlayerId === player.id;
-      const paymentSelectionEnabled = Boolean(isPaymentPayer && revealedPlayerId === player.id && !isGameOver(state).done);
-      const inlineActions = isPromptPlayer
-        ? (
-            pendingPayment
-              ? contextualActions.filter((item) => item.action.type !== 'pay_request')
-              : prompt?.kind === 'selection'
-                ? legalActions
-                : contextualActions
-          )
-        : [];
-      const propertyColors = (Object.keys(player.properties) as PropertyColor[]).filter((color) => player.properties[color].length > 0);
-
-      return (
-        <article className={`player ${isCurrent ? 'active' : ''}`} key={player.id}>
-          <header>
-            <h3>{player.name}</h3>
-            <p>{getSetCompletionCount(player)} complete sets</p>
-          </header>
-
-          {isPromptPlayer && canSeeHand && !isGameOver(state).done ? (
-            <section className="inline-action-panel">
-              {isMandatoryPrompt && <p className="inline-must-act">Required: resolve this step before anything else.</p>}
-              {mainPhaseExhausted && (
-                <p className="inline-must-act">3/3 plays used. Pass turn or use non-play actions.</p>
-              )}
-              {prompt?.kind === 'discard' && (
-                <p className="inline-discard-hint">
-                  Hand size: <strong>{player.hand.length}</strong> | Limit: <strong>7</strong> | Need to discard:{' '}
-                  <strong>{Math.max(player.hand.length - 7, 0)}</strong>
-                </p>
-              )}
-              {prompt && <p className="inline-prompt-text">{prompt.text}</p>}
-              {isPaymentPayer && pendingPayment ? (
-                <div className="payment-panel">
-                  <p>
-                    <strong>{player.name}</strong> owes <strong>${pendingPayment.amount}</strong> for{' '}
-                    <strong>{pendingPayment.reason}</strong>.
-                  </p>
-                  <p>
-                    Selected total: <strong>${selectedPaymentTotal}</strong> of ${pendingPayment.amount}
-                    {totalPayableValue < pendingPayment.amount ? ' (not enough assets available)' : ''}
-                  </p>
-                  {selectedPaymentCards.length > 0 ? (
-                    <p className="payment-selected">Selected: {selectedPaymentCards.map(getCardDisplayName).join(', ')}</p>
-                  ) : (
-                    <p className="payment-selected">Click cards in {player.name}&apos;s bank/properties to pay.</p>
-                  )}
-                  <button type="button" onClick={submitSelectedPayment} disabled={!paymentCanSubmit}>
-                    Confirm Payment
-                  </button>
-                </div>
-              ) : null}
-              <div className="actions action-list inline-actions">
-                {inlineActions.map((item, index) => (
-                  <button key={`inline-${item.label}-${index}`} onClick={() => runAction(item.action)}>
-                    {item.label}
-                    {actionDetailText(item) ? <span className="action-detail">{actionDetailText(item)}</span> : null}
-                  </button>
-                ))}
-                {inlineActions.length === 0 && !pendingPayment && (
-                  <p>{prompt?.kind === 'discard' ? 'Discard from your hand to continue.' : 'Play cards from your hand.'}</p>
-                )}
-              </div>
-              {turnSnapshots.length > 0 && prompt?.kind === 'main' ? (
-                <div className="actions inline-actions">
-                  <button type="button" onClick={undoLastPlay}>
-                    Undo Last Play
-                  </button>
-                  <button type="button" onClick={resetTurnPlays}>
-                    Reset Turn Plays
-                  </button>
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
-          <section>
-            <strong>Hand</strong>
-            {canSeeHand ? (
-              player.hand.length > 0 ? (
-                <HandFan
-                  cards={player.hand}
-                  playableCardIds={playableCardIds}
-                  selectedCardId={selectedCardId}
-                  onCardClick={handleCardClick}
-                  interactive={handInteractive}
-                />
-              ) : (
-                <p>Empty</p>
-              )
-            ) : (
-              renderHiddenHand(player.hand.length)
-            )}
-          </section>
-
-          <section>
-            <strong>Bank</strong>
-            <div className="zone-bank">
-              {player.bank.length > 0 ? (
-                player.bank.map((cardId) => (
-                  <CardView
-                    key={`${player.id}-bank-${cardId}`}
-                    cardId={cardId}
-                    size="sm"
-                    interactive={paymentSelectionEnabled}
-                    playable={paymentSelectionEnabled}
-                    selected={selectedPaymentCards.includes(cardId)}
-                    onClick={() => handlePaymentCardToggle(cardId)}
-                  />
-                ))
-              ) : (
-                <p>Empty</p>
-              )}
-            </div>
-          </section>
-
-          <section>
-            <strong>Properties</strong>
-            <div className="zone-properties">
-              {propertyColors.length > 0 ? (
-                propertyColors.map((color) => (
-                  <div className="property-lane" key={`${player.id}-${color}`}>
-                    <p>
-                      <span>{colorLabel(color)}:</span>
-                    </p>
-                    <div className="property-cards">
-                      {player.properties[color].map((entry) => (
-                        <CardView
-                          key={`${player.id}-${color}-${entry.cardId}`}
-                          cardId={entry.cardId}
-                          size="sm"
-                          interactive={paymentSelectionEnabled}
-                          playable={paymentSelectionEnabled}
-                          selected={selectedPaymentCards.includes(entry.cardId)}
-                          onClick={() => handlePaymentCardToggle(entry.cardId)}
-                          annotation={entry.assignedColor !== color ? `as ${colorLabel(entry.assignedColor)}` : undefined}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p>Empty</p>
-              )}
-            </div>
-          </section>
-        </article>
-      );
-    });
-
-  const renderGame = () => {
-    if (!game || !prompt) return null;
-    const over = isGameOver(game);
-    return (
-      <section className="panel game-panel">
-        <div className="game-top">
-          <div>
-            <h2>Game Table</h2>
-            <p>{prompt.text}</p>
-            <p>
-              Turn {game.turnCount} | Draw pile: {game.drawPile.length} | Discard: {game.discardPile.length}
-            </p>
-            {game.turn.phase === 'action' && <p>Plays used: {game.turn.playsUsed}/3</p>}
-          </div>
-          <div className="actions">
-            <button onClick={() => setScreen('home')}>Home</button>
-            <button onClick={goHome}>End Match</button>
-          </div>
-        </div>
-
-        <section className="action-panel">
-          <h3>Turn Actions</h3>
-          <p className={`turn-status ${isMandatoryPrompt ? 'is-required' : ''}`}>{turnStatusText}</p>
-          <p>{isMandatoryPrompt ? 'Resolve the required action in the active player panel.' : 'Use the active player panel below to play cards.'}</p>
-          <div className="debug-actions">
-            <button type="button" onClick={() => setShowDebugActions((prev) => !prev)}>
-              {showDebugActions ? 'Hide' : 'Show'} All Legal Actions ({legalActions.length})
-            </button>
-            {showDebugActions && (
-              <ul className="debug-action-list">
-                {legalActions.map((item, index) => (
-                  <li key={`debug-${item.label}-${index}`}>{item.label}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </section>
-
-        <div className="players-grid">{renderPlayerBoard(game)}</div>
-
-        <RecentEvents events={game.history} />
-
-        {chooser && (
-          <PlayChooser
-            cardId={chooser.cardId}
-            cardLabel={chooser.cardLabel}
-            options={chooser.variants}
-            onChoose={(id) => {
-              const selected = chooser.variants.find((variant) => variant.id === id);
-              if (!selected) return;
-              runAction(selected.action);
-            }}
-            onClose={() => {
-              setChooser(null);
-              setSelectedCardId(null);
-            }}
-          />
-        )}
-
-        {shouldShowShield && !over.done && (
-          <div className="shield" role="dialog" aria-modal="true">
-            <div className="shield-card card-enter">
-              <h3>Pass Device</h3>
-              <p>
-                Next action: <strong>{game.players.find((player) => player.id === prompt.playerId)?.name ?? prompt.playerId}</strong>
-              </p>
-              <button
-                onClick={() => {
-                  setRevealedPlayerId(prompt.playerId);
-                }}
-              >
-                Reveal Turn
-              </button>
-            </div>
-          </div>
-        )}
-      </section>
-    );
-  };
-
-  const renderStats = () => {
-    return (
-      <Suspense
-        fallback={
-          <section className="panel card-enter stats-panel">
-            <h2>Stats & History</h2>
-            <p className="stats-empty">Loading analytics...</p>
-          </section>
-        }
-      >
-        <StatsDashboard history={history} lifetime={lifetime} onBack={() => setScreen('home')} />
-      </Suspense>
-    );
+  const sharePostGameImage = async () => {
+    if (!postGameSummary || isSharing) return;
+    incrementGrowthMetric('share_image_clicked');
+    setIsSharing(true);
+    setShareStatus(null);
+    try {
+      const blob = await generatePostGameSharePng(postGameSummary);
+      const copied = await copyImageToClipboard(blob).catch(() => false);
+      if (copied) {
+        incrementGrowthMetric('share_image_success');
+        setShareStatus({ tone: 'success', message: 'Brag image copied to your clipboard.' });
+        return;
+      }
+      downloadBlob(blob, postGameShareFilename(postGameSummary));
+      incrementGrowthMetric('share_image_success');
+      setShareStatus({ tone: 'success', message: 'Brag image downloaded. Share it in your group chat.' });
+    } catch {
+      setShareStatus({ tone: 'error', message: 'Could not generate the share image. Please try again.' });
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   return (
-    <main>
-      {screen === 'home' && renderHome()}
-      {screen === 'setup' && renderSetup()}
-      {screen === 'game' && renderGame()}
-      {screen === 'stats' && renderStats()}
-      {screen === 'game_over' && renderGameOver()}
+    <GameShell screenClassName={`screen-${screen}`} textScale={uiPreferences.textScale}>
+      {screen === 'home' ? (
+        <HomeScreen
+          error={error}
+          onNewGame={() => setScreen('setup')}
+          onResumeGame={resumeGame}
+          onOpenStats={() => setScreen('stats')}
+        />
+      ) : null}
 
-      <footer>
-        <small>Monopoly Deal local pass-and-play.</small>
-      </footer>
-    </main>
+      {screen === 'setup' ? (
+        <SetupScreen
+          setup={setup}
+          onPlayerCountChange={(playerCount) => setSetup((prev) => ({ ...prev, playerCount }))}
+          onPlayerNameChange={(index, value) => {
+            setSetup((prev) => {
+              const nextNames = [...prev.playerNames];
+              nextNames[index] = value;
+              return { ...prev, playerNames: nextNames };
+            });
+          }}
+          onStartMatch={startNewGame}
+          onBack={() => setScreen('home')}
+        />
+      ) : null}
+
+      {screen === 'game' && game && prompt ? (
+        <GameTableScreen
+          game={game}
+          prompt={prompt}
+          legalActions={legalActions}
+          contextualActions={contextualActions}
+          revealedPlayerId={revealedPlayerId}
+          playableCardIds={playableCardIds}
+          selectedCardId={selectedCardId}
+          selectedPaymentCards={selectedPaymentCards}
+          selectedPaymentTotal={selectedPaymentTotal}
+          totalPayableValue={totalPayableValue}
+          paymentCanSubmit={paymentCanSubmit}
+          pendingPayment={pendingPayment}
+          chooser={chooser}
+          shouldShowShield={shouldShowShield}
+          turnStatusText={turnStatusText}
+          isMandatoryPrompt={isMandatoryPrompt}
+          mainPhaseExhausted={mainPhaseExhausted}
+          turnSnapshotsCount={turnSnapshots.length}
+          showDebugActions={showDebugActions}
+          actionDetailText={actionDetailText}
+          onToggleDebugActions={() => setShowDebugActions((prev) => !prev)}
+          onRunAction={runAction}
+          onCardClick={handleCardClick}
+          onPaymentCardToggle={handlePaymentCardToggle}
+          onSubmitSelectedPayment={submitSelectedPayment}
+          onUndoLastPlay={undoLastPlay}
+          onResetTurnPlays={resetTurnPlays}
+          onCloseChooser={() => {
+            setChooser(null);
+            setSelectedCardId(null);
+          }}
+          onRevealTurn={() => setRevealedPlayerId(prompt.playerId)}
+          onNavigateHome={() => setScreen('home')}
+          onEndMatch={goHome}
+        />
+      ) : null}
+
+      {screen === 'stats' ? <StatsScreen history={history} lifetime={lifetime} onBack={() => setScreen('home')} /> : null}
+
+      {screen === 'game_over' && postGameSummary ? (
+        <PostGameScreen
+          postGameSummary={postGameSummary}
+          game={game}
+          celebrationEnabled={celebrationEnabled}
+          reduceCelebrationEffects={reduceCelebrationEffects}
+          prefersReducedMotion={prefersReducedMotion}
+          isSharing={isSharing}
+          shareStatus={shareStatus}
+          titleRef={postGameTitleRef}
+          formatDuration={formatDuration}
+          onToggleReduceEffects={(enabled) => setUiPreferences((prev) => ({ ...prev, reducedEffects: enabled }))}
+          onStartRematch={startRematch}
+          onShareImage={sharePostGameImage}
+          onOpenSetup={() => {
+            const names = game?.players.map((player) => player.name);
+            if (names && names.length > 0) {
+              syncSetupPlayerNames(names);
+            }
+            setScreen('setup');
+            setPostGameSummary(null);
+            setError(null);
+          }}
+          onOpenStats={() => setScreen('stats')}
+          onGoHome={goHome}
+        />
+      ) : null}
+
+    </GameShell>
   );
 }
 

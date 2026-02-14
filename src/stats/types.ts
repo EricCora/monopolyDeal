@@ -23,3 +23,13 @@ export interface LifetimeStatsV1 {
   version: 1;
   players: Record<string, LifetimePlayerStats>;
 }
+
+export type GrowthMetricEvent = 'share_image_clicked' | 'share_image_success';
+
+export interface GrowthMetricsV1 {
+  version: 1;
+  events: {
+    share_image_clicked: number;
+    share_image_success: number;
+  };
+}

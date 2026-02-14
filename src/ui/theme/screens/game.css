@@ -1,0 +1,9 @@
+.game-table-screen {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.game-table-main {
+  display: grid;
+  gap: 0.9rem;
+}

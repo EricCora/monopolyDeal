@@ -1,0 +1,28 @@
+.home-screen {
+  background:
+    radial-gradient(circle at 12% 15%, rgba(81, 164, 173, 0.18), transparent 34%),
+    radial-gradient(circle at 82% 4%, rgba(246, 198, 99, 0.23), transparent 38%),
+    linear-gradient(160deg, rgba(11, 27, 40, 0.92), rgba(8, 19, 30, 0.92));
+}
+
+.home-hero {
+  max-width: 70ch;
+}
+
+.home-kicker {
+  margin: 0;
+  color: var(--accent-alt);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+}
+
+.home-subtitle {
+  margin: 0.45rem 0 0;
+  color: var(--text-muted);
+  font-size: clamp(1rem, 1.8vw, 1.25rem);
+}
+
+.home-actions {
+  margin-top: 1.1rem;
+}
