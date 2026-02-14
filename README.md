@@ -66,6 +66,13 @@ src/
   test/          # Engine and UI tests
 ```
 
+## Agent Documentation
+
+For AI coding agents working on this repository:
+
+- `AGENTS.md` - default operating instructions, invariants, and done criteria
+- `docs/LLM_AGENT_GUIDE.md` - deeper architecture map, change playbooks, and test matrix
+
 ## Persistence
 
 Game state and stats are stored in browser `localStorage` under versioned keys:

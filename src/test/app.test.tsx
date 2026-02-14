@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GameState } from '../engine';
 import App from '../App';
+import { createStatsFixture } from './fixtures/statsFixtures';
 
 const { mockedApplyAction, mockedCreateGame, mockedGetNextPrompt, mockedGetLegalActions, mockedIsGameOver } = vi.hoisted(() => ({
   mockedApplyAction: vi.fn(),
@@ -78,6 +79,9 @@ const baseState: GameState = {
   history: [],
   turnCount: 1,
 };
+
+const MATCH_HISTORY_KEY = 'monopolyDeal.matchHistory.v1';
+const LIFETIME_STATS_KEY = 'monopolyDeal.lifetimeStats.v1';
 
 vi.mock('../engine', () => {
   const clone = () => structuredClone(baseState);
@@ -310,6 +314,55 @@ describe('App', () => {
       targetPlayerId: 'p2',
       color: 'green',
     });
+  });
+
+  it('renders analytics sections on the stats page from deterministic fixture data', async () => {
+    const fixture = createStatsFixture('medium');
+    localStorage.setItem(MATCH_HISTORY_KEY, JSON.stringify(fixture.history));
+    localStorage.setItem(LIFETIME_STATS_KEY, JSON.stringify(fixture.lifetime));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /stats & history/i }));
+
+    expect(await screen.findByRole('heading', { name: /stats & history/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /wins by player/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /lifetime players/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /match history/i })).toBeInTheDocument();
+    expect(screen.getByText(/total matches/i)).toBeInTheDocument();
+  });
+
+  it('supports sorting lifetime and match tables on the stats page', async () => {
+    const fixture = createStatsFixture('medium');
+    localStorage.setItem(MATCH_HISTORY_KEY, JSON.stringify(fixture.history));
+    localStorage.setItem(LIFETIME_STATS_KEY, JSON.stringify(fixture.lifetime));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /stats & history/i }));
+
+    const lifetimeHeading = await screen.findByRole('heading', { name: /lifetime players/i });
+    const lifetimeSection = lifetimeHeading.closest('section');
+    expect(lifetimeSection).not.toBeNull();
+    const winsHeader = within(lifetimeSection as HTMLElement).getByRole('button', { name: /^wins/i });
+    const lifetimeRows = within(lifetimeSection as HTMLElement).getAllByRole('row');
+    expect(within(lifetimeRows[1]).getByText('Alpha')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(winsHeader);
+    });
+    const ascLifetimeRows = within(lifetimeSection as HTMLElement).getAllByRole('row');
+    expect(within(ascLifetimeRows[1]).getByText('Gamma')).toBeInTheDocument();
+
+    const matchHeading = await screen.findByRole('heading', { name: /match history/i });
+    const matchSection = matchHeading.closest('section');
+    expect(matchSection).not.toBeNull();
+    const endedAtHeader = within(matchSection as HTMLElement).getByRole('button', { name: /^ended at/i });
+    const matchRows = within(matchSection as HTMLElement).getAllByRole('row');
+    expect(within(matchRows[1]).getByText('24')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(endedAtHeader);
+    });
+    const ascMatchRows = within(matchSection as HTMLElement).getAllByRole('row');
+    const firstMatchCells = ascMatchRows[1].querySelectorAll('td');
+    expect(firstMatchCells[3]?.textContent).toBe('16');
   });
 
   it('navigates to a dedicated game-over screen and focuses the victory title', async () => {

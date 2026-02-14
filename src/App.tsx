@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatPropertyColor, getCardDefinition, getCardDisplayName, type PropertyColor } from './cards/catalog';
 import {
   applyAction,
@@ -34,6 +34,10 @@ import { HandFan } from './ui/components/HandFan';
 import { PlayChooser, type ActionVariantView } from './ui/components/PlayChooser';
 import { RecentEvents } from './ui/components/RecentEvents';
 import './App.css';
+
+const StatsDashboard = lazy(() =>
+  import('./ui/components/StatsDashboard').then((module) => ({ default: module.StatsDashboard })),
+);
 
 type Screen = 'home' | 'setup' | 'game' | 'stats' | 'game_over';
 
@@ -909,38 +913,17 @@ function App() {
   };
 
   const renderStats = () => {
-    const lifetimeEntries = Object.values(lifetime.players).sort((a, b) => b.wins - a.wins);
     return (
-      <section className="panel card-enter">
-        <h2>Stats & History</h2>
-        <div className="stats-grid">
-          <article>
-            <h3>Lifetime</h3>
-            <ul>
-              {lifetimeEntries.map((entry) => (
-                <li key={entry.name}>
-                  <strong>{entry.name}</strong>: {entry.wins} wins / {entry.gamesPlayed} games
-                </li>
-              ))}
-              {lifetimeEntries.length === 0 && <li>No lifetime stats yet.</li>}
-            </ul>
-          </article>
-          <article>
-            <h3>Recent Matches</h3>
-            <ul>
-              {history.slice(0, 10).map((match) => (
-                <li key={match.id}>
-                  {new Date(match.endedAt).toLocaleString()} - Winner: {match.winnerName ?? 'N/A'} ({match.turnCount} turns)
-                </li>
-              ))}
-              {history.length === 0 && <li>No completed matches yet.</li>}
-            </ul>
-          </article>
-        </div>
-        <div className="actions">
-          <button onClick={() => setScreen('home')}>Back</button>
-        </div>
-      </section>
+      <Suspense
+        fallback={
+          <section className="panel card-enter stats-panel">
+            <h2>Stats & History</h2>
+            <p className="stats-empty">Loading analytics...</p>
+          </section>
+        }
+      >
+        <StatsDashboard history={history} lifetime={lifetime} onBack={() => setScreen('home')} />
+      </Suspense>
     );
   };
 
