@@ -429,6 +429,11 @@ function legalForPending(state: GameState, player: PlayerState): LegalAction[] {
           requestedAmount,
           collectibleCap,
           requiresPropertyTransfer,
+          requiresConfirmation: true,
+          riskLevel: requiresPropertyTransfer ? 'high' : 'medium',
+          previewText: requiresPropertyTransfer
+            ? 'This rent likely requires property transfer to cover payment.'
+            : 'This rent charge may force the target to pay from their bank.',
         });
       }
       return actions;
@@ -575,6 +580,16 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
               label: `Play ${card.name} on ${target.name}`,
               action: { type: 'play_action', playerId: player.id, cardId, targetPlayerId: target.id },
               targetPlayerId: target.id,
+              requiresConfirmation: true,
+              riskLevel: actionKind === 'deal_breaker' || actionKind === 'forced_deal' ? 'high' : 'medium',
+              previewText:
+                actionKind === 'deal_breaker'
+                  ? 'This can steal an entire complete set.'
+                  : actionKind === 'forced_deal'
+                    ? 'This swaps properties and can reshape both boards.'
+                    : actionKind === 'sly_deal'
+                      ? 'This steals a property from the selected target.'
+                      : 'This demands payment from the selected target.',
             });
           }
         }
@@ -586,6 +601,9 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
             actions.push({
               label: `Play ${card.name} for ${colorLabel(color)} rent`,
               action: { type: 'play_action', playerId: player.id, cardId, color },
+              requiresConfirmation: true,
+              riskLevel: 'medium',
+              previewText: `Charge all opponents for ${colorLabel(color)} rent.`,
             });
           }
         }

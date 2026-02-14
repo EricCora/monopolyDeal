@@ -35,6 +35,7 @@ import {
 } from './stats';
 import type { ActionVariantView } from './ui/components/PlayChooser';
 import { GameShell } from './ui/layout/GameShell';
+import { ActionConfirmDialog } from './ui/components/ActionConfirmDialog';
 import { GameTableScreen } from './ui/screens/GameTableScreen';
 import { HomeScreen } from './ui/screens/HomeScreen';
 import { PostGameScreen } from './ui/screens/PostGameScreen';
@@ -42,7 +43,7 @@ import { SettingsScreen } from './ui/screens/SettingsScreen';
 import { SetupScreen } from './ui/screens/SetupScreen';
 import { StatsScreen } from './ui/screens/StatsScreen';
 import { generatePostGameSharePng, postGameShareFilename } from './ui/share/postGameShare';
-import type { SetupViewModel, ShareStatus } from './ui/types';
+import type { RiskyActionConfirmation, SetupViewModel, ShareStatus } from './ui/types';
 import './App.css';
 
 type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'game_over';
@@ -51,6 +52,9 @@ type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
 
 interface CardActionVariant extends ActionVariantView {
   action: Action;
+  requiresConfirmation?: boolean;
+  riskLevel?: 'low' | 'medium' | 'high';
+  previewText?: string;
 }
 
 interface PlayChooserState {
@@ -83,6 +87,11 @@ function actionToCardId(action: Action): string | null {
 
 function actionVariantId(action: Action): string {
   return JSON.stringify(action);
+}
+
+function actionCardName(action: Action): string {
+  if (action.type !== 'play_action') return 'Action';
+  return getCardDefinition(action.cardId).name;
 }
 
 function cardMoneyValue(cardId: string): number {
@@ -133,6 +142,7 @@ function App() {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [shareStatus, setShareStatus] = useState<ShareStatus>(null);
+  const [riskyActionConfirmation, setRiskyActionConfirmation] = useState<RiskyActionConfirmation | null>(null);
   const [turnSnapshots, setTurnSnapshots] = useState<GameState[]>([]);
   const [uiPreferences, setUiPreferences] = useState<UiPreferencesV1>(() => loadUiPreferences());
   const [devSeedStatus, setDevSeedStatus] = useState<DevSeedStatus>(null);
@@ -262,6 +272,9 @@ function App() {
         id: `${actionVariantId(item.action)}-${index}`,
         label: describeCardAction(item.action),
         action: item.action,
+        requiresConfirmation: item.requiresConfirmation,
+        riskLevel: item.riskLevel,
+        previewText: item.previewText,
       };
       const existing = variants.get(cardId) ?? [];
       existing.push(option);
@@ -469,8 +482,57 @@ function App() {
     setChooser(null);
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
+    setRiskyActionConfirmation(null);
     setGame(result.state);
     finalizeIfGameOver(result.state);
+  };
+
+  const queueRiskyAction = (
+    action: Action,
+    source?: Partial<Pick<RiskyActionConfirmation, 'riskLevel' | 'previewText'>> & { requiresConfirmation?: boolean },
+  ): boolean => {
+    if (action.type !== 'play_action') return false;
+    const highImpactActionKinds = new Set(['rent', 'rent_wild', 'debt_collector', 'sly_deal', 'forced_deal', 'deal_breaker']);
+    const cardDef = getCardDefinition(action.cardId);
+    const kind = cardDef.actionKind ?? null;
+    const shouldConfirm = source ? Boolean(source.requiresConfirmation) : kind != null && highImpactActionKinds.has(kind);
+    if (!shouldConfirm) return false;
+    setRiskyActionConfirmation({
+      action,
+      label: actionCardName(action),
+      riskLevel: source?.riskLevel ?? (kind === 'forced_deal' || kind === 'deal_breaker' ? 'high' : 'medium'),
+      previewText:
+        source?.previewText ??
+        (kind === 'deal_breaker'
+          ? 'This can steal an opponent complete set.'
+          : kind === 'forced_deal'
+            ? 'This swaps properties and can shift both players progress.'
+            : kind === 'sly_deal'
+              ? 'This steals a property from an opponent.'
+              : kind === 'debt_collector'
+                ? 'This demands payment from the selected opponent.'
+                : 'This can trigger a high-impact rent payment sequence.'),
+    });
+    return true;
+  };
+
+  const runActionWithConfirmation = (action: Action, source?: LegalAction) => {
+    if (isPaused) return;
+    if (
+      queueRiskyAction(
+        action,
+        source
+          ? {
+              requiresConfirmation: source.requiresConfirmation,
+              riskLevel: source.riskLevel,
+              previewText: source.previewText,
+            }
+          : undefined,
+      )
+    ) {
+      return;
+    }
+    runAction(action);
   };
 
   const undoLastPlay = () => {
@@ -510,7 +572,7 @@ function App() {
     setSelectedCardId(cardId);
 
     if (variants.length === 1) {
-      runAction(variants[0].action);
+      runActionWithConfirmation(variants[0].action, variants[0]);
       return;
     }
 
@@ -573,6 +635,7 @@ function App() {
     setShowDebugActions(false);
     setIsSharing(false);
     setShareStatus(null);
+    setRiskyActionConfirmation(null);
   }, []);
 
   const startRematch = useCallback(() => {
@@ -692,7 +755,7 @@ function App() {
             if (isPaused) return;
             setShowDebugActions((prev) => !prev);
           }}
-          onRunAction={runAction}
+          onRunAction={runActionWithConfirmation}
           onCardClick={handleCardClick}
           onPaymentCardToggle={handlePaymentCardToggle}
           onSubmitSelectedPayment={submitSelectedPayment}
@@ -751,6 +814,16 @@ function App() {
           }}
           onOpenStats={() => setScreen('stats')}
           onGoHome={goHome}
+        />
+      ) : null}
+
+      {riskyActionConfirmation ? (
+        <ActionConfirmDialog
+          title={riskyActionConfirmation.label}
+          previewText={riskyActionConfirmation.previewText}
+          riskLevel={riskyActionConfirmation.riskLevel}
+          onConfirm={() => runAction(riskyActionConfirmation.action)}
+          onCancel={() => setRiskyActionConfirmation(null)}
         />
       ) : null}
 

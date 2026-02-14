@@ -373,6 +373,77 @@ describe('App', () => {
     });
   });
 
+  it('shows risky action confirmation dialog and cancels safely', () => {
+    mockedGetNextPrompt.mockImplementation(() => ({
+      playerId: 'p1',
+      text: 'Alpha: choose target for Deal Breaker.',
+      kind: 'selection',
+    }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Play Deal Breaker on Beta',
+        action: {
+          type: 'play_action',
+          playerId: 'p1',
+          cardId: 'deal_breaker#d1',
+          targetPlayerId: 'p2',
+        },
+        requiresConfirmation: true,
+        riskLevel: 'high',
+        previewText: 'This can steal an entire complete set.',
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /play deal breaker on beta/i }));
+
+    expect(screen.getByRole('dialog', { name: /confirm risky action/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+    expect(mockedApplyAction).not.toHaveBeenCalled();
+  });
+
+  it('confirms risky action and dispatches exactly once', () => {
+    mockedGetNextPrompt.mockImplementation(() => ({
+      playerId: 'p1',
+      text: 'Alpha: choose target for Deal Breaker.',
+      kind: 'selection',
+    }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Play Deal Breaker on Beta',
+        action: {
+          type: 'play_action',
+          playerId: 'p1',
+          cardId: 'deal_breaker#d1',
+          targetPlayerId: 'p2',
+        },
+        requiresConfirmation: true,
+        riskLevel: 'high',
+        previewText: 'This can steal an entire complete set.',
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /play deal breaker on beta/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^confirm$/i }));
+
+    expect(mockedApplyAction).toHaveBeenCalledTimes(1);
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'play_action',
+      playerId: 'p1',
+      cardId: 'deal_breaker#d1',
+      targetPlayerId: 'p2',
+    });
+  });
+
   it('renders analytics sections on the stats page from deterministic fixture data', async () => {
     const fixture = createStatsFixture('medium');
     localStorage.setItem(MATCH_HISTORY_KEY, JSON.stringify(fixture.history));

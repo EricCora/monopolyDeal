@@ -17,6 +17,9 @@ import { TopBar } from '../layout/TopBar';
 
 interface CardActionVariant extends ActionVariantView {
   action: Action;
+  requiresConfirmation?: boolean;
+  riskLevel?: 'low' | 'medium' | 'high';
+  previewText?: string;
 }
 
 interface PlayChooserState {
@@ -51,7 +54,7 @@ interface GameTableScreenProps {
   onPauseToggle: () => void;
   onOpenSettings: () => void;
   onToggleDebugActions: () => void;
-  onRunAction: (action: Action) => void;
+  onRunAction: (action: Action, source?: LegalAction) => void;
   onCardClick: (cardId: string) => void;
   onPaymentCardToggle: (cardId: string) => void;
   onSubmitSelectedPayment: () => void;
@@ -220,7 +223,7 @@ export function GameTableScreen({
                         {inlineActions.map((item, index) => (
                           <button
                             key={`inline-${item.label}-${index}`}
-                            onClick={() => onRunAction(item.action)}
+                            onClick={() => onRunAction(item.action, item)}
                             disabled={isPaused}
                           >
                             {item.label}
@@ -333,7 +336,7 @@ export function GameTableScreen({
           onChoose={(id) => {
             const selected = chooser.variants.find((variant) => variant.id === id);
             if (!selected) return;
-            onRunAction(selected.action);
+            onRunAction(selected.action, selected);
           }}
           onClose={onCloseChooser}
         />
