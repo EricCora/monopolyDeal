@@ -37,6 +37,7 @@ import {
 import type { ActionVariantView } from './ui/components/PlayChooser';
 import { GameShell } from './ui/layout/GameShell';
 import { ActionConfirmDialog } from './ui/components/ActionConfirmDialog';
+import { RulesDrawer } from './ui/components/RulesDrawer';
 import { GameTableScreen } from './ui/screens/GameTableScreen';
 import { HomeScreen } from './ui/screens/HomeScreen';
 import { PostGameScreen } from './ui/screens/PostGameScreen';
@@ -144,6 +145,7 @@ function App() {
   const [isSharing, setIsSharing] = useState(false);
   const [shareStatus, setShareStatus] = useState<ShareStatus>(null);
   const [riskyActionConfirmation, setRiskyActionConfirmation] = useState<RiskyActionConfirmation | null>(null);
+  const [showRulesDrawer, setShowRulesDrawer] = useState(false);
   const [turnSnapshots, setTurnSnapshots] = useState<GameState[]>([]);
   const [uiPreferences, setUiPreferences] = useState<UiPreferencesV1>(() => loadUiPreferences());
   const [devSeedStatus, setDevSeedStatus] = useState<DevSeedStatus>(null);
@@ -641,6 +643,7 @@ function App() {
     setSelectedPaymentCards([]);
     setTurnSnapshots([]);
     setShowDebugActions(false);
+    setShowRulesDrawer(false);
     setIsSharing(false);
     setShareStatus(null);
     setRiskyActionConfirmation(null);
@@ -758,6 +761,7 @@ function App() {
           showDebugActions={showDebugActions}
           actionDetailText={actionDetailText}
           onPauseToggle={togglePause}
+          onOpenRules={() => setShowRulesDrawer(true)}
           onOpenSettings={() => openSettings('game')}
           onToggleDebugActions={() => {
             if (isPaused) return;
@@ -835,6 +839,8 @@ function App() {
           onCancel={() => setRiskyActionConfirmation(null)}
         />
       ) : null}
+
+      {screen === 'game' && showRulesDrawer ? <RulesDrawer onClose={() => setShowRulesDrawer(false)} /> : null}
 
     </GameShell>
   );

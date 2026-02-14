@@ -645,6 +645,24 @@ describe('App', () => {
     });
   });
 
+  it('opens and closes the rules reference drawer via click and Escape', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /rules reference/i }));
+    expect(screen.getByRole('dialog', { name: /rules reference/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^close$/i }));
+    expect(screen.queryByRole('dialog', { name: /rules reference/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /rules reference/i }));
+    expect(screen.getByRole('dialog', { name: /rules reference/i })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: /rules reference/i })).not.toBeInTheDocument();
+  });
+
   it('restores paused state when resuming a saved game after reload', () => {
     localStorage.setItem(
       ACTIVE_GAME_KEY,

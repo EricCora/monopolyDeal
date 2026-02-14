@@ -52,6 +52,7 @@ interface GameTableScreenProps {
   showDebugActions: boolean;
   actionDetailText: (item: LegalAction) => string | null;
   onPauseToggle: () => void;
+  onOpenRules: () => void;
   onOpenSettings: () => void;
   onToggleDebugActions: () => void;
   onRunAction: (action: Action, source?: LegalAction) => void;
@@ -110,6 +111,7 @@ export function GameTableScreen({
   showDebugActions,
   actionDetailText,
   onPauseToggle,
+  onOpenRules,
   onOpenSettings,
   onToggleDebugActions,
   onRunAction,
@@ -141,6 +143,7 @@ export function GameTableScreen({
         actions={(
           <>
             <button onClick={onNavigateHome}>Home</button>
+            <button onClick={onOpenRules}>Rules Reference</button>
             <button onClick={onOpenSettings}>Settings</button>
             <button onClick={onPauseToggle}>{isPaused ? 'Resume' : 'Pause'}</button>
           </>
