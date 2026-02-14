@@ -9,23 +9,31 @@ interface PlayChooserProps {
   cardId: string;
   cardLabel?: string;
   options: ActionVariantView[];
+  title?: string;
   onChoose: (id: string) => void;
   onClose: () => void;
 }
 
-export function PlayChooser({ cardId, cardLabel, options, onChoose, onClose }: PlayChooserProps) {
+export function PlayChooser({ cardId, cardLabel, options, title = 'Choose Play', onChoose, onClose }: PlayChooserProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const priorFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
+    priorFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focusables = root.querySelectorAll<HTMLButtonElement>('button');
     focusables[0]?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -46,8 +54,11 @@ export function PlayChooser({ cardId, cardLabel, options, onChoose, onClose }: P
     };
 
     document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      priorFocusRef.current?.focus();
+    };
+  }, []);
 
   return (
     <div className="play-chooser-overlay" role="presentation" onClick={onClose}>
@@ -59,8 +70,10 @@ export function PlayChooser({ cardId, cardLabel, options, onChoose, onClose }: P
         ref={containerRef}
         onClick={(event) => event.stopPropagation()}
       >
-        <h3>Choose Play</h3>
-        <p>{cardLabel ?? cardId}</p>
+        <header className="play-chooser-head">
+          <h3>{title}</h3>
+          <p>{cardLabel ?? cardId}</p>
+        </header>
         <div className="play-options">
           {options.map((option) => (
             <button key={option.id} type="button" className="play-option" onClick={() => onChoose(option.id)}>

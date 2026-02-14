@@ -14,7 +14,10 @@ Purpose: give coding agents enough context to make correct, low-regression chang
 - `src/stats/`
   - Match record creation and lifetime aggregation.
 - `src/ui/` + `src/App.tsx`
-  - UI components and orchestration around prompts/legal actions.
+  - `App.tsx` owns state/actions and passes typed props to screen containers.
+  - `src/ui/screens/` contains home/setup/game/stats/post-game screen composition.
+  - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
+  - `src/ui/theme/` contains tokenized CSS split by base/components/screens.
 
 ## Data Model Cheat Sheet
 

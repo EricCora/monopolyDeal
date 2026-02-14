@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { GameEvent } from '../../engine';
 
 type EventFilter = 'all' | 'action' | 'money' | 'property' | 'turn';
@@ -82,7 +82,12 @@ function groupEvents(events: DecoratedEvent[]): EventGroup[] {
 export function RecentEvents({ events }: RecentEventsProps) {
   const [filter, setFilter] = useState<EventFilter>('all');
   const [visibleCount, setVisibleCount] = useState(12);
-  const now = Date.now();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const decoratedDesc = useMemo(
     () =>
@@ -104,9 +109,12 @@ export function RecentEvents({ events }: RecentEventsProps) {
   const canShowMore = events.length > visibleCount;
 
   return (
-    <section className="events-panel">
+    <section className="events-panel panel card-enter">
       <div className="events-head">
-        <h3>Recent Events</h3>
+        <div>
+          <h3>Recent Events</h3>
+          <small>Turn-by-turn timeline</small>
+        </div>
         <small>{events.length} total</small>
       </div>
       <div className="events-filters" role="tablist" aria-label="Filter recent events">
@@ -116,6 +124,7 @@ export function RecentEvents({ events }: RecentEventsProps) {
             type="button"
             role="tab"
             aria-selected={filter === option.id}
+            aria-pressed={filter === option.id}
             className={`events-filter ${filter === option.id ? 'is-active' : ''}`}
             onClick={() => setFilter(option.id)}
           >

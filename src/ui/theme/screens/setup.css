@@ -1,0 +1,24 @@
+.setup-screen {
+  background:
+    radial-gradient(circle at 85% 8%, rgba(76, 194, 179, 0.2), transparent 33%),
+    linear-gradient(160deg, rgba(11, 24, 37, 0.95), rgba(8, 19, 30, 0.92));
+}
+
+.setup-subtitle {
+  margin: 0.32rem 0 0.6rem;
+}
+
+.setup-player-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+}
+
+.setup-player-card {
+  border: 1px solid #36556f;
+  border-radius: var(--radius-md);
+  background: rgba(8, 24, 37, 0.9);
+  padding: 0.65rem;
+  margin: 0;
+}

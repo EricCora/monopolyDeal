@@ -6,18 +6,27 @@ interface HandFanProps {
   selectedCardId: string | null;
   onCardClick: (cardId: string) => void;
   interactive: boolean;
+  layout?: 'fan' | 'rail';
 }
 
-export function HandFan({ cards, playableCardIds, selectedCardId, onCardClick, interactive }: HandFanProps) {
+export function HandFan({
+  cards,
+  playableCardIds,
+  selectedCardId,
+  onCardClick,
+  interactive,
+  layout = 'fan',
+}: HandFanProps) {
   const midpoint = (cards.length - 1) / 2;
-  const spread = Math.min(12, Math.max(5, 26 / Math.max(cards.length, 2)));
+  const spread = Math.max(3.8, Math.min(11, 34 / Math.max(cards.length, 2)));
+  const isRailLayout = layout === 'rail';
 
   return (
-    <div className="hand-fan" aria-label="Player hand">
+    <div className={`hand-fan ${isRailLayout ? 'is-rail' : ''}`} aria-label="Player hand">
       {cards.map((cardId, index) => {
         const distance = index - midpoint;
-        const rotate = distance * spread;
-        const raise = Math.abs(distance) * 3;
+        const rotate = isRailLayout ? 0 : distance * spread;
+        const raise = isRailLayout ? 0 : Math.abs(distance) * Math.max(2, 18 / Math.max(cards.length, 2));
         return (
           <div
             key={cardId}

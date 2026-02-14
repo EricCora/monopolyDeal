@@ -2,11 +2,17 @@ import type { CSSProperties } from 'react';
 import { getCardVisualModel } from '../cards';
 
 type CardSize = 'sm' | 'md' | 'lg';
+type CardVariant = 'standard' | 'premium';
+type CardElevation = 'base' | 'raised';
+type CardStatusTone = 'neutral' | 'success' | 'warning';
 
 interface CardViewProps {
   cardId: string;
   faceUp?: boolean;
   size?: CardSize;
+  variant?: CardVariant;
+  elevation?: CardElevation;
+  statusTone?: CardStatusTone;
   interactive?: boolean;
   playable?: boolean;
   selected?: boolean;
@@ -18,6 +24,9 @@ export function CardView({
   cardId,
   faceUp = true,
   size = 'md',
+  variant = 'premium',
+  elevation = 'base',
+  statusTone = 'neutral',
   interactive = false,
   playable = false,
   selected = false,
@@ -28,7 +37,7 @@ export function CardView({
     return (
       <button
         type="button"
-        className={`card-view card-back card-size-${size} ${interactive ? 'is-interactive' : ''}`}
+        className={`card-view card-back card-size-${size} card-variant-${variant} card-elevation-${elevation} tone-${statusTone} ${interactive ? 'is-interactive' : ''}`}
         onClick={onClick}
         disabled={!interactive || !onClick}
         aria-label="Hidden card"
@@ -53,7 +62,7 @@ export function CardView({
   return (
     <button
       type="button"
-      className={`card-view card-size-${size} ${model.themeClass} kind-${model.kindClass} ${interactive ? 'is-interactive' : ''} ${playable ? 'is-playable' : 'is-unplayable'} ${selected ? 'is-selected' : ''}`}
+      className={`card-view card-size-${size} card-variant-${variant} card-elevation-${elevation} tone-${statusTone} ${model.themeClass} kind-${model.kindClass} ${interactive ? 'is-interactive' : ''} ${playable ? 'is-playable' : 'is-unplayable'} ${selected ? 'is-selected' : ''}`}
       style={style}
       onClick={onClick}
       disabled={!interactive || !onClick}

@@ -1,0 +1,48 @@
+:root {
+  --surface-0: #071018;
+  --surface-1: #0f1c2a;
+  --surface-2: #16283a;
+  --surface-3: #1d3448;
+  --surface-panel: rgba(12, 26, 38, 0.9);
+  --surface-card: linear-gradient(160deg, #f7f5ef, #eae7db);
+  --line-strong: #4f6f8d;
+  --line-soft: #2a445d;
+  --text-main: #f1f6ff;
+  --text-muted: #a9c0d8;
+  --text-subtle: #8098b0;
+  --text-dark: #182430;
+  --accent: #4cc2b3;
+  --accent-strong: #2ea293;
+  --accent-alt: #f3c35b;
+  --danger: #e67878;
+  --success: #71d79d;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  --shadow-xs: 0 1px 4px rgba(0, 0, 0, 0.18);
+  --shadow-sm: 0 8px 16px rgba(3, 9, 16, 0.35);
+  --shadow-md: 0 14px 28px rgba(2, 6, 13, 0.46);
+  --shadow-glow: 0 0 0 1px rgba(76, 194, 179, 0.45), 0 0 28px rgba(76, 194, 179, 0.2);
+
+  --space-1: 0.3rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.6rem;
+  --space-7: 2rem;
+
+  --font-display: 'Rajdhani', 'Trebuchet MS', 'Avenir Next', sans-serif;
+  --font-body: 'Inter', 'Segoe UI', 'Avenir Next', sans-serif;
+
+  --motion-fast: 140ms;
+  --motion-base: 220ms;
+  --motion-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --z-chooser: 60;
+  --z-shield: 50;
+}

@@ -12,6 +12,11 @@ const { mockedApplyAction, mockedCreateGame, mockedGetNextPrompt, mockedGetLegal
   mockedIsGameOver: vi.fn(),
 }));
 
+const { mockedGeneratePostGameSharePng, mockedPostGameShareFilename } = vi.hoisted(() => ({
+  mockedGeneratePostGameSharePng: vi.fn(),
+  mockedPostGameShareFilename: vi.fn(),
+}));
+
 function mockMatchMedia(matches: boolean) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
@@ -82,6 +87,7 @@ const baseState: GameState = {
 
 const MATCH_HISTORY_KEY = 'monopolyDeal.matchHistory.v1';
 const LIFETIME_STATS_KEY = 'monopolyDeal.lifetimeStats.v1';
+const GROWTH_METRICS_KEY = 'monopolyDeal.growthMetrics.v1';
 
 vi.mock('../engine', () => {
   const clone = () => structuredClone(baseState);
@@ -116,6 +122,11 @@ vi.mock('../engine', () => {
   };
 });
 
+vi.mock('../ui/share/postGameShare', () => ({
+  generatePostGameSharePng: mockedGeneratePostGameSharePng,
+  postGameShareFilename: mockedPostGameShareFilename,
+}));
+
 describe('App', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -124,6 +135,8 @@ describe('App', () => {
     mockedGetNextPrompt.mockReset();
     mockedGetLegalActions.mockReset();
     mockedIsGameOver.mockReset();
+    mockedGeneratePostGameSharePng.mockReset();
+    mockedPostGameShareFilename.mockReset();
     mockMatchMedia(false);
     mockedCreateGame.mockImplementation(() => structuredClone(baseState));
     mockedGetNextPrompt.mockImplementation(() => ({ playerId: 'p1', text: 'Alpha turn', kind: 'main' }));
@@ -143,6 +156,25 @@ describe('App', () => {
         action: { type: 'play_to_bank', playerId: 'p1', cardId: 'money_1#a1' },
       },
     ]);
+    mockedGeneratePostGameSharePng.mockResolvedValue(new Blob(['share'], { type: 'image/png' }));
+    mockedPostGameShareFilename.mockReturnValue('share.png');
+    Object.defineProperty(window, 'ClipboardItem', {
+      configurable: true,
+      writable: true,
+      value: class ClipboardItemMock {
+        readonly items: Record<string, Blob>;
+        constructor(items: Record<string, Blob>) {
+          this.items = items;
+        }
+      },
+    });
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      writable: true,
+      value: {
+        write: vi.fn().mockResolvedValue(undefined),
+      },
+    });
   });
 
   it('does not re-prompt reveal for same player after an action', () => {
@@ -472,5 +504,72 @@ describe('App', () => {
     await screen.findByRole('heading', { name: /alpha wins!/i });
     expect(container.querySelector('.confetti-dot')).toBeNull();
     expect(screen.getByText(/system reduced-motion preference is enabled/i)).toBeInTheDocument();
+  });
+
+  it('shares post-game brag image and tracks success metrics', async () => {
+    mockedApplyAction.mockImplementationOnce((state: GameState) => ({
+      state: {
+        ...state,
+        winnerId: 'p1',
+        turn: { ...state.turn, phase: 'finished' },
+        updatedAt: state.updatedAt + 2_000,
+        history: [{ timestamp: 100, type: 'action', message: 'Alpha won.' }],
+      },
+      events: [],
+    }));
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+    await screen.findByRole('heading', { name: /alpha wins!/i });
+
+    fireEvent.click(screen.getByRole('button', { name: /share brag image/i }));
+
+    await screen.findByText(/brag image copied to your clipboard/i);
+    expect(mockedGeneratePostGameSharePng).toHaveBeenCalledTimes(1);
+    const metrics = JSON.parse(localStorage.getItem(GROWTH_METRICS_KEY) ?? '{}');
+    expect(metrics.events.share_image_clicked).toBe(1);
+    expect(metrics.events.share_image_success).toBe(1);
+  });
+
+  it('falls back to image download when clipboard write fails', async () => {
+    mockedApplyAction.mockImplementationOnce((state: GameState) => ({
+      state: {
+        ...state,
+        winnerId: 'p1',
+        turn: { ...state.turn, phase: 'finished' },
+        updatedAt: state.updatedAt + 3_000,
+        history: [{ timestamp: 100, type: 'action', message: 'Alpha won again.' }],
+      },
+      events: [],
+    }));
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      writable: true,
+      value: {
+        write: vi.fn().mockRejectedValue(new Error('clipboard blocked')),
+      },
+    });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+    await screen.findByRole('heading', { name: /alpha wins!/i });
+
+    fireEvent.click(screen.getByRole('button', { name: /share brag image/i }));
+
+    await screen.findByText(/brag image downloaded/i);
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    const metrics = JSON.parse(localStorage.getItem(GROWTH_METRICS_KEY) ?? '{}');
+    expect(metrics.events.share_image_clicked).toBe(1);
+    expect(metrics.events.share_image_success).toBe(1);
+    clickSpy.mockRestore();
   });
 });

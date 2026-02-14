@@ -1,0 +1,5 @@
+.screen-stats .stats-panel {
+  background:
+    radial-gradient(circle at 12% 6%, rgba(72, 152, 166, 0.16), transparent 30%),
+    linear-gradient(165deg, rgba(11, 25, 38, 0.94), rgba(9, 20, 31, 0.92));
+}
