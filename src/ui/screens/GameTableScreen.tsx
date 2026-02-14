@@ -254,7 +254,7 @@ export function GameTableScreen({
                         ) : null}
                       </div>
 
-                      {turnSnapshotsCount > 0 && prompt.kind === 'main' ? (
+                      {turnSnapshotsCount > 0 && (prompt.kind === 'main' || prompt.kind === 'discard' || prompt.kind === 'draw') ? (
                         <div className="actions inline-actions">
                           <button type="button" onClick={onUndoLastPlay} disabled={isPaused}>
                             Undo Last Play

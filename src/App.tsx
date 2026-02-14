@@ -67,7 +67,7 @@ interface PlayChooserState {
   variants: CardActionVariant[];
 }
 
-type ReversibleActionType = 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
+type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
 
 function initialSetup(): SetupViewModel {
   return {
@@ -104,7 +104,11 @@ function cardMoneyValue(cardId: string): number {
 }
 
 function isReversibleActionType(actionType: Action['type']): actionType is ReversibleActionType {
-  return actionType === 'play_to_bank' || actionType === 'play_property' || actionType === 'play_action' || actionType === 'move_wild';
+  return actionType === 'draw_cards'
+    || actionType === 'play_to_bank'
+    || actionType === 'play_property'
+    || actionType === 'play_action'
+    || actionType === 'move_wild';
 }
 
 function shouldRetainTurnSnapshots(nextState: GameState, nextPromptPlayerId: string): boolean {

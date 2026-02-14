@@ -315,6 +315,48 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: /undo last play/i })).not.toBeInTheDocument();
   });
 
+  it('keeps undo controls visible during discard-required prompt after a reversible play', () => {
+    mockedGetNextPrompt.mockImplementation((state: GameState) => (
+      state.updatedAt > 1
+        ? { playerId: 'p1', text: 'Alpha: discard down to 7 cards to end your turn.', kind: 'discard' }
+        : { playerId: 'p1', text: 'Alpha turn', kind: 'main' }
+    ));
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+
+    expect(screen.getByRole('button', { name: /undo last play/i })).toBeInTheDocument();
+  });
+
+  it('allows undoing the initial draw action', () => {
+    mockedGetNextPrompt.mockImplementation((state: GameState) => (
+      state.updatedAt > 1
+        ? { playerId: 'p1', text: 'Alpha turn', kind: 'main' }
+        : { playerId: 'p1', text: 'Alpha: draw 2 cards.', kind: 'draw' }
+    ));
+    mockedGetLegalActions.mockImplementation((state: GameState) => {
+      if (state.updatedAt > 1) {
+        return [{ label: 'Pass turn', action: { type: 'pass_turn', playerId: 'p1' } }];
+      }
+      return [{ label: 'Draw cards', action: { type: 'draw_cards', playerId: 'p1' } }];
+    });
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /draw cards/i }));
+
+    expect(screen.getByRole('button', { name: /undo last play/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /undo last play/i }));
+    expect(screen.queryByRole('button', { name: /undo last play/i })).not.toBeInTheDocument();
+  });
+
   it('treats discard as a required prompt and discards selected hand card', () => {
     const discardState: GameState = {
       ...structuredClone(baseState),
