@@ -226,6 +226,30 @@ function generatePaymentOptions(player: PlayerState, targetAmount: number): stri
   return options;
 }
 
+export function getSuggestedPaymentCards(state: GameState, playerId: PlayerId, amount: number): string[] {
+  const player = getPlayer(state, playerId);
+  if (!player) return [];
+  const options = generatePaymentOptions(player, amount);
+  if (options.length === 0) return [];
+
+  let best: string[] = options[0];
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const option of options) {
+    const total = option.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0);
+    const meetsTarget = total >= amount;
+    const score = meetsTarget
+      ? total * 100 + option.length
+      : 1_000_000 - total * 100 + option.length;
+    if (score < bestScore) {
+      best = option;
+      bestScore = score;
+    }
+  }
+
+  return best;
+}
+
 function findPropertyColorByCard(player: PlayerState, cardId: string): PropertyColor | null {
   for (const color of PROPERTY_COLORS) {
     if (player.properties[color].some((entry) => entry.cardId === cardId)) {
@@ -429,6 +453,11 @@ function legalForPending(state: GameState, player: PlayerState): LegalAction[] {
           requestedAmount,
           collectibleCap,
           requiresPropertyTransfer,
+          requiresConfirmation: true,
+          riskLevel: requiresPropertyTransfer ? 'high' : 'medium',
+          previewText: requiresPropertyTransfer
+            ? 'This rent likely requires property transfer to cover payment.'
+            : 'This rent charge may force the target to pay from their bank.',
         });
       }
       return actions;
@@ -575,6 +604,16 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
               label: `Play ${card.name} on ${target.name}`,
               action: { type: 'play_action', playerId: player.id, cardId, targetPlayerId: target.id },
               targetPlayerId: target.id,
+              requiresConfirmation: true,
+              riskLevel: actionKind === 'deal_breaker' || actionKind === 'forced_deal' ? 'high' : 'medium',
+              previewText:
+                actionKind === 'deal_breaker'
+                  ? 'This can steal an entire complete set.'
+                  : actionKind === 'forced_deal'
+                    ? 'This swaps properties and can reshape both boards.'
+                    : actionKind === 'sly_deal'
+                      ? 'This steals a property from the selected target.'
+                      : 'This demands payment from the selected target.',
             });
           }
         }
@@ -586,6 +625,9 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
             actions.push({
               label: `Play ${card.name} for ${colorLabel(color)} rent`,
               action: { type: 'play_action', playerId: player.id, cardId, color },
+              requiresConfirmation: true,
+              riskLevel: 'medium',
+              previewText: `Charge all opponents for ${colorLabel(color)} rent.`,
             });
           }
         }

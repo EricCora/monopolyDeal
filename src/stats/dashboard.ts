@@ -44,6 +44,13 @@ export interface StatsDashboardModel {
   turnBuckets: Array<{ bucket: string; count: number }>;
 }
 
+export interface StatsFilters {
+  playerName?: string;
+  winnerName?: string;
+  fromDay?: string;
+  toDay?: string;
+}
+
 function sumActionsByType(actionsByType: Record<string, number>): number {
   return Object.values(actionsByType).reduce((sum, count) => sum + count, 0);
 }
@@ -61,7 +68,11 @@ function topAction(actionsByType: Record<string, number>): { type: string; count
 }
 
 function dayLabel(timestamp: number): string {
-  return new Date(timestamp).toISOString().slice(0, 10);
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function turnsBucket(turnCount: number): string {
@@ -112,9 +123,26 @@ export function buildMatchRows(history: MatchRecordV1[]): MatchRowView[] {
     .sort((left, right) => right.endedAt - left.endedAt);
 }
 
-export function buildStatsDashboardModel(history: MatchRecordV1[], lifetime: LifetimeStatsV1): StatsDashboardModel {
-  const lifetimeRows = buildLifetimeRows(lifetime);
-  const matchRows = buildMatchRows(history);
+function applyStatsFilters(history: MatchRecordV1[], filters?: StatsFilters): MatchRecordV1[] {
+  if (!filters) return history;
+  return history.filter((match) => {
+    if (filters.playerName && !match.players.includes(filters.playerName)) return false;
+    if (filters.winnerName && match.winnerName !== filters.winnerName) return false;
+    const day = dayLabel(match.endedAt);
+    if (filters.fromDay && day < filters.fromDay) return false;
+    if (filters.toDay && day > filters.toDay) return false;
+    return true;
+  });
+}
+
+export function buildStatsDashboardModel(history: MatchRecordV1[], lifetime: LifetimeStatsV1, filters?: StatsFilters): StatsDashboardModel {
+  const filteredHistory = applyStatsFilters(history, filters);
+  const lifetimeRows = buildLifetimeRows(lifetime).filter((row) => {
+    if (filters?.playerName && row.name !== filters.playerName) return false;
+    if (filters?.winnerName && row.name !== filters.winnerName) return false;
+    return true;
+  });
+  const matchRows = buildMatchRows(filteredHistory);
 
   const turnsTotal = matchRows.reduce((sum, row) => sum + row.turnCount, 0);
   const durationTotal = matchRows.reduce((sum, row) => sum + row.durationSec, 0);
@@ -124,7 +152,7 @@ export function buildStatsDashboardModel(history: MatchRecordV1[], lifetime: Lif
   const byDay = new Map<string, number>();
   const turnBucketCounts = new Map<string, number>();
 
-  for (const match of history) {
+  for (const match of filteredHistory) {
     if (match.winnerName) winnerCounts.set(match.winnerName, (winnerCounts.get(match.winnerName) ?? 0) + 1);
     const day = dayLabel(match.endedAt);
     byDay.set(day, (byDay.get(day) ?? 0) + 1);
@@ -150,9 +178,9 @@ export function buildStatsDashboardModel(history: MatchRecordV1[], lifetime: Lif
 
   return {
     kpis: {
-      totalMatches: history.length,
-      avgTurns: history.length > 0 ? turnsTotal / history.length : 0,
-      avgDurationSec: history.length > 0 ? durationTotal / history.length : 0,
+      totalMatches: filteredHistory.length,
+      avgTurns: filteredHistory.length > 0 ? turnsTotal / filteredHistory.length : 0,
+      avgDurationSec: filteredHistory.length > 0 ? durationTotal / filteredHistory.length : 0,
       topWinnerName: topWinner?.[0] ?? 'N/A',
       topWinnerWins: topWinner?.[1] ?? 0,
       topActionType: topActionType?.[0] ?? 'N/A',

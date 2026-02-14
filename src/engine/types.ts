@@ -152,6 +152,9 @@ export interface LegalAction {
   requestedAmount?: number;
   collectibleCap?: number;
   requiresPropertyTransfer?: boolean;
+  requiresConfirmation?: boolean;
+  riskLevel?: 'low' | 'medium' | 'high';
+  previewText?: string;
 }
 
 export interface ApplyResult {

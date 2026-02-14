@@ -5,6 +5,7 @@ import {
   createGame,
   getLegalActions,
   getNextPrompt,
+  getSuggestedPaymentCards,
   isGameOver,
   type Action,
   type GameState,
@@ -12,16 +13,24 @@ import {
   type PlayerConfig,
 } from './engine';
 import {
+  clearLifetimeStats,
+  clearMatchHistory,
   clearActiveGame,
+  deleteSavedGameSlot,
   incrementGrowthMetric,
   loadActiveGame,
+  loadSavedGameSlot,
+  loadSavedGames,
   loadLifetimeStats,
   loadMatchHistory,
   loadUiPreferences,
+  renameSavedGameSlot,
   saveActiveGame,
+  upsertSavedGameSlot,
   saveLifetimeStats,
   saveMatchHistory,
   saveUiPreferences,
+  type SavedGameSlotV1,
   type UiPreferencesV1,
 } from './persistence/storage';
 import {
@@ -35,22 +44,29 @@ import {
 } from './stats';
 import type { ActionVariantView } from './ui/components/PlayChooser';
 import { GameShell } from './ui/layout/GameShell';
+import { ActionConfirmDialog } from './ui/components/ActionConfirmDialog';
+import { RulesDrawer } from './ui/components/RulesDrawer';
 import { GameTableScreen } from './ui/screens/GameTableScreen';
 import { HomeScreen } from './ui/screens/HomeScreen';
 import { PostGameScreen } from './ui/screens/PostGameScreen';
+import { SavedGamesScreen } from './ui/screens/SavedGamesScreen';
 import { SettingsScreen } from './ui/screens/SettingsScreen';
 import { SetupScreen } from './ui/screens/SetupScreen';
 import { StatsScreen } from './ui/screens/StatsScreen';
 import { generatePostGameSharePng, postGameShareFilename } from './ui/share/postGameShare';
-import type { SetupViewModel, ShareStatus } from './ui/types';
+import type { RiskyActionConfirmation, SetupViewModel, ShareStatus } from './ui/types';
 import './App.css';
 
-type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'game_over';
+type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over';
 type SettingsBackScreen = 'home' | 'game';
+type SavedGamesBackScreen = 'home' | 'game';
 type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
 
 interface CardActionVariant extends ActionVariantView {
   action: Action;
+  requiresConfirmation?: boolean;
+  riskLevel?: 'low' | 'medium' | 'high';
+  previewText?: string;
 }
 
 interface PlayChooserState {
@@ -59,7 +75,7 @@ interface PlayChooserState {
   variants: CardActionVariant[];
 }
 
-type ReversibleActionType = 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
+type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
 
 function initialSetup(): SetupViewModel {
   return {
@@ -85,13 +101,22 @@ function actionVariantId(action: Action): string {
   return JSON.stringify(action);
 }
 
+function actionCardName(action: Action): string {
+  if (action.type !== 'play_action') return 'Action';
+  return getCardDefinition(action.cardId).name;
+}
+
 function cardMoneyValue(cardId: string): number {
   const def = getCardDefinition(cardId);
   return def.moneyValue ?? def.value;
 }
 
 function isReversibleActionType(actionType: Action['type']): actionType is ReversibleActionType {
-  return actionType === 'play_to_bank' || actionType === 'play_property' || actionType === 'play_action' || actionType === 'move_wild';
+  return actionType === 'draw_cards'
+    || actionType === 'play_to_bank'
+    || actionType === 'play_property'
+    || actionType === 'play_action'
+    || actionType === 'move_wild';
 }
 
 function shouldRetainTurnSnapshots(nextState: GameState, nextPromptPlayerId: string): boolean {
@@ -116,9 +141,17 @@ function gameIdentity(game: GameState): string {
   return `${game.createdAt}`;
 }
 
+function autoSlotName(game: GameState): string {
+  const names = game.players.map((player) => player.name);
+  const prefix = names.length > 1 ? `${names[0]} vs ${names.slice(1).join(', ')}` : names[0] ?? 'Saved Game';
+  const trimmed = prefix.length > 54 ? `${prefix.slice(0, 54)}...` : prefix;
+  return `${trimmed} - Turn ${game.turnCount}`;
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [settingsBackScreen, setSettingsBackScreen] = useState<SettingsBackScreen>('home');
+  const [savedGamesBackScreen, setSavedGamesBackScreen] = useState<SavedGamesBackScreen>('home');
   const [game, setGame] = useState<GameState | null>(null);
   const [postGameSummary, setPostGameSummary] = useState<PostGameSummary | null>(null);
   const [setup, setSetup] = useState<SetupViewModel>(initialSetup);
@@ -126,6 +159,7 @@ function App() {
   const [revealedPlayerId, setRevealedPlayerId] = useState<string | null>(null);
   const [history, setHistory] = useState<MatchRecordV1[]>(() => loadMatchHistory());
   const [lifetime, setLifetime] = useState<LifetimeStatsV1>(() => loadLifetimeStats());
+  const [savedSlots, setSavedSlots] = useState<SavedGameSlotV1[]>(() => loadSavedGames().slots);
   const [chooser, setChooser] = useState<PlayChooserState | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [selectedPaymentCards, setSelectedPaymentCards] = useState<string[]>([]);
@@ -133,6 +167,8 @@ function App() {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [shareStatus, setShareStatus] = useState<ShareStatus>(null);
+  const [riskyActionConfirmation, setRiskyActionConfirmation] = useState<RiskyActionConfirmation | null>(null);
+  const [showRulesDrawer, setShowRulesDrawer] = useState(false);
   const [turnSnapshots, setTurnSnapshots] = useState<GameState[]>([]);
   const [uiPreferences, setUiPreferences] = useState<UiPreferencesV1>(() => loadUiPreferences());
   const [devSeedStatus, setDevSeedStatus] = useState<DevSeedStatus>(null);
@@ -262,6 +298,9 @@ function App() {
         id: `${actionVariantId(item.action)}-${index}`,
         label: describeCardAction(item.action),
         action: item.action,
+        requiresConfirmation: item.requiresConfirmation,
+        riskLevel: item.riskLevel,
+        previewText: item.previewText,
       };
       const existing = variants.get(cardId) ?? [];
       existing.push(option);
@@ -304,6 +343,7 @@ function App() {
   }, [discardOverLimitCount, mainPhaseExhausted, prompt]);
 
   const pendingPayment = game?.pending?.kind === 'payment' ? game.pending.payload : null;
+  const canSaveCurrentGame = Boolean(game && !isGameOver(game).done);
   const pendingPaymentPlayer = useMemo(() => {
     if (!game || !pendingPayment) return null;
     return game.players.find((player) => player.id === pendingPayment.targetPlayerId) ?? null;
@@ -335,6 +375,13 @@ function App() {
     setError(null);
   }, []);
 
+  const openSavedGames = useCallback((backScreen: SavedGamesBackScreen) => {
+    setSavedGamesBackScreen(backScreen);
+    setSavedSlots(loadSavedGames().slots);
+    setScreen('saved_games');
+    setError(null);
+  }, []);
+
   const closeSettings = useCallback(() => {
     if (settingsBackScreen === 'game' && game) {
       setScreen('game');
@@ -342,6 +389,14 @@ function App() {
     }
     setScreen('home');
   }, [game, settingsBackScreen]);
+
+  const closeSavedGames = useCallback(() => {
+    if (savedGamesBackScreen === 'game' && game) {
+      setScreen('game');
+      return;
+    }
+    setScreen('home');
+  }, [game, savedGamesBackScreen]);
 
   const togglePause = useCallback(() => {
     if (!currentGameId) return;
@@ -422,6 +477,78 @@ function App() {
     openGame(saved.gameState);
   };
 
+  const loadSavedSlotGame = (slotId: string) => {
+    const slot = loadSavedGameSlot(slotId);
+    if (!slot) {
+      setError('Saved slot no longer exists.');
+      return;
+    }
+    if (isGameOver(slot.gameState).done) {
+      const loadedLifetime = loadLifetimeStats();
+      setLifetime(loadedLifetime);
+      setGame(slot.gameState);
+      setPostGameSummary(buildPostGameSummary(slot.gameState, loadedLifetime));
+      setScreen('game_over');
+      setError(null);
+      return;
+    }
+    openGame(slot.gameState);
+  };
+
+  const saveCurrentToNewSlot = () => {
+    if (!game || isGameOver(game).done) return;
+    try {
+      const next = upsertSavedGameSlot({
+        name: autoSlotName(game),
+        gameState: game,
+      });
+      setSavedSlots(next.slots);
+      setError(null);
+    } catch (slotError) {
+      if (slotError instanceof Error && slotError.message === 'save_slots_full') {
+        setError('All 5 save slots are full. Overwrite an existing slot.');
+        return;
+      }
+      setError('Could not save the current game.');
+    }
+  };
+
+  const saveCurrentToExistingSlot = (slotId: string) => {
+    if (!game || isGameOver(game).done) return;
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm('Overwrite this saved slot with the current game?');
+      if (!confirmed) return;
+    }
+    const existing = savedSlots.find((slot) => slot.id === slotId);
+    const next = upsertSavedGameSlot({
+      id: slotId,
+      name: existing?.name ?? autoSlotName(game),
+      gameState: game,
+    });
+    setSavedSlots(next.slots);
+    setError(null);
+  };
+
+  const renameSavedSlot = (slotId: string) => {
+    const target = savedSlots.find((slot) => slot.id === slotId);
+    if (!target || typeof window === 'undefined') return;
+    const nextName = window.prompt('Rename saved slot', target.name);
+    if (!nextName) return;
+    const next = renameSavedGameSlot(slotId, nextName);
+    setSavedSlots(next.slots);
+    setError(null);
+  };
+
+  const removeSavedSlot = (slotId: string) => {
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm('Delete this saved slot?');
+      if (!confirmed) return;
+    }
+    const next = deleteSavedGameSlot(slotId);
+    setSavedSlots(next.slots);
+    setError(null);
+  };
+
   const finalizeIfGameOver = (nextState: GameState) => {
     const status = isGameOver(nextState);
     if (!status.done || !status.winnerId) return;
@@ -469,8 +596,58 @@ function App() {
     setChooser(null);
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
+    setRiskyActionConfirmation(null);
     setGame(result.state);
     finalizeIfGameOver(result.state);
+  };
+
+  const queueRiskyAction = (
+    action: Action,
+    source?: Partial<Pick<RiskyActionConfirmation, 'riskLevel' | 'previewText'>> & { requiresConfirmation?: boolean },
+  ): boolean => {
+    if (!uiPreferences.confirmRiskyActions) return false;
+    if (action.type !== 'play_action') return false;
+    const highImpactActionKinds = new Set(['rent', 'rent_wild', 'debt_collector', 'sly_deal', 'forced_deal', 'deal_breaker']);
+    const cardDef = getCardDefinition(action.cardId);
+    const kind = cardDef.actionKind ?? null;
+    const shouldConfirm = source ? Boolean(source.requiresConfirmation) : kind != null && highImpactActionKinds.has(kind);
+    if (!shouldConfirm) return false;
+    setRiskyActionConfirmation({
+      action,
+      label: actionCardName(action),
+      riskLevel: source?.riskLevel ?? (kind === 'forced_deal' || kind === 'deal_breaker' ? 'high' : 'medium'),
+      previewText:
+        source?.previewText ??
+        (kind === 'deal_breaker'
+          ? 'This can steal an opponent complete set.'
+          : kind === 'forced_deal'
+            ? 'This swaps properties and can shift both players progress.'
+            : kind === 'sly_deal'
+              ? 'This steals a property from an opponent.'
+              : kind === 'debt_collector'
+                ? 'This demands payment from the selected opponent.'
+                : 'This can trigger a high-impact rent payment sequence.'),
+    });
+    return true;
+  };
+
+  const runActionWithConfirmation = (action: Action, source?: LegalAction) => {
+    if (isPaused) return;
+    if (
+      queueRiskyAction(
+        action,
+        source
+          ? {
+              requiresConfirmation: source.requiresConfirmation,
+              riskLevel: source.riskLevel,
+              previewText: source.previewText,
+            }
+          : undefined,
+      )
+    ) {
+      return;
+    }
+    runAction(action);
   };
 
   const undoLastPlay = () => {
@@ -510,7 +687,7 @@ function App() {
     setSelectedCardId(cardId);
 
     if (variants.length === 1) {
-      runAction(variants[0].action);
+      runActionWithConfirmation(variants[0].action, variants[0]);
       return;
     }
 
@@ -533,6 +710,26 @@ function App() {
       playerId: pendingPayment.targetPlayerId,
       cards: selectedPaymentCards,
     });
+  };
+
+  const autoSelectPayment = () => {
+    if (isPaused) return;
+    if (!game || !pendingPayment) return;
+    const suggested = getSuggestedPaymentCards(game, pendingPayment.targetPlayerId, pendingPayment.amount);
+    setSelectedPaymentCards(suggested);
+    incrementGrowthMetric('payment_auto_selected');
+  };
+
+  const clearStatsData = () => {
+    if (typeof window !== 'undefined') {
+      const shouldClear = window.confirm('Clear all local stats and match history data?');
+      if (!shouldClear) return;
+    }
+    clearMatchHistory();
+    clearLifetimeStats();
+    setHistory([]);
+    setLifetime({ version: 1, players: {} });
+    setError(null);
   };
 
   const actionDetailText = (item: LegalAction): string | null => {
@@ -571,8 +768,10 @@ function App() {
     setSelectedPaymentCards([]);
     setTurnSnapshots([]);
     setShowDebugActions(false);
+    setShowRulesDrawer(false);
     setIsSharing(false);
     setShareStatus(null);
+    setRiskyActionConfirmation(null);
   }, []);
 
   const startRematch = useCallback(() => {
@@ -641,6 +840,7 @@ function App() {
           error={error}
           onNewGame={() => setScreen('setup')}
           onResumeGame={resumeGame}
+          onOpenSavedGames={() => openSavedGames('home')}
           onOpenStats={() => setScreen('stats')}
           onOpenSettings={() => openSettings('home')}
         />
@@ -682,18 +882,26 @@ function App() {
           turnStatusText={turnStatusText}
           isMandatoryPrompt={isMandatoryPrompt}
           mainPhaseExhausted={mainPhaseExhausted}
+          discardOverLimitCount={discardOverLimitCount}
+          showRulesHints={uiPreferences.showRulesDrawerHints}
           turnSnapshotsCount={turnSnapshots.length}
           showDebugActions={showDebugActions}
           actionDetailText={actionDetailText}
           onPauseToggle={togglePause}
+          onOpenRules={() => {
+            setShowRulesDrawer(true);
+            incrementGrowthMetric('rules_drawer_opened');
+          }}
+          onOpenSavedGames={() => openSavedGames('game')}
           onOpenSettings={() => openSettings('game')}
           onToggleDebugActions={() => {
             if (isPaused) return;
             setShowDebugActions((prev) => !prev);
           }}
-          onRunAction={runAction}
+          onRunAction={runActionWithConfirmation}
           onCardClick={handleCardClick}
           onPaymentCardToggle={handlePaymentCardToggle}
+          onAutoSelectPayment={autoSelectPayment}
           onSubmitSelectedPayment={submitSelectedPayment}
           onUndoLastPlay={undoLastPlay}
           onResetTurnPlays={resetTurnPlays}
@@ -712,6 +920,20 @@ function App() {
 
       {screen === 'stats' ? <StatsScreen history={history} lifetime={lifetime} onBack={() => setScreen('home')} /> : null}
 
+      {screen === 'saved_games' ? (
+        <SavedGamesScreen
+          slots={savedSlots}
+          canSaveCurrent={canSaveCurrentGame}
+          error={error}
+          onSaveCurrentToNewSlot={saveCurrentToNewSlot}
+          onLoadSlot={loadSavedSlotGame}
+          onSaveToExistingSlot={saveCurrentToExistingSlot}
+          onRenameSlot={renameSavedSlot}
+          onDeleteSlot={removeSavedSlot}
+          onBack={closeSavedGames}
+        />
+      ) : null}
+
       {screen === 'settings' ? (
         <SettingsScreen
           uiPreferences={uiPreferences}
@@ -719,8 +941,11 @@ function App() {
           onToggleReducedEffects={(enabled) => setUiPreferences((prev) => ({ ...prev, reducedEffects: enabled }))}
           onChangeTextScale={(value) => setUiPreferences((prev) => ({ ...prev, textScale: value }))}
           onChangeTableDensity={(value) => setUiPreferences((prev) => ({ ...prev, tableDensity: value }))}
+          onToggleConfirmRiskyActions={(enabled) => setUiPreferences((prev) => ({ ...prev, confirmRiskyActions: enabled }))}
+          onToggleRulesDrawerHints={(enabled) => setUiPreferences((prev) => ({ ...prev, showRulesDrawerHints: enabled }))}
           onToggleDevMode={onToggleDevMode}
           onReseedDevData={onReseedDevData}
+          onClearStatsData={clearStatsData}
           onBack={closeSettings}
         />
       ) : null}
@@ -752,6 +977,18 @@ function App() {
           onGoHome={goHome}
         />
       ) : null}
+
+      {riskyActionConfirmation ? (
+        <ActionConfirmDialog
+          title={riskyActionConfirmation.label}
+          previewText={riskyActionConfirmation.previewText}
+          riskLevel={riskyActionConfirmation.riskLevel}
+          onConfirm={() => runAction(riskyActionConfirmation.action)}
+          onCancel={() => setRiskyActionConfirmation(null)}
+        />
+      ) : null}
+
+      {screen === 'game' && showRulesDrawer ? <RulesDrawer onClose={() => setShowRulesDrawer(false)} /> : null}
 
     </GameShell>
   );

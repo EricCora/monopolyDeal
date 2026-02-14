@@ -5,12 +5,13 @@ import { createDevStatsFixture } from '../stats';
 import App from '../App';
 import { createStatsFixture } from './fixtures/statsFixtures';
 
-const { mockedApplyAction, mockedCreateGame, mockedGetNextPrompt, mockedGetLegalActions, mockedIsGameOver } = vi.hoisted(() => ({
+const { mockedApplyAction, mockedCreateGame, mockedGetNextPrompt, mockedGetLegalActions, mockedIsGameOver, mockedGetSuggestedPaymentCards } = vi.hoisted(() => ({
   mockedApplyAction: vi.fn(),
   mockedCreateGame: vi.fn(),
   mockedGetNextPrompt: vi.fn(),
   mockedGetLegalActions: vi.fn(),
   mockedIsGameOver: vi.fn(),
+  mockedGetSuggestedPaymentCards: vi.fn(),
 }));
 
 const { mockedGeneratePostGameSharePng, mockedPostGameShareFilename } = vi.hoisted(() => ({
@@ -91,6 +92,7 @@ const MATCH_HISTORY_KEY = 'monopolyDeal.matchHistory.v1';
 const LIFETIME_STATS_KEY = 'monopolyDeal.lifetimeStats.v1';
 const GROWTH_METRICS_KEY = 'monopolyDeal.growthMetrics.v1';
 const UI_PREFERENCES_KEY = 'monopolyDeal.uiPreferences.v1';
+const SAVED_GAMES_KEY = 'monopolyDeal.savedGames.v1';
 
 vi.mock('../engine', () => {
   const clone = () => structuredClone(baseState);
@@ -115,6 +117,7 @@ vi.mock('../engine', () => {
         action: { type: 'play_to_bank', playerId: 'p1', cardId: 'money_1#a1' },
       },
     ]),
+    getSuggestedPaymentCards: mockedGetSuggestedPaymentCards.mockImplementation(() => []),
     applyAction: mockedApplyAction.mockImplementation((state: GameState, action: unknown) => {
       void action;
       return {
@@ -138,6 +141,7 @@ describe('App', () => {
     mockedGetNextPrompt.mockReset();
     mockedGetLegalActions.mockReset();
     mockedIsGameOver.mockReset();
+    mockedGetSuggestedPaymentCards.mockReset();
     mockedGeneratePostGameSharePng.mockReset();
     mockedPostGameShareFilename.mockReset();
     mockMatchMedia(false);
@@ -159,6 +163,7 @@ describe('App', () => {
         action: { type: 'play_to_bank', playerId: 'p1', cardId: 'money_1#a1' },
       },
     ]);
+    mockedGetSuggestedPaymentCards.mockImplementation(() => []);
     mockedGeneratePostGameSharePng.mockResolvedValue(new Blob(['share'], { type: 'image/png' }));
     mockedPostGameShareFilename.mockReturnValue('share.png');
     Object.defineProperty(window, 'ClipboardItem', {
@@ -177,6 +182,16 @@ describe('App', () => {
       value: {
         write: vi.fn().mockResolvedValue(undefined),
       },
+    });
+    Object.defineProperty(window, 'confirm', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(() => true),
+    });
+    Object.defineProperty(window, 'prompt', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(() => 'Renamed Slot'),
     });
   });
 
@@ -232,6 +247,42 @@ describe('App', () => {
     });
   });
 
+  it('supports auto-selecting suggested payment cards', () => {
+    const paymentState: GameState = {
+      ...structuredClone(baseState),
+      currentPlayerIndex: 0,
+      pending: {
+        kind: 'payment',
+        payload: {
+          sourcePlayerId: 'p1',
+          targetPlayerId: 'p2',
+          amount: 2,
+          reason: "It's My Birthday",
+          actionCardId: 'its_my_birthday#1',
+        },
+      },
+    };
+    mockedCreateGame.mockImplementationOnce(() => paymentState);
+    mockedGetNextPrompt.mockImplementation(() => ({ playerId: 'p2', text: 'Beta: choose payment cards totaling $2.', kind: 'payment' }));
+    mockedGetLegalActions.mockImplementation(() => []);
+    mockedGetSuggestedPaymentCards.mockImplementation(() => ['money_2#b2']);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /auto-select payment/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm payment/i }));
+
+    expect(mockedGetSuggestedPaymentCards).toHaveBeenCalledWith(expect.anything(), 'p2', 2);
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'pay_request',
+      playerId: 'p2',
+      cards: ['money_2#b2'],
+    });
+  });
+
   it('ignores hand clicks for unplayable cards after 3 plays are used', () => {
     const lockedState: GameState = {
       ...structuredClone(baseState),
@@ -270,6 +321,48 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: /undo last play/i })).not.toBeInTheDocument();
   });
 
+  it('keeps undo controls visible during discard-required prompt after a reversible play', () => {
+    mockedGetNextPrompt.mockImplementation((state: GameState) => (
+      state.updatedAt > 1
+        ? { playerId: 'p1', text: 'Alpha: discard down to 7 cards to end your turn.', kind: 'discard' }
+        : { playerId: 'p1', text: 'Alpha turn', kind: 'main' }
+    ));
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+
+    expect(screen.getByRole('button', { name: /undo last play/i })).toBeInTheDocument();
+  });
+
+  it('allows undoing the initial draw action', () => {
+    mockedGetNextPrompt.mockImplementation((state: GameState) => (
+      state.updatedAt > 1
+        ? { playerId: 'p1', text: 'Alpha turn', kind: 'main' }
+        : { playerId: 'p1', text: 'Alpha: draw 2 cards.', kind: 'draw' }
+    ));
+    mockedGetLegalActions.mockImplementation((state: GameState) => {
+      if (state.updatedAt > 1) {
+        return [{ label: 'Pass turn', action: { type: 'pass_turn', playerId: 'p1' } }];
+      }
+      return [{ label: 'Draw cards', action: { type: 'draw_cards', playerId: 'p1' } }];
+    });
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /draw cards/i }));
+
+    expect(screen.getByRole('button', { name: /undo last play/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /undo last play/i }));
+    expect(screen.queryByRole('button', { name: /undo last play/i })).not.toBeInTheDocument();
+  });
+
   it('treats discard as a required prompt and discards selected hand card', () => {
     const discardState: GameState = {
       ...structuredClone(baseState),
@@ -301,6 +394,8 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /start match/i }));
     fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
 
+    expect(screen.getByText(/end turn \(discard 1\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/discard 1 card to end turn/i)).toBeInTheDocument();
     expect(screen.getByText(/required: resolve this step/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
 
@@ -309,6 +404,27 @@ describe('App', () => {
       playerId: 'p1',
       cardId: 'money_1#a1',
     });
+  });
+
+  it('shows draw-step guidance and play budget cues in the action rail', () => {
+    mockedGetNextPrompt.mockImplementation(() => ({ playerId: 'p1', text: 'Alpha: draw 2 cards.', kind: 'draw' }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Draw cards',
+        action: { type: 'draw_cards', playerId: 'p1' },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+
+    expect(screen.getByLabelText(/turn phase progress/i)).toHaveTextContent(/1\.\s*Draw/i);
+    expect(screen.getByText(/draw to start the turn/i)).toBeInTheDocument();
+    expect(screen.getByText(/play up to 3 cards \(0\/3\)/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/player hand/i)).toHaveAttribute('data-layout', 'rail');
   });
 
   it('renders pending selection play actions in inline actions and runs target choice', () => {
@@ -348,6 +464,77 @@ describe('App', () => {
       cardId: 'rent_green_dark_blue#r1',
       targetPlayerId: 'p2',
       color: 'green',
+    });
+  });
+
+  it('shows risky action confirmation dialog and cancels safely', () => {
+    mockedGetNextPrompt.mockImplementation(() => ({
+      playerId: 'p1',
+      text: 'Alpha: choose target for Deal Breaker.',
+      kind: 'selection',
+    }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Play Deal Breaker on Beta',
+        action: {
+          type: 'play_action',
+          playerId: 'p1',
+          cardId: 'deal_breaker#d1',
+          targetPlayerId: 'p2',
+        },
+        requiresConfirmation: true,
+        riskLevel: 'high',
+        previewText: 'This can steal an entire complete set.',
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /play deal breaker on beta/i }));
+
+    expect(screen.getByRole('dialog', { name: /confirm risky action/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+    expect(mockedApplyAction).not.toHaveBeenCalled();
+  });
+
+  it('confirms risky action and dispatches exactly once', () => {
+    mockedGetNextPrompt.mockImplementation(() => ({
+      playerId: 'p1',
+      text: 'Alpha: choose target for Deal Breaker.',
+      kind: 'selection',
+    }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Play Deal Breaker on Beta',
+        action: {
+          type: 'play_action',
+          playerId: 'p1',
+          cardId: 'deal_breaker#d1',
+          targetPlayerId: 'p2',
+        },
+        requiresConfirmation: true,
+        riskLevel: 'high',
+        previewText: 'This can steal an entire complete set.',
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /play deal breaker on beta/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^confirm$/i }));
+
+    expect(mockedApplyAction).toHaveBeenCalledTimes(1);
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'play_action',
+      playerId: 'p1',
+      cardId: 'deal_breaker#d1',
+      targetPlayerId: 'p2',
     });
   });
 
@@ -491,6 +678,19 @@ describe('App', () => {
     expect(screen.getByText(/replaced stats and match history with medium sample data/i)).toBeInTheDocument();
   });
 
+  it('clears local stats and history from settings data controls', () => {
+    localStorage.setItem(MATCH_HISTORY_KEY, JSON.stringify(createStatsFixture('medium').history));
+    localStorage.setItem(LIFETIME_STATS_KEY, JSON.stringify(createStatsFixture('medium').lifetime));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /clear stats & history/i }));
+
+    expect(window.confirm).toHaveBeenCalled();
+    expect(localStorage.getItem(MATCH_HISTORY_KEY)).toBeNull();
+    expect(localStorage.getItem(LIFETIME_STATS_KEY)).toBeNull();
+  });
+
   it('blocks gameplay actions while paused and allows them again after resume', () => {
     render(<App />);
 
@@ -510,6 +710,24 @@ describe('App', () => {
       playerId: 'p1',
       cardId: 'money_1#a1',
     });
+  });
+
+  it('opens and closes the rules reference drawer via click and Escape', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /rules reference/i }));
+    expect(screen.getByRole('dialog', { name: /rules reference/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^close$/i }));
+    expect(screen.queryByRole('dialog', { name: /rules reference/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /rules reference/i }));
+    expect(screen.getByRole('dialog', { name: /rules reference/i })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: /rules reference/i })).not.toBeInTheDocument();
   });
 
   it('restores paused state when resuming a saved game after reload', () => {
@@ -540,6 +758,64 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: /game table/i })).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: /game paused/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^resume$/i })).toBeInTheDocument();
+  });
+
+  it('opens saved games screen from home and returns back', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /saved games/i }));
+    expect(screen.getByRole('heading', { name: /saved games/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
+    expect(screen.getByRole('heading', { name: /monopoly deal local/i })).toBeInTheDocument();
+  });
+
+  it('saves current game to a slot and loads it from saved games', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save current game/i }));
+
+    const saved = JSON.parse(localStorage.getItem(SAVED_GAMES_KEY) ?? '{}');
+    expect(saved.version).toBe(1);
+    expect(saved.slots).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /home/i }));
+    fireEvent.click(screen.getByRole('button', { name: /saved games/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^load$/i }));
+
+    expect(screen.getByRole('heading', { name: /game table/i })).toBeInTheDocument();
+  });
+
+  it('renames and deletes saved game slots', () => {
+    localStorage.setItem(
+      SAVED_GAMES_KEY,
+      JSON.stringify({
+        version: 1,
+        slots: [
+          {
+            id: 'slot_1',
+            name: 'Original Slot',
+            createdAt: 1,
+            updatedAt: 1,
+            gameState: baseState,
+          },
+        ],
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /saved games/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^rename$/i }));
+
+    let saved = JSON.parse(localStorage.getItem(SAVED_GAMES_KEY) ?? '{}');
+    expect(saved.slots[0].name).toBe('Renamed Slot');
+
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+    saved = JSON.parse(localStorage.getItem(SAVED_GAMES_KEY) ?? '{}');
+    expect(saved.slots).toHaveLength(0);
   });
 
   it('does not carry paused state into a new match', () => {

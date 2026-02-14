@@ -27,4 +27,11 @@ export interface LegalActionDetailView {
   detailText: string | null;
 }
 
+export interface RiskyActionConfirmation {
+  action: Action;
+  label: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  previewText: string;
+}
+
 export type ShareStatus = { tone: 'success' | 'error'; message: string } | null;

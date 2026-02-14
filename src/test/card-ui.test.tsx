@@ -1,7 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { PROPERTY_RENT_SCALES, PROPERTY_SET_SIZES } from '../cards/catalog';
 import { CardView } from '../ui/components/CardView';
 import { HandFan } from '../ui/components/HandFan';
+import { RulesDrawer } from '../ui/components/RulesDrawer';
 import { getCardVisualModel } from '../ui/cards';
 
 describe('Card UI', () => {
@@ -103,5 +105,16 @@ describe('Card UI', () => {
       expect(screen.getByLabelText(/player hand/i)).toHaveAttribute('data-layout', 'rail');
     });
     rectSpy.mockRestore();
+  });
+
+  it('shows rent and set references from the card catalog in the rules drawer', () => {
+    render(<RulesDrawer onClose={() => undefined} />);
+    const brownRent = PROPERTY_RENT_SCALES.brown.join(' / ');
+    const brownRow = screen.getByText('Brown').closest('tr');
+
+    expect(screen.getByRole('dialog', { name: /rules reference/i })).toBeInTheDocument();
+    expect(brownRow).not.toBeNull();
+    expect(within(brownRow as HTMLElement).getByText(String(PROPERTY_SET_SIZES.brown))).toBeInTheDocument();
+    expect(within(brownRow as HTMLElement).getByText(brownRent)).toBeInTheDocument();
   });
 });

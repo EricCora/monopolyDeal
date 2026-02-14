@@ -25,6 +25,7 @@ import {
   type LifetimeStatsV1,
   type MatchRecordV1,
   type MatchRowView,
+  type StatsFilters,
 } from '../../stats';
 
 interface StatsDashboardProps {
@@ -53,7 +54,17 @@ function shortDate(timestamp: number): string {
 export function StatsDashboard({ history, lifetime, onBack }: StatsDashboardProps) {
   const [lifetimeSorting, setLifetimeSorting] = useState<SortingState>([{ id: 'wins', desc: true }]);
   const [matchSorting, setMatchSorting] = useState<SortingState>([{ id: 'endedAt', desc: true }]);
-  const dashboard = useMemo(() => buildStatsDashboardModel(history, lifetime), [history, lifetime]);
+  const [filters, setFilters] = useState<StatsFilters>({});
+  const dashboard = useMemo(() => buildStatsDashboardModel(history, lifetime, filters), [filters, history, lifetime]);
+  const filterPlayers = useMemo(() => {
+    const names = new Set<string>();
+    history.forEach((match) => {
+      match.players.forEach((name) => names.add(name));
+      if (match.winnerName) names.add(match.winnerName);
+    });
+    Object.keys(lifetime.players).forEach((name) => names.add(name));
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [history, lifetime.players]);
 
   const lifetimeColumnHelper = createColumnHelper<LifetimeRowView>();
   const matchColumnHelper = createColumnHelper<MatchRowView>();
@@ -122,6 +133,56 @@ export function StatsDashboard({ history, lifetime, onBack }: StatsDashboardProp
     <section className="panel card-enter stats-panel">
       <h2>Stats & History</h2>
       <p className="stats-subtitle">Sortable tables, trend plots, and lifetime performance metrics.</p>
+
+      <section className="stats-filters" aria-label="Stats filters">
+        <label>
+          Player
+          <select
+            value={filters.playerName ?? ''}
+            onChange={(event) => setFilters((prev) => ({ ...prev, playerName: event.target.value || undefined }))}
+          >
+            <option value="">All players</option>
+            {filterPlayers.map((name) => (
+              <option key={`player-${name}`} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Winner
+          <select
+            value={filters.winnerName ?? ''}
+            onChange={(event) => setFilters((prev) => ({ ...prev, winnerName: event.target.value || undefined }))}
+          >
+            <option value="">All winners</option>
+            {filterPlayers.map((name) => (
+              <option key={`winner-${name}`} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          From
+          <input
+            type="date"
+            value={filters.fromDay ?? ''}
+            onChange={(event) => setFilters((prev) => ({ ...prev, fromDay: event.target.value || undefined }))}
+          />
+        </label>
+        <label>
+          To
+          <input
+            type="date"
+            value={filters.toDay ?? ''}
+            onChange={(event) => setFilters((prev) => ({ ...prev, toDay: event.target.value || undefined }))}
+          />
+        </label>
+        <button type="button" onClick={() => setFilters({})}>
+          Clear Filters
+        </button>
+      </section>
 
       <section className="stats-kpis" aria-label="Stats key performance indicators">
         <article className="stats-kpi">

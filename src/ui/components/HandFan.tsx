@@ -75,9 +75,11 @@ export function HandFan({
       };
     }
 
-    const scale = availableWidth > 0 ? clamp(availableWidth / Math.max(neededFanWidth, 1), 0.84, 1) : 1;
+    // Keep small hands more readable before the draw step by avoiding aggressive fan down-scaling.
+    const minFanScale = count <= 5 ? 0.94 : 0.84;
+    const scale = availableWidth > 0 ? clamp(availableWidth / Math.max(neededFanWidth, 1), minFanScale, 1) : 1;
     const cardWidth = Math.round(baseCardWidth * scale);
-    const overlap = clamp(fanOverlap * scale, 18, 40);
+    const overlap = clamp(fanOverlap * scale, count <= 5 ? 14 : 18, 40);
     const spread = clamp((34 / Math.max(count, 2)) * scale, 3.2, 10.5);
     return {
       layout: resolvedLayout,

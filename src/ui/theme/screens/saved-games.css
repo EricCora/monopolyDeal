@@ -1,0 +1,48 @@
+.saved-games-screen {
+  background:
+    radial-gradient(circle at 15% 18%, rgba(73, 151, 164, 0.16), transparent 35%),
+    radial-gradient(circle at 82% 8%, rgba(247, 199, 101, 0.2), transparent 42%),
+    linear-gradient(160deg, rgba(11, 27, 40, 0.92), rgba(8, 19, 30, 0.92));
+  display: grid;
+  gap: 0.75rem;
+}
+
+.saved-games-subtitle {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.saved-games-toolbar {
+  margin-top: 0.35rem;
+}
+
+.saved-games-capacity {
+  margin: 0;
+  color: var(--text-subtle);
+}
+
+.saved-games-empty {
+  margin: 0;
+  color: var(--text-subtle);
+}
+
+.saved-games-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.saved-game-slot {
+  border: 1px solid #35556f;
+  border-radius: var(--radius-md);
+  background: rgba(10, 26, 41, 0.88);
+  padding: 0.7rem;
+}
+
+.saved-game-slot h3 {
+  margin: 0 0 0.25rem;
+}
+
+.saved-game-slot p {
+  margin: 0.1rem 0;
+  color: var(--text-subtle);
+}

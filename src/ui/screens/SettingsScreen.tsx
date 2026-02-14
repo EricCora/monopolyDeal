@@ -8,8 +8,11 @@ interface SettingsScreenProps {
   onToggleReducedEffects: (enabled: boolean) => void;
   onChangeTextScale: (value: UiPreferencesV1['textScale']) => void;
   onChangeTableDensity: (value: UiPreferencesV1['tableDensity']) => void;
+  onToggleConfirmRiskyActions: (enabled: boolean) => void;
+  onToggleRulesDrawerHints: (enabled: boolean) => void;
   onToggleDevMode: (enabled: boolean) => void;
   onReseedDevData: () => void;
+  onClearStatsData: () => void;
   onBack: () => void;
 }
 
@@ -26,8 +29,11 @@ export function SettingsScreen({
   onToggleReducedEffects,
   onChangeTextScale,
   onChangeTableDensity,
+  onToggleConfirmRiskyActions,
+  onToggleRulesDrawerHints,
   onToggleDevMode,
   onReseedDevData,
+  onClearStatsData,
   onBack,
 }: SettingsScreenProps) {
   const statusMessage = devStatusMessage(devSeedStatus);
@@ -64,6 +70,24 @@ export function SettingsScreen({
             <option value="compact">Compact</option>
           </select>
         </label>
+
+        <label className="settings-field settings-toggle">
+          <span>Confirm Risky Actions</span>
+          <input
+            type="checkbox"
+            checked={uiPreferences.confirmRiskyActions}
+            onChange={(event) => onToggleConfirmRiskyActions(event.target.checked)}
+          />
+        </label>
+
+        <label className="settings-field settings-toggle">
+          <span>Show Rules Hints</span>
+          <input
+            type="checkbox"
+            checked={uiPreferences.showRulesDrawerHints}
+            onChange={(event) => onToggleRulesDrawerHints(event.target.checked)}
+          />
+        </label>
       </section>
 
       <section className="settings-section" aria-label="Development tools">
@@ -82,6 +106,15 @@ export function SettingsScreen({
           </button>
         </div>
         {statusMessage ? <p className="settings-status">{statusMessage}</p> : null}
+      </section>
+
+      <section className="settings-section" aria-label="Data controls">
+        <h3>Data Controls</h3>
+        <div className="actions">
+          <button type="button" onClick={onClearStatsData}>
+            Clear Stats & History
+          </button>
+        </div>
       </section>
 
       <div className="actions">

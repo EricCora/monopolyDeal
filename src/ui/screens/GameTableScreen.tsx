@@ -17,6 +17,9 @@ import { TopBar } from '../layout/TopBar';
 
 interface CardActionVariant extends ActionVariantView {
   action: Action;
+  requiresConfirmation?: boolean;
+  riskLevel?: 'low' | 'medium' | 'high';
+  previewText?: string;
 }
 
 interface PlayChooserState {
@@ -44,15 +47,20 @@ interface GameTableScreenProps {
   turnStatusText: string;
   isMandatoryPrompt: boolean;
   mainPhaseExhausted: boolean;
+  discardOverLimitCount: number;
+  showRulesHints: boolean;
   turnSnapshotsCount: number;
   showDebugActions: boolean;
   actionDetailText: (item: LegalAction) => string | null;
   onPauseToggle: () => void;
+  onOpenRules: () => void;
+  onOpenSavedGames: () => void;
   onOpenSettings: () => void;
   onToggleDebugActions: () => void;
-  onRunAction: (action: Action) => void;
+  onRunAction: (action: Action, source?: LegalAction) => void;
   onCardClick: (cardId: string) => void;
   onPaymentCardToggle: (cardId: string) => void;
+  onAutoSelectPayment: () => void;
   onSubmitSelectedPayment: () => void;
   onUndoLastPlay: () => void;
   onResetTurnPlays: () => void;
@@ -100,15 +108,20 @@ export function GameTableScreen({
   turnStatusText,
   isMandatoryPrompt,
   mainPhaseExhausted,
+  discardOverLimitCount,
+  showRulesHints,
   turnSnapshotsCount,
   showDebugActions,
   actionDetailText,
   onPauseToggle,
+  onOpenRules,
+  onOpenSavedGames,
   onOpenSettings,
   onToggleDebugActions,
   onRunAction,
   onCardClick,
   onPaymentCardToggle,
+  onAutoSelectPayment,
   onSubmitSelectedPayment,
   onUndoLastPlay,
   onResetTurnPlays,
@@ -134,6 +147,8 @@ export function GameTableScreen({
         actions={(
           <>
             <button onClick={onNavigateHome}>Home</button>
+            <button onClick={onOpenRules}>Rules Reference</button>
+            <button onClick={onOpenSavedGames}>Save Game</button>
             <button onClick={onOpenSettings}>Settings</button>
             <button onClick={onPauseToggle}>{isPaused ? 'Resume' : 'Pause'}</button>
           </>
@@ -144,6 +159,11 @@ export function GameTableScreen({
         <ActionRail
           isMandatoryPrompt={isMandatoryPrompt}
           turnStatusText={turnStatusText}
+          turnPhase={game.turn.phase}
+          promptKind={prompt.kind}
+          playsUsed={game.turn.playsUsed}
+          discardOverLimitCount={discardOverLimitCount}
+          showRulesHints={showRulesHints}
           legalActions={legalActions}
           isPaused={isPaused}
           showDebugActions={showDebugActions}
@@ -156,6 +176,7 @@ export function GameTableScreen({
               const canSeeHand = revealedPlayerId === player.id;
               const isCurrent = game.players[game.currentPlayerIndex].id === player.id;
               const isPromptPlayer = prompt.playerId === player.id;
+              const handFitMode = isPromptPlayer && prompt.kind === 'draw' ? 'rail' : 'auto';
               const handInteractive = Boolean(canSeeHand && prompt.playerId === player.id && !over.done && !isPaused);
               const isPaymentPayer = pendingPayment?.targetPlayerId === player.id;
               const paymentSelectionEnabled = Boolean(isPaymentPayer && revealedPlayerId === player.id && !over.done && !isPaused);
@@ -199,11 +220,22 @@ export function GameTableScreen({
                             Selected total: <strong>${selectedPaymentTotal}</strong> of ${pendingPayment.amount}
                             {totalPayableValue < pendingPayment.amount ? ' (not enough assets available)' : ''}
                           </p>
+                          {selectedPaymentTotal > pendingPayment.amount ? (
+                            <p className="payment-selected">Overpay: ${selectedPaymentTotal - pendingPayment.amount}</p>
+                          ) : null}
+                          {selectedPaymentTotal < pendingPayment.amount && totalPayableValue < pendingPayment.amount ? (
+                            <p className="payment-selected">
+                              Shortfall accepted: payer only has ${totalPayableValue} total available.
+                            </p>
+                          ) : null}
                           {selectedPaymentCards.length > 0 ? (
                             <p className="payment-selected">Selected: {selectedPaymentCards.map(getCardDisplayName).join(', ')}</p>
                           ) : (
                             <p className="payment-selected">Click cards in {player.name}&apos;s bank/properties to pay.</p>
                           )}
+                          <button type="button" onClick={onAutoSelectPayment} disabled={isPaused}>
+                            Auto-select Payment
+                          </button>
                           <button type="button" onClick={onSubmitSelectedPayment} disabled={!paymentCanSubmit || isPaused}>
                             Confirm Payment
                           </button>
@@ -214,7 +246,7 @@ export function GameTableScreen({
                         {inlineActions.map((item, index) => (
                           <button
                             key={`inline-${item.label}-${index}`}
-                            onClick={() => onRunAction(item.action)}
+                            onClick={() => onRunAction(item.action, item)}
                             disabled={isPaused}
                           >
                             {item.label}
@@ -226,7 +258,7 @@ export function GameTableScreen({
                         ) : null}
                       </div>
 
-                      {turnSnapshotsCount > 0 && prompt.kind === 'main' ? (
+                      {turnSnapshotsCount > 0 && (prompt.kind === 'main' || prompt.kind === 'discard' || prompt.kind === 'draw') ? (
                         <div className="actions inline-actions">
                           <button type="button" onClick={onUndoLastPlay} disabled={isPaused}>
                             Undo Last Play
@@ -249,7 +281,7 @@ export function GameTableScreen({
                           selectedCardId={selectedCardId}
                           onCardClick={onCardClick}
                           interactive={handInteractive}
-                          fitMode="auto"
+                          fitMode={handFitMode}
                         />
                       ) : (
                         <p>Empty</p>
@@ -327,7 +359,7 @@ export function GameTableScreen({
           onChoose={(id) => {
             const selected = chooser.variants.find((variant) => variant.id === id);
             if (!selected) return;
-            onRunAction(selected.action);
+            onRunAction(selected.action, selected);
           }}
           onClose={onCloseChooser}
         />
