@@ -174,6 +174,34 @@
   margin: 0.2rem 0;
 }
 
+.game-table-screen.is-paused .top-bar {
+  position: relative;
+  z-index: calc(var(--z-shield) + 1);
+}
+
+.paused-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: var(--z-shield);
+  background: rgba(6, 11, 18, 0.84);
+}
+
+.paused-card {
+  width: min(520px, calc(100% - 2rem));
+  border-radius: 14px;
+  border: 2px solid #4f7390;
+  background: linear-gradient(170deg, rgba(12, 28, 44, 0.97), rgba(8, 19, 30, 0.96));
+  box-shadow: var(--shadow-md);
+  padding: 1.35rem;
+  text-align: center;
+}
+
+.paused-card p {
+  margin: 0.5rem 0 0;
+}
+
 .shield {
   position: fixed;
   inset: 0;

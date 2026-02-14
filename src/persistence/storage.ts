@@ -18,6 +18,9 @@ export interface UiPreferencesV1 {
   reducedEffects: boolean;
   tableDensity: 'cozy' | 'compact';
   textScale: 'normal' | 'large';
+  devModeEnabled: boolean;
+  gamePaused: boolean;
+  pausedGameId: string | null;
 }
 
 export function saveActiveGame(state: GameState): void {
@@ -129,6 +132,9 @@ function defaultUiPreferences(): UiPreferencesV1 {
     reducedEffects: false,
     tableDensity: 'cozy',
     textScale: 'normal',
+    devModeEnabled: false,
+    gamePaused: false,
+    pausedGameId: null,
   };
 }
 
@@ -145,6 +151,9 @@ export function loadUiPreferences(): UiPreferencesV1 {
       reducedEffects: Boolean(parsed.reducedEffects),
       tableDensity: density,
       textScale,
+      devModeEnabled: Boolean(parsed.devModeEnabled),
+      gamePaused: Boolean(parsed.gamePaused),
+      pausedGameId: typeof parsed.pausedGameId === 'string' ? parsed.pausedGameId : null,
     };
   } catch {
     return defaultUiPreferences();

@@ -4,6 +4,7 @@ interface ActionRailProps {
   isMandatoryPrompt: boolean;
   turnStatusText: string;
   legalActions: LegalAction[];
+  isPaused: boolean;
   showDebugActions: boolean;
   onToggleDebugActions: () => void;
 }
@@ -12,20 +13,23 @@ export function ActionRail({
   isMandatoryPrompt,
   turnStatusText,
   legalActions,
+  isPaused,
   showDebugActions,
   onToggleDebugActions,
 }: ActionRailProps) {
   return (
     <aside className="panel action-rail card-enter" aria-label="Turn action rail">
       <h3>Turn Actions</h3>
-      <p className={`turn-status ${isMandatoryPrompt ? 'is-required' : ''}`}>{turnStatusText}</p>
+      <p className={`turn-status ${isMandatoryPrompt ? 'is-required' : ''}`}>
+        {isPaused ? 'Game is paused. Resume from the top bar to continue.' : turnStatusText}
+      </p>
       <p className="action-rail-caption">
         {isMandatoryPrompt
           ? 'Resolve the required action in the active player panel.'
           : 'Use the active player panel below to play cards.'}
       </p>
       <div className="debug-actions">
-        <button type="button" onClick={onToggleDebugActions}>
+        <button type="button" onClick={onToggleDebugActions} disabled={isPaused}>
           {showDebugActions ? 'Hide' : 'Show'} All Legal Actions ({legalActions.length})
         </button>
         {showDebugActions && (

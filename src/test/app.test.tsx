@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GameState } from '../engine';
+import { createDevStatsFixture } from '../stats';
 import App from '../App';
 import { createStatsFixture } from './fixtures/statsFixtures';
 
@@ -85,9 +86,11 @@ const baseState: GameState = {
   turnCount: 1,
 };
 
+const ACTIVE_GAME_KEY = 'monopolyDeal.activeGame.v1';
 const MATCH_HISTORY_KEY = 'monopolyDeal.matchHistory.v1';
 const LIFETIME_STATS_KEY = 'monopolyDeal.lifetimeStats.v1';
 const GROWTH_METRICS_KEY = 'monopolyDeal.growthMetrics.v1';
+const UI_PREFERENCES_KEY = 'monopolyDeal.uiPreferences.v1';
 
 vi.mock('../engine', () => {
   const clone = () => structuredClone(baseState);
@@ -395,6 +398,188 @@ describe('App', () => {
     const ascMatchRows = within(matchSection as HTMLElement).getAllByRole('row');
     const firstMatchCells = ascMatchRows[1].querySelectorAll('td');
     expect(firstMatchCells[3]?.textContent).toBe('16');
+  });
+
+  it('seeds stats and history when dev mode is enabled and local data is empty', async () => {
+    const fixture = createDevStatsFixture('medium');
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /dev mode/i }));
+
+    expect(JSON.parse(localStorage.getItem(MATCH_HISTORY_KEY) ?? '[]')).toEqual(fixture.history);
+    expect(JSON.parse(localStorage.getItem(LIFETIME_STATS_KEY) ?? '{}')).toEqual(fixture.lifetime);
+    expect(screen.getByText(/seeded medium sample stats and match history/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    fireEvent.click(screen.getByRole('button', { name: /stats & history/i }));
+
+    expect(await screen.findByRole('heading', { name: /stats & history/i })).toBeInTheDocument();
+    expect(screen.getByText(/total matches/i)).toBeInTheDocument();
+  });
+
+  it('does not overwrite existing stats/history when enabling dev mode', () => {
+    const existingHistory = [
+      {
+        id: 'existing-1',
+        startedAt: 1,
+        endedAt: 11,
+        players: ['Existing'],
+        winnerId: 'p1',
+        winnerName: 'Existing',
+        turnCount: 5,
+        durationSec: 10,
+        actionsByType: { action: 3 },
+      },
+    ];
+    const existingLifetime = {
+      version: 1,
+      players: {
+        Existing: {
+          name: 'Existing',
+          gamesPlayed: 1,
+          wins: 1,
+          totalTurns: 5,
+          totalDurationSec: 10,
+          actionsByType: { action: 3 },
+        },
+      },
+    };
+    localStorage.setItem(MATCH_HISTORY_KEY, JSON.stringify(existingHistory));
+    localStorage.setItem(LIFETIME_STATS_KEY, JSON.stringify(existingLifetime));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /dev mode/i }));
+
+    expect(JSON.parse(localStorage.getItem(MATCH_HISTORY_KEY) ?? '[]')).toEqual(existingHistory);
+    expect(JSON.parse(localStorage.getItem(LIFETIME_STATS_KEY) ?? '{}')).toEqual(existingLifetime);
+    expect(screen.getByText(/skipped auto-seed because match history already contains data/i)).toBeInTheDocument();
+  });
+
+  it('reseeds stats/history from settings when requested', () => {
+    const fixture = createDevStatsFixture('medium');
+    localStorage.setItem(
+      MATCH_HISTORY_KEY,
+      JSON.stringify([
+        {
+          id: 'old-1',
+          startedAt: 5,
+          endedAt: 6,
+          players: ['Old'],
+          turnCount: 1,
+          durationSec: 1,
+          actionsByType: {},
+        },
+      ]),
+    );
+    localStorage.setItem(
+      LIFETIME_STATS_KEY,
+      JSON.stringify({
+        version: 1,
+        players: {},
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /dev mode/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reseed stats & history/i }));
+
+    expect(JSON.parse(localStorage.getItem(MATCH_HISTORY_KEY) ?? '[]')).toEqual(fixture.history);
+    expect(JSON.parse(localStorage.getItem(LIFETIME_STATS_KEY) ?? '{}')).toEqual(fixture.lifetime);
+    expect(screen.getByText(/replaced stats and match history with medium sample data/i)).toBeInTheDocument();
+  });
+
+  it('blocks gameplay actions while paused and allows them again after resume', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /^pause$/i }));
+    expect(screen.getByRole('dialog', { name: /game paused/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+    expect(mockedApplyAction).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /^resume$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'play_to_bank',
+      playerId: 'p1',
+      cardId: 'money_1#a1',
+    });
+  });
+
+  it('restores paused state when resuming a saved game after reload', () => {
+    localStorage.setItem(
+      ACTIVE_GAME_KEY,
+      JSON.stringify({
+        version: 1,
+        timestamp: 1,
+        gameState: baseState,
+      }),
+    );
+    localStorage.setItem(
+      UI_PREFERENCES_KEY,
+      JSON.stringify({
+        version: 1,
+        reducedEffects: false,
+        tableDensity: 'cozy',
+        textScale: 'normal',
+        devModeEnabled: false,
+        gamePaused: true,
+        pausedGameId: `${baseState.createdAt}`,
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /resume saved game/i }));
+
+    expect(screen.getByRole('heading', { name: /game table/i })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /game paused/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^resume$/i })).toBeInTheDocument();
+  });
+
+  it('does not carry paused state into a new match', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^pause$/i }));
+    expect(screen.getByRole('dialog', { name: /game paused/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /home/i }));
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+
+    expect(screen.queryByRole('dialog', { name: /game paused/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'play_to_bank',
+      playerId: 'p1',
+      cardId: 'money_1#a1',
+    });
+  });
+
+  it('navigates to settings from both home and game screens', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
+    expect(screen.getByRole('heading', { name: /^settings$/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    expect(screen.getByRole('heading', { name: /monopoly deal local/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    expect(screen.getByRole('heading', { name: /game table/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
+    expect(screen.getByRole('heading', { name: /^settings$/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    expect(screen.getByRole('heading', { name: /game table/i })).toBeInTheDocument();
   });
 
   it('navigates to a dedicated game-over screen and focuses the victory title', async () => {
