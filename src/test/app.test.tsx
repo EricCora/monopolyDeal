@@ -249,4 +249,44 @@ describe('App', () => {
       cardId: 'money_1#a1',
     });
   });
+
+  it('renders pending selection play actions in inline actions and runs target choice', () => {
+    mockedGetNextPrompt.mockImplementation(() => ({
+      playerId: 'p1',
+      text: 'Alpha: resolve the pending card effect.',
+      kind: 'selection',
+    }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Charge Beta rent for Green',
+        action: {
+          type: 'play_action',
+          playerId: 'p1',
+          cardId: 'rent_green_dark_blue#r1',
+          targetPlayerId: 'p2',
+          color: 'green',
+        },
+        targetPlayerId: 'p2',
+        requestedAmount: 8,
+        collectibleCap: 3,
+        requiresPropertyTransfer: true,
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /charge beta rent for green/i }));
+
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'play_action',
+      playerId: 'p1',
+      cardId: 'rent_green_dark_blue#r1',
+      targetPlayerId: 'p2',
+      color: 'green',
+    });
+  });
 });
