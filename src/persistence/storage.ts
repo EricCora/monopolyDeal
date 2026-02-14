@@ -35,6 +35,20 @@ export interface UiPreferencesV1 {
   textScale: 'normal' | 'large';
   confirmRiskyActions: boolean;
   showRulesDrawerHints: boolean;
+  highContrast: boolean;
+  soundEnabled: boolean;
+  hapticsEnabled: boolean;
+  experimental: {
+    aiOpponents: boolean;
+    aiCoach: boolean;
+    replayTimeline: boolean;
+    dailyChallenges: boolean;
+    achievements: boolean;
+    lanMultiplayer: boolean;
+    customRules: boolean;
+    enhancedEventLog: boolean;
+    contextualActionPreviews: boolean;
+  };
   devModeEnabled: boolean;
   gamePaused: boolean;
   pausedGameId: string | null;
@@ -284,6 +298,20 @@ function defaultUiPreferences(): UiPreferencesV1 {
     textScale: 'normal',
     confirmRiskyActions: true,
     showRulesDrawerHints: true,
+    highContrast: false,
+    soundEnabled: false,
+    hapticsEnabled: false,
+    experimental: {
+      aiOpponents: false,
+      aiCoach: false,
+      replayTimeline: false,
+      dailyChallenges: false,
+      achievements: false,
+      lanMultiplayer: false,
+      customRules: false,
+      enhancedEventLog: false,
+      contextualActionPreviews: false,
+    },
     devModeEnabled: false,
     gamePaused: false,
     pausedGameId: null,
@@ -298,6 +326,7 @@ export function loadUiPreferences(): UiPreferencesV1 {
     if (parsed.version !== 1) return defaultUiPreferences();
     const density = parsed.tableDensity === 'compact' ? 'compact' : 'cozy';
     const textScale = parsed.textScale === 'large' ? 'large' : 'normal';
+    const experimentalParsed = parsed.experimental;
     return {
       version: 1,
       reducedEffects: Boolean(parsed.reducedEffects),
@@ -305,6 +334,20 @@ export function loadUiPreferences(): UiPreferencesV1 {
       textScale,
       confirmRiskyActions: parsed.confirmRiskyActions !== false,
       showRulesDrawerHints: parsed.showRulesDrawerHints !== false,
+      highContrast: Boolean(parsed.highContrast),
+      soundEnabled: Boolean(parsed.soundEnabled),
+      hapticsEnabled: Boolean(parsed.hapticsEnabled),
+      experimental: {
+        aiOpponents: Boolean(experimentalParsed?.aiOpponents),
+        aiCoach: Boolean(experimentalParsed?.aiCoach),
+        replayTimeline: Boolean(experimentalParsed?.replayTimeline),
+        dailyChallenges: Boolean(experimentalParsed?.dailyChallenges),
+        achievements: Boolean(experimentalParsed?.achievements),
+        lanMultiplayer: Boolean(experimentalParsed?.lanMultiplayer),
+        customRules: Boolean(experimentalParsed?.customRules),
+        enhancedEventLog: Boolean(experimentalParsed?.enhancedEventLog),
+        contextualActionPreviews: Boolean(experimentalParsed?.contextualActionPreviews),
+      },
       devModeEnabled: Boolean(parsed.devModeEnabled),
       gamePaused: Boolean(parsed.gamePaused),
       pausedGameId: typeof parsed.pausedGameId === 'string' ? parsed.pausedGameId : null,

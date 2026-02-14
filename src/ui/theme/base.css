@@ -28,6 +28,18 @@ body {
   font-size: 1.06rem;
 }
 
+.game-shell.is-high-contrast {
+  --surface-panel: rgba(8, 14, 20, 0.98);
+  --line-soft: #78a7cf;
+  --line-strong: #9dcaee;
+  --text-main: #ffffff;
+  --text-muted: #e4f3ff;
+  --text-subtle: #c8dff2;
+  --accent: #70ffea;
+  --accent-strong: #52e7d1;
+  --accent-alt: #ffd36f;
+}
+
 .game-shell-inner {
   width: min(1340px, 100%);
   margin: 0 auto;

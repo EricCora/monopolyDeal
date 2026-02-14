@@ -834,7 +834,7 @@ function App() {
   };
 
   return (
-    <GameShell screenClassName={`screen-${screen}`} textScale={uiPreferences.textScale}>
+    <GameShell screenClassName={`screen-${screen}`} textScale={uiPreferences.textScale} highContrast={uiPreferences.highContrast}>
       {screen === 'home' ? (
         <HomeScreen
           error={error}
@@ -939,10 +939,22 @@ function App() {
           uiPreferences={uiPreferences}
           devSeedStatus={devSeedStatus}
           onToggleReducedEffects={(enabled) => setUiPreferences((prev) => ({ ...prev, reducedEffects: enabled }))}
+          onToggleHighContrast={(enabled) => setUiPreferences((prev) => ({ ...prev, highContrast: enabled }))}
+          onToggleSound={(enabled) => setUiPreferences((prev) => ({ ...prev, soundEnabled: enabled }))}
+          onToggleHaptics={(enabled) => setUiPreferences((prev) => ({ ...prev, hapticsEnabled: enabled }))}
           onChangeTextScale={(value) => setUiPreferences((prev) => ({ ...prev, textScale: value }))}
           onChangeTableDensity={(value) => setUiPreferences((prev) => ({ ...prev, tableDensity: value }))}
           onToggleConfirmRiskyActions={(enabled) => setUiPreferences((prev) => ({ ...prev, confirmRiskyActions: enabled }))}
           onToggleRulesDrawerHints={(enabled) => setUiPreferences((prev) => ({ ...prev, showRulesDrawerHints: enabled }))}
+          onToggleExperimentalFlag={(flag, enabled) => {
+            setUiPreferences((prev) => ({
+              ...prev,
+              experimental: {
+                ...prev.experimental,
+                [flag]: enabled,
+              },
+            }));
+          }}
           onToggleDevMode={onToggleDevMode}
           onReseedDevData={onReseedDevData}
           onClearStatsData={clearStatsData}
