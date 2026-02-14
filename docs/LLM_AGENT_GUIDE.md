@@ -115,6 +115,23 @@ Do not model multiple simultaneous pending effects.
 - Card rendering/fit is split between `src/ui/components/CardView.tsx`, `src/ui/components/HandFan.tsx`, and `src/ui/theme/components/cards.css`.
 - Rent/double-rent/counter interactions are edge-case heavy.
 
+## Milestone Gate Checklist
+
+Use this checklist for feature-milestone commits:
+
+1. Keep each commit cohesive (feature + tests + minimal docs).
+2. Do not mix structural refactors with behavioral changes unless required.
+3. Run and verify:
+- `npm run test`
+- `npm run build`
+4. Confirm invariant safety:
+- Turn phase progression remains valid.
+- Single pending interaction model remains intact.
+- End-turn hand-limit behavior still enforced.
+5. For persistence/stat changes:
+- Keep `version: 1` readers backward-compatible.
+- Treat new fields as additive + optional defaults.
+
 ## Recommended Agent Prompt Template
 
 Use this template when asking an agent to implement changes:
