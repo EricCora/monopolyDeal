@@ -457,7 +457,13 @@ function App() {
       const isPaymentPayer = pendingPayment?.targetPlayerId === player.id;
       const paymentSelectionEnabled = Boolean(isPaymentPayer && revealedPlayerId === player.id && !isGameOver(state).done);
       const inlineActions = isPromptPlayer
-        ? (pendingPayment ? contextualActions.filter((item) => item.action.type !== 'pay_request') : contextualActions)
+        ? (
+            pendingPayment
+              ? contextualActions.filter((item) => item.action.type !== 'pay_request')
+              : prompt?.kind === 'selection'
+                ? legalActions
+                : contextualActions
+          )
         : [];
       const propertyColors = (Object.keys(player.properties) as PropertyColor[]).filter((color) => player.properties[color].length > 0);
 
