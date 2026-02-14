@@ -6,7 +6,7 @@ Purpose: give coding agents enough context to make correct, low-regression chang
 
 - `src/engine/`
   - Pure game rules engine.
-  - Exports: `createGame`, `getLegalActions`, `applyAction`, `isGameOver`, `getNextPrompt`, `getSetCompletionCount`.
+  - Exports: `createGame`, `getLegalActions`, `applyAction`, `isGameOver`, `getNextPrompt`, `getSetCompletionCount`, `getSuggestedPaymentCards`.
 - `src/cards/`
   - Card catalog, set sizes, rent scales, display helpers.
 - `src/persistence/`
@@ -17,6 +17,8 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - `App.tsx` owns state/actions and passes typed props to screen containers.
   - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition.
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
+  - `src/ui/components/ActionConfirmDialog.tsx` handles risky-action confirmation flow.
+  - `src/ui/components/RulesDrawer.tsx` provides in-game rules/set/rent quick reference.
   - `src/ui/theme/` contains tokenized CSS split by base/components/screens.
 
 ## Data Model Cheat Sheet
@@ -81,7 +83,8 @@ Do not model multiple simultaneous pending effects.
 
 1. Keep engine as source of truth.
 2. Pull legal actions/prompts from engine selectors, not custom ad-hoc UI logic.
-3. Update component tests (`src/test/*.test.tsx`) when interaction surface changes.
+3. For high-impact actions, respect `LegalAction.requiresConfirmation` and related metadata.
+4. Update component tests (`src/test/*.test.tsx`) when interaction surface changes.
 
 ### 4) Change persistence or stats schema
 
@@ -161,6 +164,8 @@ Validation:
 - Rule and action types: `src/engine/types.ts`
 - Card metadata: `src/cards/catalog.ts`
 - Save/load: `src/persistence/storage.ts`
+- Risky-action confirm modal: `src/ui/components/ActionConfirmDialog.tsx`
+- Rules quick reference modal: `src/ui/components/RulesDrawer.tsx`
 - Match/lifetime models: `src/stats/types.ts`
 - Match aggregation: `src/stats/records.ts`
 - Dev fixture data: `src/stats/devFixture.ts`

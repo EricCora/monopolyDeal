@@ -20,6 +20,11 @@ This project focuses on local, pass-and-play gameplay with a rules engine, persi
 - Responsive hand layout (fan auto-scales and falls back to rail when space is tight)
 - Property cards with rent ladder cells for faster set-to-rent readability
 - Post-game brag image share (clipboard with download fallback)
+- Guided turn rail with draw/play/end-step progress and clearer required-action cues
+- Risky action confirmation dialog for high-impact targeted/rent plays
+- Payment assistant auto-select for pending payment flows
+- In-game rules reference drawer with property set/rent lookup and pending-flow help
+- Stats filters (player/winner/date range) and settings data controls for clearing local stats/history
 - Auto-save + resume via `localStorage`
 
 ## Tech Stack
@@ -67,7 +72,10 @@ Use the `Settings` screen from Home (or the in-game top bar) to control:
 - Reduced celebration effects
 - Text scale (`normal` / `large`)
 - Table density (`cozy` / `compact`)
+- Risky action confirmations on/off
+- Rules hint visibility on/off
 - Dev Mode toggle and sample data reseed tools
+- Local data controls (clear match history + lifetime stats)
 
 When a live match is open, the top bar includes `Pause` / `Resume`. Paused state is persisted, so reopening a saved match restores the paused overlay until resumed.
 
