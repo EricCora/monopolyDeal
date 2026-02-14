@@ -226,6 +226,30 @@ function generatePaymentOptions(player: PlayerState, targetAmount: number): stri
   return options;
 }
 
+export function getSuggestedPaymentCards(state: GameState, playerId: PlayerId, amount: number): string[] {
+  const player = getPlayer(state, playerId);
+  if (!player) return [];
+  const options = generatePaymentOptions(player, amount);
+  if (options.length === 0) return [];
+
+  let best: string[] = options[0];
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const option of options) {
+    const total = option.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0);
+    const meetsTarget = total >= amount;
+    const score = meetsTarget
+      ? total * 100 + option.length
+      : 1_000_000 - total * 100 + option.length;
+    if (score < bestScore) {
+      best = option;
+      bestScore = score;
+    }
+  }
+
+  return best;
+}
+
 function findPropertyColorByCard(player: PlayerState, cardId: string): PropertyColor | null {
   for (const color of PROPERTY_COLORS) {
     if (player.properties[color].some((entry) => entry.cardId === cardId)) {

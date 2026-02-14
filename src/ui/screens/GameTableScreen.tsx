@@ -57,6 +57,7 @@ interface GameTableScreenProps {
   onRunAction: (action: Action, source?: LegalAction) => void;
   onCardClick: (cardId: string) => void;
   onPaymentCardToggle: (cardId: string) => void;
+  onAutoSelectPayment: () => void;
   onSubmitSelectedPayment: () => void;
   onUndoLastPlay: () => void;
   onResetTurnPlays: () => void;
@@ -114,6 +115,7 @@ export function GameTableScreen({
   onRunAction,
   onCardClick,
   onPaymentCardToggle,
+  onAutoSelectPayment,
   onSubmitSelectedPayment,
   onUndoLastPlay,
   onResetTurnPlays,
@@ -208,11 +210,22 @@ export function GameTableScreen({
                             Selected total: <strong>${selectedPaymentTotal}</strong> of ${pendingPayment.amount}
                             {totalPayableValue < pendingPayment.amount ? ' (not enough assets available)' : ''}
                           </p>
+                          {selectedPaymentTotal > pendingPayment.amount ? (
+                            <p className="payment-selected">Overpay: ${selectedPaymentTotal - pendingPayment.amount}</p>
+                          ) : null}
+                          {selectedPaymentTotal < pendingPayment.amount && totalPayableValue < pendingPayment.amount ? (
+                            <p className="payment-selected">
+                              Shortfall accepted: payer only has ${totalPayableValue} total available.
+                            </p>
+                          ) : null}
                           {selectedPaymentCards.length > 0 ? (
                             <p className="payment-selected">Selected: {selectedPaymentCards.map(getCardDisplayName).join(', ')}</p>
                           ) : (
                             <p className="payment-selected">Click cards in {player.name}&apos;s bank/properties to pay.</p>
                           )}
+                          <button type="button" onClick={onAutoSelectPayment} disabled={isPaused}>
+                            Auto-select Payment
+                          </button>
                           <button type="button" onClick={onSubmitSelectedPayment} disabled={!paymentCanSubmit || isPaused}>
                             Confirm Payment
                           </button>

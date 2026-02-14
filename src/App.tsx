@@ -5,6 +5,7 @@ import {
   createGame,
   getLegalActions,
   getNextPrompt,
+  getSuggestedPaymentCards,
   isGameOver,
   type Action,
   type GameState,
@@ -597,6 +598,13 @@ function App() {
     });
   };
 
+  const autoSelectPayment = () => {
+    if (isPaused) return;
+    if (!game || !pendingPayment) return;
+    const suggested = getSuggestedPaymentCards(game, pendingPayment.targetPlayerId, pendingPayment.amount);
+    setSelectedPaymentCards(suggested);
+  };
+
   const actionDetailText = (item: LegalAction): string | null => {
     if (item.requestedAmount == null || item.collectibleCap == null) return null;
     const detail = `Ask $${item.requestedAmount}, likely collect up to $${item.collectibleCap}`;
@@ -758,6 +766,7 @@ function App() {
           onRunAction={runActionWithConfirmation}
           onCardClick={handleCardClick}
           onPaymentCardToggle={handlePaymentCardToggle}
+          onAutoSelectPayment={autoSelectPayment}
           onSubmitSelectedPayment={submitSelectedPayment}
           onUndoLastPlay={undoLastPlay}
           onResetTurnPlays={resetTurnPlays}

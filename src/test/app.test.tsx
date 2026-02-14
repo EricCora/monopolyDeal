@@ -5,12 +5,13 @@ import { createDevStatsFixture } from '../stats';
 import App from '../App';
 import { createStatsFixture } from './fixtures/statsFixtures';
 
-const { mockedApplyAction, mockedCreateGame, mockedGetNextPrompt, mockedGetLegalActions, mockedIsGameOver } = vi.hoisted(() => ({
+const { mockedApplyAction, mockedCreateGame, mockedGetNextPrompt, mockedGetLegalActions, mockedIsGameOver, mockedGetSuggestedPaymentCards } = vi.hoisted(() => ({
   mockedApplyAction: vi.fn(),
   mockedCreateGame: vi.fn(),
   mockedGetNextPrompt: vi.fn(),
   mockedGetLegalActions: vi.fn(),
   mockedIsGameOver: vi.fn(),
+  mockedGetSuggestedPaymentCards: vi.fn(),
 }));
 
 const { mockedGeneratePostGameSharePng, mockedPostGameShareFilename } = vi.hoisted(() => ({
@@ -115,6 +116,7 @@ vi.mock('../engine', () => {
         action: { type: 'play_to_bank', playerId: 'p1', cardId: 'money_1#a1' },
       },
     ]),
+    getSuggestedPaymentCards: mockedGetSuggestedPaymentCards.mockImplementation(() => []),
     applyAction: mockedApplyAction.mockImplementation((state: GameState, action: unknown) => {
       void action;
       return {
@@ -138,6 +140,7 @@ describe('App', () => {
     mockedGetNextPrompt.mockReset();
     mockedGetLegalActions.mockReset();
     mockedIsGameOver.mockReset();
+    mockedGetSuggestedPaymentCards.mockReset();
     mockedGeneratePostGameSharePng.mockReset();
     mockedPostGameShareFilename.mockReset();
     mockMatchMedia(false);
@@ -159,6 +162,7 @@ describe('App', () => {
         action: { type: 'play_to_bank', playerId: 'p1', cardId: 'money_1#a1' },
       },
     ]);
+    mockedGetSuggestedPaymentCards.mockImplementation(() => []);
     mockedGeneratePostGameSharePng.mockResolvedValue(new Blob(['share'], { type: 'image/png' }));
     mockedPostGameShareFilename.mockReturnValue('share.png');
     Object.defineProperty(window, 'ClipboardItem', {
@@ -225,6 +229,42 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /\$2 card/i }));
     fireEvent.click(screen.getByRole('button', { name: /confirm payment/i }));
 
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'pay_request',
+      playerId: 'p2',
+      cards: ['money_2#b2'],
+    });
+  });
+
+  it('supports auto-selecting suggested payment cards', () => {
+    const paymentState: GameState = {
+      ...structuredClone(baseState),
+      currentPlayerIndex: 0,
+      pending: {
+        kind: 'payment',
+        payload: {
+          sourcePlayerId: 'p1',
+          targetPlayerId: 'p2',
+          amount: 2,
+          reason: "It's My Birthday",
+          actionCardId: 'its_my_birthday#1',
+        },
+      },
+    };
+    mockedCreateGame.mockImplementationOnce(() => paymentState);
+    mockedGetNextPrompt.mockImplementation(() => ({ playerId: 'p2', text: 'Beta: choose payment cards totaling $2.', kind: 'payment' }));
+    mockedGetLegalActions.mockImplementation(() => []);
+    mockedGetSuggestedPaymentCards.mockImplementation(() => ['money_2#b2']);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /auto-select payment/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm payment/i }));
+
+    expect(mockedGetSuggestedPaymentCards).toHaveBeenCalledWith(expect.anything(), 'p2', 2);
     expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
       type: 'pay_request',
       playerId: 'p2',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, createGame, getLegalActions, isGameOver, type GameState } from '../engine';
+import { applyAction, createGame, getLegalActions, getSuggestedPaymentCards, isGameOver, type GameState } from '../engine';
 
 function mkState(): GameState {
   const state = createGame({
@@ -217,6 +217,59 @@ describe('engine basics', () => {
     expect(next.pending).toBeNull();
     expect(next.players[0].bank).toEqual(expect.arrayContaining(['money_2#p3m1']));
     expect(next.currentPlayerIndex).toBe(0);
+  });
+
+  it('suggests payment cards that meet requested amount when possible', () => {
+    const state = createGame({
+      seed: 40,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.players[1].bank = ['money_1#b1', 'money_2#b2', 'money_4#b3'];
+    state.players[1].properties = {
+      brown: [],
+      light_blue: [],
+      pink: [],
+      orange: [],
+      red: [],
+      yellow: [],
+      green: [],
+      dark_blue: [],
+      railroad: [],
+      utility: [],
+    };
+
+    const suggested = getSuggestedPaymentCards(state, 'p2', 3);
+    const total = suggested.reduce((sum, cardId) => sum + Number(cardId.split('_')[1]?.split('#')[0] ?? 0), 0);
+    expect(total).toBeGreaterThanOrEqual(3);
+  });
+
+  it('suggests maximum payable cards when payer cannot meet requested amount', () => {
+    const state = createGame({
+      seed: 41,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.players[1].bank = ['money_1#b1'];
+    state.players[1].properties = {
+      brown: [],
+      light_blue: [],
+      pink: [],
+      orange: [],
+      red: [],
+      yellow: [],
+      green: [],
+      dark_blue: [],
+      railroad: [],
+      utility: [],
+    };
+
+    const suggested = getSuggestedPaymentCards(state, 'p2', 5);
+    expect(suggested).toEqual(['money_1#b1']);
   });
 
   it('does not expose hand play actions after 3 plays are used', () => {
