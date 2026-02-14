@@ -182,6 +182,11 @@ describe('App', () => {
         write: vi.fn().mockResolvedValue(undefined),
       },
     });
+    Object.defineProperty(window, 'confirm', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(() => true),
+    });
   });
 
   it('does not re-prompt reveal for same player after an action', () => {
@@ -622,6 +627,19 @@ describe('App', () => {
     expect(JSON.parse(localStorage.getItem(MATCH_HISTORY_KEY) ?? '[]')).toEqual(fixture.history);
     expect(JSON.parse(localStorage.getItem(LIFETIME_STATS_KEY) ?? '{}')).toEqual(fixture.lifetime);
     expect(screen.getByText(/replaced stats and match history with medium sample data/i)).toBeInTheDocument();
+  });
+
+  it('clears local stats and history from settings data controls', () => {
+    localStorage.setItem(MATCH_HISTORY_KEY, JSON.stringify(createStatsFixture('medium').history));
+    localStorage.setItem(LIFETIME_STATS_KEY, JSON.stringify(createStatsFixture('medium').lifetime));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /clear stats & history/i }));
+
+    expect(window.confirm).toHaveBeenCalled();
+    expect(localStorage.getItem(MATCH_HISTORY_KEY)).toBeNull();
+    expect(localStorage.getItem(LIFETIME_STATS_KEY)).toBeNull();
   });
 
   it('blocks gameplay actions while paused and allows them again after resume', () => {

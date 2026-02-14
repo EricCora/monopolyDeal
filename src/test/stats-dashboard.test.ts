@@ -50,4 +50,17 @@ describe('stats dashboard helpers', () => {
     expect(edgeModel.kpis.topWinnerName).toBe('N/A');
     expect(edgeModel.matchRows[0].winnerName).toBe('N/A');
   });
+
+  it('applies player and winner filters consistently across dashboard outputs', () => {
+    const fixture = createStatsFixture('medium');
+    const model = buildStatsDashboardModel(fixture.history, fixture.lifetime, {
+      playerName: 'Alpha',
+      winnerName: 'Alpha',
+    });
+
+    expect(model.matchRows.every((row) => row.winnerName === 'Alpha')).toBe(true);
+    expect(model.matchRows.every((row) => row.playersLabel.includes('Alpha'))).toBe(true);
+    expect(model.kpis.totalMatches).toBe(model.matchRows.length);
+    expect(model.matchTrends).toHaveLength(model.matchRows.length);
+  });
 });

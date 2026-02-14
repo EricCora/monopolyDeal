@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  clearLifetimeStats,
+  clearMatchHistory,
   incrementGrowthMetric,
   loadGrowthMetrics,
   loadUiPreferences,
@@ -18,6 +20,8 @@ describe('growth metrics storage', () => {
       events: {
         share_image_clicked: 0,
         share_image_success: 0,
+        payment_auto_selected: 0,
+        rules_drawer_opened: 0,
       },
     });
 
@@ -27,6 +31,8 @@ describe('growth metrics storage', () => {
       events: {
         share_image_clicked: 0,
         share_image_success: 0,
+        payment_auto_selected: 0,
+        rules_drawer_opened: 0,
       },
     });
   });
@@ -37,6 +43,8 @@ describe('growth metrics storage', () => {
       events: {
         share_image_clicked: 2,
         share_image_success: 1,
+        payment_auto_selected: 0,
+        rules_drawer_opened: 0,
       },
     });
 
@@ -54,6 +62,8 @@ describe('growth metrics storage', () => {
         events: {
           share_image_clicked: 'broken',
           share_image_success: null,
+          payment_auto_selected: undefined,
+          rules_drawer_opened: 'x',
         },
       }),
     );
@@ -85,6 +95,8 @@ describe('ui preferences storage', () => {
       reducedEffects: true,
       tableDensity: 'compact',
       textScale: 'large',
+      confirmRiskyActions: true,
+      showRulesDrawerHints: true,
       devModeEnabled: false,
       gamePaused: false,
       pausedGameId: null,
@@ -99,6 +111,8 @@ describe('ui preferences storage', () => {
         reducedEffects: 'yes',
         tableDensity: 'spacious',
         textScale: 'tiny',
+        confirmRiskyActions: 0,
+        showRulesDrawerHints: null,
         devModeEnabled: 1,
         gamePaused: null,
       }),
@@ -109,6 +123,8 @@ describe('ui preferences storage', () => {
       reducedEffects: true,
       tableDensity: 'cozy',
       textScale: 'normal',
+      confirmRiskyActions: true,
+      showRulesDrawerHints: true,
       devModeEnabled: true,
       gamePaused: false,
       pausedGameId: null,
@@ -121,6 +137,8 @@ describe('ui preferences storage', () => {
       reducedEffects: false,
       tableDensity: 'compact',
       textScale: 'large',
+      confirmRiskyActions: false,
+      showRulesDrawerHints: false,
       devModeEnabled: true,
       gamePaused: true,
       pausedGameId: 'game-123',
@@ -131,9 +149,22 @@ describe('ui preferences storage', () => {
       reducedEffects: false,
       tableDensity: 'compact',
       textScale: 'large',
+      confirmRiskyActions: false,
+      showRulesDrawerHints: false,
       devModeEnabled: true,
       gamePaused: true,
       pausedGameId: 'game-123',
     });
+  });
+
+  it('clears match history and lifetime stats keys', () => {
+    localStorage.setItem('monopolyDeal.matchHistory.v1', JSON.stringify([{ id: 'm1' }]));
+    localStorage.setItem('monopolyDeal.lifetimeStats.v1', JSON.stringify({ version: 1, players: { A: { wins: 1 } } }));
+
+    clearMatchHistory();
+    clearLifetimeStats();
+
+    expect(localStorage.getItem('monopolyDeal.matchHistory.v1')).toBeNull();
+    expect(localStorage.getItem('monopolyDeal.lifetimeStats.v1')).toBeNull();
   });
 });

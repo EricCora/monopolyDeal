@@ -24,12 +24,14 @@ export interface LifetimeStatsV1 {
   players: Record<string, LifetimePlayerStats>;
 }
 
-export type GrowthMetricEvent = 'share_image_clicked' | 'share_image_success';
+export type GrowthMetricEvent = 'share_image_clicked' | 'share_image_success' | 'payment_auto_selected' | 'rules_drawer_opened';
 
 export interface GrowthMetricsV1 {
   version: 1;
   events: {
     share_image_clicked: number;
     share_image_success: number;
+    payment_auto_selected: number;
+    rules_drawer_opened: number;
   };
 }

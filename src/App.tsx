@@ -13,6 +13,8 @@ import {
   type PlayerConfig,
 } from './engine';
 import {
+  clearLifetimeStats,
+  clearMatchHistory,
   clearActiveGame,
   incrementGrowthMetric,
   loadActiveGame,
@@ -494,6 +496,7 @@ function App() {
     action: Action,
     source?: Partial<Pick<RiskyActionConfirmation, 'riskLevel' | 'previewText'>> & { requiresConfirmation?: boolean },
   ): boolean => {
+    if (!uiPreferences.confirmRiskyActions) return false;
     if (action.type !== 'play_action') return false;
     const highImpactActionKinds = new Set(['rent', 'rent_wild', 'debt_collector', 'sly_deal', 'forced_deal', 'deal_breaker']);
     const cardDef = getCardDefinition(action.cardId);
@@ -605,6 +608,19 @@ function App() {
     if (!game || !pendingPayment) return;
     const suggested = getSuggestedPaymentCards(game, pendingPayment.targetPlayerId, pendingPayment.amount);
     setSelectedPaymentCards(suggested);
+    incrementGrowthMetric('payment_auto_selected');
+  };
+
+  const clearStatsData = () => {
+    if (typeof window !== 'undefined') {
+      const shouldClear = window.confirm('Clear all local stats and match history data?');
+      if (!shouldClear) return;
+    }
+    clearMatchHistory();
+    clearLifetimeStats();
+    setHistory([]);
+    setLifetime({ version: 1, players: {} });
+    setError(null);
   };
 
   const actionDetailText = (item: LegalAction): string | null => {
@@ -761,7 +777,10 @@ function App() {
           showDebugActions={showDebugActions}
           actionDetailText={actionDetailText}
           onPauseToggle={togglePause}
-          onOpenRules={() => setShowRulesDrawer(true)}
+          onOpenRules={() => {
+            setShowRulesDrawer(true);
+            incrementGrowthMetric('rules_drawer_opened');
+          }}
           onOpenSettings={() => openSettings('game')}
           onToggleDebugActions={() => {
             if (isPaused) return;
@@ -796,8 +815,11 @@ function App() {
           onToggleReducedEffects={(enabled) => setUiPreferences((prev) => ({ ...prev, reducedEffects: enabled }))}
           onChangeTextScale={(value) => setUiPreferences((prev) => ({ ...prev, textScale: value }))}
           onChangeTableDensity={(value) => setUiPreferences((prev) => ({ ...prev, tableDensity: value }))}
+          onToggleConfirmRiskyActions={(enabled) => setUiPreferences((prev) => ({ ...prev, confirmRiskyActions: enabled }))}
+          onToggleRulesDrawerHints={(enabled) => setUiPreferences((prev) => ({ ...prev, showRulesDrawerHints: enabled }))}
           onToggleDevMode={onToggleDevMode}
           onReseedDevData={onReseedDevData}
+          onClearStatsData={clearStatsData}
           onBack={closeSettings}
         />
       ) : null}

@@ -18,6 +18,8 @@ export interface UiPreferencesV1 {
   reducedEffects: boolean;
   tableDensity: 'cozy' | 'compact';
   textScale: 'normal' | 'large';
+  confirmRiskyActions: boolean;
+  showRulesDrawerHints: boolean;
   devModeEnabled: boolean;
   gamePaused: boolean;
   pausedGameId: string | null;
@@ -82,6 +84,8 @@ function defaultGrowthMetrics(): GrowthMetricsV1 {
     events: {
       share_image_clicked: 0,
       share_image_success: 0,
+      payment_auto_selected: 0,
+      rules_drawer_opened: 0,
     },
   };
 }
@@ -102,6 +106,8 @@ export function loadGrowthMetrics(): GrowthMetricsV1 {
       events: {
         share_image_clicked: parseMetricCount(parsed.events?.share_image_clicked),
         share_image_success: parseMetricCount(parsed.events?.share_image_success),
+        payment_auto_selected: parseMetricCount(parsed.events?.payment_auto_selected),
+        rules_drawer_opened: parseMetricCount(parsed.events?.rules_drawer_opened),
       },
     };
   } catch {
@@ -132,6 +138,8 @@ function defaultUiPreferences(): UiPreferencesV1 {
     reducedEffects: false,
     tableDensity: 'cozy',
     textScale: 'normal',
+    confirmRiskyActions: true,
+    showRulesDrawerHints: true,
     devModeEnabled: false,
     gamePaused: false,
     pausedGameId: null,
@@ -151,6 +159,8 @@ export function loadUiPreferences(): UiPreferencesV1 {
       reducedEffects: Boolean(parsed.reducedEffects),
       tableDensity: density,
       textScale,
+      confirmRiskyActions: parsed.confirmRiskyActions !== false,
+      showRulesDrawerHints: parsed.showRulesDrawerHints !== false,
       devModeEnabled: Boolean(parsed.devModeEnabled),
       gamePaused: Boolean(parsed.gamePaused),
       pausedGameId: typeof parsed.pausedGameId === 'string' ? parsed.pausedGameId : null,
@@ -162,4 +172,12 @@ export function loadUiPreferences(): UiPreferencesV1 {
 
 export function saveUiPreferences(preferences: UiPreferencesV1): void {
   localStorage.setItem(UI_PREFERENCES_KEY, JSON.stringify(preferences));
+}
+
+export function clearMatchHistory(): void {
+  localStorage.removeItem(MATCH_HISTORY_KEY);
+}
+
+export function clearLifetimeStats(): void {
+  localStorage.removeItem(LIFETIME_STATS_KEY);
 }
