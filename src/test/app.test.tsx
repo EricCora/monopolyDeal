@@ -301,6 +301,8 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /start match/i }));
     fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
 
+    expect(screen.getByText(/end turn \(discard 1\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/discard 1 card to end turn/i)).toBeInTheDocument();
     expect(screen.getByText(/required: resolve this step/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
 
@@ -309,6 +311,26 @@ describe('App', () => {
       playerId: 'p1',
       cardId: 'money_1#a1',
     });
+  });
+
+  it('shows draw-step guidance and play budget cues in the action rail', () => {
+    mockedGetNextPrompt.mockImplementation(() => ({ playerId: 'p1', text: 'Alpha: draw 2 cards.', kind: 'draw' }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Draw cards',
+        action: { type: 'draw_cards', playerId: 'p1' },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+
+    expect(screen.getByLabelText(/turn phase progress/i)).toHaveTextContent(/1\.\s*Draw/i);
+    expect(screen.getByText(/draw to start the turn/i)).toBeInTheDocument();
+    expect(screen.getByText(/play up to 3 cards \(0\/3\)/i)).toBeInTheDocument();
   });
 
   it('renders pending selection play actions in inline actions and runs target choice', () => {

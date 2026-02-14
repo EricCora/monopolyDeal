@@ -682,6 +682,7 @@ function App() {
           turnStatusText={turnStatusText}
           isMandatoryPrompt={isMandatoryPrompt}
           mainPhaseExhausted={mainPhaseExhausted}
+          discardOverLimitCount={discardOverLimitCount}
           turnSnapshotsCount={turnSnapshots.length}
           showDebugActions={showDebugActions}
           actionDetailText={actionDetailText}

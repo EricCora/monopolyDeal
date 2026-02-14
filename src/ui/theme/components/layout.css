@@ -50,6 +50,41 @@
   margin-bottom: 0.4rem;
 }
 
+.turn-phase-steps {
+  margin: 0 0 0.55rem;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.32rem;
+}
+
+.turn-phase-step {
+  display: flex;
+  gap: 0.42rem;
+  align-items: baseline;
+  padding: 0.3rem 0.45rem;
+  border-radius: 8px;
+  border: 1px solid #2a4252;
+  color: #aec7da;
+  background: rgba(7, 22, 33, 0.56);
+  font-size: 0.84rem;
+}
+
+.turn-phase-step strong {
+  color: #d8ebfb;
+}
+
+.turn-phase-step.is-active {
+  border-color: #6099c1;
+  background: rgba(18, 58, 86, 0.48);
+  color: #f2f9ff;
+}
+
+.turn-phase-step.is-done {
+  border-color: #4f7d67;
+  color: #b4dbc5;
+}
+
 .action-rail-caption {
   margin: 0.15rem 0 0.55rem;
   color: var(--text-muted);

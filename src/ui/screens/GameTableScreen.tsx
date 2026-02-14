@@ -44,6 +44,7 @@ interface GameTableScreenProps {
   turnStatusText: string;
   isMandatoryPrompt: boolean;
   mainPhaseExhausted: boolean;
+  discardOverLimitCount: number;
   turnSnapshotsCount: number;
   showDebugActions: boolean;
   actionDetailText: (item: LegalAction) => string | null;
@@ -100,6 +101,7 @@ export function GameTableScreen({
   turnStatusText,
   isMandatoryPrompt,
   mainPhaseExhausted,
+  discardOverLimitCount,
   turnSnapshotsCount,
   showDebugActions,
   actionDetailText,
@@ -144,6 +146,10 @@ export function GameTableScreen({
         <ActionRail
           isMandatoryPrompt={isMandatoryPrompt}
           turnStatusText={turnStatusText}
+          turnPhase={game.turn.phase}
+          promptKind={prompt.kind}
+          playsUsed={game.turn.playsUsed}
+          discardOverLimitCount={discardOverLimitCount}
           legalActions={legalActions}
           isPaused={isPaused}
           showDebugActions={showDebugActions}
