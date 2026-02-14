@@ -679,6 +679,8 @@ export function createGame(config: GameConfig): GameState {
   const players: PlayerState[] = config.players.map((player) => ({
     id: player.id,
     name: player.name,
+    controller: player.controller ?? 'human',
+    botDifficulty: player.botDifficulty ?? 'easy',
     hand: [],
     bank: [],
     properties: initialProperties(),

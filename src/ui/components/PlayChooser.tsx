@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 export interface ActionVariantView {
   id: string;
   label: string;
+  description?: string;
 }
 
 interface PlayChooserProps {
@@ -77,7 +78,8 @@ export function PlayChooser({ cardId, cardLabel, options, title = 'Choose Play',
         <div className="play-options">
           {options.map((option) => (
             <button key={option.id} type="button" className="play-option" onClick={() => onChoose(option.id)}>
-              {option.label}
+              <span>{option.label}</span>
+              {option.description ? <small>{option.description}</small> : null}
             </button>
           ))}
         </div>

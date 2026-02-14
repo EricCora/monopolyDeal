@@ -1,4 +1,4 @@
-import type { RefObject } from 'react';
+import { useEffect, useMemo, useState, type RefObject } from 'react';
 import type { GameState } from '../../engine';
 import type { PostGameSummary } from '../../stats';
 import type { ShareStatus } from '../types';
@@ -11,6 +11,8 @@ interface PostGameScreenProps {
   prefersReducedMotion: boolean;
   isSharing: boolean;
   shareStatus: ShareStatus;
+  replayEvents: Array<{ timestamp: number; type: string; message: string }>;
+  showReplayTimeline: boolean;
   titleRef: RefObject<HTMLHeadingElement | null>;
   formatDuration: (seconds: number) => string;
   onToggleReduceEffects: (enabled: boolean) => void;
@@ -29,6 +31,8 @@ export function PostGameScreen({
   prefersReducedMotion,
   isSharing,
   shareStatus,
+  replayEvents,
+  showReplayTimeline,
   titleRef,
   formatDuration,
   onToggleReduceEffects,
@@ -39,6 +43,14 @@ export function PostGameScreen({
   onGoHome,
 }: PostGameScreenProps) {
   const endedLabel = new Date(postGameSummary.endedAt).toLocaleString();
+  const timelineEvents = useMemo(() => replayEvents.slice(), [replayEvents]);
+  const [timelineIndex, setTimelineIndex] = useState(() => Math.max(0, timelineEvents.length - 1));
+
+  useEffect(() => {
+    setTimelineIndex(Math.max(0, timelineEvents.length - 1));
+  }, [postGameSummary.endedAt, timelineEvents.length]);
+
+  const timelineEvent = timelineEvents[timelineIndex] ?? null;
 
   return (
     <section className={`panel postgame-panel card-enter ${celebrationEnabled ? 'has-celebration' : ''}`} aria-labelledby="postgame-title">
@@ -113,6 +125,43 @@ export function PostGameScreen({
           ))}
         </ul>
       </section>
+
+      {showReplayTimeline ? (
+        <section className="postgame-highlights" aria-labelledby="replay-title">
+          <h3 id="replay-title">Replay Timeline</h3>
+          {timelineEvents.length > 0 && timelineEvent ? (
+            <>
+              <label>
+                Event {timelineIndex + 1} / {timelineEvents.length}
+                <input
+                  type="range"
+                  min={0}
+                  max={timelineEvents.length - 1}
+                  value={timelineIndex}
+                  onChange={(event) => setTimelineIndex(Number(event.target.value))}
+                />
+              </label>
+              <div className="actions">
+                <button type="button" onClick={() => setTimelineIndex((prev) => Math.max(0, prev - 1))} disabled={timelineIndex <= 0}>
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTimelineIndex((prev) => Math.min(timelineEvents.length - 1, prev + 1))}
+                  disabled={timelineIndex >= timelineEvents.length - 1}
+                >
+                  Next
+                </button>
+              </div>
+              <p>
+                <strong>{timelineEvent.type}</strong> at {new Date(timelineEvent.timestamp).toLocaleTimeString()}: {timelineEvent.message}
+              </p>
+            </>
+          ) : (
+            <p>No replay events available for this match.</p>
+          )}
+        </section>
+      ) : null}
 
       <section className="postgame-accessibility">
         <label className="postgame-toggle">

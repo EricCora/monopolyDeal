@@ -1,8 +1,10 @@
-import type { Action, LegalAction } from '../engine';
+import type { Action, BotDifficulty, LegalAction, PlayerController } from '../engine';
 
 export interface SetupViewModel {
   playerCount: number;
   playerNames: string[];
+  playerControllers: PlayerController[];
+  botDifficulties: BotDifficulty[];
 }
 
 export interface ActionRailEntry {

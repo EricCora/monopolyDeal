@@ -909,8 +909,8 @@ describe('App', () => {
 
     expect(mockedCreateGame).toHaveBeenLastCalledWith({
       players: [
-        { id: 'p1', name: 'Alpha' },
-        { id: 'p2', name: 'Beta' },
+        { id: 'p1', name: 'Alpha', controller: 'human', botDifficulty: 'easy' },
+        { id: 'p2', name: 'Beta', controller: 'human', botDifficulty: 'easy' },
       ],
       deckVersion: 'v1',
     });

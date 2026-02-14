@@ -6,6 +6,7 @@ type EventTone = 'action' | 'money' | 'property' | 'turn' | 'neutral';
 
 interface RecentEventsProps {
   events: GameEvent[];
+  enhancedGrouping?: boolean;
 }
 
 interface DecoratedEvent extends GameEvent {
@@ -79,7 +80,36 @@ function groupEvents(events: DecoratedEvent[]): EventGroup[] {
   return groups;
 }
 
-export function RecentEvents({ events }: RecentEventsProps) {
+function collapseActionChains(events: DecoratedEvent[]): DecoratedEvent[] {
+  const chainTypes = new Set(['action', 'counter', 'rent_target', 'pay']);
+  const collapsed: DecoratedEvent[] = [];
+
+  for (const event of events) {
+    const previous = collapsed[collapsed.length - 1];
+    const inChain = chainTypes.has(event.type);
+    const previousInChain = previous ? chainTypes.has(previous.type) : false;
+    const closeInTime = previous ? Math.abs(previous.timestamp - event.timestamp) <= 8_000 : false;
+
+    if (previous && inChain && previousInChain && closeInTime) {
+      collapsed[collapsed.length - 1] = {
+        ...previous,
+        type: 'action_chain',
+        label: 'Chain',
+        icon: 'CHN',
+        tone: 'action',
+        filter: 'action',
+        message: `${previous.message} -> ${event.message}`,
+      };
+      continue;
+    }
+
+    collapsed.push(event);
+  }
+
+  return collapsed;
+}
+
+export function RecentEvents({ events, enhancedGrouping = false }: RecentEventsProps) {
   const [filter, setFilter] = useState<EventFilter>('all');
   const [visibleCount, setVisibleCount] = useState(12);
   const [now, setNow] = useState(() => Date.now());
@@ -89,14 +119,13 @@ export function RecentEvents({ events }: RecentEventsProps) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const decoratedDesc = useMemo(
-    () =>
-      [...events]
-        .reverse()
-        .slice(0, visibleCount)
-        .map((event) => ({ ...event, ...eventMeta(event.type) })),
-    [events, visibleCount],
-  );
+  const decoratedDesc = useMemo(() => {
+    const base = [...events]
+      .reverse()
+      .slice(0, visibleCount)
+      .map((event) => ({ ...event, ...eventMeta(event.type) }));
+    return enhancedGrouping ? collapseActionChains(base) : base;
+  }, [enhancedGrouping, events, visibleCount]);
 
   const grouped = useMemo(() => {
     const groupedAll = groupEvents(decoratedDesc);
