@@ -1121,4 +1121,14 @@ footer {
   .postgame-standing-stats span {
     font-size: 0.73rem;
   }
+
+  .stats-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-panel th,
+  .stats-panel td {
+    padding: 0.45rem;
+    font-size: 0.86rem;
+  }
 }
