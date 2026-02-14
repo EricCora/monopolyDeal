@@ -14,6 +14,11 @@ This project focuses on local, pass-and-play gameplay with a rules engine, persi
 - Winner detection at 3 complete property sets
 - Undo for reversible plays during the active turn
 - Match history and lifetime win stats
+- Dedicated Settings screen for display options and dev tooling
+- In-match Pause/Resume control with persistent paused state
+- Dev Mode tools to seed or reseed sample stats/history data
+- Responsive hand layout (fan auto-scales and falls back to rail when space is tight)
+- Property cards with rent ladder cells for faster set-to-rent readability
 - Post-game brag image share (clipboard with download fallback)
 - Auto-save + resume via `localStorage`
 
@@ -55,6 +60,17 @@ Open the local URL shown by Vite (usually `http://localhost:5173`).
 - `npm run test` - run tests once
 - `npm run test:watch` - run tests in watch mode
 
+## Settings
+
+Use the `Settings` screen from Home (or the in-game top bar) to control:
+
+- Reduced celebration effects
+- Text scale (`normal` / `large`)
+- Table density (`cozy` / `compact`)
+- Dev Mode toggle and sample data reseed tools
+
+When a live match is open, the top bar includes `Pause` / `Resume`. Paused state is persisted, so reopening a saved match restores the paused overlay until resumed.
+
 ## Project Structure
 
 ```text
@@ -85,6 +101,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - `monopolyDeal.matchHistory.v1`
 - `monopolyDeal.lifetimeStats.v1`
 - `monopolyDeal.growthMetrics.v1`
+- `monopolyDeal.uiPreferences.v1`
 
 ## Current Scope
 

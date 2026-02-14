@@ -1,12 +1,20 @@
-import { getCardDefinition, getRentScale, getSetSize, type CardDefinition, type PropertyColor } from '../cards/catalog';
+import { formatPropertyColor, getCardDefinition, getRentScale, getSetSize, type CardDefinition, type PropertyColor } from '../cards/catalog';
+
+export interface RentStep {
+  setCount: number;
+  rent: number;
+}
 
 export interface CardVisualModel {
   cardId: string;
   title: string;
   subtitle: string;
   valueBadge: string;
+  cardRole: 'money' | 'property' | 'wild' | 'action' | 'building';
+  colorLabel?: string;
+  rentSteps?: RentStep[];
   setSize?: number;
-  rentScale?: number[];
+  actionBadge?: string;
   kindClass: 'money' | 'property' | 'wild' | 'action' | 'building';
   themeClass: string;
   accent: string;
@@ -24,10 +32,35 @@ function titleFromCard(card: CardDefinition): string {
 
 function subtitleFromCard(card: CardDefinition): string {
   if (card.kind === 'money') return 'Money';
-  if (card.kind === 'property') return `${card.color?.replace('_', ' ')} property`;
+  if (card.kind === 'property') return `${formatPropertyColor(card.color!)} Property`;
   if (card.kind === 'wild') return `Wild: ${(card.colors ?? []).map((color) => color.replace('_', ' ')).join(' / ')}`;
   if (card.kind === 'building') return 'Building';
   return 'Action';
+}
+
+function actionBadgeFromCard(card: CardDefinition): string | undefined {
+  if (card.kind === 'action' && card.actionKind) {
+    return card.actionKind.replace('_', ' ').replace(/\b\w/g, (value) => value.toUpperCase());
+  }
+  if (card.kind === 'building' && card.actionKind) {
+    return card.actionKind.replace('_', ' ').replace(/\b\w/g, (value) => value.toUpperCase());
+  }
+  return undefined;
+}
+
+function colorLabelFromCard(card: CardDefinition): string | undefined {
+  if (card.kind === 'property' && card.color) return formatPropertyColor(card.color);
+  if (card.kind === 'wild' && card.colors?.length) return card.colors.map((color) => formatPropertyColor(color)).join(' / ');
+  if (card.kind === 'action' && card.rentMatrix) {
+    const colors = Object.keys(card.rentMatrix) as PropertyColor[];
+    if (colors.length > 0) return colors.map((color) => formatPropertyColor(color)).join(' / ');
+  }
+  return undefined;
+}
+
+function rentStepsFromScale(rentScale: number[] | undefined): RentStep[] | undefined {
+  if (!rentScale || rentScale.length === 0) return undefined;
+  return rentScale.map((rent, index) => ({ setCount: index + 1, rent }));
 }
 
 function themeFromCard(card: CardDefinition): { themeClass: string; accent: string; splitAccent?: string } {
@@ -83,8 +116,11 @@ export function getCardVisualModel(cardId: string): CardVisualModel {
     title: titleFromCard(card),
     subtitle: subtitleFromCard(card),
     valueBadge: `$${card.moneyValue ?? card.value}`,
+    cardRole: card.kind,
+    colorLabel: colorLabelFromCard(card),
+    rentSteps: rentStepsFromScale(rentScale),
     setSize,
-    rentScale,
+    actionBadge: actionBadgeFromCard(card),
     kindClass: card.kind,
     themeClass: theme.themeClass,
     accent: theme.accent,

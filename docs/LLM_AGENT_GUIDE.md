@@ -10,12 +10,12 @@ Purpose: give coding agents enough context to make correct, low-regression chang
 - `src/cards/`
   - Card catalog, set sizes, rent scales, display helpers.
 - `src/persistence/`
-  - `localStorage` read/write wrappers for active game and stats.
+  - `localStorage` read/write wrappers for active game, stats, and UI preferences.
 - `src/stats/`
-  - Match record creation and lifetime aggregation.
+  - Match record creation, lifetime aggregation, and dev fixture data.
 - `src/ui/` + `src/App.tsx`
   - `App.tsx` owns state/actions and passes typed props to screen containers.
-  - `src/ui/screens/` contains home/setup/game/stats/post-game screen composition.
+  - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition.
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
   - `src/ui/theme/` contains tokenized CSS split by base/components/screens.
 
@@ -111,7 +111,8 @@ Do not model multiple simultaneous pending effects.
 ## Known Hotspots
 
 - `src/engine/game.ts` is large; regressions are likely when changing shared helpers.
-- `src/App.tsx` coordinates many UI states (chooser, payment selection, pass-and-play shield, undo snapshots).
+- `src/App.tsx` coordinates many UI states (chooser, payment selection, pass-and-play shield, pause state, settings routing, undo snapshots).
+- Card rendering/fit is split between `src/ui/components/CardView.tsx`, `src/ui/components/HandFan.tsx`, and `src/ui/theme/components/cards.css`.
 - Rent/double-rent/counter interactions are edge-case heavy.
 
 ## Recommended Agent Prompt Template
@@ -145,5 +146,6 @@ Validation:
 - Save/load: `src/persistence/storage.ts`
 - Match/lifetime models: `src/stats/types.ts`
 - Match aggregation: `src/stats/records.ts`
+- Dev fixture data: `src/stats/devFixture.ts`
 - Main app orchestration: `src/App.tsx`
 - Tests: `src/test/engine.test.ts`, `src/test/app.test.tsx`, `src/test/card-ui.test.tsx`

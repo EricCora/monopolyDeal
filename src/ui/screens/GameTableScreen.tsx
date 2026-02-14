@@ -28,6 +28,7 @@ interface PlayChooserState {
 interface GameTableScreenProps {
   game: GameState;
   prompt: TurnPrompt;
+  isPaused: boolean;
   legalActions: LegalAction[];
   contextualActions: LegalAction[];
   revealedPlayerId: string | null;
@@ -46,6 +47,8 @@ interface GameTableScreenProps {
   turnSnapshotsCount: number;
   showDebugActions: boolean;
   actionDetailText: (item: LegalAction) => string | null;
+  onPauseToggle: () => void;
+  onOpenSettings: () => void;
   onToggleDebugActions: () => void;
   onRunAction: (action: Action) => void;
   onCardClick: (cardId: string) => void;
@@ -56,7 +59,6 @@ interface GameTableScreenProps {
   onCloseChooser: () => void;
   onRevealTurn: () => void;
   onNavigateHome: () => void;
-  onEndMatch: () => void;
 }
 
 function colorLabel(color: PropertyColor): string {
@@ -82,6 +84,7 @@ function renderHiddenHand(cardCount: number) {
 export function GameTableScreen({
   game,
   prompt,
+  isPaused,
   legalActions,
   contextualActions,
   revealedPlayerId,
@@ -100,6 +103,8 @@ export function GameTableScreen({
   turnSnapshotsCount,
   showDebugActions,
   actionDetailText,
+  onPauseToggle,
+  onOpenSettings,
   onToggleDebugActions,
   onRunAction,
   onCardClick,
@@ -110,12 +115,11 @@ export function GameTableScreen({
   onCloseChooser,
   onRevealTurn,
   onNavigateHome,
-  onEndMatch,
 }: GameTableScreenProps) {
   const over = isGameOver(game);
 
   return (
-    <section className="game-table-screen">
+    <section className={`game-table-screen ${isPaused ? 'is-paused' : ''}`}>
       <TopBar
         title="Game Table"
         subtitle={prompt.text}
@@ -130,7 +134,8 @@ export function GameTableScreen({
         actions={(
           <>
             <button onClick={onNavigateHome}>Home</button>
-            <button onClick={onEndMatch}>End Match</button>
+            <button onClick={onOpenSettings}>Settings</button>
+            <button onClick={onPauseToggle}>{isPaused ? 'Resume' : 'Pause'}</button>
           </>
         )}
       />
@@ -140,6 +145,7 @@ export function GameTableScreen({
           isMandatoryPrompt={isMandatoryPrompt}
           turnStatusText={turnStatusText}
           legalActions={legalActions}
+          isPaused={isPaused}
           showDebugActions={showDebugActions}
           onToggleDebugActions={onToggleDebugActions}
         />
@@ -150,9 +156,9 @@ export function GameTableScreen({
               const canSeeHand = revealedPlayerId === player.id;
               const isCurrent = game.players[game.currentPlayerIndex].id === player.id;
               const isPromptPlayer = prompt.playerId === player.id;
-              const handInteractive = Boolean(canSeeHand && prompt.playerId === player.id && !over.done);
+              const handInteractive = Boolean(canSeeHand && prompt.playerId === player.id && !over.done && !isPaused);
               const isPaymentPayer = pendingPayment?.targetPlayerId === player.id;
-              const paymentSelectionEnabled = Boolean(isPaymentPayer && revealedPlayerId === player.id && !over.done);
+              const paymentSelectionEnabled = Boolean(isPaymentPayer && revealedPlayerId === player.id && !over.done && !isPaused);
               const inlineActions = isPromptPlayer
                 ? (
                     pendingPayment
@@ -198,7 +204,7 @@ export function GameTableScreen({
                           ) : (
                             <p className="payment-selected">Click cards in {player.name}&apos;s bank/properties to pay.</p>
                           )}
-                          <button type="button" onClick={onSubmitSelectedPayment} disabled={!paymentCanSubmit}>
+                          <button type="button" onClick={onSubmitSelectedPayment} disabled={!paymentCanSubmit || isPaused}>
                             Confirm Payment
                           </button>
                         </div>
@@ -206,7 +212,11 @@ export function GameTableScreen({
 
                       <div className="actions action-list inline-actions">
                         {inlineActions.map((item, index) => (
-                          <button key={`inline-${item.label}-${index}`} onClick={() => onRunAction(item.action)}>
+                          <button
+                            key={`inline-${item.label}-${index}`}
+                            onClick={() => onRunAction(item.action)}
+                            disabled={isPaused}
+                          >
                             {item.label}
                             {actionDetailText(item) ? <span className="action-detail">{actionDetailText(item)}</span> : null}
                           </button>
@@ -218,10 +228,10 @@ export function GameTableScreen({
 
                       {turnSnapshotsCount > 0 && prompt.kind === 'main' ? (
                         <div className="actions inline-actions">
-                          <button type="button" onClick={onUndoLastPlay}>
+                          <button type="button" onClick={onUndoLastPlay} disabled={isPaused}>
                             Undo Last Play
                           </button>
-                          <button type="button" onClick={onResetTurnPlays}>
+                          <button type="button" onClick={onResetTurnPlays} disabled={isPaused}>
                             Reset Turn Plays
                           </button>
                         </div>
@@ -239,7 +249,7 @@ export function GameTableScreen({
                           selectedCardId={selectedCardId}
                           onCardClick={onCardClick}
                           interactive={handInteractive}
-                          layout={player.hand.length > 10 ? 'rail' : 'fan'}
+                          fitMode="auto"
                         />
                       ) : (
                         <p>Empty</p>
@@ -309,7 +319,7 @@ export function GameTableScreen({
         </div>
       </div>
 
-      {chooser ? (
+      {chooser && !isPaused ? (
         <PlayChooser
           cardId={chooser.cardId}
           cardLabel={chooser.cardLabel}
@@ -323,7 +333,7 @@ export function GameTableScreen({
         />
       ) : null}
 
-      {shouldShowShield && !over.done ? (
+      {shouldShowShield && !over.done && !isPaused ? (
         <div className="shield" role="dialog" aria-modal="true">
           <div className="shield-card card-enter">
             <h3>Pass Device</h3>
@@ -331,6 +341,15 @@ export function GameTableScreen({
               Next action: <strong>{game.players.find((player) => player.id === prompt.playerId)?.name ?? prompt.playerId}</strong>
             </p>
             <button onClick={onRevealTurn}>Reveal Turn</button>
+          </div>
+        </div>
+      ) : null}
+
+      {isPaused && !over.done ? (
+        <div className="paused-overlay" role="dialog" aria-modal="true" aria-label="Game paused">
+          <div className="paused-card card-enter">
+            <h3>Game Paused</h3>
+            <p>Gameplay is locked until you press Resume in the top bar.</p>
           </div>
         </div>
       ) : null}

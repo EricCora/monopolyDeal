@@ -27,23 +27,27 @@ import {
 import {
   applyMatchToLifetime,
   buildMatchRecord,
+  createDevStatsFixture,
   buildPostGameSummary,
   type LifetimeStatsV1,
   type MatchRecordV1,
   type PostGameSummary,
 } from './stats';
-import { PlayChooser, type ActionVariantView } from './ui/components/PlayChooser';
+import type { ActionVariantView } from './ui/components/PlayChooser';
 import { GameShell } from './ui/layout/GameShell';
 import { GameTableScreen } from './ui/screens/GameTableScreen';
 import { HomeScreen } from './ui/screens/HomeScreen';
 import { PostGameScreen } from './ui/screens/PostGameScreen';
+import { SettingsScreen } from './ui/screens/SettingsScreen';
 import { SetupScreen } from './ui/screens/SetupScreen';
 import { StatsScreen } from './ui/screens/StatsScreen';
 import { generatePostGameSharePng, postGameShareFilename } from './ui/share/postGameShare';
 import type { SetupViewModel, ShareStatus } from './ui/types';
 import './App.css';
 
-type Screen = 'home' | 'setup' | 'game' | 'stats' | 'game_over';
+type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'game_over';
+type SettingsBackScreen = 'home' | 'game';
+type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
 
 interface CardActionVariant extends ActionVariantView {
   action: Action;
@@ -108,8 +112,13 @@ function formatDuration(seconds: number): string {
   return `${hours}h ${remainingMinutes}m`;
 }
 
+function gameIdentity(game: GameState): string {
+  return `${game.createdAt}`;
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('home');
+  const [settingsBackScreen, setSettingsBackScreen] = useState<SettingsBackScreen>('home');
   const [game, setGame] = useState<GameState | null>(null);
   const [postGameSummary, setPostGameSummary] = useState<PostGameSummary | null>(null);
   const [setup, setSetup] = useState<SetupViewModel>(initialSetup);
@@ -126,8 +135,10 @@ function App() {
   const [shareStatus, setShareStatus] = useState<ShareStatus>(null);
   const [turnSnapshots, setTurnSnapshots] = useState<GameState[]>([]);
   const [uiPreferences, setUiPreferences] = useState<UiPreferencesV1>(() => loadUiPreferences());
+  const [devSeedStatus, setDevSeedStatus] = useState<DevSeedStatus>(null);
   const postGameTitleRef = useRef<HTMLHeadingElement | null>(null);
   const finalizedMatchRef = useRef<string | null>(null);
+  const devAutoSeedAttemptedRef = useRef(false);
 
   useEffect(() => {
     if (!game || isGameOver(game).done) return;
@@ -166,7 +177,31 @@ function App() {
     setShareStatus(null);
   }, [postGameSummary?.endedAt, screen]);
 
+  const applyDevFixture = useCallback((status: Exclude<DevSeedStatus, 'already-populated' | null>) => {
+    const fixture = createDevStatsFixture('medium');
+    const nextHistory = structuredClone(fixture.history);
+    const nextLifetime = structuredClone(fixture.lifetime);
+    saveMatchHistory(nextHistory);
+    saveLifetimeStats(nextLifetime);
+    setHistory(nextHistory);
+    setLifetime(nextLifetime);
+    setDevSeedStatus(status);
+  }, []);
+
+  useEffect(() => {
+    if (!uiPreferences.devModeEnabled) {
+      devAutoSeedAttemptedRef.current = false;
+      return;
+    }
+    if (devAutoSeedAttemptedRef.current) return;
+    devAutoSeedAttemptedRef.current = true;
+    if (history.length > 0) return;
+    applyDevFixture('seeded');
+  }, [applyDevFixture, history.length, uiPreferences.devModeEnabled]);
+
   const prompt = useMemo(() => (game ? getNextPrompt(game) : null), [game]);
+  const currentGameId = game ? gameIdentity(game) : null;
+  const isPaused = Boolean(game && uiPreferences.gamePaused && uiPreferences.pausedGameId === currentGameId);
   const reduceCelebrationEffects = uiPreferences.reducedEffects;
   const celebrationEnabled = Boolean(postGameSummary && !prefersReducedMotion && !reduceCelebrationEffects);
 
@@ -294,6 +329,53 @@ function App() {
     ? selectedPaymentCards.length > 0 && (selectedPaymentTotal >= pendingPayment.amount || totalPayableValue < pendingPayment.amount)
     : false;
 
+  const openSettings = useCallback((backScreen: SettingsBackScreen) => {
+    setSettingsBackScreen(backScreen);
+    setScreen('settings');
+    setError(null);
+  }, []);
+
+  const closeSettings = useCallback(() => {
+    if (settingsBackScreen === 'game' && game) {
+      setScreen('game');
+      return;
+    }
+    setScreen('home');
+  }, [game, settingsBackScreen]);
+
+  const togglePause = useCallback(() => {
+    if (!currentGameId) return;
+    setUiPreferences((prev) => {
+      if (prev.gamePaused && prev.pausedGameId === currentGameId) {
+        return { ...prev, gamePaused: false, pausedGameId: null };
+      }
+      return { ...prev, gamePaused: true, pausedGameId: currentGameId };
+    });
+    setChooser(null);
+    setSelectedCardId(null);
+    setSelectedPaymentCards([]);
+    setError(null);
+  }, [currentGameId]);
+
+  const onToggleDevMode = useCallback((enabled: boolean) => {
+    setUiPreferences((prev) => ({ ...prev, devModeEnabled: enabled }));
+    if (!enabled) {
+      setDevSeedStatus(null);
+      devAutoSeedAttemptedRef.current = false;
+      return;
+    }
+    devAutoSeedAttemptedRef.current = true;
+    if (history.length > 0) {
+      setDevSeedStatus('already-populated');
+      return;
+    }
+    applyDevFixture('seeded');
+  }, [applyDevFixture, history.length]);
+
+  const onReseedDevData = useCallback(() => {
+    applyDevFixture('reseeded');
+  }, [applyDevFixture]);
+
   const openGame = useCallback((nextGame: GameState) => {
     finalizedMatchRef.current = null;
     setGame(nextGame);
@@ -309,6 +391,7 @@ function App() {
 
   const startGameWithPlayers = useCallback((players: PlayerConfig[]) => {
     const nextGame = createGame({ players, deckVersion: 'v1' });
+    setUiPreferences((prev) => ({ ...prev, gamePaused: false, pausedGameId: null }));
     openGame(nextGame);
   }, [openGame]);
 
@@ -363,7 +446,7 @@ function App() {
   };
 
   const runAction = (action: Action) => {
-    if (!game) return;
+    if (!game || isPaused) return;
     const shouldSnapshot = isReversibleActionType(action.type) && prompt?.playerId === action.playerId;
     const snapshotBeforeAction = shouldSnapshot ? structuredClone(game) : null;
     const result = applyAction(game, action);
@@ -391,6 +474,7 @@ function App() {
   };
 
   const undoLastPlay = () => {
+    if (isPaused) return;
     if (turnSnapshots.length === 0) return;
     const previousState = turnSnapshots[turnSnapshots.length - 1];
     setGame(previousState);
@@ -402,6 +486,7 @@ function App() {
   };
 
   const resetTurnPlays = () => {
+    if (isPaused) return;
     if (turnSnapshots.length === 0) return;
     const firstState = turnSnapshots[0];
     setGame(firstState);
@@ -413,6 +498,7 @@ function App() {
   };
 
   const handleCardClick = (cardId: string) => {
+    if (isPaused) return;
     if (!game || !prompt) return;
     if (isGameOver(game).done) return;
     if (revealedPlayerId !== prompt.playerId) return;
@@ -434,11 +520,13 @@ function App() {
   };
 
   const handlePaymentCardToggle = (cardId: string) => {
+    if (isPaused) return;
     if (!pendingPayment || !pendingPaymentCardIds.includes(cardId)) return;
     setSelectedPaymentCards((prev) => (prev.includes(cardId) ? prev.filter((id) => id !== cardId) : [...prev, cardId]));
   };
 
   const submitSelectedPayment = () => {
+    if (isPaused) return;
     if (!pendingPayment || !paymentCanSubmit) return;
     runAction({
       type: 'pay_request',
@@ -473,6 +561,7 @@ function App() {
 
   const goHome = useCallback(() => {
     clearActiveGame();
+    setUiPreferences((prev) => ({ ...prev, gamePaused: false, pausedGameId: null }));
     setGame(null);
     setPostGameSummary(null);
     setScreen('home');
@@ -553,6 +642,7 @@ function App() {
           onNewGame={() => setScreen('setup')}
           onResumeGame={resumeGame}
           onOpenStats={() => setScreen('stats')}
+          onOpenSettings={() => openSettings('home')}
         />
       ) : null}
 
@@ -576,6 +666,7 @@ function App() {
         <GameTableScreen
           game={game}
           prompt={prompt}
+          isPaused={isPaused}
           legalActions={legalActions}
           contextualActions={contextualActions}
           revealedPlayerId={revealedPlayerId}
@@ -594,7 +685,12 @@ function App() {
           turnSnapshotsCount={turnSnapshots.length}
           showDebugActions={showDebugActions}
           actionDetailText={actionDetailText}
-          onToggleDebugActions={() => setShowDebugActions((prev) => !prev)}
+          onPauseToggle={togglePause}
+          onOpenSettings={() => openSettings('game')}
+          onToggleDebugActions={() => {
+            if (isPaused) return;
+            setShowDebugActions((prev) => !prev);
+          }}
           onRunAction={runAction}
           onCardClick={handleCardClick}
           onPaymentCardToggle={handlePaymentCardToggle}
@@ -602,16 +698,32 @@ function App() {
           onUndoLastPlay={undoLastPlay}
           onResetTurnPlays={resetTurnPlays}
           onCloseChooser={() => {
+            if (isPaused) return;
             setChooser(null);
             setSelectedCardId(null);
           }}
-          onRevealTurn={() => setRevealedPlayerId(prompt.playerId)}
+          onRevealTurn={() => {
+            if (isPaused) return;
+            setRevealedPlayerId(prompt.playerId);
+          }}
           onNavigateHome={() => setScreen('home')}
-          onEndMatch={goHome}
         />
       ) : null}
 
       {screen === 'stats' ? <StatsScreen history={history} lifetime={lifetime} onBack={() => setScreen('home')} /> : null}
+
+      {screen === 'settings' ? (
+        <SettingsScreen
+          uiPreferences={uiPreferences}
+          devSeedStatus={devSeedStatus}
+          onToggleReducedEffects={(enabled) => setUiPreferences((prev) => ({ ...prev, reducedEffects: enabled }))}
+          onChangeTextScale={(value) => setUiPreferences((prev) => ({ ...prev, textScale: value }))}
+          onChangeTableDensity={(value) => setUiPreferences((prev) => ({ ...prev, tableDensity: value }))}
+          onToggleDevMode={onToggleDevMode}
+          onReseedDevData={onReseedDevData}
+          onBack={closeSettings}
+        />
+      ) : null}
 
       {screen === 'game_over' && postGameSummary ? (
         <PostGameScreen

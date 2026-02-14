@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { CardView } from '../ui/components/CardView';
+import { HandFan } from '../ui/components/HandFan';
 import { getCardVisualModel } from '../ui/cards';
 
 describe('Card UI', () => {
@@ -18,8 +19,9 @@ describe('Card UI', () => {
     expect(screen.getByRole('button', { name: /debt collector card/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /\$5 card/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /wild red\/yellow card/i })).toBeInTheDocument();
-    expect(screen.getByText(/set 2/i)).toBeInTheDocument();
-    expect(screen.getByText(/rent \$1\/\$2/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/rent ladder/i)).toBeInTheDocument();
+    expect(screen.getByText(/^rent$/i)).toBeInTheDocument();
+    expect(screen.getByText('$2')).toBeInTheDocument();
   });
 
   it('uses dedicated rent card themes instead of generic action blue', () => {
@@ -59,5 +61,47 @@ describe('Card UI', () => {
       expect(model.themeClass).toBe(testCase.themeClass);
       expect(model.accent).toBe(testCase.accent);
     }
+  });
+
+  it('highlights the full-set rent step for property cards', () => {
+    const { container } = render(<CardView cardId="railroad_1#1" />);
+    const fullSetSteps = container.querySelectorAll('.card-rent-step.is-fullset');
+
+    expect(fullSetSteps.length).toBe(1);
+    expect(fullSetSteps[0]?.textContent).toContain('$4');
+  });
+
+  it('uses auto fit mode for fan/rail hand layout based on available width', async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+    const baseRect = { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) };
+    rectSpy.mockImplementation(function mockRect(this: HTMLElement) {
+      if (this.classList?.contains('hand-fan') && this.childElementCount <= 6) {
+        return { ...baseRect, width: 620, right: 620, bottom: 200, height: 200 } as DOMRect;
+      }
+      if (this.classList?.contains('hand-fan')) {
+        return { ...baseRect, width: 260, right: 260, bottom: 200, height: 200 } as DOMRect;
+      }
+      return { ...baseRect } as DOMRect;
+    });
+
+    const cards = ['money_1#a', 'money_2#b', 'money_3#c', 'money_4#d', 'money_5#e', 'money_10#f'];
+    const allPlayable = new Set(cards);
+    const { rerender } = render(
+      <HandFan cards={cards} playableCardIds={allPlayable} selectedCardId={null} onCardClick={() => undefined} interactive fitMode="auto" />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/player hand/i)).toHaveAttribute('data-layout', 'fan');
+    });
+
+    const moreCards = [...cards, 'brown_1#g', 'light_blue_1#h', 'pink_1#i', 'orange_1#j'];
+    rerender(
+      <HandFan cards={moreCards} playableCardIds={new Set(moreCards)} selectedCardId={null} onCardClick={() => undefined} interactive fitMode="auto" />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/player hand/i)).toHaveAttribute('data-layout', 'rail');
+    });
+    rectSpy.mockRestore();
   });
 });

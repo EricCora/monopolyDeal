@@ -10,6 +10,7 @@ interface CardViewProps {
   cardId: string;
   faceUp?: boolean;
   size?: CardSize;
+  context?: 'hand' | 'table';
   variant?: CardVariant;
   elevation?: CardElevation;
   statusTone?: CardStatusTone;
@@ -24,6 +25,7 @@ export function CardView({
   cardId,
   faceUp = true,
   size = 'md',
+  context = 'table',
   variant = 'premium',
   elevation = 'base',
   statusTone = 'neutral',
@@ -48,31 +50,50 @@ export function CardView({
   }
 
   const model = getCardVisualModel(cardId);
-  const metaParts: string[] = [];
-  if (model.setSize) metaParts.push(`Set ${model.setSize}`);
-  if (model.rentScale && model.rentScale.length > 0) {
-    metaParts.push(`Rent $${model.rentScale.join('/$')}`);
-  }
-  const metaText = metaParts.join(' • ');
   const style: CSSProperties = {
     ['--card-accent' as string]: model.accent,
     ['--card-accent-split' as string]: model.splitAccent ?? model.accent,
   };
+  const isProperty = model.cardRole === 'property';
+  const isCompactRent = size === 'sm';
+  const isHandCard = context === 'hand';
+  const shouldShowSubtitle = !(isHandCard && size === 'lg' && (model.cardRole === 'money' || model.cardRole === 'property'));
 
   return (
     <button
       type="button"
-      className={`card-view card-size-${size} card-variant-${variant} card-elevation-${elevation} tone-${statusTone} ${model.themeClass} kind-${model.kindClass} ${interactive ? 'is-interactive' : ''} ${playable ? 'is-playable' : 'is-unplayable'} ${selected ? 'is-selected' : ''}`}
+      className={`card-view card-size-${size} card-context-${context} card-variant-${variant} card-elevation-${elevation} tone-${statusTone} ${model.themeClass} kind-${model.kindClass} role-${model.cardRole} ${interactive ? 'is-interactive' : ''} ${playable ? 'is-playable' : 'is-unplayable'} ${selected ? 'is-selected' : ''}`}
       style={style}
       onClick={onClick}
       disabled={!interactive || !onClick}
       aria-label={`${model.title} card`}
     >
       <span className="card-face">
-        <span className="card-value">{model.valueBadge}</span>
+        <span className="card-head">
+          <span className="card-value">{model.valueBadge}</span>
+          {model.actionBadge ? <span className="card-badge">{model.actionBadge}</span> : null}
+        </span>
         <span className="card-title" title={model.title}>{model.title}</span>
-        <span className="card-subtitle" title={model.subtitle}>{model.subtitle}</span>
-        {metaText ? <span className="card-meta" title={metaText}>{metaText}</span> : null}
+        {shouldShowSubtitle ? <span className="card-subtitle" title={model.subtitle}>{model.subtitle}</span> : null}
+        {model.colorLabel ? <span className="card-color-label">{model.colorLabel}</span> : null}
+
+        {isProperty && model.rentSteps ? (
+          <span className={`card-rent ${isCompactRent ? 'is-compact' : ''}`} aria-label="Rent ladder">
+            <span className="card-rent-label">Rent</span>
+            <span className="card-rent-grid">
+              {model.rentSteps.map((step) => (
+                <span
+                  key={`${model.cardId}-rent-${step.setCount}`}
+                  className={`card-rent-step ${step.setCount === model.setSize ? 'is-fullset' : ''}`}
+                >
+                  <span>{step.setCount}</span>
+                  <span>${step.rent}</span>
+                </span>
+              ))}
+            </span>
+          </span>
+        ) : null}
+
         {annotation ? <span className="card-annotation">{annotation}</span> : null}
       </span>
     </button>
