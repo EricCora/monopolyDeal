@@ -1,14 +1,31 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GameState } from '../engine';
 import App from '../App';
 
-const { mockedApplyAction, mockedCreateGame, mockedGetNextPrompt, mockedGetLegalActions } = vi.hoisted(() => ({
+const { mockedApplyAction, mockedCreateGame, mockedGetNextPrompt, mockedGetLegalActions, mockedIsGameOver } = vi.hoisted(() => ({
   mockedApplyAction: vi.fn(),
   mockedCreateGame: vi.fn(),
   mockedGetNextPrompt: vi.fn(),
   mockedGetLegalActions: vi.fn(),
+  mockedIsGameOver: vi.fn(),
 }));
+
+function mockMatchMedia(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    })),
+  });
+}
 
 const baseState: GameState = {
   version: 1,
@@ -69,7 +86,8 @@ vi.mock('../engine', () => {
     createGame: mockedCreateGame.mockImplementation(() => clone()),
     getNextPrompt: mockedGetNextPrompt.mockImplementation(() => ({ playerId: 'p1', text: 'Alpha turn', kind: 'main' })),
     getSetCompletionCount: vi.fn(() => 0),
-    isGameOver: vi.fn(() => ({ done: false, winnerId: undefined })),
+    isGameOver: mockedIsGameOver.mockImplementation((state: GameState) =>
+      state.winnerId ? { done: true, winnerId: state.winnerId } : { done: false, winnerId: undefined }),
     getLegalActions: mockedGetLegalActions.mockImplementation(() => [
       {
         label: 'Draw cards',
@@ -101,8 +119,12 @@ describe('App', () => {
     mockedCreateGame.mockReset();
     mockedGetNextPrompt.mockReset();
     mockedGetLegalActions.mockReset();
+    mockedIsGameOver.mockReset();
+    mockMatchMedia(false);
     mockedCreateGame.mockImplementation(() => structuredClone(baseState));
     mockedGetNextPrompt.mockImplementation(() => ({ playerId: 'p1', text: 'Alpha turn', kind: 'main' }));
+    mockedIsGameOver.mockImplementation((state: GameState) =>
+      state.winnerId ? { done: true, winnerId: state.winnerId } : { done: false, winnerId: undefined });
     mockedGetLegalActions.mockImplementation(() => [
       {
         label: 'Draw cards',
@@ -288,5 +310,114 @@ describe('App', () => {
       targetPlayerId: 'p2',
       color: 'green',
     });
+  });
+
+  it('navigates to a dedicated game-over screen and focuses the victory title', async () => {
+    mockedApplyAction.mockImplementationOnce((state: GameState) => ({
+      state: {
+        ...state,
+        winnerId: 'p1',
+        turn: { ...state.turn, phase: 'finished' },
+        updatedAt: state.updatedAt + 10_000,
+        history: [{ timestamp: 100, type: 'action', message: 'Alpha closed the match with a final set.' }],
+      },
+      events: [],
+    }));
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+
+    const victoryHeading = await screen.findByRole('heading', { name: /alpha wins!/i });
+    expect(victoryHeading).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /game table/i })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(victoryHeading);
+    });
+  });
+
+  it('starts a rematch with the same players from the post-game screen', async () => {
+    mockedApplyAction.mockImplementationOnce((state: GameState) => ({
+      state: {
+        ...state,
+        winnerId: 'p1',
+        turn: { ...state.turn, phase: 'finished' },
+        updatedAt: state.updatedAt + 4_000,
+        history: [{ timestamp: 100, type: 'action', message: 'Alpha finished the game.' }],
+      },
+      events: [],
+    }));
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+
+    await screen.findByRole('button', { name: /play rematch/i });
+    fireEvent.click(screen.getByRole('button', { name: /play rematch/i }));
+
+    expect(mockedCreateGame).toHaveBeenLastCalledWith({
+      players: [
+        { id: 'p1', name: 'Alpha' },
+        { id: 'p2', name: 'Beta' },
+      ],
+      deckVersion: 'v1',
+    });
+    expect(screen.getByRole('heading', { name: /game table/i })).toBeInTheDocument();
+  });
+
+  it('routes to stats from the post-game screen', async () => {
+    mockedApplyAction.mockImplementationOnce((state: GameState) => ({
+      state: {
+        ...state,
+        winnerId: 'p1',
+        turn: { ...state.turn, phase: 'finished' },
+        updatedAt: state.updatedAt + 5_000,
+        history: [{ timestamp: 100, type: 'action', message: 'Alpha won the game.' }],
+      },
+      events: [],
+    }));
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+
+    await screen.findByRole('button', { name: /view stats/i });
+    fireEvent.click(screen.getByRole('button', { name: /view stats/i }));
+
+    expect(screen.getByRole('heading', { name: /stats & history/i })).toBeInTheDocument();
+  });
+
+  it('disables celebration visuals when reduced motion is preferred', async () => {
+    mockMatchMedia(true);
+    mockedApplyAction.mockImplementationOnce((state: GameState) => ({
+      state: {
+        ...state,
+        winnerId: 'p1',
+        turn: { ...state.turn, phase: 'finished' },
+        updatedAt: state.updatedAt + 6_000,
+        history: [{ timestamp: 100, type: 'action', message: 'Alpha won quickly.' }],
+      },
+      events: [],
+    }));
+
+    const { container } = render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+
+    await screen.findByRole('heading', { name: /alpha wins!/i });
+    expect(container.querySelector('.confetti-dot')).toBeNull();
+    expect(screen.getByText(/system reduced-motion preference is enabled/i)).toBeInTheDocument();
   });
 });
