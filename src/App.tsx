@@ -21,14 +21,21 @@ import {
   saveLifetimeStats,
   saveMatchHistory,
 } from './persistence/storage';
-import { applyMatchToLifetime, buildMatchRecord, type LifetimeStatsV1, type MatchRecordV1 } from './stats';
+import {
+  applyMatchToLifetime,
+  buildMatchRecord,
+  buildPostGameSummary,
+  type LifetimeStatsV1,
+  type MatchRecordV1,
+  type PostGameSummary,
+} from './stats';
 import { CardView } from './ui/components/CardView';
 import { HandFan } from './ui/components/HandFan';
 import { PlayChooser, type ActionVariantView } from './ui/components/PlayChooser';
 import { RecentEvents } from './ui/components/RecentEvents';
 import './App.css';
 
-type Screen = 'home' | 'setup' | 'game' | 'stats';
+type Screen = 'home' | 'setup' | 'game' | 'stats' | 'game_over';
 
 interface SetupState {
   playerCount: number;
@@ -88,9 +95,20 @@ function shouldRetainTurnSnapshots(nextState: GameState, nextPromptPlayerId: str
   return nextState.pending.kind === 'rent' || nextState.pending.kind === 'sly_deal' || nextState.pending.kind === 'forced_deal' || nextState.pending.kind === 'deal_breaker';
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${remainingMinutes}m`;
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [game, setGame] = useState<GameState | null>(null);
+  const [postGameSummary, setPostGameSummary] = useState<PostGameSummary | null>(null);
   const [setup, setSetup] = useState<SetupState>(initialSetup);
   const [error, setError] = useState<string | null>(null);
   const [revealedPlayerId, setRevealedPlayerId] = useState<string | null>(null);
@@ -100,18 +118,42 @@ function App() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [selectedPaymentCards, setSelectedPaymentCards] = useState<string[]>([]);
   const [showDebugActions, setShowDebugActions] = useState(false);
+  const [reduceCelebrationEffects, setReduceCelebrationEffects] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [turnSnapshots, setTurnSnapshots] = useState<GameState[]>([]);
+  const postGameTitleRef = useRef<HTMLHeadingElement | null>(null);
   const finalizedMatchRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!game) return;
+    if (!game || isGameOver(game).done) return;
     const handle = window.setTimeout(() => {
       saveActiveGame(game);
     }, 220);
     return () => window.clearTimeout(handle);
   }, [game]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const syncPreference = () => {
+      setPrefersReducedMotion(query.matches);
+    };
+    syncPreference();
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', syncPreference);
+      return () => query.removeEventListener('change', syncPreference);
+    }
+    query.addListener(syncPreference);
+    return () => query.removeListener(syncPreference);
+  }, []);
+
+  useEffect(() => {
+    if (screen !== 'game_over') return;
+    postGameTitleRef.current?.focus();
+  }, [screen, postGameSummary?.endedAt]);
+
   const prompt = useMemo(() => (game ? getNextPrompt(game) : null), [game]);
+  const celebrationEnabled = Boolean(postGameSummary && !prefersReducedMotion && !reduceCelebrationEffects);
 
   useEffect(() => {
     if (!game || !prompt) {
@@ -237,14 +279,10 @@ function App() {
     ? selectedPaymentCards.length > 0 && (selectedPaymentTotal >= pendingPayment.amount || totalPayableValue < pendingPayment.amount)
     : false;
 
-  const startNewGame = () => {
-    const players: PlayerConfig[] = setup.playerNames.slice(0, setup.playerCount).map((name, index) => ({
-      id: `p${index + 1}`,
-      name: name.trim() || `Player ${index + 1}`,
-    }));
-
-    const nextGame = createGame({ players, deckVersion: 'v1' });
+  const openGame = useCallback((nextGame: GameState) => {
+    finalizedMatchRef.current = null;
     setGame(nextGame);
+    setPostGameSummary(null);
     setRevealedPlayerId(null);
     setScreen('game');
     setError(null);
@@ -252,6 +290,19 @@ function App() {
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
     setTurnSnapshots([]);
+  }, []);
+
+  const startGameWithPlayers = useCallback((players: PlayerConfig[]) => {
+    const nextGame = createGame({ players, deckVersion: 'v1' });
+    openGame(nextGame);
+  }, [openGame]);
+
+  const startNewGame = () => {
+    const players: PlayerConfig[] = setup.playerNames.slice(0, setup.playerCount).map((name, index) => ({
+      id: `p${index + 1}`,
+      name: name.trim() || `Player ${index + 1}`,
+    }));
+    startGameWithPlayers(players);
   };
 
   const resumeGame = () => {
@@ -260,14 +311,17 @@ function App() {
       setError('No active saved game found.');
       return;
     }
-    setGame(saved.gameState);
-    setRevealedPlayerId(null);
-    setScreen('game');
-    setError(null);
-    setChooser(null);
-    setSelectedCardId(null);
-    setSelectedPaymentCards([]);
-    setTurnSnapshots([]);
+    if (isGameOver(saved.gameState).done) {
+      const loadedLifetime = loadLifetimeStats();
+      setLifetime(loadedLifetime);
+      setGame(saved.gameState);
+      setPostGameSummary(buildPostGameSummary(saved.gameState, loadedLifetime));
+      setScreen('game_over');
+      setError(null);
+      clearActiveGame();
+      return;
+    }
+    openGame(saved.gameState);
   };
 
   const finalizeIfGameOver = (nextState: GameState) => {
@@ -283,6 +337,13 @@ function App() {
     const nextLifetime = applyMatchToLifetime(loadLifetimeStats(), matchRecord);
     saveLifetimeStats(nextLifetime);
     setLifetime(nextLifetime);
+    setPostGameSummary(buildPostGameSummary(nextState, nextLifetime));
+    setRevealedPlayerId(null);
+    setChooser(null);
+    setSelectedCardId(null);
+    setSelectedPaymentCards([]);
+    setTurnSnapshots([]);
+    setScreen('game_over');
     clearActiveGame();
   };
 
@@ -375,6 +436,168 @@ function App() {
     if (item.requestedAmount == null || item.collectibleCap == null) return null;
     const detail = `Ask $${item.requestedAmount}, likely collect up to $${item.collectibleCap}`;
     return item.requiresPropertyTransfer ? `${detail} (likely requires property transfer)` : detail;
+  };
+
+  const syncSetupPlayerNames = useCallback((names: string[]) => {
+    setSetup((prev) => {
+      const nextNames = [...prev.playerNames];
+      for (let index = 0; index < 4; index += 1) {
+        if (index < names.length) {
+          nextNames[index] = names[index];
+        } else if (!nextNames[index]?.trim()) {
+          nextNames[index] = `Player ${index + 1}`;
+        }
+      }
+      return {
+        ...prev,
+        playerCount: Math.min(4, Math.max(2, names.length)),
+        playerNames: nextNames,
+      };
+    });
+  }, []);
+
+  const goHome = useCallback(() => {
+    clearActiveGame();
+    setGame(null);
+    setPostGameSummary(null);
+    setScreen('home');
+    setError(null);
+    setChooser(null);
+    setSelectedCardId(null);
+    setSelectedPaymentCards([]);
+    setTurnSnapshots([]);
+    setShowDebugActions(false);
+  }, []);
+
+  const startRematch = useCallback(() => {
+    if (!game) return;
+    const playerNames = game.players.map((player) => player.name);
+    syncSetupPlayerNames(playerNames);
+    startGameWithPlayers(
+      playerNames.map((name, index) => ({
+        id: `p${index + 1}`,
+        name,
+      })),
+    );
+  }, [game, startGameWithPlayers, syncSetupPlayerNames]);
+
+  const renderGameOver = () => {
+    if (!postGameSummary) return null;
+
+    const endedLabel = new Date(postGameSummary.endedAt).toLocaleString();
+
+    return (
+      <section className={`panel postgame-panel card-enter ${celebrationEnabled ? 'has-celebration' : ''}`} aria-labelledby="postgame-title">
+        {celebrationEnabled && (
+          <div className="postgame-celebration" aria-hidden="true">
+            {Array.from({ length: 18 }, (_, index) => (
+              <span key={`confetti-${index}`} className="confetti-dot" />
+            ))}
+          </div>
+        )}
+
+        <header className="postgame-hero">
+          <p className="postgame-kicker">Match Complete</p>
+          <h2 id="postgame-title" ref={postGameTitleRef} tabIndex={-1}>
+            {postGameSummary.winnerName ?? 'Unknown Player'} Wins!
+          </h2>
+          <p>
+            {postGameSummary.winnerName ?? 'The winner'} completed three full property sets and closed out the match.
+          </p>
+          <p className="postgame-meta">Finished {endedLabel}</p>
+        </header>
+
+        <section className="postgame-kpis" aria-label="Match stats">
+          <article className="postgame-kpi">
+            <h3>Turns</h3>
+            <p>{postGameSummary.turnCount}</p>
+          </article>
+          <article className="postgame-kpi">
+            <h3>Duration</h3>
+            <p>{formatDuration(postGameSummary.durationSec)}</p>
+          </article>
+          <article className="postgame-kpi">
+            <h3>Total Events</h3>
+            <p>{postGameSummary.totalEvents}</p>
+          </article>
+        </section>
+
+        <section className="postgame-standings" aria-labelledby="standings-title">
+          <div className="postgame-heading-row">
+            <h3 id="standings-title">Final Standings</h3>
+          </div>
+          <ul className="postgame-standing-list">
+            {postGameSummary.players.map((row) => (
+              <li key={row.playerId} className={`postgame-standing ${row.isWinner ? 'is-winner' : ''}`}>
+                <div className="postgame-standing-head">
+                  <p className="postgame-rank">#{row.rank}</p>
+                  <p className="postgame-name">{row.name}</p>
+                </div>
+                <div className="postgame-standing-stats">
+                  <span>{row.completeSets} complete sets</span>
+                  <span>${row.bankValue} bank value</span>
+                  <span>{row.propertyCardCount} property cards</span>
+                  <span>{row.handCount} cards in hand</span>
+                  <span>${row.totalCardValue} total card value</span>
+                  <span>
+                    Lifetime: {row.lifetimeWins} wins / {row.lifetimeGamesPlayed} games
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="postgame-highlights" aria-labelledby="highlights-title">
+          <h3 id="highlights-title">Highlights</h3>
+          <p>
+            <strong>Final swing:</strong> {postGameSummary.finalSwing}
+          </p>
+          <ul>
+            {postGameSummary.recentEvents.map((event, index) => (
+              <li key={`${event.timestamp}-${event.type}-${index}`}>
+                {event.message}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="postgame-accessibility">
+          <label className="postgame-toggle">
+            <input
+              type="checkbox"
+              checked={reduceCelebrationEffects}
+              onChange={(event) => setReduceCelebrationEffects(event.target.checked)}
+            />
+            Reduce celebration effects
+          </label>
+          {prefersReducedMotion && (
+            <small>System reduced-motion preference is enabled.</small>
+          )}
+        </section>
+
+        <div className="actions postgame-actions">
+          <button className="postgame-primary-action" onClick={startRematch} disabled={!game}>
+            Play Rematch
+          </button>
+          <button
+            onClick={() => {
+              const names = game?.players.map((player) => player.name);
+              if (names && names.length > 0) {
+                syncSetupPlayerNames(names);
+              }
+              setScreen('setup');
+              setPostGameSummary(null);
+              setError(null);
+            }}
+          >
+            New Match Setup
+          </button>
+          <button onClick={() => setScreen('stats')}>View Stats</button>
+          <button onClick={goHome}>Home</button>
+        </div>
+      </section>
+    );
   };
 
   const renderHome = () => (
@@ -608,7 +831,6 @@ function App() {
   const renderGame = () => {
     if (!game || !prompt) return null;
     const over = isGameOver(game);
-    const winner = game.players.find((player) => player.id === over.winnerId);
     return (
       <section className="panel game-panel">
         <div className="game-top">
@@ -619,19 +841,10 @@ function App() {
               Turn {game.turnCount} | Draw pile: {game.drawPile.length} | Discard: {game.discardPile.length}
             </p>
             {game.turn.phase === 'action' && <p>Plays used: {game.turn.playsUsed}/3</p>}
-            {over.done && <p className="winner">Winner: {winner?.name ?? 'Unknown'}</p>}
           </div>
           <div className="actions">
             <button onClick={() => setScreen('home')}>Home</button>
-            <button
-              onClick={() => {
-                clearActiveGame();
-                setGame(null);
-                setScreen('home');
-              }}
-            >
-              End Match
-            </button>
+            <button onClick={goHome}>End Match</button>
           </div>
         </div>
 
@@ -737,6 +950,7 @@ function App() {
       {screen === 'setup' && renderSetup()}
       {screen === 'game' && renderGame()}
       {screen === 'stats' && renderStats()}
+      {screen === 'game_over' && renderGameOver()}
 
       <footer>
         <small>Monopoly Deal local pass-and-play.</small>

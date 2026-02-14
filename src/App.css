@@ -281,6 +281,287 @@ button:disabled {
   margin-top: 1rem;
 }
 
+.postgame-panel {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(255, 215, 128, 0.38), transparent 34%),
+    radial-gradient(circle at 90% 0%, rgba(123, 211, 199, 0.28), transparent 42%),
+    linear-gradient(170deg, #fffbef, #f5efe2 52%, #efe8d7);
+  border-color: #d4c3a0;
+}
+
+.postgame-panel::before {
+  content: '';
+  position: absolute;
+  inset: auto -80px -130px auto;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(199, 119, 30, 0.22), rgba(199, 119, 30, 0));
+  pointer-events: none;
+}
+
+.postgame-hero {
+  position: relative;
+  z-index: 1;
+  text-align: left;
+}
+
+.postgame-kicker {
+  display: inline-block;
+  margin: 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #e9dfcb;
+  color: #475463;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.postgame-hero h2 {
+  margin-top: 0.45rem;
+  font-size: clamp(1.7rem, 3.8vw, 2.6rem);
+  color: #1f2e3a;
+}
+
+.postgame-hero p {
+  margin: 0.4rem 0 0;
+  font-size: 1rem;
+  color: #42515d;
+  max-width: 68ch;
+}
+
+.postgame-meta {
+  font-size: 0.86rem !important;
+  color: #5c6b77 !important;
+}
+
+.postgame-kpis {
+  position: relative;
+  z-index: 1;
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.65rem;
+}
+
+.postgame-kpi {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid #dfd0b4;
+  border-radius: 12px;
+  padding: 0.7rem 0.8rem;
+}
+
+.postgame-kpi h3 {
+  font-size: 0.82rem;
+  color: #5b6772;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+.postgame-kpi p {
+  margin: 0.25rem 0 0;
+  color: #26343e;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.postgame-standings {
+  position: relative;
+  z-index: 1;
+  margin-top: 1rem;
+  border-radius: 14px;
+  border: 1px solid #daccb2;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 0.9rem;
+}
+
+.postgame-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.postgame-standing-list {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.postgame-standing {
+  border: 1px solid #ded3be;
+  border-radius: 12px;
+  background: #fdf9f1;
+  padding: 0.65rem 0.7rem;
+}
+
+.postgame-standing.is-winner {
+  border-color: #cb9836;
+  background: linear-gradient(140deg, #fff9e8, #f8f0db);
+  box-shadow: 0 0 0 2px rgba(203, 152, 54, 0.14);
+}
+
+.postgame-standing-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.postgame-rank {
+  margin: 0;
+  color: #8f5f11;
+  font-weight: 800;
+  font-size: 0.94rem;
+}
+
+.postgame-name {
+  margin: 0;
+  color: #22313b;
+  font-weight: 700;
+}
+
+.postgame-standing-stats {
+  margin-top: 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.34rem;
+}
+
+.postgame-standing-stats span {
+  font-size: 0.78rem;
+  color: #495863;
+  border-radius: 999px;
+  border: 1px solid #d8cdb9;
+  background: #fff;
+  padding: 0.17rem 0.45rem;
+}
+
+.postgame-highlights {
+  position: relative;
+  z-index: 1;
+  margin-top: 1rem;
+  padding: 0.9rem;
+  border-radius: 14px;
+  border: 1px dashed #d7c6a4;
+  background: rgba(255, 251, 242, 0.95);
+}
+
+.postgame-highlights h3 {
+  margin-bottom: 0.35rem;
+}
+
+.postgame-highlights p {
+  margin: 0;
+  color: #2f3f4b;
+}
+
+.postgame-highlights ul {
+  margin: 0.6rem 0 0;
+  padding-left: 1.1rem;
+  color: #4d5d68;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.postgame-accessibility {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.postgame-toggle {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.86rem;
+}
+
+.postgame-toggle input {
+  width: 1rem;
+  height: 1rem;
+}
+
+.postgame-actions {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.9rem;
+}
+
+.postgame-actions button {
+  min-height: 48px;
+  padding: 0.7rem 1rem;
+}
+
+.postgame-primary-action {
+  background: linear-gradient(140deg, #196a4f, #124f3b);
+  box-shadow: 0 8px 16px rgba(25, 106, 79, 0.22);
+}
+
+.postgame-celebration {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.confetti-dot {
+  position: absolute;
+  top: -28px;
+  width: 9px;
+  height: 13px;
+  border-radius: 3px;
+  opacity: 0;
+  animation: confetti-fall 760ms ease-out forwards;
+}
+
+.confetti-dot:nth-child(5n + 1) {
+  background: #db6545;
+}
+
+.confetti-dot:nth-child(5n + 2) {
+  background: #2c8a6f;
+}
+
+.confetti-dot:nth-child(5n + 3) {
+  background: #d5a239;
+}
+
+.confetti-dot:nth-child(5n + 4) {
+  background: #3d6999;
+}
+
+.confetti-dot:nth-child(5n + 5) {
+  background: #8a4f2d;
+}
+
+.confetti-dot:nth-child(1) { left: 4%; animation-delay: 10ms; }
+.confetti-dot:nth-child(2) { left: 11%; animation-delay: 30ms; }
+.confetti-dot:nth-child(3) { left: 17%; animation-delay: 50ms; }
+.confetti-dot:nth-child(4) { left: 23%; animation-delay: 80ms; }
+.confetti-dot:nth-child(5) { left: 29%; animation-delay: 20ms; }
+.confetti-dot:nth-child(6) { left: 35%; animation-delay: 100ms; }
+.confetti-dot:nth-child(7) { left: 41%; animation-delay: 40ms; }
+.confetti-dot:nth-child(8) { left: 47%; animation-delay: 70ms; }
+.confetti-dot:nth-child(9) { left: 53%; animation-delay: 90ms; }
+.confetti-dot:nth-child(10) { left: 58%; animation-delay: 60ms; }
+.confetti-dot:nth-child(11) { left: 63%; animation-delay: 40ms; }
+.confetti-dot:nth-child(12) { left: 68%; animation-delay: 20ms; }
+.confetti-dot:nth-child(13) { left: 73%; animation-delay: 80ms; }
+.confetti-dot:nth-child(14) { left: 78%; animation-delay: 50ms; }
+.confetti-dot:nth-child(15) { left: 83%; animation-delay: 30ms; }
+.confetti-dot:nth-child(16) { left: 88%; animation-delay: 70ms; }
+.confetti-dot:nth-child(17) { left: 93%; animation-delay: 110ms; }
+.confetti-dot:nth-child(18) { left: 97%; animation-delay: 35ms; }
+
 .shield {
   position: fixed;
   inset: 0;
@@ -780,6 +1061,31 @@ footer {
   }
 }
 
+@keyframes confetti-fall {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) rotate(0deg);
+  }
+  20% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(210px) rotate(140deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-enter {
+    animation: none;
+  }
+
+  .confetti-dot {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 @media (max-width: 720px) {
   main {
     padding: 1rem;
@@ -810,5 +1116,9 @@ footer {
   .card-size-lg {
     width: 94px;
     height: 134px;
+  }
+
+  .postgame-standing-stats span {
+    font-size: 0.73rem;
   }
 }
