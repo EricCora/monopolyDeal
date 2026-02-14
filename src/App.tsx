@@ -773,6 +773,7 @@ function App() {
           isMandatoryPrompt={isMandatoryPrompt}
           mainPhaseExhausted={mainPhaseExhausted}
           discardOverLimitCount={discardOverLimitCount}
+          showRulesHints={uiPreferences.showRulesDrawerHints}
           turnSnapshotsCount={turnSnapshots.length}
           showDebugActions={showDebugActions}
           actionDetailText={actionDetailText}

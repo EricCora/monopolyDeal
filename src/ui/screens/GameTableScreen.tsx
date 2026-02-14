@@ -48,6 +48,7 @@ interface GameTableScreenProps {
   isMandatoryPrompt: boolean;
   mainPhaseExhausted: boolean;
   discardOverLimitCount: number;
+  showRulesHints: boolean;
   turnSnapshotsCount: number;
   showDebugActions: boolean;
   actionDetailText: (item: LegalAction) => string | null;
@@ -107,6 +108,7 @@ export function GameTableScreen({
   isMandatoryPrompt,
   mainPhaseExhausted,
   discardOverLimitCount,
+  showRulesHints,
   turnSnapshotsCount,
   showDebugActions,
   actionDetailText,
@@ -158,6 +160,7 @@ export function GameTableScreen({
           promptKind={prompt.kind}
           playsUsed={game.turn.playsUsed}
           discardOverLimitCount={discardOverLimitCount}
+          showRulesHints={showRulesHints}
           legalActions={legalActions}
           isPaused={isPaused}
           showDebugActions={showDebugActions}

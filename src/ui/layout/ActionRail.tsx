@@ -8,6 +8,7 @@ interface ActionRailProps {
   promptKind: TurnPrompt['kind'];
   playsUsed: number;
   discardOverLimitCount: number;
+  showRulesHints: boolean;
   legalActions: LegalAction[];
   isPaused: boolean;
   showDebugActions: boolean;
@@ -21,6 +22,7 @@ export function ActionRail({
   promptKind,
   playsUsed,
   discardOverLimitCount,
+  showRulesHints,
   legalActions,
   isPaused,
   showDebugActions,
@@ -47,11 +49,13 @@ export function ActionRail({
       <p className={`turn-status ${isMandatoryPrompt ? 'is-required' : ''}`}>
         {isPaused ? 'Game is paused. Resume from the top bar to continue.' : turnStatusText}
       </p>
-      <p className="action-rail-caption">
-        {isMandatoryPrompt
-          ? 'Resolve the required action in the active player panel.'
-          : 'Use the active player panel below to play cards.'}
-      </p>
+      {showRulesHints ? (
+        <p className="action-rail-caption">
+          {isMandatoryPrompt
+            ? 'Resolve the required action in the active player panel.'
+            : 'Use the active player panel below to play cards.'}
+        </p>
+      ) : null}
       <div className="debug-actions">
         <button type="button" onClick={onToggleDebugActions} disabled={isPaused}>
           {showDebugActions ? 'Hide' : 'Show'} All Legal Actions ({legalActions.length})
