@@ -12,14 +12,14 @@ interface HomeScreenProps {
     unlocked: number;
     total: number;
   };
-  showLanMultiplayer: boolean;
+  showMultiplayer: boolean;
   onNewGame: () => void;
   onStartDailyChallenge: () => void;
   onResumeGame: () => void;
   onOpenSavedGames: () => void;
   onOpenStats: () => void;
   onOpenSettings: () => void;
-  onOpenLan: () => void;
+  onOpenMultiplayer: () => void;
 }
 
 export function HomeScreen({
@@ -28,31 +28,31 @@ export function HomeScreen({
   dailyChallenge,
   showAchievements,
   achievementSummary,
-  showLanMultiplayer,
+  showMultiplayer,
   onNewGame,
   onStartDailyChallenge,
   onResumeGame,
   onOpenSavedGames,
   onOpenStats,
   onOpenSettings,
-  onOpenLan,
+  onOpenMultiplayer,
 }: HomeScreenProps) {
   return (
     <section className="panel home-screen card-enter">
       <div className="home-hero">
         <p className="home-kicker">Competitive Local Card Table</p>
         <h1>Monopoly Deal Local</h1>
-        <p className="home-subtitle">Pass-and-play on one laptop for 2-4 players.</p>
+        <p className="home-subtitle">Pass-and-play locally, or jump into private multiplayer with a room code.</p>
       </div>
 
       <div className="home-actions actions" aria-label="Home actions">
         <button onClick={onNewGame}>New Game</button>
         {showDailyChallenge ? <button onClick={onStartDailyChallenge}>Start Daily Challenge</button> : null}
         <button onClick={onResumeGame}>Resume Saved Game</button>
+        {showMultiplayer ? <button onClick={onOpenMultiplayer}>Play Multiplayer</button> : null}
         <button onClick={onOpenSavedGames}>Saved Games</button>
         <button onClick={onOpenStats}>Stats & History</button>
         <button onClick={onOpenSettings}>Settings</button>
-        {showLanMultiplayer ? <button onClick={onOpenLan}>LAN Multiplayer (Beta)</button> : null}
       </div>
 
       {showDailyChallenge ? (

@@ -23,6 +23,7 @@ This file tracks execution progress of `docs/deep-research-improvement-plan.md` 
 - [x] Add replay timeline mode from completed matches
 - [x] Add achievements and daily challenge seed workflow
 - [x] Add LAN multiplayer server/client architecture (room code flow)
+- [x] Replace manual LAN setup UX with one-click hosted multiplayer room flow
 - [x] Add custom rules/ruleset support + safe card-pack extension points
 - [x] Expand analytics and release documentation
 
@@ -34,6 +35,7 @@ This file tracks execution progress of `docs/deep-research-improvement-plan.md` 
 - `006cc50` feat(accessibility+rules): extend custom-rules coverage and polish assistive UX
 - `8b9a357` refactor(engine): extract core helpers and broaden pending-flow regression coverage
 - `ebad365` feat(app+analytics): add orchestration hooks and growth telemetry insights
+- `<pending>` feat(multiplayer): ship one-click hosted multiplayer UX with reconnect and host migration handling
 
 ## Notes
 - This tracker is intentionally append-only for auditability during rapid iteration.

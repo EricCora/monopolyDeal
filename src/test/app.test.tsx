@@ -788,6 +788,23 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: /monopoly deal local/i })).toBeInTheDocument();
   });
 
+  it('opens multiplayer screen with one-click controls and no server url field', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+
+    expect(await screen.findByRole('heading', { name: /multiplayer/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/server url/i)).not.toBeInTheDocument();
+
+    fetchSpy.mockRestore();
+  });
+
   it('saves current game to a slot and loads it from saved games', () => {
     render(<App />);
 

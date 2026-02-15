@@ -18,13 +18,14 @@ Purpose: give coding agents enough context to make correct, low-regression chang
 - `src/ai/`
   - Heuristic and rollout decision helpers plus explainable coach hint generation.
 - `src/network/`
-  - LAN client API wrappers for room create/join/start/state/action flows.
+  - Hosted multiplayer client API wrappers (`src/network/multiplayerClient.ts`) for room create/join/reconnect/start/state/action/leave flows.
+  - Legacy LAN wrappers remain for development fallback.
 - `apps/server/`
-  - Local LAN authoritative server scaffold with room lifecycle and best-effort snapshot persistence.
+  - Multiplayer API server scaffold with room lifecycle, reconnect windows, host migration, and best-effort snapshot persistence.
 - `src/ui/` + `src/App.tsx`
   - `App.tsx` owns state/actions and passes typed props to screen containers.
   - `src/app/useFeedback.ts` encapsulates sound/haptic emission.
-  - `src/app/useLanRoom.ts` encapsulates LAN room state, actions, and polling lifecycle.
+  - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, polling, and reconnect lifecycle.
   - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition.
   - `src/ui/screens/SavedGamesScreen.tsx` manages manual save slots (load/save-over/rename/delete).
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
@@ -178,7 +179,7 @@ Validation:
 - Rule and action types: `src/engine/types.ts`
 - Card metadata: `src/cards/catalog.ts`
 - Save/load: `src/persistence/storage.ts`
-- App orchestration hooks: `src/app/useFeedback.ts`, `src/app/useLanRoom.ts`
+- App orchestration hooks: `src/app/useFeedback.ts`, `src/app/useMultiplayerRoom.ts`
 - Risky-action confirm modal: `src/ui/components/ActionConfirmDialog.tsx`
 - Rules quick reference modal: `src/ui/components/RulesDrawer.tsx`
 - Saved slots manager screen: `src/ui/screens/SavedGamesScreen.tsx`
@@ -187,6 +188,7 @@ Validation:
 - Dev fixture data: `src/stats/devFixture.ts`
 - Main app orchestration: `src/App.tsx`
 - AI decision helpers: `src/ai/heuristic.ts`, `src/ai/rollout.ts`, `src/ai/explain.ts`
-- LAN screen + client: `src/ui/screens/LanPlayScreen.tsx`, `src/network/lanClient.ts`
-- LAN server entry: `apps/server/src/index.ts`
+- Multiplayer screen + client: `src/ui/screens/MultiplayerScreen.tsx`, `src/network/multiplayerClient.ts`
+- Multiplayer server entry: `apps/server/src/index.ts`
+- Legacy LAN fallback: `src/ui/screens/LanPlayScreen.tsx`, `src/network/lanClient.ts`
 - Tests: `src/test/engine.test.ts`, `src/test/app.test.tsx`, `src/test/card-ui.test.tsx`

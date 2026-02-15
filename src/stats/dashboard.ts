@@ -260,8 +260,8 @@ export function buildStatsDashboardModel(
       { event: 'Payment auto-selects', count: growthEvents.payment_auto_selected },
       { event: 'Rules drawer opens', count: growthEvents.rules_drawer_opened },
       { event: 'Coach hints viewed', count: growthEvents.coach_hint_viewed },
-      { event: 'LAN room hosts', count: growthEvents.lan_room_hosted },
-      { event: 'LAN room joins', count: growthEvents.lan_room_joined },
+      { event: 'Multiplayer hosts', count: growthEvents.lan_room_hosted },
+      { event: 'Multiplayer joins', count: growthEvents.lan_room_joined },
     ],
   };
 }

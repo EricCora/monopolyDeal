@@ -195,15 +195,6 @@ export function SettingsScreen({
         </label>
 
         <label className="settings-field settings-toggle">
-          <span>LAN Multiplayer</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.experimental.lanMultiplayer}
-            onChange={(event) => onToggleExperimentalFlag('lanMultiplayer', event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field settings-toggle">
           <span>Custom Rules</span>
           <input
             type="checkbox"

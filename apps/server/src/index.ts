@@ -1,17 +1,31 @@
 import { createServer } from 'node:http';
 import { parse } from 'node:url';
-import { applyRoomAction, createRoom, joinRoom, roomView, startRoom, type LanRoom } from './gameService';
+import {
+  applyRoomAction,
+  createRoom,
+  joinRoom,
+  leaveRoom,
+  pruneInactiveRooms,
+  reconnectRoom,
+  roomView,
+  startRoom,
+  type MultiplayerRoom,
+} from './gameService';
 import { loadSnapshots, saveSnapshots } from './persistence/snapshots';
 import type { Action } from '../../../src/engine';
 
 const PORT = Number(process.env.PORT ?? 8787);
-const rooms = new Map<string, LanRoom>();
+const rooms = new Map<string, MultiplayerRoom>();
 
 for (const room of loadSnapshots()) {
   rooms.set(room.code, room);
 }
 
-function writeJson(res: { writeHead: (code: number, headers: Record<string, string>) => void; end: (body: string) => void }, code: number, payload: unknown): void {
+function writeJson(
+  res: { writeHead: (code: number, headers: Record<string, string>) => void; end: (body: string) => void },
+  code: number,
+  payload: unknown,
+): void {
   res.writeHead(code, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
@@ -35,6 +49,11 @@ function snapshotAll(): void {
   saveSnapshots(Array.from(rooms.values()));
 }
 
+setInterval(() => {
+  pruneInactiveRooms(rooms);
+  snapshotAll();
+}, 60_000);
+
 createServer(async (req, res) => {
   if (!req.url || !req.method) {
     writeJson(res, 400, { error: 'bad_request' });
@@ -48,79 +67,105 @@ createServer(async (req, res) => {
 
   const parsed = parse(req.url, true);
   const path = parsed.pathname ?? '';
+  pruneInactiveRooms(rooms);
 
   try {
-    if (req.method === 'POST' && path === '/api/rooms/create') {
+    if (req.method === 'GET' && path === '/api/multiplayer/health') {
+      writeJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === 'POST' && path === '/api/multiplayer/rooms') {
       const raw = await collectBody(req);
       const payload = JSON.parse(raw || '{}') as { playerName?: string };
       const created = createRoom(rooms, payload.playerName ?? 'Host');
       snapshotAll();
-      writeJson(res, 200, { roomCode: created.room.code, playerId: created.playerId });
+      writeJson(res, 200, created.session);
       return;
     }
 
-    if (req.method === 'POST' && path === '/api/rooms/join') {
-      const raw = await collectBody(req);
-      const payload = JSON.parse(raw || '{}') as { roomCode?: string; playerName?: string };
-      const roomCode = payload.roomCode?.toUpperCase() ?? '';
-      const room = rooms.get(roomCode);
-      if (!room) {
-        writeJson(res, 404, { error: 'room_not_found' });
-        return;
-      }
-      const playerId = joinRoom(room, payload.playerName ?? 'Player');
-      snapshotAll();
-      writeJson(res, 200, { roomCode, playerId });
+    const match = path.match(/^\/api\/multiplayer\/rooms\/([^/]+)\/(join|reconnect|start|action|leave|state)$/);
+    if (!match) {
+      writeJson(res, 404, { error: 'not_found' });
       return;
     }
 
-    if (req.method === 'POST' && path === '/api/rooms/start') {
-      const raw = await collectBody(req);
-      const payload = JSON.parse(raw || '{}') as { roomCode?: string; seed?: number };
-      const roomCode = payload.roomCode?.toUpperCase() ?? '';
-      const room = rooms.get(roomCode);
-      if (!room) {
-        writeJson(res, 404, { error: 'room_not_found' });
-        return;
-      }
-      startRoom(room, payload.seed);
-      snapshotAll();
-      writeJson(res, 200, { ok: true });
+    const roomCode = decodeURIComponent(match[1]).toUpperCase();
+    const operation = match[2];
+    const room = rooms.get(roomCode);
+    if (!room) {
+      writeJson(res, 404, { error: 'room_not_found' });
       return;
     }
 
-    if (req.method === 'POST' && path === '/api/rooms/action') {
-      const raw = await collectBody(req);
-      const payload = JSON.parse(raw || '{}') as { roomCode?: string; playerId?: string; action?: Action };
-      const roomCode = payload.roomCode?.toUpperCase() ?? '';
-      const room = rooms.get(roomCode);
-      if (!room) {
-        writeJson(res, 404, { error: 'room_not_found' });
-        return;
-      }
-      if (!payload.playerId || !payload.action) {
+    if (req.method === 'GET' && operation === 'state') {
+      const playerId = String(parsed.query.playerId ?? '');
+      const sessionToken = String(parsed.query.sessionToken ?? '');
+      if (!playerId || !sessionToken) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      applyRoomAction(room, payload.playerId, payload.action);
+      const view = roomView(room, playerId, sessionToken);
+      snapshotAll();
+      writeJson(res, 200, view);
+      return;
+    }
+
+    if (req.method !== 'POST') {
+      writeJson(res, 405, { error: 'method_not_allowed' });
+      return;
+    }
+
+    const raw = await collectBody(req);
+    const payload = JSON.parse(raw || '{}') as {
+      playerName?: string;
+      playerId?: string;
+      sessionToken?: string;
+      action?: Action;
+      seed?: number;
+    };
+
+    if (operation === 'join') {
+      const session = joinRoom(room, payload.playerName ?? 'Player');
+      snapshotAll();
+      writeJson(res, 200, session);
+      return;
+    }
+
+    if (!payload.playerId || !payload.sessionToken) {
+      writeJson(res, 400, { error: 'invalid_payload' });
+      return;
+    }
+
+    if (operation === 'reconnect') {
+      const session = reconnectRoom(room, payload.playerId, payload.sessionToken);
+      snapshotAll();
+      writeJson(res, 200, session);
+      return;
+    }
+
+    if (operation === 'start') {
+      startRoom(room, payload.playerId, payload.sessionToken, payload.seed);
       snapshotAll();
       writeJson(res, 200, { ok: true });
       return;
     }
 
-    if (req.method === 'GET' && path === '/api/rooms/state') {
-      const roomCode = String(parsed.query.roomCode ?? '').toUpperCase();
-      const playerId = String(parsed.query.playerId ?? '');
-      const room = rooms.get(roomCode);
-      if (!room) {
-        writeJson(res, 404, { error: 'room_not_found' });
+    if (operation === 'leave') {
+      leaveRoom(room, payload.playerId, payload.sessionToken);
+      snapshotAll();
+      writeJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (operation === 'action') {
+      if (!payload.action) {
+        writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      if (!playerId) {
-        writeJson(res, 400, { error: 'player_required' });
-        return;
-      }
-      writeJson(res, 200, roomView(room, playerId));
+      applyRoomAction(room, payload.playerId, payload.sessionToken, payload.action);
+      snapshotAll();
+      writeJson(res, 200, { ok: true });
       return;
     }
 
@@ -130,5 +175,5 @@ createServer(async (req, res) => {
     writeJson(res, 400, { error: message });
   }
 }).listen(PORT, () => {
-  console.log(`LAN server listening on http://0.0.0.0:${PORT}`);
+  console.log(`Multiplayer server listening on http://0.0.0.0:${PORT}`);
 });

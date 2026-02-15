@@ -2,7 +2,7 @@
 
 A browser-based Monopoly Deal game built with React + TypeScript.
 
-This project focuses on local, pass-and-play gameplay with a rules engine, persistent saves, and match stats.
+This project focuses on pass-and-play and private-room multiplayer gameplay with a rules engine, persistent saves, and match stats.
 
 ## Features
 
@@ -27,7 +27,8 @@ This project focuses on local, pass-and-play gameplay with a rules engine, persi
 - Stats filters (player/winner/date range) and settings data controls for clearing local stats/history
 - Growth telemetry counters (starts/completions/rematches/share conversion/LAN activity/coach usage) surfaced in Stats & History
 - Manual saved-game slots (up to 5) with load/save-over/rename/delete controls
-- Experimental feature flags for AI opponents, AI coach hints, replay timeline, daily challenges, achievements, LAN multiplayer beta, and custom rules
+- One-click multiplayer room flow (host/join/reconnect) with no manual server URL entry
+- Experimental feature flags for AI opponents, AI coach hints, replay timeline, daily challenges, achievements, and custom rules
 - Auto-save + resume via `localStorage`
 
 ## Tech Stack
@@ -62,6 +63,7 @@ Open the local URL shown by Vite (usually `http://localhost:5173`).
 ## Scripts
 
 - `npm run dev` - start local dev server
+- `npm run dev:multiplayer-server` - start the Node multiplayer API for local backend development
 - `npm run build` - type-check and build production assets
 - `npm run preview` - preview the production build locally
 - `npm run lint` - run ESLint
@@ -79,7 +81,7 @@ Use the `Settings` screen from Home (or the in-game top bar) to control:
 - Rules hint visibility on/off
 - Dev Mode toggle and sample data reseed tools
 - Local data controls (clear match history + lifetime stats + growth telemetry)
-- Experimental features toggle section (AI/replay/challenges/achievements/LAN/custom rules)
+- Experimental features toggle section (AI/replay/challenges/achievements/custom rules)
 
 ## Saved Games
 
@@ -124,17 +126,21 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 
 ## Current Scope
 
-- Local multiplayer only (single device, pass-and-play)
-- Optional LAN beta scaffold (run local server + room code flow)
+- Local pass-and-play
+- Private-room multiplayer (hosted API path)
+- Legacy LAN scaffold is retained in the repo for development fallback but is not the primary user flow
 
-## LAN Beta (Experimental)
+## Multiplayer Deployment Notes
 
-1. Start app UI: `npm run dev`
-2. Start LAN server: `npm run dev --prefix apps/server`
-3. In Settings, enable `Experimental Features -> LAN Multiplayer`.
-4. On Home, open `LAN Multiplayer (Beta)` and host/join with room code.
+Set `VITE_MULTIPLAYER_API_URL` to your deployed multiplayer API origin.
+See `.env.example` for the expected variable.
 
-Note: LAN mode is currently a beta scaffold intended for same-network testing and iterative hardening.
+For local backend development, you can run:
+
+1. App UI: `npm run dev`
+2. Node multiplayer server: `npm run dev --prefix apps/server`
+
+In production, users should only need to press `Play Multiplayer`.
 
 ## License
 

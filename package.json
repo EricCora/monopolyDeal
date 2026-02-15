@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:multiplayer-server": "npm run dev --prefix apps/server",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

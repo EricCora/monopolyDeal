@@ -76,14 +76,14 @@ import { SavedGamesScreen } from './ui/screens/SavedGamesScreen';
 import { SettingsScreen } from './ui/screens/SettingsScreen';
 import { SetupScreen } from './ui/screens/SetupScreen';
 import { StatsScreen } from './ui/screens/StatsScreen';
-import { LanPlayScreen } from './ui/screens/LanPlayScreen';
+import { MultiplayerScreen } from './ui/screens/MultiplayerScreen';
 import { generatePostGameSharePng, postGameShareFilename } from './ui/share/postGameShare';
 import { useFeedback } from './app/useFeedback';
-import { useLanRoom } from './app/useLanRoom';
+import { useMultiplayerRoom } from './app/useMultiplayerRoom';
 import type { RiskyActionConfirmation, SetupViewModel, ShareStatus } from './ui/types';
 import './App.css';
 
-type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over' | 'lan';
+type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over' | 'multiplayer';
 type SettingsBackScreen = 'home' | 'game';
 type SavedGamesBackScreen = 'home' | 'game';
 type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
@@ -308,23 +308,25 @@ function App() {
     hapticsEnabled: uiPreferences.hapticsEnabled,
   });
   const {
-    lanServerUrl,
-    setLanServerUrl,
-    lanPlayerName,
-    setLanPlayerName,
-    lanJoinCode,
-    setLanJoinCode,
-    lanSession,
-    lanRoomView,
-    lanLoading,
-    lanError,
-    setLanError,
-    hostLanRoom,
-    joinLanRoomSession,
-    startLanRoomMatch,
-    refreshLanStateInteractive,
-    runLanAction,
-  } = useLanRoom({ enabled: screen === 'lan' });
+    playerName: multiplayerPlayerName,
+    setPlayerName: setMultiplayerPlayerName,
+    joinCode: multiplayerJoinCode,
+    setJoinCode: setMultiplayerJoinCode,
+    session: multiplayerSession,
+    roomView: multiplayerRoomView,
+    loading: multiplayerLoading,
+    error: multiplayerError,
+    connectionState: multiplayerConnectionState,
+    isHost: multiplayerIsHost,
+    healthOk: multiplayerHealthOk,
+    hostRoom: hostMultiplayerRoom,
+    joinRoom: joinMultiplayerRoom,
+    startMatch: startMultiplayerMatch,
+    runAction: runMultiplayerAction,
+    leaveRoom: leaveMultiplayerRoom,
+    refreshRoom: refreshMultiplayerRoom,
+    setError: setMultiplayerError,
+  } = useMultiplayerRoom({ enabled: screen === 'multiplayer' });
 
   useEffect(() => {
     if (!game || !prompt) {
@@ -557,19 +559,19 @@ function App() {
     applyDevFixture('reseeded');
   }, [applyDevFixture]);
 
-  const onHostLanRoom = useCallback(async () => {
-    const hosted = await hostLanRoom();
+  const onHostMultiplayerRoom = useCallback(async () => {
+    const hosted = await hostMultiplayerRoom();
     if (hosted) {
       recordGrowthMetric('lan_room_hosted');
     }
-  }, [hostLanRoom, recordGrowthMetric]);
+  }, [hostMultiplayerRoom, recordGrowthMetric]);
 
-  const onJoinLanRoom = useCallback(async () => {
-    const joined = await joinLanRoomSession();
+  const onJoinMultiplayerRoom = useCallback(async () => {
+    const joined = await joinMultiplayerRoom();
     if (joined) {
       recordGrowthMetric('lan_room_joined');
     }
-  }, [joinLanRoomSession, recordGrowthMetric]);
+  }, [joinMultiplayerRoom, recordGrowthMetric]);
 
   const openGame = useCallback((nextGame: GameState) => {
     finalizedMatchRef.current = null;
@@ -1020,10 +1022,10 @@ function App() {
     setShowRulesDrawer(false);
     setIsSharing(false);
     setShareStatus(null);
-    setLanError(null);
+    setMultiplayerError(null);
     setRecentAchievementUnlocks([]);
     setRiskyActionConfirmation(null);
-  }, [setLanError]);
+  }, [setMultiplayerError]);
 
   const startRematch = useCallback(() => {
     if (!game) return;
@@ -1107,16 +1109,16 @@ function App() {
           dailyChallenge={dailyChallenge}
           showAchievements={uiPreferences.experimental.achievements}
           achievementSummary={{ unlocked: unlockedAchievements.length, total: 4 }}
-          showLanMultiplayer={uiPreferences.experimental.lanMultiplayer}
+          showMultiplayer={true}
           onNewGame={() => setScreen('setup')}
           onStartDailyChallenge={startDailyChallengeMatch}
           onResumeGame={resumeGame}
           onOpenSavedGames={() => openSavedGames('home')}
           onOpenStats={() => setScreen('stats')}
           onOpenSettings={() => openSettings('home')}
-          onOpenLan={() => {
-            setLanError(null);
-            setScreen('lan');
+          onOpenMultiplayer={() => {
+            setMultiplayerError(null);
+            setScreen('multiplayer');
           }}
         />
       ) : null}
@@ -1220,23 +1222,25 @@ function App() {
         />
       ) : null}
 
-      {screen === 'lan' ? (
-        <LanPlayScreen
-          serverUrl={lanServerUrl}
-          playerName={lanPlayerName}
-          joinCode={lanJoinCode}
-          session={lanSession}
-          roomView={lanRoomView}
-          loading={lanLoading}
-          error={lanError}
-          onServerUrlChange={setLanServerUrl}
-          onPlayerNameChange={setLanPlayerName}
-          onJoinCodeChange={setLanJoinCode}
-          onHostRoom={onHostLanRoom}
-          onJoinRoom={onJoinLanRoom}
-          onStartRoom={startLanRoomMatch}
-          onRefresh={refreshLanStateInteractive}
-          onRunAction={runLanAction}
+      {screen === 'multiplayer' ? (
+        <MultiplayerScreen
+          playerName={multiplayerPlayerName}
+          joinCode={multiplayerJoinCode}
+          session={multiplayerSession}
+          roomView={multiplayerRoomView}
+          loading={multiplayerLoading}
+          healthOk={multiplayerHealthOk}
+          error={multiplayerError}
+          connectionState={multiplayerConnectionState}
+          isHost={multiplayerIsHost}
+          onPlayerNameChange={setMultiplayerPlayerName}
+          onJoinCodeChange={setMultiplayerJoinCode}
+          onHostRoom={onHostMultiplayerRoom}
+          onJoinRoom={onJoinMultiplayerRoom}
+          onStartMatch={startMultiplayerMatch}
+          onRunAction={runMultiplayerAction}
+          onRefresh={refreshMultiplayerRoom}
+          onLeaveRoom={leaveMultiplayerRoom}
           onBack={() => setScreen('home')}
         />
       ) : null}
