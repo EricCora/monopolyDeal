@@ -1,44 +1,71 @@
-# UX Feature Milestone Release Notes
+# Deep Research Branch Release Notes
 
-## Included Milestones
+Branch: `codex/deep-research-improvements`
 
-- M0: roadmap + milestone gate checklist docs
-- M1: guided action rail turn cues and required-action clarity
-- M2: risky action confirmation dialog wired to legal action metadata
-- M3: payment assistant auto-select backed by engine helper
-- M4: in-game rules reference drawer with set/rent lookup
-- M5: stats filters + settings data controls + additive v1 preference/metric fields
+## What Landed
 
-## Public Interface Updates
+- Experimental feature flags for AI opponents, AI coach, replay timeline, daily challenges, achievements, LAN multiplayer beta, custom rules, enhanced event log, and contextual previews.
+- AI gameplay stack:
+- Heuristic bot decisions
+- Monte Carlo rollout decisions
+- Explainable AI coach hints for human turns
+- Replay timeline on post-game screen (flag-gated).
+- Retention systems:
+- Daily challenge seeding/progression
+- Achievement progression/unlock surfacing
+- Post-game unlock callouts
+- Custom ruleset plumbing (win sets, hand limit, max plays per turn) across setup, engine enforcement, rematch, and prompts.
+- LAN multiplayer scaffold:
+- Client room create/join/start/action flow
+- Local server scaffold with room lifecycle and snapshot persistence stub
+- Accessibility/game-feel improvements:
+- High contrast mode, keyboard shortcuts, live-region updates
+- Sound and haptics toggles
+- Richer event log grouping and contextual action metadata
+- Engine safety-net expansion:
+- Added pending-flow invalid-path tests
+- Added custom-rules prompt/limit tests
+- App/engine maintainability refactors:
+- Extracted engine shared helpers into `src/engine/core.ts`
+- Extracted App orchestration hooks into `src/app/useFeedback.ts` and `src/app/useLanRoom.ts`
+- Analytics expansion:
+- Extended growth telemetry counters (starts, completions, rematches, LAN host/join, coach hint views, share conversion)
+- Stats dashboard now shows telemetry KPIs and growth-event chart
 
-- `LegalAction` now supports optional UX metadata:
-- `requiresConfirmation?: boolean`
-- `riskLevel?: 'low' | 'medium' | 'high'`
-- `previewText?: string`
-- Engine exports `getSuggestedPaymentCards(state, playerId, amount)`.
+## Interface And Data Updates
 
-## Persistence Compatibility
+- `src/stats/types.ts`:
+- `GrowthMetricEvent` expanded with:
+- `game_started`
+- `game_completed`
+- `rematch_started`
+- `lan_room_hosted`
+- `lan_room_joined`
+- `coach_hint_viewed`
+- `GrowthMetricsV1.events` expanded with matching additive counters.
+- `src/persistence/storage.ts`:
+- Growth metric loader now backfills new counters safely for existing v1 payloads.
+- Added `clearGrowthMetrics()` helper.
+- `src/stats/dashboard.ts`:
+- `buildStatsDashboardModel` now accepts optional growth metrics input and returns `growthKpis` plus `growthEvents` series.
+
+## Compatibility
 
 - Storage remains `version: 1`.
-- Added additive optional UI preference fields:
-- `confirmRiskyActions`
-- `showRulesDrawerHints`
-- Added additive growth metrics counters:
-- `payment_auto_selected`
-- `rules_drawer_opened`
-- Legacy payloads still backfill safe defaults.
+- All new persistence fields are additive and default-backed.
+- Legacy `growthMetrics` and `uiPreferences` payloads remain readable.
 
 ## Verification
 
-- Automated checks:
-- `npm run test` (66 tests passing)
-- `npm run build` (TypeScript + production build passing)
+- Required verification executed on branch:
+- `npm run test`
+- `npm run build`
 
-## Manual Smoke Checklist
+## Manual Smoke Focus
 
-1. New game flow: reveal, play cards, pass turn.
-2. Risky action flow: confirm + cancel both behave correctly.
-3. Payment flow: auto-select, submit, shortfall messaging.
-4. Rules drawer: open/close via button and Escape.
-5. Stats page: apply/clear filters and verify charts/tables update.
-6. Settings: clear stats/history and verify empty analytics state.
+1. Enable experimental flags and verify gated surfaces render only when expected.
+2. Run a bot-enabled match and confirm bot turns execute automatically.
+3. Complete a match and confirm post-game replay + achievement updates.
+4. Use custom rules and validate prompts/limits match configured values.
+5. Open LAN screen and validate host/join/start/refresh/action workflow against local server.
+6. Open Stats & History and verify new growth telemetry cards/chart update after gameplay actions.

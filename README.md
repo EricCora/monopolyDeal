@@ -25,6 +25,7 @@ This project focuses on local, pass-and-play gameplay with a rules engine, persi
 - Payment assistant auto-select for pending payment flows
 - In-game rules reference drawer with property set/rent lookup and pending-flow help
 - Stats filters (player/winner/date range) and settings data controls for clearing local stats/history
+- Growth telemetry counters (starts/completions/rematches/share conversion/LAN activity/coach usage) surfaced in Stats & History
 - Manual saved-game slots (up to 5) with load/save-over/rename/delete controls
 - Experimental feature flags for AI opponents, AI coach hints, replay timeline, daily challenges, achievements, LAN multiplayer beta, and custom rules
 - Auto-save + resume via `localStorage`
@@ -77,7 +78,7 @@ Use the `Settings` screen from Home (or the in-game top bar) to control:
 - Risky action confirmations on/off
 - Rules hint visibility on/off
 - Dev Mode toggle and sample data reseed tools
-- Local data controls (clear match history + lifetime stats)
+- Local data controls (clear match history + lifetime stats + growth telemetry)
 - Experimental features toggle section (AI/replay/challenges/achievements/LAN/custom rules)
 
 ## Saved Games

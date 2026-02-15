@@ -12,9 +12,9 @@ This file tracks execution progress of `docs/deep-research-improvement-plan.md` 
 - [x] Import deep research plan into repo
 - [x] Add execution tracker and phased commit log
 - [x] Add novice-friendly experimental settings flags
-- [ ] Expand engine edge-case tests
-- [ ] Refactor engine internals into clearer helpers
-- [ ] Refactor App orchestration boundaries
+- [x] Expand engine edge-case tests
+- [x] Refactor engine internals into clearer helpers
+- [x] Refactor App orchestration boundaries
 - [x] Add contextual action previews and richer event grouping
 - [x] Improve accessibility (keyboard + SR announcements + contrast)
 - [x] Add game-feel improvements (motion/sound/haptics controls)
@@ -24,13 +24,16 @@ This file tracks execution progress of `docs/deep-research-improvement-plan.md` 
 - [x] Add achievements and daily challenge seed workflow
 - [x] Add LAN multiplayer server/client architecture (room code flow)
 - [x] Add custom rules/ruleset support + safe card-pack extension points
-- [ ] Expand analytics and release documentation
+- [x] Expand analytics and release documentation
 
 ## Commit Log
 - `fe1702c` docs: add deep research improvement plan for implementation tracking
 - `d08e212` feat(settings): add experimental feature flags and accessibility toggles
 - `fa4dcac` feat(ai): add bot setup, coach hints, and replay timeline surfaces
 - `552a054` feat(core): add retention systems, custom ruleset plumbing, and LAN multiplayer scaffold
+- `006cc50` feat(accessibility+rules): extend custom-rules coverage and polish assistive UX
+- `8b9a357` refactor(engine): extract core helpers and broaden pending-flow regression coverage
+- `ebad365` feat(app+analytics): add orchestration hooks and growth telemetry insights
 
 ## Notes
 - This tracker is intentionally append-only for auditability during rapid iteration.
