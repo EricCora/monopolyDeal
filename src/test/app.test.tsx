@@ -681,6 +681,24 @@ describe('App', () => {
   it('clears local stats and history from settings data controls', () => {
     localStorage.setItem(MATCH_HISTORY_KEY, JSON.stringify(createStatsFixture('medium').history));
     localStorage.setItem(LIFETIME_STATS_KEY, JSON.stringify(createStatsFixture('medium').lifetime));
+    localStorage.setItem(
+      GROWTH_METRICS_KEY,
+      JSON.stringify({
+        version: 1,
+        events: {
+          share_image_clicked: 1,
+          share_image_success: 1,
+          payment_auto_selected: 1,
+          rules_drawer_opened: 1,
+          game_started: 1,
+          game_completed: 1,
+          rematch_started: 1,
+          lan_room_hosted: 1,
+          lan_room_joined: 1,
+          coach_hint_viewed: 1,
+        },
+      }),
+    );
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
@@ -689,6 +707,7 @@ describe('App', () => {
     expect(window.confirm).toHaveBeenCalled();
     expect(localStorage.getItem(MATCH_HISTORY_KEY)).toBeNull();
     expect(localStorage.getItem(LIFETIME_STATS_KEY)).toBeNull();
+    expect(localStorage.getItem(GROWTH_METRICS_KEY)).toBeNull();
   });
 
   it('blocks gameplay actions while paused and allows them again after resume', () => {

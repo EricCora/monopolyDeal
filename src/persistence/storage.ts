@@ -306,6 +306,12 @@ function defaultGrowthMetrics(): GrowthMetricsV1 {
       share_image_success: 0,
       payment_auto_selected: 0,
       rules_drawer_opened: 0,
+      game_started: 0,
+      game_completed: 0,
+      rematch_started: 0,
+      lan_room_hosted: 0,
+      lan_room_joined: 0,
+      coach_hint_viewed: 0,
     },
   };
 }
@@ -328,6 +334,12 @@ export function loadGrowthMetrics(): GrowthMetricsV1 {
         share_image_success: parseMetricCount(parsed.events?.share_image_success),
         payment_auto_selected: parseMetricCount(parsed.events?.payment_auto_selected),
         rules_drawer_opened: parseMetricCount(parsed.events?.rules_drawer_opened),
+        game_started: parseMetricCount(parsed.events?.game_started),
+        game_completed: parseMetricCount(parsed.events?.game_completed),
+        rematch_started: parseMetricCount(parsed.events?.rematch_started),
+        lan_room_hosted: parseMetricCount(parsed.events?.lan_room_hosted),
+        lan_room_joined: parseMetricCount(parsed.events?.lan_room_joined),
+        coach_hint_viewed: parseMetricCount(parsed.events?.coach_hint_viewed),
       },
     };
   } catch {
@@ -429,4 +441,8 @@ export function clearMatchHistory(): void {
 
 export function clearLifetimeStats(): void {
   localStorage.removeItem(LIFETIME_STATS_KEY);
+}
+
+export function clearGrowthMetrics(): void {
+  localStorage.removeItem(GROWTH_METRICS_KEY);
 }

@@ -1,4 +1,4 @@
-import type { LifetimeStatsV1, MatchRecordV1 } from './types';
+import type { GrowthMetricsV1, LifetimeStatsV1, MatchRecordV1 } from './types';
 
 export interface LifetimeRowView {
   name: string;
@@ -35,6 +35,20 @@ export interface StatsKpis {
 
 export interface StatsDashboardModel {
   kpis: StatsKpis;
+  growthKpis: {
+    gameStarts: number;
+    gameCompletions: number;
+    completionRate: number;
+    shareAttempts: number;
+    shareSuccesses: number;
+    shareConversionRate: number;
+    paymentAutoSelects: number;
+    rulesDrawerOpens: number;
+    rematches: number;
+    coachHintsViewed: number;
+    lanHosts: number;
+    lanJoins: number;
+  };
   lifetimeRows: LifetimeRowView[];
   matchRows: MatchRowView[];
   winsByPlayer: Array<{ player: string; wins: number }>;
@@ -42,6 +56,7 @@ export interface StatsDashboardModel {
   actionDistribution: Array<{ actionType: string; count: number }>;
   matchesByDay: Array<{ day: string; count: number }>;
   turnBuckets: Array<{ bucket: string; count: number }>;
+  growthEvents: Array<{ event: string; count: number }>;
 }
 
 export interface StatsFilters {
@@ -49,6 +64,11 @@ export interface StatsFilters {
   winnerName?: string;
   fromDay?: string;
   toDay?: string;
+}
+
+function safeRate(numerator: number, denominator: number): number {
+  if (denominator <= 0) return 0;
+  return numerator / denominator;
 }
 
 function sumActionsByType(actionsByType: Record<string, number>): number {
@@ -135,7 +155,12 @@ function applyStatsFilters(history: MatchRecordV1[], filters?: StatsFilters): Ma
   });
 }
 
-export function buildStatsDashboardModel(history: MatchRecordV1[], lifetime: LifetimeStatsV1, filters?: StatsFilters): StatsDashboardModel {
+export function buildStatsDashboardModel(
+  history: MatchRecordV1[],
+  lifetime: LifetimeStatsV1,
+  filters?: StatsFilters,
+  growthMetrics?: GrowthMetricsV1,
+): StatsDashboardModel {
   const filteredHistory = applyStatsFilters(history, filters);
   const lifetimeRows = buildLifetimeRows(lifetime).filter((row) => {
     if (filters?.playerName && row.name !== filters.playerName) return false;
@@ -165,6 +190,18 @@ export function buildStatsDashboardModel(history: MatchRecordV1[], lifetime: Lif
 
   const topWinner = Array.from(winnerCounts.entries()).sort((a, b) => b[1] - a[1])[0];
   const topActionType = Array.from(actionCounts.entries()).sort((a, b) => b[1] - a[1])[0];
+  const growthEvents = growthMetrics?.events ?? {
+    share_image_clicked: 0,
+    share_image_success: 0,
+    payment_auto_selected: 0,
+    rules_drawer_opened: 0,
+    game_started: 0,
+    game_completed: 0,
+    rematch_started: 0,
+    lan_room_hosted: 0,
+    lan_room_joined: 0,
+    coach_hint_viewed: 0,
+  };
 
   const matchTrends = matchRows
     .slice()
@@ -186,6 +223,20 @@ export function buildStatsDashboardModel(history: MatchRecordV1[], lifetime: Lif
       topActionType: topActionType?.[0] ?? 'N/A',
       topActionCount: topActionType?.[1] ?? 0,
     },
+    growthKpis: {
+      gameStarts: growthEvents.game_started,
+      gameCompletions: growthEvents.game_completed,
+      completionRate: safeRate(growthEvents.game_completed, growthEvents.game_started),
+      shareAttempts: growthEvents.share_image_clicked,
+      shareSuccesses: growthEvents.share_image_success,
+      shareConversionRate: safeRate(growthEvents.share_image_success, growthEvents.share_image_clicked),
+      paymentAutoSelects: growthEvents.payment_auto_selected,
+      rulesDrawerOpens: growthEvents.rules_drawer_opened,
+      rematches: growthEvents.rematch_started,
+      coachHintsViewed: growthEvents.coach_hint_viewed,
+      lanHosts: growthEvents.lan_room_hosted,
+      lanJoins: growthEvents.lan_room_joined,
+    },
     lifetimeRows,
     matchRows,
     winsByPlayer: lifetimeRows.map((row) => ({ player: row.name, wins: row.wins })),
@@ -200,5 +251,17 @@ export function buildStatsDashboardModel(history: MatchRecordV1[], lifetime: Lif
       bucket,
       count: turnBucketCounts.get(bucket) ?? 0,
     })),
+    growthEvents: [
+      { event: 'Game starts', count: growthEvents.game_started },
+      { event: 'Game completions', count: growthEvents.game_completed },
+      { event: 'Rematches', count: growthEvents.rematch_started },
+      { event: 'Share attempts', count: growthEvents.share_image_clicked },
+      { event: 'Share successes', count: growthEvents.share_image_success },
+      { event: 'Payment auto-selects', count: growthEvents.payment_auto_selected },
+      { event: 'Rules drawer opens', count: growthEvents.rules_drawer_opened },
+      { event: 'Coach hints viewed', count: growthEvents.coach_hint_viewed },
+      { event: 'LAN room hosts', count: growthEvents.lan_room_hosted },
+      { event: 'LAN room joins', count: growthEvents.lan_room_joined },
+    ],
   };
 }

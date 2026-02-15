@@ -47,7 +47,17 @@ export interface DailyChallengeV1 {
   bestTurnCount: number | null;
 }
 
-export type GrowthMetricEvent = 'share_image_clicked' | 'share_image_success' | 'payment_auto_selected' | 'rules_drawer_opened';
+export type GrowthMetricEvent =
+  | 'share_image_clicked'
+  | 'share_image_success'
+  | 'payment_auto_selected'
+  | 'rules_drawer_opened'
+  | 'game_started'
+  | 'game_completed'
+  | 'rematch_started'
+  | 'lan_room_hosted'
+  | 'lan_room_joined'
+  | 'coach_hint_viewed';
 
 export interface GrowthMetricsV1 {
   version: 1;
@@ -56,5 +66,11 @@ export interface GrowthMetricsV1 {
     share_image_success: number;
     payment_auto_selected: number;
     rules_drawer_opened: number;
+    game_started: number;
+    game_completed: number;
+    rematch_started: number;
+    lan_room_hosted: number;
+    lan_room_joined: number;
+    coach_hint_viewed: number;
   };
 }

@@ -24,8 +24,8 @@ export interface RoomSession {
   playerId: string;
 }
 
-export interface CreateRoomResponse extends RoomSession {}
-export interface JoinRoomResponse extends RoomSession {}
+export type CreateRoomResponse = RoomSession;
+export type JoinRoomResponse = RoomSession;
 
 export interface ApplyRoomActionPayload {
   roomCode: string;

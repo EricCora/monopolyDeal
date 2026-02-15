@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type RefObject } from 'react';
+import { useMemo, useState, type RefObject } from 'react';
 import type { GameState } from '../../engine';
 import type { PostGameSummary } from '../../stats';
 import type { ShareStatus } from '../types';
@@ -49,10 +49,6 @@ export function PostGameScreen({
   const endedLabel = new Date(postGameSummary.endedAt).toLocaleString();
   const timelineEvents = useMemo(() => replayEvents.slice(), [replayEvents]);
   const [timelineIndex, setTimelineIndex] = useState(() => Math.max(0, timelineEvents.length - 1));
-
-  useEffect(() => {
-    setTimelineIndex(Math.max(0, timelineEvents.length - 1));
-  }, [postGameSummary.endedAt, timelineEvents.length]);
 
   const timelineEvent = timelineEvents[timelineIndex] ?? null;
 

@@ -130,6 +130,5 @@ createServer(async (req, res) => {
     writeJson(res, 400, { error: message });
   }
 }).listen(PORT, () => {
-  // eslint-disable-next-line no-console
   console.log(`LAN server listening on http://0.0.0.0:${PORT}`);
 });

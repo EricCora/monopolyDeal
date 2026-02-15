@@ -19,6 +19,7 @@ import {
 import {
   clearLifetimeStats,
   clearMatchHistory,
+  clearGrowthMetrics,
   clearActiveGame,
   deleteSavedGameSlot,
   incrementGrowthMetric,
@@ -27,6 +28,7 @@ import {
   loadDailyChallenge,
   loadSavedGameSlot,
   loadSavedGames,
+  loadGrowthMetrics,
   loadLifetimeStats,
   loadMatchHistory,
   loadUiPreferences,
@@ -41,8 +43,6 @@ import {
   type SavedGameSlotV1,
   type UiPreferencesV1,
 } from './persistence/storage';
-import { applyLanRoomAction, createLanRoom, joinLanRoom, loadLanRoomState, startLanRoom } from './network/lanClient';
-import type { LanRoomView, RoomSession } from './network/types';
 import {
   achievementLabel,
   applyMatchToAchievementState,
@@ -62,6 +62,8 @@ import {
   type AchievementId,
   type AchievementStateV1,
   type DailyChallengeV1,
+  type GrowthMetricEvent,
+  type GrowthMetricsV1,
 } from './stats';
 import type { ActionVariantView } from './ui/components/PlayChooser';
 import { GameShell } from './ui/layout/GameShell';
@@ -76,6 +78,8 @@ import { SetupScreen } from './ui/screens/SetupScreen';
 import { StatsScreen } from './ui/screens/StatsScreen';
 import { LanPlayScreen } from './ui/screens/LanPlayScreen';
 import { generatePostGameSharePng, postGameShareFilename } from './ui/share/postGameShare';
+import { useFeedback } from './app/useFeedback';
+import { useLanRoom } from './app/useLanRoom';
 import type { RiskyActionConfirmation, SetupViewModel, ShareStatus } from './ui/types';
 import './App.css';
 
@@ -200,6 +204,7 @@ function App() {
   const [revealedPlayerId, setRevealedPlayerId] = useState<string | null>(null);
   const [history, setHistory] = useState<MatchRecordV1[]>(() => loadMatchHistory());
   const [lifetime, setLifetime] = useState<LifetimeStatsV1>(() => loadLifetimeStats());
+  const [growthMetrics, setGrowthMetrics] = useState<GrowthMetricsV1>(() => loadGrowthMetrics());
   const [achievementState, setAchievementState] = useState<AchievementStateV1>(() => loadAchievementState());
   const [dailyChallenge, setDailyChallenge] = useState<DailyChallengeV1>(() => ensureTodayDailyChallenge(loadDailyChallenge()));
   const [recentAchievementUnlocks, setRecentAchievementUnlocks] = useState<AchievementId[]>([]);
@@ -216,18 +221,11 @@ function App() {
   const [turnSnapshots, setTurnSnapshots] = useState<GameState[]>([]);
   const [uiPreferences, setUiPreferences] = useState<UiPreferencesV1>(() => loadUiPreferences());
   const [devSeedStatus, setDevSeedStatus] = useState<DevSeedStatus>(null);
-  const [lanServerUrl, setLanServerUrl] = useState('http://localhost:8787');
-  const [lanPlayerName, setLanPlayerName] = useState('Player');
-  const [lanJoinCode, setLanJoinCode] = useState('');
-  const [lanSession, setLanSession] = useState<RoomSession | null>(null);
-  const [lanRoomView, setLanRoomView] = useState<LanRoomView | null>(null);
-  const [lanLoading, setLanLoading] = useState(false);
-  const [lanError, setLanError] = useState<string | null>(null);
   const postGameTitleRef = useRef<HTMLHeadingElement | null>(null);
   const finalizedMatchRef = useRef<string | null>(null);
   const devAutoSeedAttemptedRef = useRef(false);
   const botTurnSignatureRef = useRef<string | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const coachHintMetricRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!game || isGameOver(game).done) return;
@@ -284,6 +282,11 @@ function App() {
     setDevSeedStatus(status);
   }, []);
 
+  const recordGrowthMetric = useCallback((event: GrowthMetricEvent) => {
+    const next = incrementGrowthMetric(event);
+    setGrowthMetrics(next);
+  }, []);
+
   useEffect(() => {
     if (!uiPreferences.devModeEnabled) {
       devAutoSeedAttemptedRef.current = false;
@@ -300,26 +303,28 @@ function App() {
   const isPaused = Boolean(game && uiPreferences.gamePaused && uiPreferences.pausedGameId === currentGameId);
   const reduceCelebrationEffects = uiPreferences.reducedEffects;
   const celebrationEnabled = Boolean(postGameSummary && !prefersReducedMotion && !reduceCelebrationEffects);
-  const emitFeedback = useCallback((tone: 'success' | 'error') => {
-    if (uiPreferences.hapticsEnabled && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate(tone === 'error' ? [18, 25, 18] : 16);
-    }
-    if (!uiPreferences.soundEnabled || typeof window === 'undefined') return;
-    if (typeof window.AudioContext !== 'function') return;
-    if (audioContextRef.current == null) {
-      audioContextRef.current = new window.AudioContext();
-    }
-    const ctx = audioContextRef.current;
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
-    oscillator.type = tone === 'error' ? 'square' : 'triangle';
-    oscillator.frequency.value = tone === 'error' ? 220 : 520;
-    gain.gain.value = 0.05;
-    oscillator.connect(gain);
-    gain.connect(ctx.destination);
-    oscillator.start();
-    oscillator.stop(ctx.currentTime + 0.07);
-  }, [uiPreferences.hapticsEnabled, uiPreferences.soundEnabled]);
+  const { emitFeedback } = useFeedback({
+    soundEnabled: uiPreferences.soundEnabled,
+    hapticsEnabled: uiPreferences.hapticsEnabled,
+  });
+  const {
+    lanServerUrl,
+    setLanServerUrl,
+    lanPlayerName,
+    setLanPlayerName,
+    lanJoinCode,
+    setLanJoinCode,
+    lanSession,
+    lanRoomView,
+    lanLoading,
+    lanError,
+    setLanError,
+    hostLanRoom,
+    joinLanRoomSession,
+    startLanRoomMatch,
+    refreshLanStateInteractive,
+    runLanAction,
+  } = useLanRoom({ enabled: screen === 'lan' });
 
   useEffect(() => {
     if (!game || !prompt) {
@@ -351,6 +356,14 @@ function App() {
     return buildCoachHint(game, prompt.playerId, legalActions, mode);
   }, [game, legalActions, prompt, promptPlayerState?.controller, uiPreferences.experimental.aiCoach, uiPreferences.experimental.aiOpponents]);
   const unlockedAchievements = useMemo(() => getUnlockedAchievementIds(achievementState), [achievementState]);
+
+  useEffect(() => {
+    if (!coachHint || !game || !prompt) return;
+    const signature = `${game.updatedAt}:${prompt.playerId}`;
+    if (coachHintMetricRef.current === signature) return;
+    coachHintMetricRef.current = signature;
+    recordGrowthMetric('coach_hint_viewed');
+  }, [coachHint, game, prompt, recordGrowthMetric]);
 
   const playerNameById = useCallback((playerId: string): string => {
     if (!game) return playerId;
@@ -544,94 +557,19 @@ function App() {
     applyDevFixture('reseeded');
   }, [applyDevFixture]);
 
-  const refreshLanState = useCallback(async () => {
-    if (!lanSession) return;
-    const next = await loadLanRoomState(lanServerUrl, lanSession);
-    setLanRoomView(next);
-  }, [lanServerUrl, lanSession]);
-
-  const refreshLanStateInteractive = useCallback(async () => {
-    setLanLoading(true);
-    setLanError(null);
-    try {
-      await refreshLanState();
-    } catch (refreshError) {
-      setLanError(refreshError instanceof Error ? refreshError.message : 'Could not refresh room state.');
-    } finally {
-      setLanLoading(false);
+  const onHostLanRoom = useCallback(async () => {
+    const hosted = await hostLanRoom();
+    if (hosted) {
+      recordGrowthMetric('lan_room_hosted');
     }
-  }, [refreshLanState]);
+  }, [hostLanRoom, recordGrowthMetric]);
 
-  const hostLanRoom = useCallback(async () => {
-    setLanLoading(true);
-    setLanError(null);
-    try {
-      const session = await createLanRoom(lanServerUrl, lanPlayerName);
-      setLanSession(session);
-      setLanJoinCode(session.roomCode);
-      const next = await loadLanRoomState(lanServerUrl, session);
-      setLanRoomView(next);
-    } catch (hostError) {
-      setLanError(hostError instanceof Error ? hostError.message : 'Could not host room.');
-    } finally {
-      setLanLoading(false);
+  const onJoinLanRoom = useCallback(async () => {
+    const joined = await joinLanRoomSession();
+    if (joined) {
+      recordGrowthMetric('lan_room_joined');
     }
-  }, [lanPlayerName, lanServerUrl]);
-
-  const joinLanRoomSession = useCallback(async () => {
-    setLanLoading(true);
-    setLanError(null);
-    try {
-      const session = await joinLanRoom(lanServerUrl, lanJoinCode, lanPlayerName);
-      setLanSession(session);
-      const next = await loadLanRoomState(lanServerUrl, session);
-      setLanRoomView(next);
-    } catch (joinError) {
-      setLanError(joinError instanceof Error ? joinError.message : 'Could not join room.');
-    } finally {
-      setLanLoading(false);
-    }
-  }, [lanJoinCode, lanPlayerName, lanServerUrl]);
-
-  const startLanRoomMatch = useCallback(async () => {
-    if (!lanSession) return;
-    setLanLoading(true);
-    setLanError(null);
-    try {
-      await startLanRoom(lanServerUrl, lanSession.roomCode);
-      await refreshLanState();
-    } catch (startError) {
-      setLanError(startError instanceof Error ? startError.message : 'Could not start room.');
-    } finally {
-      setLanLoading(false);
-    }
-  }, [lanServerUrl, lanSession, refreshLanState]);
-
-  const runLanAction = useCallback(async (index: number) => {
-    if (!lanSession || !lanRoomView) return;
-    const selected = lanRoomView.legalActions[index];
-    if (!selected) return;
-    setLanLoading(true);
-    setLanError(null);
-    try {
-      await applyLanRoomAction(lanServerUrl, lanSession.roomCode, lanSession.playerId, selected.action);
-      await refreshLanState();
-    } catch (actionError) {
-      setLanError(actionError instanceof Error ? actionError.message : 'Could not apply room action.');
-    } finally {
-      setLanLoading(false);
-    }
-  }, [lanRoomView, lanServerUrl, lanSession, refreshLanState]);
-
-  useEffect(() => {
-    if (screen !== 'lan' || !lanSession) return;
-    const timer = window.setInterval(() => {
-      refreshLanState().catch(() => {
-        // Best-effort polling; manual refresh remains available in UI.
-      });
-    }, 2_000);
-    return () => window.clearInterval(timer);
-  }, [lanSession, refreshLanState, screen]);
+  }, [joinLanRoomSession, recordGrowthMetric]);
 
   const openGame = useCallback((nextGame: GameState) => {
     finalizedMatchRef.current = null;
@@ -654,7 +592,8 @@ function App() {
     setUiPreferences((prev) => ({ ...prev, gamePaused: false, pausedGameId: null }));
     setRecentAchievementUnlocks([]);
     openGame(nextGame);
-  }, [openGame]);
+    recordGrowthMetric('game_started');
+  }, [openGame, recordGrowthMetric]);
 
   const startNewGame = () => {
     const players: PlayerConfig[] = setup.playerNames.slice(0, setup.playerCount).map((name, index) => ({
@@ -818,7 +757,8 @@ function App() {
     setTurnSnapshots([]);
     setScreen('game_over');
     clearActiveGame();
-  }, []);
+    recordGrowthMetric('game_completed');
+  }, [recordGrowthMetric]);
 
   const runAction = useCallback((action: Action) => {
     if (!game || isPaused) return;
@@ -998,7 +938,7 @@ function App() {
     if (!game || !pendingPayment) return;
     const suggested = getSuggestedPaymentCards(game, pendingPayment.targetPlayerId, pendingPayment.amount);
     setSelectedPaymentCards(suggested);
-    incrementGrowthMetric('payment_auto_selected');
+    recordGrowthMetric('payment_auto_selected');
   };
 
   const clearStatsData = () => {
@@ -1008,8 +948,10 @@ function App() {
     }
     clearMatchHistory();
     clearLifetimeStats();
+    clearGrowthMetrics();
     setHistory([]);
     setLifetime({ version: 1, players: {} });
+    setGrowthMetrics(loadGrowthMetrics());
     const resetAchievements = defaultAchievementState();
     saveAchievementState(resetAchievements);
     setAchievementState(resetAchievements);
@@ -1081,7 +1023,7 @@ function App() {
     setLanError(null);
     setRecentAchievementUnlocks([]);
     setRiskyActionConfirmation(null);
-  }, []);
+  }, [setLanError]);
 
   const startRematch = useCallback(() => {
     if (!game) return;
@@ -1102,7 +1044,8 @@ function App() {
     );
     setIsSharing(false);
     setShareStatus(null);
-  }, [game, startGameWithPlayers, syncSetupPlayerNames, uiPreferences.experimental.customRules]);
+    recordGrowthMetric('rematch_started');
+  }, [game, recordGrowthMetric, startGameWithPlayers, syncSetupPlayerNames, uiPreferences.experimental.customRules]);
 
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -1128,19 +1071,19 @@ function App() {
 
   const sharePostGameImage = async () => {
     if (!postGameSummary || isSharing) return;
-    incrementGrowthMetric('share_image_clicked');
+    recordGrowthMetric('share_image_clicked');
     setIsSharing(true);
     setShareStatus(null);
     try {
       const blob = await generatePostGameSharePng(postGameSummary);
       const copied = await copyImageToClipboard(blob).catch(() => false);
       if (copied) {
-        incrementGrowthMetric('share_image_success');
+        recordGrowthMetric('share_image_success');
         setShareStatus({ tone: 'success', message: 'Brag image copied to your clipboard.' });
         return;
       }
       downloadBlob(blob, postGameShareFilename(postGameSummary));
-      incrementGrowthMetric('share_image_success');
+      recordGrowthMetric('share_image_success');
       setShareStatus({ tone: 'success', message: 'Brag image downloaded. Share it in your group chat.' });
     } catch {
       setShareStatus({ tone: 'error', message: 'Could not generate the share image. Please try again.' });
@@ -1249,7 +1192,7 @@ function App() {
           onPauseToggle={togglePause}
           onOpenRules={() => {
             setShowRulesDrawer(true);
-            incrementGrowthMetric('rules_drawer_opened');
+            recordGrowthMetric('rules_drawer_opened');
           }}
           onOpenSavedGames={() => openSavedGames('game')}
           onOpenSettings={() => openSettings('game')}
@@ -1289,8 +1232,8 @@ function App() {
           onServerUrlChange={setLanServerUrl}
           onPlayerNameChange={setLanPlayerName}
           onJoinCodeChange={setLanJoinCode}
-          onHostRoom={hostLanRoom}
-          onJoinRoom={joinLanRoomSession}
+          onHostRoom={onHostLanRoom}
+          onJoinRoom={onJoinLanRoom}
           onStartRoom={startLanRoomMatch}
           onRefresh={refreshLanStateInteractive}
           onRunAction={runLanAction}
@@ -1298,7 +1241,14 @@ function App() {
         />
       ) : null}
 
-      {screen === 'stats' ? <StatsScreen history={history} lifetime={lifetime} onBack={() => setScreen('home')} /> : null}
+      {screen === 'stats' ? (
+        <StatsScreen
+          history={history}
+          lifetime={lifetime}
+          growthMetrics={growthMetrics}
+          onBack={() => setScreen('home')}
+        />
+      ) : null}
 
       {screen === 'saved_games' ? (
         <SavedGamesScreen
@@ -1344,6 +1294,7 @@ function App() {
 
       {screen === 'game_over' && postGameSummary ? (
         <PostGameScreen
+          key={postGameSummary.endedAt}
           postGameSummary={postGameSummary}
           game={game}
           celebrationEnabled={celebrationEnabled}

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import type { LifetimeStatsV1, MatchRecordV1 } from '../../stats';
+import type { GrowthMetricsV1, LifetimeStatsV1, MatchRecordV1 } from '../../stats';
 
 const StatsDashboard = lazy(() =>
   import('../components/StatsDashboard').then((module) => ({ default: module.StatsDashboard })),
@@ -8,10 +8,11 @@ const StatsDashboard = lazy(() =>
 interface StatsScreenProps {
   history: MatchRecordV1[];
   lifetime: LifetimeStatsV1;
+  growthMetrics: GrowthMetricsV1;
   onBack: () => void;
 }
 
-export function StatsScreen({ history, lifetime, onBack }: StatsScreenProps) {
+export function StatsScreen({ history, lifetime, growthMetrics, onBack }: StatsScreenProps) {
   return (
     <Suspense
       fallback={
@@ -21,7 +22,7 @@ export function StatsScreen({ history, lifetime, onBack }: StatsScreenProps) {
         </section>
       }
     >
-      <StatsDashboard history={history} lifetime={lifetime} onBack={onBack} />
+      <StatsDashboard history={history} lifetime={lifetime} growthMetrics={growthMetrics} onBack={onBack} />
     </Suspense>
   );
 }

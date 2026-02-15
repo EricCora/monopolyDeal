@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  clearGrowthMetrics,
   clearLifetimeStats,
   clearMatchHistory,
   deleteSavedGameSlot,
@@ -32,6 +33,12 @@ describe('growth metrics storage', () => {
         share_image_success: 0,
         payment_auto_selected: 0,
         rules_drawer_opened: 0,
+        game_started: 0,
+        game_completed: 0,
+        rematch_started: 0,
+        lan_room_hosted: 0,
+        lan_room_joined: 0,
+        coach_hint_viewed: 0,
       },
     });
 
@@ -43,6 +50,12 @@ describe('growth metrics storage', () => {
         share_image_success: 0,
         payment_auto_selected: 0,
         rules_drawer_opened: 0,
+        game_started: 0,
+        game_completed: 0,
+        rematch_started: 0,
+        lan_room_hosted: 0,
+        lan_room_joined: 0,
+        coach_hint_viewed: 0,
       },
     });
   });
@@ -55,6 +68,12 @@ describe('growth metrics storage', () => {
         share_image_success: 1,
         payment_auto_selected: 0,
         rules_drawer_opened: 0,
+        game_started: 0,
+        game_completed: 0,
+        rematch_started: 0,
+        lan_room_hosted: 0,
+        lan_room_joined: 0,
+        coach_hint_viewed: 0,
       },
     });
 
@@ -74,6 +93,12 @@ describe('growth metrics storage', () => {
           share_image_success: null,
           payment_auto_selected: undefined,
           rules_drawer_opened: 'x',
+          game_started: null,
+          game_completed: 'bad',
+          rematch_started: undefined,
+          lan_room_hosted: {},
+          lan_room_joined: [],
+          coach_hint_viewed: 'oops',
         },
       }),
     );
@@ -226,12 +251,15 @@ describe('ui preferences storage', () => {
   it('clears match history and lifetime stats keys', () => {
     localStorage.setItem('monopolyDeal.matchHistory.v1', JSON.stringify([{ id: 'm1' }]));
     localStorage.setItem('monopolyDeal.lifetimeStats.v1', JSON.stringify({ version: 1, players: { A: { wins: 1 } } }));
+    localStorage.setItem('monopolyDeal.growthMetrics.v1', JSON.stringify({ version: 1, events: { share_image_clicked: 1 } }));
 
     clearMatchHistory();
     clearLifetimeStats();
+    clearGrowthMetrics();
 
     expect(localStorage.getItem('monopolyDeal.matchHistory.v1')).toBeNull();
     expect(localStorage.getItem('monopolyDeal.lifetimeStats.v1')).toBeNull();
+    expect(localStorage.getItem('monopolyDeal.growthMetrics.v1')).toBeNull();
   });
 });
 

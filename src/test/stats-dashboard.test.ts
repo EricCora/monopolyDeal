@@ -63,4 +63,30 @@ describe('stats dashboard helpers', () => {
     expect(model.kpis.totalMatches).toBe(model.matchRows.length);
     expect(model.matchTrends).toHaveLength(model.matchRows.length);
   });
+
+  it('derives growth telemetry kpis and event series when metrics are provided', () => {
+    const fixture = createStatsFixture('medium');
+    const metrics = {
+      version: 1 as const,
+      events: {
+        share_image_clicked: 4,
+        share_image_success: 3,
+        payment_auto_selected: 6,
+        rules_drawer_opened: 8,
+        game_started: 10,
+        game_completed: 7,
+        rematch_started: 2,
+        lan_room_hosted: 1,
+        lan_room_joined: 2,
+        coach_hint_viewed: 5,
+      },
+    };
+    const model = buildStatsDashboardModel(fixture.history, fixture.lifetime, undefined, metrics);
+
+    expect(model.growthKpis.gameStarts).toBe(10);
+    expect(model.growthKpis.gameCompletions).toBe(7);
+    expect(model.growthKpis.completionRate).toBeCloseTo(0.7);
+    expect(model.growthKpis.shareConversionRate).toBeCloseTo(0.75);
+    expect(model.growthEvents.find((event) => event.event === 'Coach hints viewed')?.count).toBe(5);
+  });
 });
