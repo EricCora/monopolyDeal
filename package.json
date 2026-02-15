@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:all": "concurrently --kill-others --names \"ui,server\" \"npm run dev\" \"npm run dev:multiplayer-server\"",
+    "dev:all": "concurrently --kill-others --names \"ui,server\" \"npm run dev -- --open\" \"npm run dev:multiplayer-server\"",
     "dev:multiplayer-server": "node --import tsx/esm apps/server/src/index.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
