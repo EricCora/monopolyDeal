@@ -35,7 +35,7 @@ This file tracks execution progress of `docs/deep-research-improvement-plan.md` 
 - `006cc50` feat(accessibility+rules): extend custom-rules coverage and polish assistive UX
 - `8b9a357` refactor(engine): extract core helpers and broaden pending-flow regression coverage
 - `ebad365` feat(app+analytics): add orchestration hooks and growth telemetry insights
-- `<pending>` feat(multiplayer): ship one-click hosted multiplayer UX with reconnect and host migration handling
+- `2230360` feat(multiplayer): ship one-click hosted room flow with reconnect and host migration
 
 ## Notes
 - This tracker is intentionally append-only for auditability during rapid iteration.
