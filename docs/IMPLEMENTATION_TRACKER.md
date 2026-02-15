@@ -16,7 +16,7 @@ This file tracks execution progress of `docs/deep-research-improvement-plan.md` 
 - [ ] Refactor engine internals into clearer helpers
 - [ ] Refactor App orchestration boundaries
 - [x] Add contextual action previews and richer event grouping
-- [ ] Improve accessibility (keyboard + SR announcements + contrast)
+- [x] Improve accessibility (keyboard + SR announcements + contrast)
 - [x] Add game-feel improvements (motion/sound/haptics controls)
 - [x] Add bot-capable setup model and auto-turn bot execution
 - [x] Add heuristic AI + rollout AI + explainable AI coach panel
@@ -30,6 +30,7 @@ This file tracks execution progress of `docs/deep-research-improvement-plan.md` 
 - `fe1702c` docs: add deep research improvement plan for implementation tracking
 - `d08e212` feat(settings): add experimental feature flags and accessibility toggles
 - `fa4dcac` feat(ai): add bot setup, coach hints, and replay timeline surfaces
+- `552a054` feat(core): add retention systems, custom ruleset plumbing, and LAN multiplayer scaffold
 
 ## Notes
 - This tracker is intentionally append-only for auditability during rapid iteration.

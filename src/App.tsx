@@ -421,6 +421,25 @@ function App() {
     if (!activePlayer) return 0;
     return Math.max(activePlayer.hand.length - 7, 0);
   }, [game, prompt]);
+
+  useEffect(() => {
+    if (screen !== 'game') return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'select' || tag === 'textarea' || target?.isContentEditable) return;
+      if (event.key.toLowerCase() === 'r' && shouldShowShield && prompt && !isPaused) {
+        event.preventDefault();
+        setRevealedPlayerId(prompt.playerId);
+      }
+      if (event.key.toLowerCase() === 'k' && !isPaused) {
+        event.preventDefault();
+        setShowRulesDrawer((prev) => !prev);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isPaused, prompt, screen, shouldShowShield]);
   const turnStatusText = useMemo(() => {
     if (!prompt) return '';
     if (prompt.kind === 'discard') {
@@ -1132,6 +1151,12 @@ function App() {
 
   return (
     <GameShell screenClassName={`screen-${screen}`} textScale={uiPreferences.textScale} highContrast={uiPreferences.highContrast}>
+      {screen === 'game' && prompt ? (
+        <p className="sr-only" aria-live="polite" aria-atomic="true">
+          Turn update. Active player {prompt.playerId}. Prompt type {prompt.kind}.
+        </p>
+      ) : null}
+
       {screen === 'home' ? (
         <HomeScreen
           error={error}

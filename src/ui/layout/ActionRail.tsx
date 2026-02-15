@@ -46,7 +46,7 @@ export function ActionRail({
           <strong>3.</strong> End turn{discardOverLimitCount > 0 ? ` (discard ${discardOverLimitCount})` : ''}
         </li>
       </ol>
-      <p className={`turn-status ${isMandatoryPrompt ? 'is-required' : ''}`}>
+      <p className={`turn-status ${isMandatoryPrompt ? 'is-required' : ''}`} aria-live="polite" aria-atomic="true">
         {isPaused ? 'Game is paused. Resume from the top bar to continue.' : turnStatusText}
       </p>
       {showRulesHints ? (

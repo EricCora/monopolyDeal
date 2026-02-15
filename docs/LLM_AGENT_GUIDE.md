@@ -13,6 +13,13 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - `localStorage` read/write wrappers for active game, manual saved slots, stats, and UI preferences.
 - `src/stats/`
   - Match record creation, lifetime aggregation, and dev fixture data.
+  - Retention helpers (`src/stats/retention.ts`) for achievements and daily challenge progression.
+- `src/ai/`
+  - Heuristic and rollout decision helpers plus explainable coach hint generation.
+- `src/network/`
+  - LAN client API wrappers for room create/join/start/state/action flows.
+- `apps/server/`
+  - Local LAN authoritative server scaffold with room lifecycle and best-effort snapshot persistence.
 - `src/ui/` + `src/App.tsx`
   - `App.tsx` owns state/actions and passes typed props to screen containers.
   - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition.
@@ -173,4 +180,7 @@ Validation:
 - Match aggregation: `src/stats/records.ts`
 - Dev fixture data: `src/stats/devFixture.ts`
 - Main app orchestration: `src/App.tsx`
+- AI decision helpers: `src/ai/heuristic.ts`, `src/ai/rollout.ts`, `src/ai/explain.ts`
+- LAN screen + client: `src/ui/screens/LanPlayScreen.tsx`, `src/network/lanClient.ts`
+- LAN server entry: `apps/server/src/index.ts`
 - Tests: `src/test/engine.test.ts`, `src/test/app.test.tsx`, `src/test/card-ui.test.tsx`

@@ -26,6 +26,7 @@ This project focuses on local, pass-and-play gameplay with a rules engine, persi
 - In-game rules reference drawer with property set/rent lookup and pending-flow help
 - Stats filters (player/winner/date range) and settings data controls for clearing local stats/history
 - Manual saved-game slots (up to 5) with load/save-over/rename/delete controls
+- Experimental feature flags for AI opponents, AI coach hints, replay timeline, daily challenges, achievements, LAN multiplayer beta, and custom rules
 - Auto-save + resume via `localStorage`
 
 ## Tech Stack
@@ -77,6 +78,7 @@ Use the `Settings` screen from Home (or the in-game top bar) to control:
 - Rules hint visibility on/off
 - Dev Mode toggle and sample data reseed tools
 - Local data controls (clear match history + lifetime stats)
+- Experimental features toggle section (AI/replay/challenges/achievements/LAN/custom rules)
 
 ## Saved Games
 
@@ -122,7 +124,16 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 ## Current Scope
 
 - Local multiplayer only (single device, pass-and-play)
-- No backend, login, or online matchmaking
+- Optional LAN beta scaffold (run local server + room code flow)
+
+## LAN Beta (Experimental)
+
+1. Start app UI: `npm run dev`
+2. Start LAN server: `npm run dev --prefix apps/server`
+3. In Settings, enable `Experimental Features -> LAN Multiplayer`.
+4. On Home, open `LAN Multiplayer (Beta)` and host/join with room code.
+
+Note: LAN mode is currently a beta scaffold intended for same-network testing and iterative hardening.
 
 ## License
 
