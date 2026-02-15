@@ -10,6 +10,7 @@ import {
   isGameOver,
   type Action,
   type BotDifficulty,
+  type GameConfig,
   type GameState,
   type LegalAction,
   type PlayerConfig,
@@ -22,6 +23,8 @@ import {
   deleteSavedGameSlot,
   incrementGrowthMetric,
   loadActiveGame,
+  loadAchievementState,
+  loadDailyChallenge,
   loadSavedGameSlot,
   loadSavedGames,
   loadLifetimeStats,
@@ -32,18 +35,33 @@ import {
   upsertSavedGameSlot,
   saveLifetimeStats,
   saveMatchHistory,
+  saveAchievementState,
+  saveDailyChallenge,
   saveUiPreferences,
   type SavedGameSlotV1,
   type UiPreferencesV1,
 } from './persistence/storage';
+import { applyLanRoomAction, createLanRoom, joinLanRoom, loadLanRoomState, startLanRoom } from './network/lanClient';
+import type { LanRoomView, RoomSession } from './network/types';
 import {
+  achievementLabel,
+  applyMatchToAchievementState,
+  applyMatchToDailyChallenge,
   applyMatchToLifetime,
   buildMatchRecord,
   createDevStatsFixture,
+  defaultAchievementState,
+  defaultDailyChallenge,
+  ensureTodayDailyChallenge,
+  getNewAchievementUnlocks,
+  getUnlockedAchievementIds,
   buildPostGameSummary,
   type LifetimeStatsV1,
   type MatchRecordV1,
   type PostGameSummary,
+  type AchievementId,
+  type AchievementStateV1,
+  type DailyChallengeV1,
 } from './stats';
 import type { ActionVariantView } from './ui/components/PlayChooser';
 import { GameShell } from './ui/layout/GameShell';
@@ -56,14 +74,20 @@ import { SavedGamesScreen } from './ui/screens/SavedGamesScreen';
 import { SettingsScreen } from './ui/screens/SettingsScreen';
 import { SetupScreen } from './ui/screens/SetupScreen';
 import { StatsScreen } from './ui/screens/StatsScreen';
+import { LanPlayScreen } from './ui/screens/LanPlayScreen';
 import { generatePostGameSharePng, postGameShareFilename } from './ui/share/postGameShare';
 import type { RiskyActionConfirmation, SetupViewModel, ShareStatus } from './ui/types';
 import './App.css';
 
-type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over';
+type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over' | 'lan';
 type SettingsBackScreen = 'home' | 'game';
 type SavedGamesBackScreen = 'home' | 'game';
 type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
+const DEFAULT_SETUP_RULES = {
+  winCompleteSets: 3,
+  maxHandAtEndTurn: 7,
+  maxPlaysPerTurn: 3,
+} as const;
 
 interface CardActionVariant extends ActionVariantView {
   action: Action;
@@ -86,6 +110,11 @@ function initialSetup(): SetupViewModel {
     playerNames: ['Player 1', 'Player 2', 'Player 3', 'Player 4'],
     playerControllers: ['human', 'human', 'human', 'human'],
     botDifficulties: ['easy', 'easy', 'easy', 'easy'],
+    customRules: {
+      winCompleteSets: DEFAULT_SETUP_RULES.winCompleteSets,
+      maxHandAtEndTurn: DEFAULT_SETUP_RULES.maxHandAtEndTurn,
+      maxPlaysPerTurn: DEFAULT_SETUP_RULES.maxPlaysPerTurn,
+    },
   };
 }
 
@@ -153,6 +182,13 @@ function autoSlotName(game: GameState): string {
   return `${trimmed} - Turn ${game.turnCount}`;
 }
 
+function sanitizeRuleset(input: SetupViewModel['customRules']): SetupViewModel['customRules'] {
+  const winCompleteSets = Number.isFinite(input.winCompleteSets) ? Math.min(5, Math.max(2, Math.round(input.winCompleteSets))) : DEFAULT_SETUP_RULES.winCompleteSets;
+  const maxHandAtEndTurn = Number.isFinite(input.maxHandAtEndTurn) ? Math.min(12, Math.max(4, Math.round(input.maxHandAtEndTurn))) : DEFAULT_SETUP_RULES.maxHandAtEndTurn;
+  const maxPlaysPerTurn = Number.isFinite(input.maxPlaysPerTurn) ? Math.min(6, Math.max(1, Math.round(input.maxPlaysPerTurn))) : DEFAULT_SETUP_RULES.maxPlaysPerTurn;
+  return { winCompleteSets, maxHandAtEndTurn, maxPlaysPerTurn };
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [settingsBackScreen, setSettingsBackScreen] = useState<SettingsBackScreen>('home');
@@ -164,6 +200,9 @@ function App() {
   const [revealedPlayerId, setRevealedPlayerId] = useState<string | null>(null);
   const [history, setHistory] = useState<MatchRecordV1[]>(() => loadMatchHistory());
   const [lifetime, setLifetime] = useState<LifetimeStatsV1>(() => loadLifetimeStats());
+  const [achievementState, setAchievementState] = useState<AchievementStateV1>(() => loadAchievementState());
+  const [dailyChallenge, setDailyChallenge] = useState<DailyChallengeV1>(() => ensureTodayDailyChallenge(loadDailyChallenge()));
+  const [recentAchievementUnlocks, setRecentAchievementUnlocks] = useState<AchievementId[]>([]);
   const [savedSlots, setSavedSlots] = useState<SavedGameSlotV1[]>(() => loadSavedGames().slots);
   const [chooser, setChooser] = useState<PlayChooserState | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -177,6 +216,13 @@ function App() {
   const [turnSnapshots, setTurnSnapshots] = useState<GameState[]>([]);
   const [uiPreferences, setUiPreferences] = useState<UiPreferencesV1>(() => loadUiPreferences());
   const [devSeedStatus, setDevSeedStatus] = useState<DevSeedStatus>(null);
+  const [lanServerUrl, setLanServerUrl] = useState('http://localhost:8787');
+  const [lanPlayerName, setLanPlayerName] = useState('Player');
+  const [lanJoinCode, setLanJoinCode] = useState('');
+  const [lanSession, setLanSession] = useState<RoomSession | null>(null);
+  const [lanRoomView, setLanRoomView] = useState<LanRoomView | null>(null);
+  const [lanLoading, setLanLoading] = useState(false);
+  const [lanError, setLanError] = useState<string | null>(null);
   const postGameTitleRef = useRef<HTMLHeadingElement | null>(null);
   const finalizedMatchRef = useRef<string | null>(null);
   const devAutoSeedAttemptedRef = useRef(false);
@@ -194,6 +240,13 @@ function App() {
   useEffect(() => {
     saveUiPreferences(uiPreferences);
   }, [uiPreferences]);
+
+  useEffect(() => {
+    const next = ensureTodayDailyChallenge(dailyChallenge);
+    if (next.day === dailyChallenge.day) return;
+    setDailyChallenge(next);
+    saveDailyChallenge(next);
+  }, [dailyChallenge]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -297,6 +350,7 @@ function App() {
     const mode = uiPreferences.experimental.aiOpponents ? 'hard' : 'easy';
     return buildCoachHint(game, prompt.playerId, legalActions, mode);
   }, [game, legalActions, prompt, promptPlayerState?.controller, uiPreferences.experimental.aiCoach, uiPreferences.experimental.aiOpponents]);
+  const unlockedAchievements = useMemo(() => getUnlockedAchievementIds(achievementState), [achievementState]);
 
   const playerNameById = useCallback((playerId: string): string => {
     if (!game) return playerId;
@@ -471,6 +525,95 @@ function App() {
     applyDevFixture('reseeded');
   }, [applyDevFixture]);
 
+  const refreshLanState = useCallback(async () => {
+    if (!lanSession) return;
+    const next = await loadLanRoomState(lanServerUrl, lanSession);
+    setLanRoomView(next);
+  }, [lanServerUrl, lanSession]);
+
+  const refreshLanStateInteractive = useCallback(async () => {
+    setLanLoading(true);
+    setLanError(null);
+    try {
+      await refreshLanState();
+    } catch (refreshError) {
+      setLanError(refreshError instanceof Error ? refreshError.message : 'Could not refresh room state.');
+    } finally {
+      setLanLoading(false);
+    }
+  }, [refreshLanState]);
+
+  const hostLanRoom = useCallback(async () => {
+    setLanLoading(true);
+    setLanError(null);
+    try {
+      const session = await createLanRoom(lanServerUrl, lanPlayerName);
+      setLanSession(session);
+      setLanJoinCode(session.roomCode);
+      const next = await loadLanRoomState(lanServerUrl, session);
+      setLanRoomView(next);
+    } catch (hostError) {
+      setLanError(hostError instanceof Error ? hostError.message : 'Could not host room.');
+    } finally {
+      setLanLoading(false);
+    }
+  }, [lanPlayerName, lanServerUrl]);
+
+  const joinLanRoomSession = useCallback(async () => {
+    setLanLoading(true);
+    setLanError(null);
+    try {
+      const session = await joinLanRoom(lanServerUrl, lanJoinCode, lanPlayerName);
+      setLanSession(session);
+      const next = await loadLanRoomState(lanServerUrl, session);
+      setLanRoomView(next);
+    } catch (joinError) {
+      setLanError(joinError instanceof Error ? joinError.message : 'Could not join room.');
+    } finally {
+      setLanLoading(false);
+    }
+  }, [lanJoinCode, lanPlayerName, lanServerUrl]);
+
+  const startLanRoomMatch = useCallback(async () => {
+    if (!lanSession) return;
+    setLanLoading(true);
+    setLanError(null);
+    try {
+      await startLanRoom(lanServerUrl, lanSession.roomCode);
+      await refreshLanState();
+    } catch (startError) {
+      setLanError(startError instanceof Error ? startError.message : 'Could not start room.');
+    } finally {
+      setLanLoading(false);
+    }
+  }, [lanServerUrl, lanSession, refreshLanState]);
+
+  const runLanAction = useCallback(async (index: number) => {
+    if (!lanSession || !lanRoomView) return;
+    const selected = lanRoomView.legalActions[index];
+    if (!selected) return;
+    setLanLoading(true);
+    setLanError(null);
+    try {
+      await applyLanRoomAction(lanServerUrl, lanSession.roomCode, lanSession.playerId, selected.action);
+      await refreshLanState();
+    } catch (actionError) {
+      setLanError(actionError instanceof Error ? actionError.message : 'Could not apply room action.');
+    } finally {
+      setLanLoading(false);
+    }
+  }, [lanRoomView, lanServerUrl, lanSession, refreshLanState]);
+
+  useEffect(() => {
+    if (screen !== 'lan' || !lanSession) return;
+    const timer = window.setInterval(() => {
+      refreshLanState().catch(() => {
+        // Best-effort polling; manual refresh remains available in UI.
+      });
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [lanSession, refreshLanState, screen]);
+
   const openGame = useCallback((nextGame: GameState) => {
     finalizedMatchRef.current = null;
     setGame(nextGame);
@@ -484,9 +627,13 @@ function App() {
     setTurnSnapshots([]);
   }, []);
 
-  const startGameWithPlayers = useCallback((players: PlayerConfig[]) => {
-    const nextGame = createGame({ players, deckVersion: 'v1' });
+  const startGameWithPlayers = useCallback((players: PlayerConfig[], options?: { seed?: number; ruleset?: GameConfig['ruleset'] }) => {
+    const config: GameConfig = { players, deckVersion: 'v1' };
+    if (typeof options?.seed === 'number') config.seed = options.seed;
+    if (options?.ruleset) config.ruleset = options.ruleset;
+    const nextGame = createGame(config);
     setUiPreferences((prev) => ({ ...prev, gamePaused: false, pausedGameId: null }));
+    setRecentAchievementUnlocks([]);
     openGame(nextGame);
   }, [openGame]);
 
@@ -497,8 +644,39 @@ function App() {
       controller: setup.playerControllers[index] ?? 'human',
       botDifficulty: setup.botDifficulties[index] ?? 'easy',
     }));
-    startGameWithPlayers(players);
+    startGameWithPlayers(players, {
+      ruleset: uiPreferences.experimental.customRules ? sanitizeRuleset(setup.customRules) : undefined,
+    });
   };
+
+  const startDailyChallengeMatch = useCallback(() => {
+    const players: PlayerConfig[] = [
+      {
+        id: 'p1',
+        name: setup.playerNames[0]?.trim() || 'Player 1',
+        controller: setup.playerControllers[0] ?? 'human',
+        botDifficulty: setup.botDifficulties[0] ?? 'easy',
+      },
+      {
+        id: 'p2',
+        name: setup.playerNames[1]?.trim() || 'Player 2',
+        controller: setup.playerControllers[1] ?? 'human',
+        botDifficulty: setup.botDifficulties[1] ?? 'easy',
+      },
+    ];
+    startGameWithPlayers(players, {
+      seed: dailyChallenge.seed,
+      ruleset: uiPreferences.experimental.customRules ? sanitizeRuleset(setup.customRules) : undefined,
+    });
+  }, [
+    dailyChallenge.seed,
+    setup.botDifficulties,
+    setup.customRules,
+    setup.playerControllers,
+    setup.playerNames,
+    startGameWithPlayers,
+    uiPreferences.experimental.customRules,
+  ]);
 
   const resumeGame = () => {
     const saved = loadActiveGame();
@@ -604,6 +782,15 @@ function App() {
     const nextLifetime = applyMatchToLifetime(loadLifetimeStats(), matchRecord);
     saveLifetimeStats(nextLifetime);
     setLifetime(nextLifetime);
+    const previousAchievementState = loadAchievementState();
+    const nextAchievementState = applyMatchToAchievementState(previousAchievementState, matchRecord);
+    saveAchievementState(nextAchievementState);
+    setAchievementState(nextAchievementState);
+    setRecentAchievementUnlocks(getNewAchievementUnlocks(previousAchievementState, nextAchievementState));
+    const challengeForToday = ensureTodayDailyChallenge(loadDailyChallenge());
+    const nextChallenge = applyMatchToDailyChallenge(challengeForToday, matchRecord);
+    saveDailyChallenge(nextChallenge);
+    setDailyChallenge(nextChallenge);
     setPostGameSummary(buildPostGameSummary(nextState, nextLifetime));
     setRevealedPlayerId(null);
     setChooser(null);
@@ -804,6 +991,13 @@ function App() {
     clearLifetimeStats();
     setHistory([]);
     setLifetime({ version: 1, players: {} });
+    const resetAchievements = defaultAchievementState();
+    saveAchievementState(resetAchievements);
+    setAchievementState(resetAchievements);
+    setRecentAchievementUnlocks([]);
+    const resetChallenge = defaultDailyChallenge();
+    saveDailyChallenge(resetChallenge);
+    setDailyChallenge(resetChallenge);
     setError(null);
   };
 
@@ -816,7 +1010,8 @@ function App() {
     return item.previewText ?? financialDetail;
   };
 
-  const syncSetupPlayerNames = useCallback((names: string[], controllers?: PlayerController[], difficulties?: BotDifficulty[]) => {
+  const syncSetupPlayerNames = useCallback(
+    (names: string[], controllers?: PlayerController[], difficulties?: BotDifficulty[], customRules?: GameConfig['ruleset']) => {
     setSetup((prev) => {
       const nextNames = [...prev.playerNames];
       const nextControllers = [...prev.playerControllers];
@@ -838,9 +1033,16 @@ function App() {
         playerNames: nextNames,
         playerControllers: nextControllers,
         botDifficulties: nextDifficulties,
+        customRules: customRules ? sanitizeRuleset({
+          winCompleteSets: customRules.winCompleteSets ?? prev.customRules.winCompleteSets,
+          maxHandAtEndTurn: customRules.maxHandAtEndTurn ?? prev.customRules.maxHandAtEndTurn,
+          maxPlaysPerTurn: customRules.maxPlaysPerTurn ?? prev.customRules.maxPlaysPerTurn,
+        }) : prev.customRules,
       };
     });
-  }, []);
+    },
+    [],
+  );
 
   const goHome = useCallback(() => {
     clearActiveGame();
@@ -857,6 +1059,8 @@ function App() {
     setShowRulesDrawer(false);
     setIsSharing(false);
     setShareStatus(null);
+    setLanError(null);
+    setRecentAchievementUnlocks([]);
     setRiskyActionConfirmation(null);
   }, []);
 
@@ -865,7 +1069,7 @@ function App() {
     const playerNames = game.players.map((player) => player.name);
     const playerControllers = game.players.map((player) => player.controller ?? 'human');
     const botDifficulties = game.players.map((player) => player.botDifficulty ?? 'easy');
-    syncSetupPlayerNames(playerNames, playerControllers, botDifficulties);
+    syncSetupPlayerNames(playerNames, playerControllers, botDifficulties, game.ruleset);
     startGameWithPlayers(
       game.players.map((player, index) => ({
         id: `p${index + 1}`,
@@ -873,10 +1077,13 @@ function App() {
         controller: player.controller ?? 'human',
         botDifficulty: player.botDifficulty ?? 'easy',
       })),
+      {
+        ruleset: uiPreferences.experimental.customRules ? game.ruleset : undefined,
+      },
     );
     setIsSharing(false);
     setShareStatus(null);
-  }, [game, startGameWithPlayers, syncSetupPlayerNames]);
+  }, [game, startGameWithPlayers, syncSetupPlayerNames, uiPreferences.experimental.customRules]);
 
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -928,11 +1135,21 @@ function App() {
       {screen === 'home' ? (
         <HomeScreen
           error={error}
+          showDailyChallenge={uiPreferences.experimental.dailyChallenges}
+          dailyChallenge={dailyChallenge}
+          showAchievements={uiPreferences.experimental.achievements}
+          achievementSummary={{ unlocked: unlockedAchievements.length, total: 4 }}
+          showLanMultiplayer={uiPreferences.experimental.lanMultiplayer}
           onNewGame={() => setScreen('setup')}
+          onStartDailyChallenge={startDailyChallengeMatch}
           onResumeGame={resumeGame}
           onOpenSavedGames={() => openSavedGames('home')}
           onOpenStats={() => setScreen('stats')}
           onOpenSettings={() => openSettings('home')}
+          onOpenLan={() => {
+            setLanError(null);
+            setScreen('lan');
+          }}
         />
       ) : null}
 
@@ -940,6 +1157,7 @@ function App() {
         <SetupScreen
           setup={setup}
           allowAiOpponents={uiPreferences.experimental.aiOpponents}
+          allowCustomRules={uiPreferences.experimental.customRules}
           onPlayerCountChange={(playerCount) => setSetup((prev) => ({ ...prev, playerCount }))}
           onPlayerNameChange={(index, value) => {
             setSetup((prev) => {
@@ -961,6 +1179,15 @@ function App() {
               nextDifficulties[index] = difficulty;
               return { ...prev, botDifficulties: nextDifficulties };
             });
+          }}
+          onChangeCustomRule={(rule, value) => {
+            setSetup((prev) => ({
+              ...prev,
+              customRules: {
+                ...prev.customRules,
+                [rule]: Number.isFinite(value) ? value : prev.customRules[rule],
+              },
+            }));
           }}
           onStartMatch={startNewGame}
           onBack={() => setScreen('home')}
@@ -1025,6 +1252,27 @@ function App() {
         />
       ) : null}
 
+      {screen === 'lan' ? (
+        <LanPlayScreen
+          serverUrl={lanServerUrl}
+          playerName={lanPlayerName}
+          joinCode={lanJoinCode}
+          session={lanSession}
+          roomView={lanRoomView}
+          loading={lanLoading}
+          error={lanError}
+          onServerUrlChange={setLanServerUrl}
+          onPlayerNameChange={setLanPlayerName}
+          onJoinCodeChange={setLanJoinCode}
+          onHostRoom={hostLanRoom}
+          onJoinRoom={joinLanRoomSession}
+          onStartRoom={startLanRoomMatch}
+          onRefresh={refreshLanStateInteractive}
+          onRunAction={runLanAction}
+          onBack={() => setScreen('home')}
+        />
+      ) : null}
+
       {screen === 'stats' ? <StatsScreen history={history} lifetime={lifetime} onBack={() => setScreen('home')} /> : null}
 
       {screen === 'saved_games' ? (
@@ -1080,6 +1328,8 @@ function App() {
           shareStatus={shareStatus}
           replayEvents={game?.history ?? []}
           showReplayTimeline={uiPreferences.experimental.replayTimeline}
+          showAchievements={uiPreferences.experimental.achievements}
+          recentAchievementUnlockLabels={recentAchievementUnlocks.map(achievementLabel)}
           titleRef={postGameTitleRef}
           formatDuration={formatDuration}
           onToggleReduceEffects={(enabled) => setUiPreferences((prev) => ({ ...prev, reducedEffects: enabled }))}
@@ -1090,7 +1340,7 @@ function App() {
             const controllers = game?.players.map((player) => player.controller ?? 'human');
             const difficulties = game?.players.map((player) => player.botDifficulty ?? 'easy');
             if (names && names.length > 0) {
-              syncSetupPlayerNames(names, controllers, difficulties);
+              syncSetupPlayerNames(names, controllers, difficulties, game?.ruleset);
             }
             setScreen('setup');
             setPostGameSummary(null);

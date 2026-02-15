@@ -5,6 +5,11 @@ export interface SetupViewModel {
   playerNames: string[];
   playerControllers: PlayerController[];
   botDifficulties: BotDifficulty[];
+  customRules: {
+    winCompleteSets: number;
+    maxHandAtEndTurn: number;
+    maxPlaysPerTurn: number;
+  };
 }
 
 export interface ActionRailEntry {

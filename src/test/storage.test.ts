@@ -4,11 +4,15 @@ import {
   clearMatchHistory,
   deleteSavedGameSlot,
   incrementGrowthMetric,
+  loadAchievementState,
+  loadDailyChallenge,
   loadGrowthMetrics,
   loadSavedGameSlot,
   loadSavedGames,
   loadUiPreferences,
   renameSavedGameSlot,
+  saveAchievementState,
+  saveDailyChallenge,
   saveGrowthMetrics,
   saveUiPreferences,
   upsertSavedGameSlot,
@@ -282,5 +286,71 @@ describe('saved game slots storage', () => {
     }
     expect(loadSavedGames().slots).toHaveLength(5);
     expect(() => upsertSavedGameSlot({ gameState: sampleGame(999), name: 'Overflow' })).toThrowError('save_slots_full');
+  });
+});
+
+describe('retention storage', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('loads default achievement and daily challenge state when missing', () => {
+    const achievements = loadAchievementState();
+    expect(achievements.version).toBe(1);
+    expect(achievements.counters.wins).toBe(0);
+    const challenge = loadDailyChallenge();
+    expect(challenge.version).toBe(1);
+    expect(challenge.day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('round-trips achievement and daily challenge payloads', () => {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    saveAchievementState({
+      version: 1,
+      counters: {
+        wins: 3,
+        actions: 40,
+        gamesPlayed: 4,
+        quickWins: 1,
+      },
+      unlockedAt: {
+        first_win: 1000,
+      },
+    });
+    saveDailyChallenge({
+      version: 1,
+      day: today,
+      seed: 12345,
+      targetTurns: 13,
+      completed: true,
+      attempts: 2,
+      bestTurnCount: 11,
+    });
+
+    expect(loadAchievementState()).toEqual({
+      version: 1,
+      counters: {
+        wins: 3,
+        actions: 40,
+        gamesPlayed: 4,
+        quickWins: 1,
+      },
+      unlockedAt: {
+        first_win: 1000,
+        ten_wins: undefined,
+        action_century: undefined,
+        quick_win: undefined,
+      },
+    });
+    expect(loadDailyChallenge()).toEqual({
+      version: 1,
+      day: today,
+      seed: 12345,
+      targetTurns: 13,
+      completed: true,
+      attempts: 2,
+      bestTurnCount: 11,
+    });
   });
 });

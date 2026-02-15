@@ -1,11 +1,14 @@
 import type { GameState } from '../engine';
-import type { GrowthMetricEvent, GrowthMetricsV1, LifetimeStatsV1, MatchRecordV1 } from '../stats/types';
+import { defaultAchievementState, defaultDailyChallenge, ensureTodayDailyChallenge } from '../stats/retention';
+import type { AchievementStateV1, DailyChallengeV1, GrowthMetricEvent, GrowthMetricsV1, LifetimeStatsV1, MatchRecordV1 } from '../stats/types';
 
 const ACTIVE_GAME_KEY = 'monopolyDeal.activeGame.v1';
 const SAVED_GAMES_KEY = 'monopolyDeal.savedGames.v1';
 const MATCH_HISTORY_KEY = 'monopolyDeal.matchHistory.v1';
 const LIFETIME_STATS_KEY = 'monopolyDeal.lifetimeStats.v1';
 const GROWTH_METRICS_KEY = 'monopolyDeal.growthMetrics.v1';
+const ACHIEVEMENTS_KEY = 'monopolyDeal.achievements.v1';
+const DAILY_CHALLENGE_KEY = 'monopolyDeal.dailyChallenge.v1';
 const UI_PREFERENCES_KEY = 'monopolyDeal.uiPreferences.v1';
 const MAX_SAVED_GAME_SLOTS = 5;
 
@@ -234,6 +237,65 @@ export function loadLifetimeStats(): LifetimeStatsV1 {
 
 export function saveLifetimeStats(stats: LifetimeStatsV1): void {
   localStorage.setItem(LIFETIME_STATS_KEY, JSON.stringify(stats));
+}
+
+function parseNonNegative(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+export function loadAchievementState(): AchievementStateV1 {
+  const raw = localStorage.getItem(ACHIEVEMENTS_KEY);
+  if (!raw) return defaultAchievementState();
+  try {
+    const parsed = JSON.parse(raw) as Partial<AchievementStateV1>;
+    if (parsed.version !== 1) return defaultAchievementState();
+    return {
+      version: 1,
+      counters: {
+        wins: parseNonNegative(parsed.counters?.wins),
+        actions: parseNonNegative(parsed.counters?.actions),
+        gamesPlayed: parseNonNegative(parsed.counters?.gamesPlayed),
+        quickWins: parseNonNegative(parsed.counters?.quickWins),
+      },
+      unlockedAt: {
+        first_win: parseNonNegative(parsed.unlockedAt?.first_win) || undefined,
+        ten_wins: parseNonNegative(parsed.unlockedAt?.ten_wins) || undefined,
+        action_century: parseNonNegative(parsed.unlockedAt?.action_century) || undefined,
+        quick_win: parseNonNegative(parsed.unlockedAt?.quick_win) || undefined,
+      },
+    };
+  } catch {
+    return defaultAchievementState();
+  }
+}
+
+export function saveAchievementState(state: AchievementStateV1): void {
+  localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(state));
+}
+
+export function loadDailyChallenge(): DailyChallengeV1 {
+  const raw = localStorage.getItem(DAILY_CHALLENGE_KEY);
+  if (!raw) return defaultDailyChallenge();
+  try {
+    const parsed = JSON.parse(raw) as Partial<DailyChallengeV1>;
+    if (parsed.version !== 1) return defaultDailyChallenge();
+    return ensureTodayDailyChallenge({
+      version: 1,
+      day: typeof parsed.day === 'string' ? parsed.day : defaultDailyChallenge().day,
+      seed: parseNonNegative(parsed.seed),
+      targetTurns: Math.max(1, parseNonNegative(parsed.targetTurns)),
+      completed: Boolean(parsed.completed),
+      attempts: parseNonNegative(parsed.attempts),
+      bestTurnCount: parsed.bestTurnCount == null ? null : Math.max(1, parseNonNegative(parsed.bestTurnCount)),
+    });
+  } catch {
+    return defaultDailyChallenge();
+  }
+}
+
+export function saveDailyChallenge(challenge: DailyChallengeV1): void {
+  localStorage.setItem(DAILY_CHALLENGE_KEY, JSON.stringify(challenge));
 }
 
 function defaultGrowthMetrics(): GrowthMetricsV1 {

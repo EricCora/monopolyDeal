@@ -4,10 +4,12 @@ import type { BotDifficulty, PlayerController } from '../../engine';
 interface SetupScreenProps {
   setup: SetupViewModel;
   allowAiOpponents: boolean;
+  allowCustomRules: boolean;
   onPlayerCountChange: (playerCount: number) => void;
   onPlayerNameChange: (index: number, value: string) => void;
   onPlayerControllerChange: (index: number, controller: PlayerController) => void;
   onPlayerDifficultyChange: (index: number, difficulty: BotDifficulty) => void;
+  onChangeCustomRule: (rule: keyof SetupViewModel['customRules'], value: number) => void;
   onStartMatch: () => void;
   onBack: () => void;
 }
@@ -15,10 +17,12 @@ interface SetupScreenProps {
 export function SetupScreen({
   setup,
   allowAiOpponents,
+  allowCustomRules,
   onPlayerCountChange,
   onPlayerNameChange,
   onPlayerControllerChange,
   onPlayerDifficultyChange,
+  onChangeCustomRule,
   onStartMatch,
   onBack,
 }: SetupScreenProps) {
@@ -78,6 +82,42 @@ export function SetupScreen({
           );
         })}
       </div>
+
+      {allowCustomRules ? (
+        <section className="settings-section" aria-label="Custom rule options">
+          <h3>Custom Rules</h3>
+          <label>
+            Win Sets
+            <input
+              type="number"
+              min={2}
+              max={5}
+              value={setup.customRules.winCompleteSets}
+              onChange={(event) => onChangeCustomRule('winCompleteSets', Number(event.target.value))}
+            />
+          </label>
+          <label>
+            Hand Limit At End Turn
+            <input
+              type="number"
+              min={4}
+              max={12}
+              value={setup.customRules.maxHandAtEndTurn}
+              onChange={(event) => onChangeCustomRule('maxHandAtEndTurn', Number(event.target.value))}
+            />
+          </label>
+          <label>
+            Max Plays Per Turn
+            <input
+              type="number"
+              min={1}
+              max={6}
+              value={setup.customRules.maxPlaysPerTurn}
+              onChange={(event) => onChangeCustomRule('maxPlaysPerTurn', Number(event.target.value))}
+            />
+          </label>
+        </section>
+      ) : null}
 
       <div className="actions">
         <button onClick={onStartMatch}>Start Match</button>

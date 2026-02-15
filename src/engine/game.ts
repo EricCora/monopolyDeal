@@ -19,12 +19,17 @@ import type {
   PlayerId,
   PlayerState,
   PropertyCardPlacement,
+  RulesetV1,
   RuleError,
   TurnPrompt,
 } from './types';
 
 export const MAX_HAND_AT_END_TURN = 7;
-const MAX_PLAYS_PER_TURN = 3;
+export const DEFAULT_RULESET: RulesetV1 = {
+  winCompleteSets: 3,
+  maxHandAtEndTurn: MAX_HAND_AT_END_TURN,
+  maxPlaysPerTurn: 3,
+};
 const PROPERTY_COLORS = Object.keys(PROPERTY_SET_SIZES) as PropertyColor[];
 
 function now(): number {
@@ -66,6 +71,10 @@ function initialProperties(): PlayerState['properties'] {
 
 function cloneState(state: GameState): GameState {
   return structuredClone(state);
+}
+
+function ruleset(state: GameState): RulesetV1 {
+  return state.ruleset ?? DEFAULT_RULESET;
 }
 
 function pushEvent(events: GameEvent[], type: string, message: string): void {
@@ -281,7 +290,7 @@ function hasPlayableRentCard(player: PlayerState, excludedCardId?: string): bool
 }
 
 function canPlayDoubleRent(state: GameState, player: PlayerState, excludedCardId: string): boolean {
-  const hasPlayBudgetForCombo = state.turn.playsUsed <= MAX_PLAYS_PER_TURN - 2;
+  const hasPlayBudgetForCombo = state.turn.playsUsed <= ruleset(state).maxPlaysPerTurn - 2;
   if (!hasPlayBudgetForCombo) return false;
   return hasPlayableRentCard(player, excludedCardId);
 }
@@ -295,13 +304,16 @@ function nextPlayerIndex(state: GameState, fromIndex = state.currentPlayerIndex)
 }
 
 function requiresEndTurnDiscard(state: GameState, player: PlayerState): boolean {
-  return !state.pending && state.turn.phase === 'action' && getCurrentPlayer(state).id === player.id && player.hand.length > MAX_HAND_AT_END_TURN;
+  return !state.pending
+    && state.turn.phase === 'action'
+    && getCurrentPlayer(state).id === player.id
+    && player.hand.length > ruleset(state).maxHandAtEndTurn;
 }
 
 function finishTurn(state: GameState, events: GameEvent[]): RuleError | undefined {
   const current = getCurrentPlayer(state);
-  if (current.hand.length > MAX_HAND_AT_END_TURN) {
-    return error('hand_limit', `You must discard to 7 cards or fewer (currently ${current.hand.length}).`);
+  if (current.hand.length > ruleset(state).maxHandAtEndTurn) {
+    return error('hand_limit', `You must discard to ${ruleset(state).maxHandAtEndTurn} cards or fewer (currently ${current.hand.length}).`);
   }
   state.currentPlayerIndex = nextPlayerIndex(state);
   state.turn = { phase: 'draw', playsUsed: 0, doubleRentMultiplier: 1 };
@@ -389,7 +401,7 @@ function continuePaymentChain(state: GameState, request: { sourcePlayerId: Playe
 }
 
 function checkWinner(state: GameState): void {
-  const winner = state.players.find((player) => countCompleteSets(player) >= 3);
+  const winner = state.players.find((player) => countCompleteSets(player) >= ruleset(state).winCompleteSets);
   if (winner) {
     state.winnerId = winner.id;
     state.turn.phase = 'finished';
@@ -538,7 +550,7 @@ function legalForPending(state: GameState, player: PlayerState): LegalAction[] {
 function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] {
   const actions: LegalAction[] = [];
   if (state.turn.phase !== 'action') return actions;
-  const canUsePlay = state.turn.playsUsed < MAX_PLAYS_PER_TURN;
+  const canUsePlay = state.turn.playsUsed < ruleset(state).maxPlaysPerTurn;
 
   if (canUsePlay) {
     for (const cardId of player.hand) {
@@ -664,6 +676,10 @@ export function createGame(config: GameConfig): GameState {
     throw new Error('Monopoly Deal supports 2-4 players.');
   }
 
+  const ruleset: RulesetV1 = {
+    ...DEFAULT_RULESET,
+    ...config.ruleset,
+  };
   const seed = config.seed ?? Math.floor(Math.random() * 1_000_000_000);
   const rand = rngFromSeed(seed);
 
@@ -691,6 +707,7 @@ export function createGame(config: GameConfig): GameState {
     createdAt: now(),
     updatedAt: now(),
     deckVersion: 'v1',
+    ruleset,
     players,
     drawPile: shuffled,
     discardPile: [],
@@ -779,7 +796,9 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
   if (action.type === 'play_to_bank') {
     if (getCurrentPlayer(state).id !== player.id) return setErr(error('invalid_action', 'Not your turn.'));
     if (state.turn.phase !== 'action') return setErr(error('invalid_phase', 'Cannot play now.'));
-    if (state.turn.playsUsed >= MAX_PLAYS_PER_TURN) return setErr(error('illegal_play_limit', 'Already used 3 plays this turn.'));
+    if (state.turn.playsUsed >= ruleset(state).maxPlaysPerTurn) {
+      return setErr(error('illegal_play_limit', `Already used ${ruleset(state).maxPlaysPerTurn} plays this turn.`));
+    }
     if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
     player.bank.push(action.cardId);
     consumePlay(state);
@@ -789,7 +808,9 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
   if (action.type === 'play_property') {
     if (getCurrentPlayer(state).id !== player.id) return setErr(error('invalid_action', 'Not your turn.'));
     if (state.turn.phase !== 'action') return setErr(error('invalid_phase', 'Cannot play now.'));
-    if (state.turn.playsUsed >= MAX_PLAYS_PER_TURN) return setErr(error('illegal_play_limit', 'Already used 3 plays this turn.'));
+    if (state.turn.playsUsed >= ruleset(state).maxPlaysPerTurn) {
+      return setErr(error('illegal_play_limit', `Already used ${ruleset(state).maxPlaysPerTurn} plays this turn.`));
+    }
     const card = getCardDefinition(action.cardId);
     if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
 
@@ -848,7 +869,9 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     } else {
       if (getCurrentPlayer(state).id !== player.id) return setErr(error('invalid_action', 'Not your turn.'));
       if (state.turn.phase !== 'action') return setErr(error('invalid_phase', 'Cannot play now.'));
-      if (state.turn.playsUsed >= MAX_PLAYS_PER_TURN) return setErr(error('illegal_play_limit', 'Already used 3 plays this turn.'));
+      if (state.turn.playsUsed >= ruleset(state).maxPlaysPerTurn) {
+        return setErr(error('illegal_play_limit', `Already used ${ruleset(state).maxPlaysPerTurn} plays this turn.`));
+      }
       const card = getCardDefinition(action.cardId);
       if (card.kind !== 'action' && card.kind !== 'building') return setErr(error('invalid_action', 'Not an action card.'));
       if (card.actionKind === 'just_say_no') return setErr(error('invalid_action', 'Just Say No can only be played as response.'));
@@ -1159,7 +1182,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
 
 export function isGameOver(state: GameState): { done: boolean; winnerId?: PlayerId } {
   if (state.winnerId) return { done: true, winnerId: state.winnerId };
-  const winner = state.players.find((player) => countCompleteSets(player) >= 3);
+  const winner = state.players.find((player) => countCompleteSets(player) >= ruleset(state).winCompleteSets);
   return winner ? { done: true, winnerId: winner.id } : { done: false };
 }
 
@@ -1168,7 +1191,7 @@ export function getNextPrompt(state: GameState): TurnPrompt {
   if (requiresEndTurnDiscard(state, currentPlayer)) {
     return {
       playerId: currentPlayer.id,
-      text: `${currentPlayer.name}: discard down to ${MAX_HAND_AT_END_TURN} cards to end your turn.`,
+      text: `${currentPlayer.name}: discard down to ${ruleset(state).maxHandAtEndTurn} cards to end your turn.`,
       kind: 'discard',
     };
   }
@@ -1209,7 +1232,7 @@ export function getNextPrompt(state: GameState): TurnPrompt {
 
   return {
     playerId: currentPlayer.id,
-    text: `${currentPlayer.name}: play up to ${MAX_PLAYS_PER_TURN - state.turn.playsUsed} cards or pass.`,
+    text: `${currentPlayer.name}: play up to ${ruleset(state).maxPlaysPerTurn - state.turn.playsUsed} cards or pass.`,
     kind: 'main',
   };
 }

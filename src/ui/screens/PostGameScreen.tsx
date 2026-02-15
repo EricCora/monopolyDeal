@@ -13,6 +13,8 @@ interface PostGameScreenProps {
   shareStatus: ShareStatus;
   replayEvents: Array<{ timestamp: number; type: string; message: string }>;
   showReplayTimeline: boolean;
+  showAchievements: boolean;
+  recentAchievementUnlockLabels: string[];
   titleRef: RefObject<HTMLHeadingElement | null>;
   formatDuration: (seconds: number) => string;
   onToggleReduceEffects: (enabled: boolean) => void;
@@ -33,6 +35,8 @@ export function PostGameScreen({
   shareStatus,
   replayEvents,
   showReplayTimeline,
+  showAchievements,
+  recentAchievementUnlockLabels,
   titleRef,
   formatDuration,
   onToggleReduceEffects,
@@ -160,6 +164,17 @@ export function PostGameScreen({
           ) : (
             <p>No replay events available for this match.</p>
           )}
+        </section>
+      ) : null}
+
+      {showAchievements && recentAchievementUnlockLabels.length > 0 ? (
+        <section className="postgame-highlights" aria-labelledby="achievements-title">
+          <h3 id="achievements-title">New Achievements</h3>
+          <ul>
+            {recentAchievementUnlockLabels.map((label) => (
+              <li key={label}>{label}</li>
+            ))}
+          </ul>
         </section>
       ) : null}
 

@@ -16,6 +16,13 @@ export interface GameConfig {
   players: PlayerConfig[];
   seed?: number;
   deckVersion?: 'v1';
+  ruleset?: Partial<RulesetV1>;
+}
+
+export interface RulesetV1 {
+  winCompleteSets: number;
+  maxHandAtEndTurn: number;
+  maxPlaysPerTurn: number;
 }
 
 export interface PropertyCardPlacement {
@@ -110,6 +117,7 @@ export interface GameState {
   createdAt: number;
   updatedAt: number;
   deckVersion: 'v1';
+  ruleset?: RulesetV1;
   players: PlayerState[];
   drawPile: string[];
   discardPile: string[];
