@@ -10,9 +10,9 @@ import {
   roomView,
   startRoom,
   type MultiplayerRoom,
-} from './gameService';
-import { loadSnapshots, saveSnapshots } from './persistence/snapshots';
-import type { Action } from '../../../src/engine';
+} from './gameService.ts';
+import { loadSnapshots, saveSnapshots } from './persistence/snapshots.ts';
+import type { Action } from '../../../src/engine/index.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const rooms = new Map<string, MultiplayerRoom>();

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:all": "concurrently --kill-others --names \"ui,server\" \"npm run dev\" \"npm run dev:multiplayer-server\"",
-    "dev:multiplayer-server": "npm run dev --prefix apps/server",
+    "dev:multiplayer-server": "node --import tsx/esm apps/server/src/index.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -35,6 +35,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "jsdom": "^28.0.0",
+    "tsx": "^4.20.6",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",
     "vite": "^7.3.1",

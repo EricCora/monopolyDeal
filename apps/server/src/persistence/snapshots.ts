@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { MultiplayerRoom } from '../gameService';
+import type { MultiplayerRoom } from '../gameService.ts';
 
 const SNAPSHOT_PATH = resolve(process.cwd(), 'apps/server/.multiplayer-room-snapshots.json');
 

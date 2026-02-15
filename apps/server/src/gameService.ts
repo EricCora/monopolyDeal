@@ -9,8 +9,13 @@ import {
   type GameState,
   type PlayerConfig,
   type PlayerId,
-} from '../../../src/engine';
-import type { MultiplayerPlayerSummary, MultiplayerRoomView, MultiplayerRoomStatus, RoomSessionResponse } from '../../../packages/shared/multiplayer';
+} from '../../../src/engine/index.ts';
+import type {
+  MultiplayerPlayerSummary,
+  MultiplayerRoomView,
+  MultiplayerRoomStatus,
+  RoomSessionResponse,
+} from '../../../packages/shared/multiplayer.ts';
 
 const RECONNECT_WINDOW_MS = 5 * 60 * 1000;
 const STALE_CONNECTION_MS = 12_000;
