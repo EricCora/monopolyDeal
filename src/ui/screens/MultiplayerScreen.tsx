@@ -7,6 +7,8 @@ interface MultiplayerScreenProps {
   roomView: MultiplayerRoomView | null;
   loading: boolean;
   healthOk: boolean | null;
+  apiBase: string;
+  isLocalDevApi: boolean;
   error: string | null;
   connectionState: MultiplayerConnectionState;
   isHost: boolean;
@@ -45,6 +47,8 @@ export function MultiplayerScreen({
   roomView,
   loading,
   healthOk,
+  apiBase,
+  isLocalDevApi,
   error,
   connectionState,
   isHost,
@@ -61,11 +65,20 @@ export function MultiplayerScreen({
   return (
     <section className="panel setup-screen card-enter">
       <h2>Multiplayer</h2>
-      <p className="setup-subtitle">Create or join a private room code. No local server setup required.</p>
+      <p className="setup-subtitle">
+        {isLocalDevApi
+          ? 'Local testing uses a local multiplayer service.'
+          : 'Create or join with a private room code.'}
+      </p>
 
       {healthOk === false ? (
-        <p className="error">Multiplayer service is currently unreachable. Please try again in a moment.</p>
+        <p className="error">
+          {isLocalDevApi
+            ? `Multiplayer server not reachable at ${apiBase}. Run npm run dev:all.`
+            : 'Multiplayer service is currently unreachable. Please try again in a moment.'}
+        </p>
       ) : null}
+      {import.meta.env.DEV ? <p className="setup-subtitle">Multiplayer API: {apiBase}</p> : null}
 
       {!session ? (
         <>

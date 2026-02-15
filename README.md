@@ -135,10 +135,15 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 Set `VITE_MULTIPLAYER_API_URL` to your deployed multiplayer API origin.
 See `.env.example` for the expected variable.
 
-For local backend development, you can run:
+For local multiplayer development, the backend service is required.
+Use the one-command startup:
+
+1. UI + multiplayer server together: `npm run dev:all`
+
+If you prefer split terminals, you can still run:
 
 1. App UI: `npm run dev`
-2. Node multiplayer server: `npm run dev --prefix apps/server`
+2. Node multiplayer server: `npm run dev:multiplayer-server`
 
 In production, users should only need to press `Play Multiplayer`.
 

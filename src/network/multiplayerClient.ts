@@ -5,15 +5,35 @@ function normalizeApiBase(input: string): string {
   return input.endsWith('/') ? input.slice(0, -1) : input;
 }
 
-export function getMultiplayerApiBase(): string {
-  const fromEnv = import.meta.env.VITE_MULTIPLAYER_API_URL;
-  if (typeof fromEnv === 'string' && fromEnv.trim().length > 0) {
-    return normalizeApiBase(fromEnv.trim());
+function isLocalHostname(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+}
+
+export interface ResolveMultiplayerApiBaseOptions {
+  envUrl?: string | null;
+  hostname?: string | null;
+  origin?: string | null;
+}
+
+export function resolveMultiplayerApiBase({ envUrl, hostname, origin }: ResolveMultiplayerApiBaseOptions): string {
+  if (typeof envUrl === 'string' && envUrl.trim().length > 0) {
+    return normalizeApiBase(envUrl.trim());
   }
-  if (typeof window !== 'undefined' && typeof window.location?.origin === 'string') {
-    return normalizeApiBase(window.location.origin);
+  if (typeof hostname === 'string' && isLocalHostname(hostname)) {
+    return 'http://localhost:8787';
+  }
+  if (typeof origin === 'string' && origin.trim().length > 0) {
+    return normalizeApiBase(origin.trim());
   }
   return 'http://localhost:8787';
+}
+
+export function getMultiplayerApiBase(): string {
+  return resolveMultiplayerApiBase({
+    envUrl: import.meta.env.VITE_MULTIPLAYER_API_URL,
+    hostname: typeof window !== 'undefined' ? window.location?.hostname : undefined,
+    origin: typeof window !== 'undefined' ? window.location?.origin : undefined,
+  });
 }
 
 export function multiplayerErrorMessage(code: string): string {

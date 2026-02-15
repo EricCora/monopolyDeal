@@ -61,8 +61,18 @@ function saveStoredSession(session: MultiplayerSession | null): void {
   window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
 
+function isLocalApiBase(apiBase: string): boolean {
+  try {
+    const parsed = new URL(apiBase);
+    return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
+  } catch {
+    return false;
+  }
+}
+
 export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMultiplayerRoomOptions) {
   const [apiBase] = useState(() => getMultiplayerApiBase());
+  const [isLocalDevApi] = useState(() => isLocalApiBase(apiBase));
   const [playerName, setPlayerName] = useState('Player');
   const [joinCode, setJoinCode] = useState('');
   const [session, setSession] = useState<MultiplayerSession | null>(null);
@@ -300,6 +310,7 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
 
   return {
     apiBase,
+    isLocalDevApi,
     healthOk,
     playerName,
     setPlayerName,

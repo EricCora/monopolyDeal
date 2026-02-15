@@ -308,6 +308,8 @@ function App() {
     hapticsEnabled: uiPreferences.hapticsEnabled,
   });
   const {
+    apiBase: multiplayerApiBase,
+    isLocalDevApi: multiplayerIsLocalDevApi,
     playerName: multiplayerPlayerName,
     setPlayerName: setMultiplayerPlayerName,
     joinCode: multiplayerJoinCode,
@@ -1230,6 +1232,8 @@ function App() {
           roomView={multiplayerRoomView}
           loading={multiplayerLoading}
           healthOk={multiplayerHealthOk}
+          apiBase={multiplayerApiBase}
+          isLocalDevApi={multiplayerIsLocalDevApi}
           error={multiplayerError}
           connectionState={multiplayerConnectionState}
           isHost={multiplayerIsHost}

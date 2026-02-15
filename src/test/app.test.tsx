@@ -801,6 +801,20 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: /multiplayer/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/server url/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no local server setup required/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/local testing uses a local multiplayer service/i)).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
+  });
+
+  it('shows local troubleshooting guidance when multiplayer health check fails', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network_unavailable'));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+
+    expect(await screen.findByText(/multiplayer server not reachable at/i)).toBeInTheDocument();
+    expect(screen.getByText(/run npm run dev:all/i)).toBeInTheDocument();
 
     fetchSpy.mockRestore();
   });

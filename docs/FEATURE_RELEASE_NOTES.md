@@ -53,7 +53,8 @@ Branch: `codex/deep-research-improvements`
 - Added `clearGrowthMetrics()` helper.
 - `src/network/multiplayerClient.ts`:
 - Added hosted multiplayer client with endpoint helpers and friendly error mapping.
-- Uses `VITE_MULTIPLAYER_API_URL` (or current origin fallback) for one-click user flow.
+- Uses `VITE_MULTIPLAYER_API_URL` with localhost-aware fallback (`http://localhost:8787` in local dev, same-origin fallback otherwise).
+- Multiplayer unreachable messaging now includes actionable local guidance for starting the backend service.
 - `src/stats/dashboard.ts`:
 - `buildStatsDashboardModel` now accepts optional growth metrics input and returns `growthKpis` plus `growthEvents` series.
 
