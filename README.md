@@ -29,8 +29,11 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Manual saved-game slots (up to 5) with load/save-over/rename/delete controls
 - One-click multiplayer room flow (host/join/reconnect) with no manual server URL entry
 - Full multiplayer in-match table view (same board/event/action surfaces as local play)
+- Multiplayer winner overlay with clear winner callout at match end
 - Host-controlled multiplayer pause/resume and checkpoint save/load/delete controls
+- Multiplayer `Exit Match` (keeps reconnect session) and `Forget Room` (permanent disconnect) actions
 - Multiplayer undo/reset-turn controls for the active player with server-authoritative snapshots
+- In-match per-player connection pills and richer lobby disconnect timing labels
 - Experimental feature flags for AI opponents, AI coach hints, replay timeline, daily challenges, achievements, and custom rules
 - Auto-save + resume via `localStorage`
 
@@ -119,7 +122,18 @@ For AI coding agents working on this repository:
 
 - `AGENTS.md` - default operating instructions, invariants, and done criteria
 - `docs/LLM_AGENT_GUIDE.md` - deeper architecture map, change playbooks, and test matrix
+- `docs/REFRACTOR_SAFETY_PLAYBOOK.md` - refactor safety workflow, behavior-contract templates, and regression gates
 - `docs/NEXT_CODEX_MULTIPLAYER.md` - next-session multiplayer simplification handoff instructions
+
+## Engineering Quality Guardrails
+
+To reduce regressions during refactors:
+
+1. Define behavior contracts for impacted flows before code changes.
+2. Add characterization tests when behavior is currently untested.
+3. Keep refactor commits small and phase-based.
+4. Run `npm run test`, `npm run build`, and `npm run lint` before handoff.
+5. Update both user docs (`README.md`) and agent docs (`docs/LLM_AGENT_GUIDE.md`) for workflow or UX changes.
 
 ## Persistence
 
@@ -141,7 +155,9 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 ### Multiplayer Match Controls
 
 - Active multiplayer matches now open the full game table experience.
+- Rules Reference drawer is available from active multiplayer matches.
 - Host controls: `Pause/Resume`, `Save Checkpoint`, `Load Checkpoint`, `Delete Checkpoint`.
+- Player session controls: `Exit Match` (retain reconnect) and `Forget Room` (clear session).
 - Active-turn controls: `Undo Last Play`, `Reset Turn Plays` (when snapshot history exists).
 - Multiplayer state mutations are revision-guarded to prevent stale updates.
 

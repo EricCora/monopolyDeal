@@ -192,4 +192,49 @@ describe('multiplayer room service lifecycle', () => {
     const disconnected = findParticipant(room, playerTwo.playerId);
     expect(disconnected.connected).toBe(false);
   });
+
+  it('accepts manual pay_request card order when cards are otherwise legal', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+
+    if (!room.game) throw new Error('expected game');
+    const payer = room.game.players.find((player) => player.id === playerTwo.playerId);
+    if (!payer) throw new Error('expected payer');
+    payer.bank = ['money_1#pay1', 'money_2#pay2'];
+    payer.properties = {
+      brown: [],
+      light_blue: [],
+      pink: [],
+      orange: [],
+      red: [],
+      yellow: [],
+      green: [],
+      dark_blue: [],
+      railroad: [],
+      utility: [],
+    };
+    room.game.pending = {
+      kind: 'payment',
+      payload: {
+        sourcePlayerId: session.playerId,
+        targetPlayerId: playerTwo.playerId,
+        amount: 3,
+        reason: 'rent',
+        actionCardId: 'rent#test',
+      },
+    };
+
+    const legal = roomView(room, playerTwo.playerId, playerTwo.sessionToken).legalActions;
+    const payAction = legal.find((entry) => entry.action.type === 'pay_request' && entry.action.cards.length === 2)?.action;
+    expect(payAction).toBeDefined();
+    if (!payAction || payAction.type !== 'pay_request') throw new Error('expected pay action');
+
+    const reversed = {
+      ...payAction,
+      cards: [...payAction.cards].reverse(),
+    };
+    expect(() => applyRoomAction(room, playerTwo.playerId, playerTwo.sessionToken, reversed)).not.toThrow();
+  });
 });

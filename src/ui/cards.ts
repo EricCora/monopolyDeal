@@ -33,7 +33,11 @@ function titleFromCard(card: CardDefinition): string {
 function subtitleFromCard(card: CardDefinition): string {
   if (card.kind === 'money') return 'Money';
   if (card.kind === 'property') return `${formatPropertyColor(card.color!)} Property`;
-  if (card.kind === 'wild') return `Wild: ${(card.colors ?? []).map((color) => color.replace('_', ' ')).join(' / ')}`;
+  if (card.kind === 'wild') {
+    const colors = card.colors ?? [];
+    if (colors.length > 4) return 'Wild Any Color';
+    return `Wild: ${colors.map((color) => color.replace('_', ' ')).join(' / ')}`;
+  }
   if (card.kind === 'building') return 'Building';
   return 'Action';
 }
@@ -50,7 +54,10 @@ function actionBadgeFromCard(card: CardDefinition): string | undefined {
 
 function colorLabelFromCard(card: CardDefinition): string | undefined {
   if (card.kind === 'property' && card.color) return formatPropertyColor(card.color);
-  if (card.kind === 'wild' && card.colors?.length) return card.colors.map((color) => formatPropertyColor(color)).join(' / ');
+  if (card.kind === 'wild' && card.colors?.length) {
+    if (card.colors.length > 4) return 'All Property Colors';
+    return card.colors.map((color) => formatPropertyColor(color)).join(' / ');
+  }
   if (card.kind === 'action' && card.rentMatrix) {
     const colors = Object.keys(card.rentMatrix) as PropertyColor[];
     if (colors.length > 0) return colors.map((color) => formatPropertyColor(color)).join(' / ');
@@ -70,6 +77,12 @@ function themeFromCard(card: CardDefinition): { themeClass: string; accent: stri
   }
 
   if (card.kind === 'wild') {
+    if ((card.colors?.length ?? 0) > 4) {
+      return {
+        themeClass: 'theme-wild-any',
+        accent: 'var(--card-rent-any)',
+      };
+    }
     const first = card.colors?.[0] ? normalizeColor(card.colors[0]) : 'wild';
     const second = card.colors?.[1] ? normalizeColor(card.colors[1]) : first;
     return {

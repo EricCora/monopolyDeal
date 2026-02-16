@@ -40,6 +40,14 @@ function deadlineLabel(deadlineMs: number): string {
   return `${minutes}m ${remainder}s`;
 }
 
+function playerConnectionLabel(connected: boolean, lastSeenAt: number): string {
+  if (connected) return 'Connected';
+  const secondsAgo = Math.max(0, Math.floor((Date.now() - lastSeenAt) / 1000));
+  if (secondsAgo < 60) return `Disconnected (${secondsAgo}s ago)`;
+  const minutesAgo = Math.floor(secondsAgo / 60);
+  return `Disconnected (${minutesAgo}m ago)`;
+}
+
 export function MultiplayerScreen({
   playerName,
   joinCode,
@@ -126,7 +134,7 @@ export function MultiplayerScreen({
                 Refresh
               </button>
               <button type="button" onClick={onLeaveRoom} disabled={loading}>
-                Leave Room
+                Forget Room
               </button>
               {roomView && roomView.canStart && isHost ? (
                 <button type="button" onClick={onStartMatch} disabled={loading}>
@@ -150,7 +158,7 @@ export function MultiplayerScreen({
                 {roomView.players.map((player) => (
                   <li key={player.id}>
                     {player.name}
-                    {player.isHost ? ' (Host)' : ''} | {player.connected ? 'Connected' : 'Disconnected'} | hand {player.handCount} | bank {player.bankCount} | sets {player.completeSets}
+                    {player.isHost ? ' (Host)' : ''} | {playerConnectionLabel(player.connected, player.lastSeenAt)} | hand {player.handCount} | bank {player.bankCount} | sets {player.completeSets}
                   </li>
                 ))}
               </ul>

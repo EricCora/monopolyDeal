@@ -65,6 +65,13 @@ describe('Card UI', () => {
     }
   });
 
+  it('uses compact labels for wild any cards to avoid small-card text clipping', () => {
+    const model = getCardVisualModel('wild_all#1');
+    expect(model.subtitle).toBe('Wild Any Color');
+    expect(model.colorLabel).toBe('All Property Colors');
+    expect(model.themeClass).toBe('theme-wild-any');
+  });
+
   it('highlights the full-set rent step for property cards', () => {
     const { container } = render(<CardView cardId="railroad_1#1" />);
     const fullSetSteps = container.querySelectorAll('.card-rent-step.is-fullset');

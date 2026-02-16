@@ -39,7 +39,7 @@ export function getMultiplayerApiBase(): string {
 export function multiplayerErrorMessage(code: string): string {
   if (code === 'room_not_found') return 'Room code not found. Double-check the code and try again.';
   if (code === 'room_full') return 'This room is already full.';
-  if (code === 'room_started') return 'This match already started. Ask the host for a fresh room code.';
+  if (code === 'room_started') return 'This match already started. Re-enter from Multiplayer to reconnect, or ask the host for a fresh room.';
   if (code === 'invalid_session') return 'Your multiplayer session expired. Please rejoin the room.';
   if (code === 'reconnect_expired') return 'Rejoin window expired. Please rejoin with the room code.';
   if (code === 'minimum_players_required') return 'At least 2 players are required to start.';

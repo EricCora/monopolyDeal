@@ -35,6 +35,7 @@ interface GameTableScreenProps {
   isPaused: boolean;
   pauseReasonText?: string;
   connectionStatusLabel?: string;
+  playerConnectionById?: Record<string, { connected: boolean; lastSeenAt: number; reconnectDeadlineMs: number }>;
   isMultiplayerHost?: boolean;
   checkpointSlots?: { id: string; name: string; savedAt: number }[];
   checkpointLoading?: boolean;
@@ -67,7 +68,8 @@ interface GameTableScreenProps {
   actionDetailText: (item: LegalAction) => string | null;
   onPauseToggle: () => void;
   onRefreshMultiplayer?: () => void;
-  onLeaveMultiplayer?: () => void;
+  onExitMultiplayer?: () => void;
+  onForgetMultiplayer?: () => void;
   onSaveCheckpoint?: (name: string) => void;
   onLoadCheckpoint?: (checkpointId: string) => void;
   onDeleteCheckpoint?: (checkpointId: string) => void;
@@ -114,6 +116,7 @@ export function GameTableScreen({
   isPaused,
   pauseReasonText,
   connectionStatusLabel,
+  playerConnectionById = {},
   isMultiplayerHost = false,
   checkpointSlots = [],
   checkpointLoading = false,
@@ -141,7 +144,8 @@ export function GameTableScreen({
   actionDetailText,
   onPauseToggle,
   onRefreshMultiplayer,
-  onLeaveMultiplayer,
+  onExitMultiplayer,
+  onForgetMultiplayer,
   onSaveCheckpoint,
   onLoadCheckpoint,
   onDeleteCheckpoint,
@@ -162,6 +166,9 @@ export function GameTableScreen({
 }: GameTableScreenProps) {
   const over = isGameOver(game);
   const isMultiplayer = mode === 'multiplayer';
+  const winnerName = over.done && over.winnerId
+    ? game.players.find((player) => player.id === over.winnerId)?.name ?? over.winnerId
+    : null;
 
   const saveCheckpointInteractive = () => {
     if (!onSaveCheckpoint || !isMultiplayerHost || isPaused) return;
@@ -218,7 +225,8 @@ export function GameTableScreen({
             {isMultiplayer ? (
               <>
                 <button onClick={onRefreshMultiplayer} disabled={isPaused || checkpointLoading}>Refresh</button>
-                <button onClick={onLeaveMultiplayer} disabled={checkpointLoading}>Leave Room</button>
+                <button onClick={onExitMultiplayer} disabled={checkpointLoading}>Exit Match</button>
+                <button onClick={onForgetMultiplayer} disabled={checkpointLoading}>Forget Room</button>
                 {isMultiplayerHost ? (
                   <>
                     <button onClick={saveCheckpointInteractive} disabled={checkpointLoading || isPaused}>Save Checkpoint</button>
@@ -293,6 +301,11 @@ export function GameTableScreen({
                   <header>
                     <h3>{player.name}</h3>
                     <p>{getSetCompletionCount(player)} complete sets</p>
+                    {isMultiplayer ? (
+                      <p className={`connection-pill ${playerConnectionById[player.id]?.connected ? 'is-online' : 'is-offline'}`}>
+                        {playerConnectionById[player.id]?.connected ? 'Online' : 'Disconnected'}
+                      </p>
+                    ) : null}
                   </header>
 
                   {isPromptPlayer && canSeeHand && !over.done ? (
@@ -479,6 +492,18 @@ export function GameTableScreen({
           <div className="paused-card card-enter">
             <h3>Game Paused</h3>
             <p>{pauseReasonText ?? 'Gameplay is locked until you press Resume in the top bar.'}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {isMultiplayer && over.done ? (
+        <div className="winner-overlay" role="dialog" aria-modal="true" aria-label="Multiplayer winner">
+          <div className="winner-card card-enter">
+            <h3>Match Complete</h3>
+            <p>
+              Winner: <strong>{winnerName ?? 'Unknown player'}</strong>
+            </p>
+            <p>Use Exit Match to leave and keep reconnect access, or Forget Room to disconnect permanently.</p>
           </div>
         </div>
       ) : null}

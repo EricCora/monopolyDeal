@@ -58,7 +58,7 @@ export function ActionRail({
       ) : null}
       <div className="debug-actions">
         <button type="button" onClick={onToggleDebugActions} disabled={isPaused}>
-          {showDebugActions ? 'Hide' : 'Show'} All Legal Actions ({legalActions.length})
+          {showDebugActions ? 'Hide' : 'Show'} Advanced Legal Actions ({legalActions.length})
         </button>
         {showDebugActions && (
           <ul className="debug-action-list">

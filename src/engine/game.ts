@@ -57,6 +57,14 @@ export { DEFAULT_RULESET, MAX_HAND_AT_END_TURN };
 export function getSuggestedPaymentCards(state: GameState, playerId: PlayerId, amount: number): string[] {
   const player = getPlayer(state, playerId);
   if (!player) return [];
+  const availableCards = [
+    ...player.bank,
+    ...PROPERTY_COLORS.flatMap((color) => player.properties[color].map((entry) => entry.cardId)),
+  ];
+  const exactSingle = availableCards
+    .filter((cardId) => cardMoneyValue(cardId) === amount)
+    .sort((left, right) => left.localeCompare(right))[0];
+  if (exactSingle) return [exactSingle];
   const options = generatePaymentOptions(player, amount);
   if (options.length === 0) return [];
 

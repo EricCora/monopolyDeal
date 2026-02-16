@@ -9,6 +9,8 @@ export interface MultiplayerPlayerSummary {
   bankCount: number;
   completeSets: number;
   connected: boolean;
+  lastSeenAt: number;
+  reconnectDeadlineMs: number;
   isHost: boolean;
 }
 

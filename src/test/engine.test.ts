@@ -303,6 +303,58 @@ describe('engine basics', () => {
     expect(total).toBeGreaterThanOrEqual(3);
   });
 
+  it('prefers exact single-card payments when available', () => {
+    const state = createGame({
+      seed: 142,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.players[1].bank = ['money_1#b1', 'money_2#b2', 'money_3#b3'];
+    state.players[1].properties = {
+      brown: [],
+      light_blue: [],
+      pink: [],
+      orange: [],
+      red: [],
+      yellow: [],
+      green: [],
+      dark_blue: [],
+      railroad: [],
+      utility: [],
+    };
+
+    const suggested = getSuggestedPaymentCards(state, 'p2', 3);
+    expect(suggested).toEqual(['money_3#b3']);
+  });
+
+  it('does not include zero-value cards when an exact single payment exists', () => {
+    const state = createGame({
+      seed: 143,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.players[1].bank = ['money_3#b3', 'wild_all#b0'];
+    state.players[1].properties = {
+      brown: [],
+      light_blue: [],
+      pink: [],
+      orange: [],
+      red: [],
+      yellow: [],
+      green: [],
+      dark_blue: [],
+      railroad: [],
+      utility: [],
+    };
+
+    const suggested = getSuggestedPaymentCards(state, 'p2', 3);
+    expect(suggested).toEqual(['money_3#b3']);
+  });
+
   it('suggests maximum payable cards when payer cannot meet requested amount', () => {
     const state = createGame({
       seed: 41,

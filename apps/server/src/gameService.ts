@@ -161,6 +161,8 @@ function roomPlayerSummary(room: MultiplayerRoom): MultiplayerPlayerSummary[] {
       bankCount: 0,
       completeSets: 0,
       connected: entry.connected,
+      lastSeenAt: entry.lastSeenAt,
+      reconnectDeadlineMs: entry.reconnectDeadlineMs,
       isHost: entry.id === room.hostPlayerId,
     }));
   }
@@ -174,9 +176,23 @@ function roomPlayerSummary(room: MultiplayerRoom): MultiplayerPlayerSummary[] {
       bankCount: player.bank.length,
       completeSets: getSetCompletionCount(player),
       connected: Boolean(entry?.connected),
+      lastSeenAt: entry?.lastSeenAt ?? room.updatedAt,
+      reconnectDeadlineMs: entry?.reconnectDeadlineMs ?? room.updatedAt,
       isHost: player.id === room.hostPlayerId,
     };
   });
+}
+
+function canonicalizeCardIds(cardIds: string[]): string[] {
+  return [...cardIds].sort((left, right) => left.localeCompare(right));
+}
+
+function normalizeActionForComparison(action: Action): Action {
+  if (action.type !== 'pay_request') return action;
+  return {
+    ...action,
+    cards: canonicalizeCardIds(action.cards),
+  };
 }
 
 function maskForViewer(state: GameState, viewerId: PlayerId): GameState {
@@ -452,7 +468,8 @@ export function applyRoomAction(
     throw new Error('player_action_mismatch');
   }
   const legal = getLegalActions(game, playerId);
-  const isLegal = legal.some((entry) => JSON.stringify(entry.action) === JSON.stringify(action));
+  const normalizedAction = JSON.stringify(normalizeActionForComparison(action));
+  const isLegal = legal.some((entry) => JSON.stringify(normalizeActionForComparison(entry.action)) === normalizedAction);
   if (!isLegal) {
     throw new Error('illegal_action');
   }

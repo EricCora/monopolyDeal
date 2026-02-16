@@ -205,10 +205,12 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
     }
   }, [apiBase, joinCode, playerName, refreshRoom]);
 
-  const leaveRoom = useCallback(async () => {
+  const leaveRoomInternal = useCallback(async (forgetSession: boolean) => {
     const current = session;
     if (!current) {
-      clearSession();
+      if (forgetSession) {
+        clearSession();
+      }
       return;
     }
     setLoading(true);
@@ -217,11 +219,24 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
     } catch {
       // Best-effort leave; local cleanup still proceeds.
     } finally {
-      clearSession();
+      if (forgetSession) {
+        clearSession();
+      } else {
+        setRoomView(null);
+      }
       setConnectionState('idle');
+      setError(null);
       setLoading(false);
     }
   }, [apiBase, clearSession, expectedRevision, session]);
+
+  const exitRoom = useCallback(async () => {
+    await leaveRoomInternal(false);
+  }, [leaveRoomInternal]);
+
+  const leaveRoom = useCallback(async () => {
+    await leaveRoomInternal(true);
+  }, [leaveRoomInternal]);
 
   const startMatch = useCallback(async () => {
     const current = session;
@@ -507,6 +522,7 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
     deleteCheckpoint,
     refreshCheckpoints,
     leaveRoom,
+    exitRoom,
     refreshRoom: () => refreshRoom(),
     reconnectSession: () => reconnectSession(),
     clearSession,

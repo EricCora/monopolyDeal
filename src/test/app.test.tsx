@@ -858,8 +858,28 @@ describe('App', () => {
             hostPlayerId: 'p1',
             yourPlayerId: 'p1',
             players: [
-              { id: 'p1', name: 'Host', handCount: 1, bankCount: 0, completeSets: 0, connected: true, isHost: true },
-              { id: 'p2', name: 'Guest', handCount: 1, bankCount: 1, completeSets: 0, connected: true, isHost: false },
+              {
+                id: 'p1',
+                name: 'Host',
+                handCount: 1,
+                bankCount: 0,
+                completeSets: 0,
+                connected: true,
+                lastSeenAt: Date.now(),
+                reconnectDeadlineMs: Date.now() + 30_000,
+                isHost: true,
+              },
+              {
+                id: 'p2',
+                name: 'Guest',
+                handCount: 1,
+                bankCount: 1,
+                completeSets: 0,
+                connected: true,
+                lastSeenAt: Date.now(),
+                reconnectDeadlineMs: Date.now() + 30_000,
+                isHost: false,
+              },
             ],
             promptPlayerId: 'p1',
             legalActions: [
@@ -887,7 +907,202 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: /multiplayer table/i })).toBeInTheDocument();
     expect(screen.getByText(/connection: connected/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /leave room/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /exit match/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /forget room/i })).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
+  });
+
+  it('opens rules drawer during an active multiplayer match', async () => {
+    const multiplayerState = structuredClone(baseState);
+    const now = Date.now();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/multiplayer/health')) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.endsWith('/api/multiplayer/rooms')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            playerId: 'p1',
+            sessionToken: 'token',
+            reconnectDeadlineMs: now + 30_000,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/multiplayer/rooms/ABCDE/state')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            status: 'active',
+            started: true,
+            hostPlayerId: 'p1',
+            yourPlayerId: 'p1',
+            players: [
+              { id: 'p1', name: 'Host', handCount: 1, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: true },
+              { id: 'p2', name: 'Guest', handCount: 1, bankCount: 1, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: false },
+            ],
+            promptPlayerId: 'p1',
+            legalActions: [{ label: 'Pass turn', action: { type: 'pass_turn', playerId: 'p1' } }],
+            gameState: multiplayerState,
+            paused: false,
+            revision: 3,
+            turnSnapshotCount: 0,
+            checkpointSlots: [],
+            canStart: false,
+            reconnectDeadlineMs: now + 30_000,
+            serverTime: now,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+    fireEvent.change(await screen.findByLabelText(/your name/i), { target: { value: 'Host' } });
+    fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
+    expect(await screen.findByRole('heading', { name: /multiplayer table/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /rules reference/i }));
+    expect(screen.getByRole('dialog', { name: /rules reference/i })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /rules reference/i })).not.toBeInTheDocument();
+    });
+
+    fetchSpy.mockRestore();
+  });
+
+  it('shows multiplayer winner overlay when the match is finished', async () => {
+    const multiplayerState = {
+      ...structuredClone(baseState),
+      winnerId: 'p1',
+    };
+    const now = Date.now();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/multiplayer/health')) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.endsWith('/api/multiplayer/rooms')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            playerId: 'p1',
+            sessionToken: 'token',
+            reconnectDeadlineMs: now + 30_000,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/multiplayer/rooms/ABCDE/state')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            status: 'finished',
+            started: true,
+            winnerId: 'p1',
+            hostPlayerId: 'p1',
+            yourPlayerId: 'p1',
+            players: [
+              { id: 'p1', name: 'Host', handCount: 1, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: true },
+              { id: 'p2', name: 'Guest', handCount: 1, bankCount: 1, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: false },
+            ],
+            promptPlayerId: 'p1',
+            legalActions: [],
+            gameState: multiplayerState,
+            paused: false,
+            revision: 3,
+            turnSnapshotCount: 0,
+            checkpointSlots: [],
+            canStart: false,
+            reconnectDeadlineMs: now + 30_000,
+            serverTime: now,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+    fireEvent.change(await screen.findByLabelText(/your name/i), { target: { value: 'Host' } });
+    fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
+    expect(await screen.findByRole('dialog', { name: /multiplayer winner/i })).toBeInTheDocument();
+    expect(screen.getByText(/winner:/i)).toHaveTextContent('Alpha');
+
+    fetchSpy.mockRestore();
+  });
+
+  it('keeps reconnect session on exit match but clears it on forget room', async () => {
+    const multiplayerState = structuredClone(baseState);
+    const now = Date.now();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/multiplayer/health')) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.endsWith('/api/multiplayer/rooms')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            playerId: 'p1',
+            sessionToken: 'token',
+            reconnectDeadlineMs: now + 30_000,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/multiplayer/rooms/ABCDE/state')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            status: 'active',
+            started: true,
+            hostPlayerId: 'p1',
+            yourPlayerId: 'p1',
+            players: [
+              { id: 'p1', name: 'Host', handCount: 1, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: true },
+              { id: 'p2', name: 'Guest', handCount: 1, bankCount: 1, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: false },
+            ],
+            promptPlayerId: 'p1',
+            legalActions: [{ label: 'Pass turn', action: { type: 'pass_turn', playerId: 'p1' } }],
+            gameState: multiplayerState,
+            paused: false,
+            revision: 3,
+            turnSnapshotCount: 0,
+            checkpointSlots: [],
+            canStart: false,
+            reconnectDeadlineMs: now + 30_000,
+            serverTime: now,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+    fireEvent.change(await screen.findByLabelText(/your name/i), { target: { value: 'Host' } });
+    fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
+    expect(await screen.findByRole('heading', { name: /multiplayer table/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /exit match/i }));
+    expect(await screen.findByRole('heading', { name: /monopoly deal local/i })).toBeInTheDocument();
+    expect(localStorage.getItem('monopolyDeal.multiplayerSession.v1')).toContain('ABCDE');
+
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+    expect(await screen.findByRole('heading', { name: /multiplayer/i })).toBeInTheDocument();
+    expect(screen.getByText(/room abcde/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /forget room/i }));
+    expect(await screen.findByRole('button', { name: /host multiplayer game/i })).toBeInTheDocument();
+    expect(localStorage.getItem('monopolyDeal.multiplayerSession.v1')).toBeNull();
 
     fetchSpy.mockRestore();
   });
