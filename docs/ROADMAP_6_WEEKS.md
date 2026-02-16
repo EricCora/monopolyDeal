@@ -116,3 +116,8 @@ Implied roadmap drivers (from architecture + hotspots):
 - Online multiplayer, backend accounts, matchmaking
 - Non-local persistence services
 - Major game mode additions unrelated to core pass-and-play stability
+
+## Next Codex Session Handoff
+
+- Multiplayer simplification handoff and implementation spec:
+  - `docs/NEXT_CODEX_MULTIPLAYER.md`

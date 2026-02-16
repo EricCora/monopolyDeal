@@ -112,6 +112,7 @@ For AI coding agents working on this repository:
 
 - `AGENTS.md` - default operating instructions, invariants, and done criteria
 - `docs/LLM_AGENT_GUIDE.md` - deeper architecture map, change playbooks, and test matrix
+- `docs/NEXT_CODEX_MULTIPLAYER.md` - next-session multiplayer simplification handoff instructions
 
 ## Persistence
 

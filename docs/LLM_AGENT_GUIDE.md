@@ -2,6 +2,11 @@
 
 Purpose: give coding agents enough context to make correct, low-regression changes without re-learning the whole codebase every run.
 
+## Current Handoff Focus
+
+- Next multiplayer simplification implementation spec:
+  - `docs/NEXT_CODEX_MULTIPLAYER.md`
+
 ## Architecture Snapshot
 
 - `src/engine/`
