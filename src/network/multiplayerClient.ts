@@ -1,5 +1,5 @@
 import type { Action } from '../engine';
-import type { MultiplayerRoomSessionResponse, MultiplayerRoomView, MultiplayerSession } from './multiplayerTypes';
+import type { MultiplayerCheckpointSummary, MultiplayerRoomSessionResponse, MultiplayerRoomView, MultiplayerSession } from './multiplayerTypes';
 
 function normalizeApiBase(input: string): string {
   return input.endsWith('/') ? input.slice(0, -1) : input;
@@ -44,6 +44,11 @@ export function multiplayerErrorMessage(code: string): string {
   if (code === 'reconnect_expired') return 'Rejoin window expired. Please rejoin with the room code.';
   if (code === 'minimum_players_required') return 'At least 2 players are required to start.';
   if (code === 'host_required') return 'Only the host can start this room.';
+  if (code === 'room_paused') return 'The host paused this match.';
+  if (code === 'revision_conflict') return 'Room state changed. Refreshing now.';
+  if (code === 'no_turn_snapshot') return 'No undo snapshots are available for this turn.';
+  if (code === 'checkpoint_slots_full') return 'Checkpoint slots are full. Delete one and try again.';
+  if (code === 'checkpoint_not_found') return 'Checkpoint not found. Refresh the room and try again.';
   if (code === 'network_unavailable' || code === 'request_failed') return 'Couldn\'t connect right now. Retrying...';
   return 'Could not complete multiplayer request. Please try again.';
 }
@@ -100,6 +105,7 @@ export async function joinMultiplayerRoom(
 export async function reconnectMultiplayerRoom(
   session: MultiplayerSession,
   apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
 ): Promise<MultiplayerRoomSessionResponse> {
   return request<MultiplayerRoomSessionResponse>(
     `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reconnect`,
@@ -109,6 +115,7 @@ export async function reconnectMultiplayerRoom(
       body: JSON.stringify({
         playerId: session.playerId,
         sessionToken: session.sessionToken,
+        expectedRevision,
       }),
     },
   );
@@ -118,6 +125,7 @@ export async function leaveMultiplayerRoom(
   session: MultiplayerSession,
   apiBase = getMultiplayerApiBase(),
   keepalive = false,
+  expectedRevision?: number,
 ): Promise<void> {
   await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/leave`, {
     method: 'POST',
@@ -125,6 +133,7 @@ export async function leaveMultiplayerRoom(
     body: JSON.stringify({
       playerId: session.playerId,
       sessionToken: session.sessionToken,
+      expectedRevision,
     }),
     keepalive,
   });
@@ -133,6 +142,7 @@ export async function leaveMultiplayerRoom(
 export async function startMultiplayerRoom(
   session: MultiplayerSession,
   apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
 ): Promise<void> {
   await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/start`, {
     method: 'POST',
@@ -140,6 +150,7 @@ export async function startMultiplayerRoom(
     body: JSON.stringify({
       playerId: session.playerId,
       sessionToken: session.sessionToken,
+      expectedRevision,
     }),
   });
 }
@@ -161,6 +172,7 @@ export async function applyMultiplayerAction(
   session: MultiplayerSession,
   action: Action,
   apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
 ): Promise<void> {
   await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/action`, {
     method: 'POST',
@@ -169,6 +181,143 @@ export async function applyMultiplayerAction(
       playerId: session.playerId,
       sessionToken: session.sessionToken,
       action,
+      expectedRevision,
+    }),
+  });
+}
+
+export async function pauseMultiplayerRoom(
+  session: MultiplayerSession,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<void> {
+  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/pause`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      playerId: session.playerId,
+      sessionToken: session.sessionToken,
+      expectedRevision,
+    }),
+  });
+}
+
+export async function resumeMultiplayerRoom(
+  session: MultiplayerSession,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<void> {
+  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/resume`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      playerId: session.playerId,
+      sessionToken: session.sessionToken,
+      expectedRevision,
+    }),
+  });
+}
+
+export async function undoMultiplayerRoomAction(
+  session: MultiplayerSession,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<void> {
+  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/undo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      playerId: session.playerId,
+      sessionToken: session.sessionToken,
+      expectedRevision,
+    }),
+  });
+}
+
+export async function resetMultiplayerRoomTurn(
+  session: MultiplayerSession,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<void> {
+  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reset-turn`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      playerId: session.playerId,
+      sessionToken: session.sessionToken,
+      expectedRevision,
+    }),
+  });
+}
+
+export async function listMultiplayerCheckpoints(
+  session: MultiplayerSession,
+  apiBase = getMultiplayerApiBase(),
+): Promise<MultiplayerCheckpointSummary[]> {
+  const params = new URLSearchParams({
+    playerId: session.playerId,
+    sessionToken: session.sessionToken,
+  });
+  const payload = await request<{ checkpoints: MultiplayerCheckpointSummary[] }>(
+    `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/checkpoints?${params.toString()}`,
+  );
+  return payload.checkpoints ?? [];
+}
+
+export async function saveMultiplayerCheckpoint(
+  session: MultiplayerSession,
+  name: string,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<MultiplayerCheckpointSummary> {
+  const payload = await request<{ checkpoint: MultiplayerCheckpointSummary }>(
+    `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/checkpoints/save`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        name,
+        expectedRevision,
+      }),
+    },
+  );
+  return payload.checkpoint;
+}
+
+export async function loadMultiplayerCheckpoint(
+  session: MultiplayerSession,
+  checkpointId: string,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<void> {
+  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/checkpoints/load`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      playerId: session.playerId,
+      sessionToken: session.sessionToken,
+      checkpointId,
+      expectedRevision,
+    }),
+  });
+}
+
+export async function deleteMultiplayerCheckpoint(
+  session: MultiplayerSession,
+  checkpointId: string,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<void> {
+  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/checkpoints/delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      playerId: session.playerId,
+      sessionToken: session.sessionToken,
+      checkpointId,
+      expectedRevision,
     }),
   });
 }
