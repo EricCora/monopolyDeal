@@ -380,7 +380,7 @@ export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, session
 }
 
 export function leaveRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, expectedRevision?: number): void {
-  ensureExpectedRevision(room, expectedRevision);
+  void expectedRevision;
   const player = requireSession(room, playerId, sessionToken);
   markDisconnected(room, player);
   incrementRevision(room);

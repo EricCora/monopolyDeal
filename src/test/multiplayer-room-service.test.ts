@@ -179,4 +179,17 @@ describe('multiplayer room service lifecycle', () => {
 
     expect(() => pauseRoom(room, session.playerId, session.sessionToken, staleRevision)).toThrowError('revision_conflict');
   });
+
+  it('allows leave with stale expected revision for valid session cleanup', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+    const staleRevision = room.revision - 1;
+
+    leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken, staleRevision);
+
+    const disconnected = findParticipant(room, playerTwo.playerId);
+    expect(disconnected.connected).toBe(false);
+  });
 });
