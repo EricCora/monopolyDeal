@@ -23,9 +23,20 @@ export interface MultiplayerRoomView {
   promptPlayerId?: PlayerId;
   legalActions: LegalAction[];
   gameState?: GameState;
+  paused: boolean;
+  pausedByPlayerId?: PlayerId;
+  revision: number;
+  turnSnapshotCount: number;
+  checkpointSlots: MultiplayerCheckpointSummary[];
   canStart: boolean;
   reconnectDeadlineMs: number;
   serverTime: number;
+}
+
+export interface MultiplayerCheckpointSummary {
+  id: string;
+  name: string;
+  savedAt: number;
 }
 
 export interface RoomSessionResponse {
@@ -46,6 +57,7 @@ export interface JoinRoomRequest {
 export interface ReconnectRoomRequest {
   playerId: PlayerId;
   sessionToken: string;
+  expectedRevision?: number;
 }
 
 export type StartRoomRequest = ReconnectRoomRequest;
@@ -54,4 +66,16 @@ export type LeaveRoomRequest = ReconnectRoomRequest;
 
 export interface ApplyRoomActionRequest extends ReconnectRoomRequest {
   action: Action;
+}
+
+export interface SaveCheckpointRequest extends ReconnectRoomRequest {
+  name: string;
+}
+
+export interface LoadCheckpointRequest extends ReconnectRoomRequest {
+  checkpointId: string;
+}
+
+export interface DeleteCheckpointRequest extends ReconnectRoomRequest {
+  checkpointId: string;
 }

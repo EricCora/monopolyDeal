@@ -24,9 +24,20 @@ export interface MultiplayerRoomView {
   promptPlayerId?: string;
   legalActions: LegalAction[];
   gameState?: GameState;
+  paused: boolean;
+  pausedByPlayerId?: string;
+  revision: number;
+  turnSnapshotCount: number;
+  checkpointSlots: MultiplayerCheckpointSummary[];
   canStart: boolean;
   reconnectDeadlineMs: number;
   serverTime: number;
+}
+
+export interface MultiplayerCheckpointSummary {
+  id: string;
+  name: string;
+  savedAt: number;
 }
 
 export interface MultiplayerSession {
@@ -50,4 +61,5 @@ export interface MultiplayerActionPayload {
   playerId: string;
   sessionToken: string;
   action: Action;
+  expectedRevision?: number;
 }

@@ -175,6 +175,14 @@ function formatDuration(seconds: number): string {
   return `${hours}h ${remainingMinutes}m`;
 }
 
+function multiplayerConnectionLabel(state: 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected'): string {
+  if (state === 'connected') return 'Connected';
+  if (state === 'connecting') return 'Connecting';
+  if (state === 'reconnecting') return 'Reconnecting';
+  if (state === 'disconnected') return 'Disconnected';
+  return 'Idle';
+}
+
 function gameIdentity(game: GameState): string {
   return `${game.createdAt}`;
 }
@@ -317,6 +325,7 @@ function App() {
     session: multiplayerSession,
     roomView: multiplayerRoomView,
     loading: multiplayerLoading,
+    checkpointLoading: multiplayerCheckpointLoading,
     error: multiplayerError,
     connectionState: multiplayerConnectionState,
     isHost: multiplayerIsHost,
@@ -325,6 +334,13 @@ function App() {
     joinRoom: joinMultiplayerRoom,
     startMatch: startMultiplayerMatch,
     runAction: runMultiplayerAction,
+    pauseMatch: pauseMultiplayerMatch,
+    resumeMatch: resumeMultiplayerMatch,
+    undoLastAction: undoMultiplayerAction,
+    resetTurn: resetMultiplayerTurn,
+    saveCheckpoint: saveMultiplayerCheckpoint,
+    loadCheckpoint: loadMultiplayerCheckpoint,
+    deleteCheckpoint: deleteMultiplayerCheckpoint,
     leaveRoom: leaveMultiplayerRoom,
     refreshRoom: refreshMultiplayerRoom,
     setError: setMultiplayerError,
@@ -471,6 +487,115 @@ function App() {
     if (mainPhaseExhausted) return '3/3 plays used. Pass turn or use non-play actions.';
     return 'Play cards from hand or pass turn.';
   }, [discardOverLimitCount, mainPhaseExhausted, prompt]);
+
+  const multiplayerGame = screen === 'multiplayer' ? (multiplayerRoomView?.gameState ?? null) : null;
+  const multiplayerPrompt = useMemo(
+    () => (multiplayerGame ? getNextPrompt(multiplayerGame) : null),
+    [multiplayerGame],
+  );
+  const multiplayerLegalActions = useMemo(() => multiplayerRoomView?.legalActions ?? [], [multiplayerRoomView?.legalActions]);
+  const multiplayerContextualActions = useMemo(
+    () => multiplayerLegalActions.filter((item) => !actionToCardId(item.action)),
+    [multiplayerLegalActions],
+  );
+  const multiplayerCardActionVariants = useMemo(() => {
+    const variants = new Map<string, CardActionVariant[]>();
+    multiplayerLegalActions.forEach((item, index) => {
+      const cardId = actionToCardId(item.action);
+      if (!cardId) return;
+      const option: CardActionVariant = {
+        id: `${actionVariantId(item.action)}-${index}`,
+        label: item.label,
+        description: uiPreferences.experimental.contextualActionPreviews ? item.previewText : undefined,
+        action: item.action,
+        requiresConfirmation: item.requiresConfirmation,
+        riskLevel: item.riskLevel,
+        previewText: item.previewText,
+      };
+      const existing = variants.get(cardId) ?? [];
+      existing.push(option);
+      variants.set(cardId, existing);
+    });
+    return variants;
+  }, [multiplayerLegalActions, uiPreferences.experimental.contextualActionPreviews]);
+  const multiplayerPlayableCardIds = useMemo(
+    () => new Set(multiplayerCardActionVariants.keys()),
+    [multiplayerCardActionVariants],
+  );
+  const multiplayerIsMandatoryPrompt = Boolean(
+    multiplayerPrompt
+      && (multiplayerPrompt.kind === 'payment'
+        || multiplayerPrompt.kind === 'selection'
+        || multiplayerPrompt.kind === 'response'
+        || multiplayerPrompt.kind === 'discard'),
+  );
+  const multiplayerMainPhaseExhausted = Boolean(
+    multiplayerGame
+      && multiplayerPrompt?.kind === 'main'
+      && multiplayerGame.turn.phase === 'action'
+      && multiplayerGame.turn.playsUsed >= 3
+      && !multiplayerGame.pending,
+  );
+  const multiplayerDiscardOverLimitCount = useMemo(() => {
+    if (!multiplayerGame || !multiplayerPrompt || multiplayerPrompt.kind !== 'discard') return 0;
+    const activePlayer = multiplayerGame.players.find((player) => player.id === multiplayerPrompt.playerId);
+    if (!activePlayer) return 0;
+    return Math.max(activePlayer.hand.length - 7, 0);
+  }, [multiplayerGame, multiplayerPrompt]);
+  const multiplayerTurnStatusText = useMemo(() => {
+    if (!multiplayerPrompt) return '';
+    if (multiplayerPrompt.kind === 'discard') {
+      return multiplayerDiscardOverLimitCount > 0
+        ? `Discard ${multiplayerDiscardOverLimitCount} card${multiplayerDiscardOverLimitCount === 1 ? '' : 's'} to end turn.`
+        : 'Discard step complete. You can pass turn.';
+    }
+    if (multiplayerPrompt.kind === 'payment') return 'Payment is required before any other action.';
+    if (multiplayerPrompt.kind === 'response') return 'Respond to Just Say No chain.';
+    if (multiplayerPrompt.kind === 'selection') return 'Resolve the pending card effect.';
+    if (multiplayerPrompt.kind === 'draw') return 'Draw to start the turn.';
+    if (multiplayerMainPhaseExhausted) return '3/3 plays used. Pass turn or use non-play actions.';
+    return 'Play cards from hand or pass turn.';
+  }, [multiplayerDiscardOverLimitCount, multiplayerMainPhaseExhausted, multiplayerPrompt]);
+  const multiplayerPendingPayment = multiplayerGame?.pending?.kind === 'payment' ? multiplayerGame.pending.payload : null;
+  const multiplayerPendingPaymentPlayer = useMemo(() => {
+    if (!multiplayerGame || !multiplayerPendingPayment) return null;
+    return multiplayerGame.players.find((player) => player.id === multiplayerPendingPayment.targetPlayerId) ?? null;
+  }, [multiplayerGame, multiplayerPendingPayment]);
+  const multiplayerPendingPaymentCardIds = useMemo(() => {
+    if (!multiplayerPendingPaymentPlayer) return [];
+    const propertyCards = (Object.keys(multiplayerPendingPaymentPlayer.properties) as PropertyColor[]).flatMap((color) =>
+      multiplayerPendingPaymentPlayer.properties[color].map((entry) => entry.cardId),
+    );
+    return [...multiplayerPendingPaymentPlayer.bank, ...propertyCards];
+  }, [multiplayerPendingPaymentPlayer]);
+  const multiplayerSelectedPaymentTotal = useMemo(
+    () => selectedPaymentCards.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
+    [selectedPaymentCards],
+  );
+  const multiplayerTotalPayableValue = useMemo(
+    () => multiplayerPendingPaymentCardIds.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
+    [multiplayerPendingPaymentCardIds],
+  );
+  const multiplayerPaymentCanSubmit = multiplayerPendingPayment
+    ? selectedPaymentCards.length > 0
+      && (multiplayerSelectedPaymentTotal >= multiplayerPendingPayment.amount
+        || multiplayerTotalPayableValue < multiplayerPendingPayment.amount)
+    : false;
+  const multiplayerCoachHint = useMemo(() => {
+    if (!multiplayerGame || !multiplayerPrompt || !multiplayerRoomView) return null;
+    if (!uiPreferences.experimental.aiCoach) return null;
+    if (multiplayerPrompt.playerId !== multiplayerRoomView.yourPlayerId) return null;
+    if (multiplayerLegalActions.length === 0) return null;
+    const mode = uiPreferences.experimental.aiOpponents ? 'hard' : 'easy';
+    return buildCoachHint(multiplayerGame, multiplayerPrompt.playerId, multiplayerLegalActions, mode);
+  }, [
+    multiplayerGame,
+    multiplayerLegalActions,
+    multiplayerPrompt,
+    multiplayerRoomView,
+    uiPreferences.experimental.aiCoach,
+    uiPreferences.experimental.aiOpponents,
+  ]);
 
   const pendingPayment = game?.pending?.kind === 'payment' ? game.pending.payload : null;
   const canSaveCurrentGame = Boolean(game && !isGameOver(game).done);
@@ -797,6 +922,7 @@ function App() {
 
   const queueRiskyAction = (
     action: Action,
+    mode: 'local' | 'multiplayer',
     source?: Partial<Pick<RiskyActionConfirmation, 'riskLevel' | 'previewText'>> & { requiresConfirmation?: boolean },
   ): boolean => {
     if (!uiPreferences.confirmRiskyActions) return false;
@@ -808,6 +934,7 @@ function App() {
     if (!shouldConfirm) return false;
     setRiskyActionConfirmation({
       action,
+      mode,
       label: actionCardName(action),
       riskLevel: source?.riskLevel ?? (kind === 'forced_deal' || kind === 'deal_breaker' ? 'high' : 'medium'),
       previewText:
@@ -830,6 +957,7 @@ function App() {
     if (
       queueRiskyAction(
         action,
+        'local',
         source
           ? {
               requiresConfirmation: source.requiresConfirmation,
@@ -842,6 +970,39 @@ function App() {
       return;
     }
     runAction(action);
+  };
+
+  const runMultiplayerActionByPayload = useCallback(async (action: Action) => {
+    if (!multiplayerRoomView) return;
+    const index = multiplayerRoomView.legalActions.findIndex(
+      (item) => JSON.stringify(item.action) === JSON.stringify(action),
+    );
+    if (index < 0) {
+      setMultiplayerError('That action is no longer legal. Refreshing room state.');
+      await refreshMultiplayerRoom();
+      return;
+    }
+    await runMultiplayerAction(index);
+  }, [multiplayerRoomView, refreshMultiplayerRoom, runMultiplayerAction, setMultiplayerError]);
+
+  const runMultiplayerActionWithConfirmation = (action: Action, source?: LegalAction) => {
+    if (multiplayerRoomView?.paused) return;
+    if (
+      queueRiskyAction(
+        action,
+        'multiplayer',
+        source
+          ? {
+              requiresConfirmation: source.requiresConfirmation,
+              riskLevel: source.riskLevel,
+              previewText: source.previewText,
+            }
+          : undefined,
+      )
+    ) {
+      return;
+    }
+    void runMultiplayerActionByPayload(action);
   };
 
   useEffect(() => {
@@ -935,6 +1096,45 @@ function App() {
       playerId: pendingPayment.targetPlayerId,
       cards: selectedPaymentCards,
     });
+  };
+
+  const handleMultiplayerCardClick = (cardId: string) => {
+    if (!multiplayerGame || !multiplayerPrompt || !multiplayerRoomView) return;
+    if (multiplayerPrompt.playerId !== multiplayerRoomView.yourPlayerId) return;
+    if (isGameOver(multiplayerGame).done) return;
+    if (!multiplayerPlayableCardIds.has(cardId)) return;
+
+    const variants = multiplayerCardActionVariants.get(cardId) ?? [];
+    if (variants.length === 0) return;
+    setSelectedCardId(cardId);
+    if (variants.length === 1) {
+      runMultiplayerActionWithConfirmation(variants[0].action, variants[0]);
+      return;
+    }
+    const def = getCardDefinition(cardId);
+    const cardLabel = def.kind === 'money' ? `$${def.value}` : def.name;
+    setChooser({ cardId, cardLabel, variants });
+  };
+
+  const handleMultiplayerPaymentCardToggle = (cardId: string) => {
+    if (!multiplayerPendingPayment || !multiplayerPendingPaymentCardIds.includes(cardId)) return;
+    setSelectedPaymentCards((prev) => (prev.includes(cardId) ? prev.filter((id) => id !== cardId) : [...prev, cardId]));
+  };
+
+  const submitMultiplayerSelectedPayment = () => {
+    if (!multiplayerPendingPayment || !multiplayerPaymentCanSubmit) return;
+    runMultiplayerActionWithConfirmation({
+      type: 'pay_request',
+      playerId: multiplayerPendingPayment.targetPlayerId,
+      cards: selectedPaymentCards,
+    });
+  };
+
+  const autoSelectMultiplayerPayment = () => {
+    if (!multiplayerGame || !multiplayerPendingPayment) return;
+    const suggested = getSuggestedPaymentCards(multiplayerGame, multiplayerPendingPayment.targetPlayerId, multiplayerPendingPayment.amount);
+    setSelectedPaymentCards(suggested);
+    recordGrowthMetric('payment_auto_selected');
   };
 
   const autoSelectPayment = () => {
@@ -1224,7 +1424,98 @@ function App() {
         />
       ) : null}
 
-      {screen === 'multiplayer' ? (
+      {screen === 'multiplayer' && multiplayerRoomView?.started && multiplayerGame && multiplayerPrompt ? (
+        <GameTableScreen
+          mode="multiplayer"
+          game={multiplayerGame}
+          prompt={multiplayerPrompt}
+          isPaused={multiplayerRoomView.paused}
+          pauseReasonText={
+            multiplayerRoomView.pausedByPlayerId
+              ? `Gameplay is paused by ${multiplayerGame.players.find((player) => player.id === multiplayerRoomView.pausedByPlayerId)?.name ?? multiplayerRoomView.pausedByPlayerId}.`
+              : 'Gameplay is paused by the host.'
+          }
+          connectionStatusLabel={multiplayerConnectionLabel(multiplayerConnectionState)}
+          isMultiplayerHost={multiplayerIsHost}
+          checkpointSlots={multiplayerRoomView.checkpointSlots}
+          checkpointLoading={multiplayerCheckpointLoading}
+          legalActions={multiplayerLegalActions}
+          contextualActions={multiplayerContextualActions}
+          revealedPlayerId={multiplayerRoomView.yourPlayerId}
+          playableCardIds={multiplayerPlayableCardIds}
+          selectedCardId={selectedCardId}
+          selectedPaymentCards={selectedPaymentCards}
+          selectedPaymentTotal={multiplayerSelectedPaymentTotal}
+          totalPayableValue={multiplayerTotalPayableValue}
+          paymentCanSubmit={multiplayerPaymentCanSubmit}
+          pendingPayment={multiplayerPendingPayment}
+          chooser={chooser}
+          shouldShowShield={false}
+          turnStatusText={multiplayerTurnStatusText}
+          isMandatoryPrompt={multiplayerIsMandatoryPrompt}
+          mainPhaseExhausted={multiplayerMainPhaseExhausted}
+          discardOverLimitCount={multiplayerDiscardOverLimitCount}
+          showRulesHints={uiPreferences.showRulesDrawerHints}
+          enhancedEventLog={uiPreferences.experimental.enhancedEventLog}
+          coachHint={multiplayerCoachHint}
+          turnSnapshotsCount={multiplayerRoomView.turnSnapshotCount}
+          showDebugActions={false}
+          actionDetailText={actionDetailText}
+          onPauseToggle={() => {
+            if (!multiplayerIsHost) return;
+            if (multiplayerRoomView.paused) {
+              void resumeMultiplayerMatch();
+              return;
+            }
+            void pauseMultiplayerMatch();
+          }}
+          onRefreshMultiplayer={() => {
+            void refreshMultiplayerRoom();
+          }}
+          onLeaveMultiplayer={() => {
+            void leaveMultiplayerRoom();
+          }}
+          onSaveCheckpoint={(name) => {
+            void saveMultiplayerCheckpoint(name);
+          }}
+          onLoadCheckpoint={(checkpointId) => {
+            void loadMultiplayerCheckpoint(checkpointId);
+          }}
+          onDeleteCheckpoint={(checkpointId) => {
+            void deleteMultiplayerCheckpoint(checkpointId);
+          }}
+          onOpenRules={() => {
+            setShowRulesDrawer(true);
+            recordGrowthMetric('rules_drawer_opened');
+          }}
+          onOpenSavedGames={() => {}}
+          onOpenSettings={() => openSettings('home')}
+          onToggleDebugActions={() => {
+            // debug actions are local-only.
+          }}
+          onRunAction={runMultiplayerActionWithConfirmation}
+          onCardClick={handleMultiplayerCardClick}
+          onPaymentCardToggle={handleMultiplayerPaymentCardToggle}
+          onAutoSelectPayment={autoSelectMultiplayerPayment}
+          onSubmitSelectedPayment={submitMultiplayerSelectedPayment}
+          onUndoLastPlay={() => {
+            void undoMultiplayerAction();
+          }}
+          onResetTurnPlays={() => {
+            void resetMultiplayerTurn();
+          }}
+          onCloseChooser={() => {
+            setChooser(null);
+            setSelectedCardId(null);
+          }}
+          onRevealTurn={() => {
+            // no pass-and-play shield for multiplayer.
+          }}
+          onNavigateHome={() => setScreen('home')}
+        />
+      ) : null}
+
+      {screen === 'multiplayer' && (!multiplayerRoomView?.started || !multiplayerGame || !multiplayerPrompt) ? (
         <MultiplayerScreen
           playerName={multiplayerPlayerName}
           joinCode={multiplayerJoinCode}
@@ -1340,7 +1631,14 @@ function App() {
           title={riskyActionConfirmation.label}
           previewText={riskyActionConfirmation.previewText}
           riskLevel={riskyActionConfirmation.riskLevel}
-          onConfirm={() => runAction(riskyActionConfirmation.action)}
+          onConfirm={() => {
+            if (riskyActionConfirmation.mode === 'multiplayer') {
+              void runMultiplayerActionByPayload(riskyActionConfirmation.action);
+              setRiskyActionConfirmation(null);
+              return;
+            }
+            runAction(riskyActionConfirmation.action);
+          }}
           onCancel={() => setRiskyActionConfirmation(null)}
         />
       ) : null}

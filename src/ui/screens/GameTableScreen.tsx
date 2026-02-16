@@ -29,9 +29,15 @@ interface PlayChooserState {
 }
 
 interface GameTableScreenProps {
+  mode?: 'local' | 'multiplayer';
   game: GameState;
   prompt: TurnPrompt;
   isPaused: boolean;
+  pauseReasonText?: string;
+  connectionStatusLabel?: string;
+  isMultiplayerHost?: boolean;
+  checkpointSlots?: { id: string; name: string; savedAt: number }[];
+  checkpointLoading?: boolean;
   legalActions: LegalAction[];
   contextualActions: LegalAction[];
   revealedPlayerId: string | null;
@@ -60,6 +66,11 @@ interface GameTableScreenProps {
   showDebugActions: boolean;
   actionDetailText: (item: LegalAction) => string | null;
   onPauseToggle: () => void;
+  onRefreshMultiplayer?: () => void;
+  onLeaveMultiplayer?: () => void;
+  onSaveCheckpoint?: (name: string) => void;
+  onLoadCheckpoint?: (checkpointId: string) => void;
+  onDeleteCheckpoint?: (checkpointId: string) => void;
   onOpenRules: () => void;
   onOpenSavedGames: () => void;
   onOpenSettings: () => void;
@@ -97,9 +108,15 @@ function renderHiddenHand(cardCount: number) {
 }
 
 export function GameTableScreen({
+  mode = 'local',
   game,
   prompt,
   isPaused,
+  pauseReasonText,
+  connectionStatusLabel,
+  isMultiplayerHost = false,
+  checkpointSlots = [],
+  checkpointLoading = false,
   legalActions,
   contextualActions,
   revealedPlayerId,
@@ -123,6 +140,11 @@ export function GameTableScreen({
   showDebugActions,
   actionDetailText,
   onPauseToggle,
+  onRefreshMultiplayer,
+  onLeaveMultiplayer,
+  onSaveCheckpoint,
+  onLoadCheckpoint,
+  onDeleteCheckpoint,
   onOpenRules,
   onOpenSavedGames,
   onOpenSettings,
@@ -139,11 +161,42 @@ export function GameTableScreen({
   onNavigateHome,
 }: GameTableScreenProps) {
   const over = isGameOver(game);
+  const isMultiplayer = mode === 'multiplayer';
+
+  const saveCheckpointInteractive = () => {
+    if (!onSaveCheckpoint || !isMultiplayerHost || isPaused) return;
+    if (typeof window === 'undefined') return;
+    const nextName = window.prompt('Checkpoint name', `Turn ${game.turnCount}`);
+    if (!nextName) return;
+    onSaveCheckpoint(nextName);
+  };
+
+  const loadCheckpointInteractive = () => {
+    if (!onLoadCheckpoint || !isMultiplayerHost || checkpointSlots.length === 0 || isPaused) return;
+    if (typeof window === 'undefined') return;
+    const options = checkpointSlots.map((slot, index) => `${index + 1}. ${slot.name}`).join('\n');
+    const chosen = window.prompt(`Load which checkpoint?\n${options}`, '1');
+    const index = Number(chosen) - 1;
+    if (!Number.isFinite(index) || index < 0 || index >= checkpointSlots.length) return;
+    onLoadCheckpoint(checkpointSlots[index].id);
+  };
+
+  const deleteCheckpointInteractive = () => {
+    if (!onDeleteCheckpoint || !isMultiplayerHost || checkpointSlots.length === 0) return;
+    if (typeof window === 'undefined') return;
+    const options = checkpointSlots.map((slot, index) => `${index + 1}. ${slot.name}`).join('\n');
+    const chosen = window.prompt(`Delete which checkpoint?\n${options}`, '1');
+    const index = Number(chosen) - 1;
+    if (!Number.isFinite(index) || index < 0 || index >= checkpointSlots.length) return;
+    const confirmed = window.confirm(`Delete checkpoint "${checkpointSlots[index].name}"?`);
+    if (!confirmed) return;
+    onDeleteCheckpoint(checkpointSlots[index].id);
+  };
 
   return (
     <section className={`game-table-screen ${isPaused ? 'is-paused' : ''}`}>
       <TopBar
-        title="Game Table"
+        title={isMultiplayer ? 'Multiplayer Table' : 'Game Table'}
         subtitle={prompt.text}
         meta={(
           <>
@@ -151,15 +204,37 @@ export function GameTableScreen({
               Turn {game.turnCount} | Draw pile: {game.drawPile.length} | Discard: {game.discardPile.length}
             </p>
             {game.turn.phase === 'action' ? <p>Plays used: {game.turn.playsUsed}/3</p> : null}
+            {isMultiplayer && connectionStatusLabel ? (
+              <p>Connection: {connectionStatusLabel}</p>
+            ) : null}
+            {isMultiplayer && checkpointSlots.length > 0 ? (
+              <p>Checkpoints: {checkpointSlots.length}</p>
+            ) : null}
           </>
         )}
         actions={(
           <>
             <button onClick={onNavigateHome}>Home</button>
+            {isMultiplayer ? (
+              <>
+                <button onClick={onRefreshMultiplayer} disabled={isPaused || checkpointLoading}>Refresh</button>
+                <button onClick={onLeaveMultiplayer} disabled={checkpointLoading}>Leave Room</button>
+                {isMultiplayerHost ? (
+                  <>
+                    <button onClick={saveCheckpointInteractive} disabled={checkpointLoading || isPaused}>Save Checkpoint</button>
+                    <button onClick={loadCheckpointInteractive} disabled={checkpointLoading || isPaused || checkpointSlots.length === 0}>Load Checkpoint</button>
+                    <button onClick={deleteCheckpointInteractive} disabled={checkpointLoading || checkpointSlots.length === 0}>Delete Checkpoint</button>
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <button onClick={onOpenSavedGames}>Save Game</button>
+            )}
             <button onClick={onOpenRules}>Rules Reference</button>
-            <button onClick={onOpenSavedGames}>Save Game</button>
             <button onClick={onOpenSettings}>Settings</button>
-            <button onClick={onPauseToggle}>{isPaused ? 'Resume' : 'Pause'}</button>
+            {(isMultiplayer ? isMultiplayerHost : true) ? (
+              <button onClick={onPauseToggle}>{isPaused ? 'Resume' : 'Pause'}</button>
+            ) : null}
           </>
         )}
       />
@@ -403,7 +478,7 @@ export function GameTableScreen({
         <div className="paused-overlay" role="dialog" aria-modal="true" aria-label="Game paused">
           <div className="paused-card card-enter">
             <h3>Game Paused</h3>
-            <p>Gameplay is locked until you press Resume in the top bar.</p>
+            <p>{pauseReasonText ?? 'Gameplay is locked until you press Resume in the top bar.'}</p>
           </div>
         </div>
       ) : null}

@@ -26,6 +26,12 @@ Branch: `codex/deep-research-improvements`
 - `/state` polling now refreshes room activity to prevent false inactivity cleanup
 - Expired disconnected lobby participants are reclaimed before `room_full` checks
 - `/state` now returns `reconnect_expired` when disconnected reconnect windows have elapsed
+- Multiplayer parity expansion:
+- Active multiplayer matches now render the full `GameTableScreen` experience (board, event log, inline actions, confirmations, previews, coach hints).
+- Host-only room controls added: `pause`, `resume`, checkpoint `save/load/delete`.
+- Active prompt player can now run server-authoritative `undo` and `reset-turn` actions.
+- Room state now includes `paused`, `pausedByPlayerId`, `revision`, `turnSnapshotCount`, and checkpoint summaries.
+- Mutating multiplayer operations now accept optional `expectedRevision` and return `revision_conflict` on stale writes.
 - Accessibility/game-feel improvements:
 - High contrast mode, keyboard shortcuts, live-region updates
 - Sound and haptics toggles
@@ -59,6 +65,7 @@ Branch: `codex/deep-research-improvements`
 - Added hosted multiplayer client with endpoint helpers and friendly error mapping.
 - Uses `VITE_MULTIPLAYER_API_URL` with localhost-aware fallback (`http://localhost:8787` in local dev, same-origin fallback otherwise).
 - Multiplayer unreachable messaging now includes actionable local guidance for starting the backend service.
+- Added pause/resume/undo/reset-turn/checkpoint endpoint helpers and revision-aware mutation payloads.
 - `src/stats/dashboard.ts`:
 - `buildStatsDashboardModel` now accepts optional growth metrics input and returns `growthKpis` plus `growthEvents` series.
 

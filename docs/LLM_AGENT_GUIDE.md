@@ -23,14 +23,14 @@ Purpose: give coding agents enough context to make correct, low-regression chang
 - `src/ai/`
   - Heuristic and rollout decision helpers plus explainable coach hint generation.
 - `src/network/`
-  - Hosted multiplayer client API wrappers (`src/network/multiplayerClient.ts`) for room create/join/reconnect/start/state/action/leave flows.
+  - Hosted multiplayer client API wrappers (`src/network/multiplayerClient.ts`) for room create/join/reconnect/start/state/action/leave plus pause/resume/undo/reset-turn/checkpoint flows.
   - Legacy LAN wrappers remain for development fallback.
 - `apps/server/`
-  - Multiplayer API server scaffold with room lifecycle, reconnect windows, host migration, and best-effort snapshot persistence.
+  - Multiplayer API server scaffold with room lifecycle, reconnect windows, host migration, revision-guarded mutations, turn snapshots, checkpoints, and best-effort snapshot persistence.
 - `src/ui/` + `src/App.tsx`
   - `App.tsx` owns state/actions and passes typed props to screen containers.
   - `src/app/useFeedback.ts` encapsulates sound/haptic emission.
-  - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, polling, and reconnect lifecycle.
+  - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, polling/reconnect lifecycle, and host/player room controls (pause/undo/checkpoints).
   - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition.
   - `src/ui/screens/SavedGamesScreen.tsx` manages manual save slots (load/save-over/rename/delete).
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
@@ -132,6 +132,7 @@ Do not model multiple simultaneous pending effects.
 
 - `src/engine/game.ts` is large; regressions are likely when changing shared helpers.
 - `src/App.tsx` coordinates many UI states (chooser, payment selection, pass-and-play shield, pause state, settings routing, undo snapshots).
+- In multiplayer mode, `GameTableScreen` is reused for active matches; server room state remains authoritative for pause/snapshots/checkpoints.
 - Growth telemetry uses `monopolyDeal.growthMetrics.v1` and is surfaced in `StatsDashboard`.
 - Card rendering/fit is split between `src/ui/components/CardView.tsx`, `src/ui/components/HandFan.tsx`, and `src/ui/theme/components/cards.css`.
 - Draw-phase prompt intentionally uses rail hand layout for readability; non-draw prompts still use auto-fit.

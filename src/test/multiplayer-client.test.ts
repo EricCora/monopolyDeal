@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveMultiplayerApiBase } from '../network/multiplayerClient';
+import { multiplayerErrorMessage, resolveMultiplayerApiBase } from '../network/multiplayerClient';
 
 describe('resolveMultiplayerApiBase', () => {
   it('prefers env url over host/origin', () => {
@@ -41,5 +41,15 @@ describe('resolveMultiplayerApiBase', () => {
 
   it('falls back to localhost server without browser context', () => {
     expect(resolveMultiplayerApiBase({})).toBe('http://localhost:8787');
+  });
+});
+
+describe('multiplayerErrorMessage', () => {
+  it('maps revision conflict to refresh guidance', () => {
+    expect(multiplayerErrorMessage('revision_conflict')).toMatch(/refresh/i);
+  });
+
+  it('maps room paused for user clarity', () => {
+    expect(multiplayerErrorMessage('room_paused')).toMatch(/paused/i);
   });
 });

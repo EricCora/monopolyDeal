@@ -36,6 +36,7 @@ export interface LegalActionDetailView {
 
 export interface RiskyActionConfirmation {
   action: Action;
+  mode: 'local' | 'multiplayer';
   label: string;
   riskLevel: 'low' | 'medium' | 'high';
   previewText: string;

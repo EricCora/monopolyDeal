@@ -7,8 +7,17 @@ const SNAPSHOT_PATH = resolve(process.cwd(), 'apps/server/.multiplayer-room-snap
 export function loadSnapshots(): MultiplayerRoom[] {
   try {
     const raw = readFileSync(SNAPSHOT_PATH, 'utf8');
-    const parsed = JSON.parse(raw) as MultiplayerRoom[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(raw) as Partial<MultiplayerRoom>[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((room): room is Partial<MultiplayerRoom> & { code: string } => typeof room?.code === 'string')
+      .map((room) => ({
+        ...room,
+        paused: Boolean(room.paused),
+        revision: Number.isFinite(room.revision) ? Number(room.revision) : 0,
+        turnSnapshots: Array.isArray(room.turnSnapshots) ? room.turnSnapshots : [],
+        checkpoints: Array.isArray(room.checkpoints) ? room.checkpoints : [],
+      })) as MultiplayerRoom[];
   } catch {
     return [];
   }

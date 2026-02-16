@@ -28,6 +28,9 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Growth telemetry counters (starts/completions/rematches/share conversion/LAN activity/coach usage) surfaced in Stats & History
 - Manual saved-game slots (up to 5) with load/save-over/rename/delete controls
 - One-click multiplayer room flow (host/join/reconnect) with no manual server URL entry
+- Full multiplayer in-match table view (same board/event/action surfaces as local play)
+- Host-controlled multiplayer pause/resume and checkpoint save/load/delete controls
+- Multiplayer undo/reset-turn controls for the active player with server-authoritative snapshots
 - Experimental feature flags for AI opponents, AI coach hints, replay timeline, daily challenges, achievements, and custom rules
 - Auto-save + resume via `localStorage`
 
@@ -130,6 +133,13 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Local pass-and-play
 - Private-room multiplayer (hosted API path)
 - Legacy LAN scaffold is retained in the repo for development fallback but is not the primary user flow
+
+### Multiplayer Match Controls
+
+- Active multiplayer matches now open the full game table experience.
+- Host controls: `Pause/Resume`, `Save Checkpoint`, `Load Checkpoint`, `Delete Checkpoint`.
+- Active-turn controls: `Undo Last Play`, `Reset Turn Plays` (when snapshot history exists).
+- Multiplayer state mutations are revision-guarded to prevent stale updates.
 
 ## Multiplayer Deployment Notes
 
