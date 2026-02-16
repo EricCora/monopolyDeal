@@ -8,7 +8,9 @@ Purpose: build on shipped multiplayer gameplay parity by reducing onboarding fri
 - Host-only room controls exist for pause/resume and checkpoint save/load/delete.
 - Active prompt player controls include undo/reset-turn backed by server-authoritative snapshots.
 - Multiplayer mutations are revision-guarded to reduce stale write conflicts.
-- Local development supports one-command startup via `npm run dev:all`.
+- LAN startup is simplified for non-technical testing via `npm run dev:lan:all` with Vite proxying `/api/multiplayer` to the local API server.
+- Multiplayer lobby includes `Copy Room Code` to reduce manual code-sharing friction.
+- Same-machine local development still supports one-command startup via `npm run dev:all`.
 
 ## Next Objective
 

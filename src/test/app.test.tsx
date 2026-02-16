@@ -814,7 +814,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
 
     expect(await screen.findByText(/multiplayer server not reachable at/i)).toBeInTheDocument();
-    expect(screen.getByText(/run npm run dev:all/i)).toBeInTheDocument();
+    expect(screen.getByText(/run npm run dev:lan:all/i)).toBeInTheDocument();
 
     fetchSpy.mockRestore();
   });
