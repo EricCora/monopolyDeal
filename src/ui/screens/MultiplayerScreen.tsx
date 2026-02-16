@@ -62,6 +62,12 @@ export function MultiplayerScreen({
   onLeaveRoom,
   onBack,
 }: MultiplayerScreenProps) {
+  const copyRoomCode = () => {
+    if (!session) return;
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
+    void navigator.clipboard.writeText(session.roomCode);
+  };
+
   return (
     <section className="panel setup-screen card-enter">
       <h2>Multiplayer</h2>
@@ -74,7 +80,7 @@ export function MultiplayerScreen({
       {healthOk === false ? (
         <p className="error">
           {isLocalDevApi
-            ? `Multiplayer server not reachable at ${apiBase}. Run npm run dev:all.`
+            ? `Multiplayer server not reachable at ${apiBase}. For two-device LAN play run npm run dev:lan:all.`
             : 'Multiplayer service is currently unreachable. Please try again in a moment.'}
         </p>
       ) : null}
@@ -113,6 +119,9 @@ export function MultiplayerScreen({
             <p>Status: {connectionLabel(connectionState)}</p>
             <p>Rejoin window: {deadlineLabel(session.reconnectDeadlineMs)}</p>
             <div className="actions">
+              <button type="button" onClick={copyRoomCode} disabled={loading}>
+                Copy Room Code
+              </button>
               <button type="button" onClick={onRefresh} disabled={loading}>
                 Refresh
               </button>

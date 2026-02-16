@@ -66,6 +66,10 @@ Open the local URL shown by Vite (usually `http://localhost:5173`).
 ## Scripts
 
 - `npm run dev` - start local dev server
+- `npm run dev:all` - start UI + multiplayer server for same-machine local development
+- `npm run dev:lan` - start Vite on LAN (`0.0.0.0:5173`) for cross-device testing
+- `npm run dev:lan:all` - start LAN UI + multiplayer server together for two-device local play
+- `npm run lan` - alias for `npm run dev:lan:all`
 - `npm run dev:multiplayer-server` - start the Node multiplayer API for local backend development
 - `npm run build` - type-check and build production assets
 - `npm run preview` - preview the production build locally
@@ -148,6 +152,12 @@ See `.env.example` for the expected variable.
 
 For local multiplayer development, the backend service is required.
 Use the one-command startup:
+
+1. Two-device LAN host flow: `npm run dev:lan:all`
+2. Share the Vite `Network` URL (example: `http://192.168.1.123:5173`) with Player 2.
+3. Player 2 opens that URL, goes to `Multiplayer`, enters name + room code, and joins.
+
+For same-machine development, you can still run:
 
 1. UI + multiplayer server together: `npm run dev:all`
 
