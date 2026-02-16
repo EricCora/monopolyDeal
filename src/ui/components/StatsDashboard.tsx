@@ -21,6 +21,7 @@ import {
 } from 'recharts';
 import {
   buildStatsDashboardModel,
+  type GrowthMetricsV1,
   type LifetimeRowView,
   type LifetimeStatsV1,
   type MatchRecordV1,
@@ -31,6 +32,7 @@ import {
 interface StatsDashboardProps {
   history: MatchRecordV1[];
   lifetime: LifetimeStatsV1;
+  growthMetrics: GrowthMetricsV1;
   onBack: () => void;
 }
 
@@ -51,11 +53,14 @@ function shortDate(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-export function StatsDashboard({ history, lifetime, onBack }: StatsDashboardProps) {
+export function StatsDashboard({ history, lifetime, growthMetrics, onBack }: StatsDashboardProps) {
   const [lifetimeSorting, setLifetimeSorting] = useState<SortingState>([{ id: 'wins', desc: true }]);
   const [matchSorting, setMatchSorting] = useState<SortingState>([{ id: 'endedAt', desc: true }]);
   const [filters, setFilters] = useState<StatsFilters>({});
-  const dashboard = useMemo(() => buildStatsDashboardModel(history, lifetime, filters), [filters, history, lifetime]);
+  const dashboard = useMemo(
+    () => buildStatsDashboardModel(history, lifetime, filters, growthMetrics),
+    [filters, growthMetrics, history, lifetime],
+  );
   const filterPlayers = useMemo(() => {
     const names = new Set<string>();
     history.forEach((match) => {
@@ -127,7 +132,9 @@ export function StatsDashboard({ history, lifetime, onBack }: StatsDashboardProp
     getSortedRowModel: getSortedRowModel(),
   });
 
-  const hasAnyData = dashboard.matchRows.length > 0 || dashboard.lifetimeRows.length > 0;
+  const hasAnyData = dashboard.matchRows.length > 0
+    || dashboard.lifetimeRows.length > 0
+    || dashboard.growthEvents.some((item) => item.count > 0);
 
   return (
     <section className="panel card-enter stats-panel">
@@ -208,6 +215,29 @@ export function StatsDashboard({ history, lifetime, onBack }: StatsDashboardProp
           <p>
             {dashboard.kpis.topActionType} ({dashboard.kpis.topActionCount})
           </p>
+        </article>
+      </section>
+
+      <section className="stats-kpis" aria-label="Growth telemetry summary">
+        <article className="stats-kpi">
+          <h3>Games Started</h3>
+          <p>{dashboard.growthKpis.gameStarts}</p>
+        </article>
+        <article className="stats-kpi">
+          <h3>Completion Rate</h3>
+          <p>{formatPercent(dashboard.growthKpis.completionRate)}</p>
+        </article>
+        <article className="stats-kpi">
+          <h3>Share Conversion</h3>
+          <p>{formatPercent(dashboard.growthKpis.shareConversionRate)}</p>
+        </article>
+        <article className="stats-kpi">
+          <h3>Rematches</h3>
+          <p>{dashboard.growthKpis.rematches}</p>
+        </article>
+        <article className="stats-kpi">
+          <h3>Coach Hints</h3>
+          <p>{dashboard.growthKpis.coachHintsViewed}</p>
         </article>
       </section>
 
@@ -331,6 +361,25 @@ export function StatsDashboard({ history, lifetime, onBack }: StatsDashboardProp
             </div>
           ) : (
             <p className="stats-empty">No data yet.</p>
+          )}
+        </article>
+        <article className="stats-chart-card">
+          <h3>Growth Telemetry Events</h3>
+          <p className="stats-chart-summary">Local feature engagement counters collected from gameplay interactions.</p>
+          {dashboard.growthEvents.some((item) => item.count > 0) ? (
+            <div className="stats-chart-wrap">
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={dashboard.growthEvents}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="event" interval={0} angle={-25} textAnchor="end" height={70} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#245f86" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="stats-empty">No telemetry events yet.</p>
           )}
         </article>
       </section>

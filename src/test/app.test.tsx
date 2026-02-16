@@ -681,6 +681,24 @@ describe('App', () => {
   it('clears local stats and history from settings data controls', () => {
     localStorage.setItem(MATCH_HISTORY_KEY, JSON.stringify(createStatsFixture('medium').history));
     localStorage.setItem(LIFETIME_STATS_KEY, JSON.stringify(createStatsFixture('medium').lifetime));
+    localStorage.setItem(
+      GROWTH_METRICS_KEY,
+      JSON.stringify({
+        version: 1,
+        events: {
+          share_image_clicked: 1,
+          share_image_success: 1,
+          payment_auto_selected: 1,
+          rules_drawer_opened: 1,
+          game_started: 1,
+          game_completed: 1,
+          rematch_started: 1,
+          lan_room_hosted: 1,
+          lan_room_joined: 1,
+          coach_hint_viewed: 1,
+        },
+      }),
+    );
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
@@ -689,6 +707,7 @@ describe('App', () => {
     expect(window.confirm).toHaveBeenCalled();
     expect(localStorage.getItem(MATCH_HISTORY_KEY)).toBeNull();
     expect(localStorage.getItem(LIFETIME_STATS_KEY)).toBeNull();
+    expect(localStorage.getItem(GROWTH_METRICS_KEY)).toBeNull();
   });
 
   it('blocks gameplay actions while paused and allows them again after resume', () => {
@@ -767,6 +786,37 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: /saved games/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
     expect(screen.getByRole('heading', { name: /monopoly deal local/i })).toBeInTheDocument();
+  });
+
+  it('opens multiplayer screen with one-click controls and no server url field', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+
+    expect(await screen.findByRole('heading', { name: /multiplayer/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/server url/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no local server setup required/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/local testing uses a local multiplayer service/i)).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
+  });
+
+  it('shows local troubleshooting guidance when multiplayer health check fails', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network_unavailable'));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+
+    expect(await screen.findByText(/multiplayer server not reachable at/i)).toBeInTheDocument();
+    expect(screen.getByText(/run npm run dev:all/i)).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
   });
 
   it('saves current game to a slot and loads it from saved games', () => {
@@ -909,8 +959,8 @@ describe('App', () => {
 
     expect(mockedCreateGame).toHaveBeenLastCalledWith({
       players: [
-        { id: 'p1', name: 'Alpha' },
-        { id: 'p2', name: 'Beta' },
+        { id: 'p1', name: 'Alpha', controller: 'human', botDifficulty: 'easy' },
+        { id: 'p2', name: 'Beta', controller: 'human', botDifficulty: 'easy' },
       ],
       deckVersion: 'v1',
     });

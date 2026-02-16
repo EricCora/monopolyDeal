@@ -2,7 +2,7 @@
 
 A browser-based Monopoly Deal game built with React + TypeScript.
 
-This project focuses on local, pass-and-play gameplay with a rules engine, persistent saves, and match stats.
+This project focuses on pass-and-play and private-room multiplayer gameplay with a rules engine, persistent saves, and match stats.
 
 ## Features
 
@@ -25,7 +25,10 @@ This project focuses on local, pass-and-play gameplay with a rules engine, persi
 - Payment assistant auto-select for pending payment flows
 - In-game rules reference drawer with property set/rent lookup and pending-flow help
 - Stats filters (player/winner/date range) and settings data controls for clearing local stats/history
+- Growth telemetry counters (starts/completions/rematches/share conversion/LAN activity/coach usage) surfaced in Stats & History
 - Manual saved-game slots (up to 5) with load/save-over/rename/delete controls
+- One-click multiplayer room flow (host/join/reconnect) with no manual server URL entry
+- Experimental feature flags for AI opponents, AI coach hints, replay timeline, daily challenges, achievements, and custom rules
 - Auto-save + resume via `localStorage`
 
 ## Tech Stack
@@ -60,6 +63,7 @@ Open the local URL shown by Vite (usually `http://localhost:5173`).
 ## Scripts
 
 - `npm run dev` - start local dev server
+- `npm run dev:multiplayer-server` - start the Node multiplayer API for local backend development
 - `npm run build` - type-check and build production assets
 - `npm run preview` - preview the production build locally
 - `npm run lint` - run ESLint
@@ -76,7 +80,8 @@ Use the `Settings` screen from Home (or the in-game top bar) to control:
 - Risky action confirmations on/off
 - Rules hint visibility on/off
 - Dev Mode toggle and sample data reseed tools
-- Local data controls (clear match history + lifetime stats)
+- Local data controls (clear match history + lifetime stats + growth telemetry)
+- Experimental features toggle section (AI/replay/challenges/achievements/custom rules)
 
 ## Saved Games
 
@@ -107,6 +112,7 @@ For AI coding agents working on this repository:
 
 - `AGENTS.md` - default operating instructions, invariants, and done criteria
 - `docs/LLM_AGENT_GUIDE.md` - deeper architecture map, change playbooks, and test matrix
+- `docs/NEXT_CODEX_MULTIPLAYER.md` - next-session multiplayer simplification handoff instructions
 
 ## Persistence
 
@@ -121,8 +127,26 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 
 ## Current Scope
 
-- Local multiplayer only (single device, pass-and-play)
-- No backend, login, or online matchmaking
+- Local pass-and-play
+- Private-room multiplayer (hosted API path)
+- Legacy LAN scaffold is retained in the repo for development fallback but is not the primary user flow
+
+## Multiplayer Deployment Notes
+
+Set `VITE_MULTIPLAYER_API_URL` to your deployed multiplayer API origin.
+See `.env.example` for the expected variable.
+
+For local multiplayer development, the backend service is required.
+Use the one-command startup:
+
+1. UI + multiplayer server together: `npm run dev:all`
+
+If you prefer split terminals, you can still run:
+
+1. App UI: `npm run dev`
+2. Node multiplayer server: `npm run dev:multiplayer-server`
+
+In production, users should only need to press `Play Multiplayer`.
 
 ## License
 

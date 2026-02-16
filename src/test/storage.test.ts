@@ -1,14 +1,19 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  clearGrowthMetrics,
   clearLifetimeStats,
   clearMatchHistory,
   deleteSavedGameSlot,
   incrementGrowthMetric,
+  loadAchievementState,
+  loadDailyChallenge,
   loadGrowthMetrics,
   loadSavedGameSlot,
   loadSavedGames,
   loadUiPreferences,
   renameSavedGameSlot,
+  saveAchievementState,
+  saveDailyChallenge,
   saveGrowthMetrics,
   saveUiPreferences,
   upsertSavedGameSlot,
@@ -28,6 +33,12 @@ describe('growth metrics storage', () => {
         share_image_success: 0,
         payment_auto_selected: 0,
         rules_drawer_opened: 0,
+        game_started: 0,
+        game_completed: 0,
+        rematch_started: 0,
+        lan_room_hosted: 0,
+        lan_room_joined: 0,
+        coach_hint_viewed: 0,
       },
     });
 
@@ -39,6 +50,12 @@ describe('growth metrics storage', () => {
         share_image_success: 0,
         payment_auto_selected: 0,
         rules_drawer_opened: 0,
+        game_started: 0,
+        game_completed: 0,
+        rematch_started: 0,
+        lan_room_hosted: 0,
+        lan_room_joined: 0,
+        coach_hint_viewed: 0,
       },
     });
   });
@@ -51,6 +68,12 @@ describe('growth metrics storage', () => {
         share_image_success: 1,
         payment_auto_selected: 0,
         rules_drawer_opened: 0,
+        game_started: 0,
+        game_completed: 0,
+        rematch_started: 0,
+        lan_room_hosted: 0,
+        lan_room_joined: 0,
+        coach_hint_viewed: 0,
       },
     });
 
@@ -70,6 +93,12 @@ describe('growth metrics storage', () => {
           share_image_success: null,
           payment_auto_selected: undefined,
           rules_drawer_opened: 'x',
+          game_started: null,
+          game_completed: 'bad',
+          rematch_started: undefined,
+          lan_room_hosted: {},
+          lan_room_joined: [],
+          coach_hint_viewed: 'oops',
         },
       }),
     );
@@ -103,6 +132,20 @@ describe('ui preferences storage', () => {
       textScale: 'large',
       confirmRiskyActions: true,
       showRulesDrawerHints: true,
+      highContrast: false,
+      soundEnabled: false,
+      hapticsEnabled: false,
+      experimental: {
+        aiOpponents: false,
+        aiCoach: false,
+        replayTimeline: false,
+        dailyChallenges: false,
+        achievements: false,
+        lanMultiplayer: false,
+        customRules: false,
+        enhancedEventLog: false,
+        contextualActionPreviews: false,
+      },
       devModeEnabled: false,
       gamePaused: false,
       pausedGameId: null,
@@ -131,6 +174,20 @@ describe('ui preferences storage', () => {
       textScale: 'normal',
       confirmRiskyActions: true,
       showRulesDrawerHints: true,
+      highContrast: false,
+      soundEnabled: false,
+      hapticsEnabled: false,
+      experimental: {
+        aiOpponents: false,
+        aiCoach: false,
+        replayTimeline: false,
+        dailyChallenges: false,
+        achievements: false,
+        lanMultiplayer: false,
+        customRules: false,
+        enhancedEventLog: false,
+        contextualActionPreviews: false,
+      },
       devModeEnabled: true,
       gamePaused: false,
       pausedGameId: null,
@@ -145,6 +202,20 @@ describe('ui preferences storage', () => {
       textScale: 'large',
       confirmRiskyActions: false,
       showRulesDrawerHints: false,
+      highContrast: true,
+      soundEnabled: true,
+      hapticsEnabled: true,
+      experimental: {
+        aiOpponents: true,
+        aiCoach: true,
+        replayTimeline: true,
+        dailyChallenges: true,
+        achievements: true,
+        lanMultiplayer: true,
+        customRules: true,
+        enhancedEventLog: true,
+        contextualActionPreviews: true,
+      },
       devModeEnabled: true,
       gamePaused: true,
       pausedGameId: 'game-123',
@@ -157,6 +228,20 @@ describe('ui preferences storage', () => {
       textScale: 'large',
       confirmRiskyActions: false,
       showRulesDrawerHints: false,
+      highContrast: true,
+      soundEnabled: true,
+      hapticsEnabled: true,
+      experimental: {
+        aiOpponents: true,
+        aiCoach: true,
+        replayTimeline: true,
+        dailyChallenges: true,
+        achievements: true,
+        lanMultiplayer: true,
+        customRules: true,
+        enhancedEventLog: true,
+        contextualActionPreviews: true,
+      },
       devModeEnabled: true,
       gamePaused: true,
       pausedGameId: 'game-123',
@@ -166,12 +251,15 @@ describe('ui preferences storage', () => {
   it('clears match history and lifetime stats keys', () => {
     localStorage.setItem('monopolyDeal.matchHistory.v1', JSON.stringify([{ id: 'm1' }]));
     localStorage.setItem('monopolyDeal.lifetimeStats.v1', JSON.stringify({ version: 1, players: { A: { wins: 1 } } }));
+    localStorage.setItem('monopolyDeal.growthMetrics.v1', JSON.stringify({ version: 1, events: { share_image_clicked: 1 } }));
 
     clearMatchHistory();
     clearLifetimeStats();
+    clearGrowthMetrics();
 
     expect(localStorage.getItem('monopolyDeal.matchHistory.v1')).toBeNull();
     expect(localStorage.getItem('monopolyDeal.lifetimeStats.v1')).toBeNull();
+    expect(localStorage.getItem('monopolyDeal.growthMetrics.v1')).toBeNull();
   });
 });
 
@@ -226,5 +314,71 @@ describe('saved game slots storage', () => {
     }
     expect(loadSavedGames().slots).toHaveLength(5);
     expect(() => upsertSavedGameSlot({ gameState: sampleGame(999), name: 'Overflow' })).toThrowError('save_slots_full');
+  });
+});
+
+describe('retention storage', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('loads default achievement and daily challenge state when missing', () => {
+    const achievements = loadAchievementState();
+    expect(achievements.version).toBe(1);
+    expect(achievements.counters.wins).toBe(0);
+    const challenge = loadDailyChallenge();
+    expect(challenge.version).toBe(1);
+    expect(challenge.day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('round-trips achievement and daily challenge payloads', () => {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    saveAchievementState({
+      version: 1,
+      counters: {
+        wins: 3,
+        actions: 40,
+        gamesPlayed: 4,
+        quickWins: 1,
+      },
+      unlockedAt: {
+        first_win: 1000,
+      },
+    });
+    saveDailyChallenge({
+      version: 1,
+      day: today,
+      seed: 12345,
+      targetTurns: 13,
+      completed: true,
+      attempts: 2,
+      bestTurnCount: 11,
+    });
+
+    expect(loadAchievementState()).toEqual({
+      version: 1,
+      counters: {
+        wins: 3,
+        actions: 40,
+        gamesPlayed: 4,
+        quickWins: 1,
+      },
+      unlockedAt: {
+        first_win: 1000,
+        ten_wins: undefined,
+        action_century: undefined,
+        quick_win: undefined,
+      },
+    });
+    expect(loadDailyChallenge()).toEqual({
+      version: 1,
+      day: today,
+      seed: 12345,
+      targetTurns: 13,
+      completed: true,
+      attempts: 2,
+      bestTurnCount: 11,
+    });
   });
 });

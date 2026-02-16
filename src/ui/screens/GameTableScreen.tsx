@@ -49,6 +49,13 @@ interface GameTableScreenProps {
   mainPhaseExhausted: boolean;
   discardOverLimitCount: number;
   showRulesHints: boolean;
+  enhancedEventLog: boolean;
+  coachHint: {
+    title: string;
+    summary: string;
+    topActionLabel: string;
+    alternatives: string[];
+  } | null;
   turnSnapshotsCount: number;
   showDebugActions: boolean;
   actionDetailText: (item: LegalAction) => string | null;
@@ -110,6 +117,8 @@ export function GameTableScreen({
   mainPhaseExhausted,
   discardOverLimitCount,
   showRulesHints,
+  enhancedEventLog,
+  coachHint,
   turnSnapshotsCount,
   showDebugActions,
   actionDetailText,
@@ -171,6 +180,19 @@ export function GameTableScreen({
         />
 
         <div className="game-table-main">
+          {coachHint ? (
+            <section className="panel inline-action-panel" aria-label="AI coach hint">
+              <h3>{coachHint.title}</h3>
+              <p className="inline-prompt-text">
+                <strong>Recommended:</strong> {coachHint.topActionLabel}
+              </p>
+              <p className="inline-prompt-text">{coachHint.summary}</p>
+              {coachHint.alternatives.length > 0 ? (
+                <p className="inline-prompt-text">Alternatives: {coachHint.alternatives.join(' | ')}</p>
+              ) : null}
+            </section>
+          ) : null}
+
           <div className="players-grid">
             {game.players.map((player) => {
               const canSeeHand = revealedPlayerId === player.id;
@@ -347,7 +369,7 @@ export function GameTableScreen({
             })}
           </div>
 
-          <RecentEvents events={game.history} />
+          <RecentEvents events={game.history} enhancedGrouping={enhancedEventLog} />
         </div>
       </div>
 

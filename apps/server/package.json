@@ -1,0 +1,9 @@
+{
+  "name": "monopolydeal-lan-server",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "node --experimental-strip-types src/index.ts"
+  }
+}

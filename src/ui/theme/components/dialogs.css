@@ -34,6 +34,13 @@
 .play-option {
   text-align: left;
   border-radius: 12px;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.play-option small {
+  color: var(--text-muted);
+  font-size: 0.78rem;
 }
 
 .play-cancel {

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, createGame, getLegalActions, getSuggestedPaymentCards, isGameOver, type GameState } from '../engine';
+import {
+  applyAction,
+  createGame,
+  getLegalActions,
+  getNextPrompt,
+  getSuggestedPaymentCards,
+  isGameOver,
+  type GameState,
+} from '../engine';
 
 function mkState(): GameState {
   const state = createGame({
@@ -42,6 +50,28 @@ describe('engine basics', () => {
 
     const fourth = applyAction(state, { type: 'play_to_bank', playerId: 'p1', cardId: 'money_4#x4' });
     expect(fourth.error?.code).toBe('illegal_play_limit');
+  });
+
+  it('applies custom max plays per turn ruleset', () => {
+    const state = createGame({
+      seed: 50,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+      ruleset: {
+        maxPlaysPerTurn: 2,
+      },
+    });
+    state.turn.phase = 'action';
+    state.currentPlayerIndex = 0;
+    state.players[0].hand = ['money_1#a1', 'money_2#a2', 'money_3#a3'];
+
+    const first = applyAction(state, { type: 'play_to_bank', playerId: 'p1', cardId: 'money_1#a1' });
+    const second = applyAction(first.state, { type: 'play_to_bank', playerId: 'p1', cardId: 'money_2#a2' });
+    const third = applyAction(second.state, { type: 'play_to_bank', playerId: 'p1', cardId: 'money_3#a3' });
+
+    expect(third.error?.code).toBe('illegal_play_limit');
   });
 
   it('supports just say no chain and cancellation', () => {
@@ -98,6 +128,33 @@ describe('engine basics', () => {
 
     const legal = getLegalActions(state, 'p1');
     expect(legal.length).toBeGreaterThan(0);
+
+    const result = applyAction(state, { type: 'pass_turn', playerId: 'p1' });
+    expect(isGameOver(result.state).done).toBe(true);
+    expect(isGameOver(result.state).winnerId).toBe('p1');
+  });
+
+  it('honors custom win set target in ruleset', () => {
+    const state = createGame({
+      seed: 52,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+      ruleset: {
+        winCompleteSets: 2,
+      },
+    });
+    state.turn.phase = 'action';
+    state.currentPlayerIndex = 0;
+    state.players[0].properties.brown = [
+      { cardId: 'brown_1#a', assignedColor: 'brown' },
+      { cardId: 'brown_1#b', assignedColor: 'brown' },
+    ];
+    state.players[0].properties.dark_blue = [
+      { cardId: 'dark_blue_1#a', assignedColor: 'dark_blue' },
+      { cardId: 'dark_blue_1#b', assignedColor: 'dark_blue' },
+    ];
 
     const result = applyAction(state, { type: 'pass_turn', playerId: 'p1' });
     expect(isGameOver(result.state).done).toBe(true);
@@ -415,6 +472,35 @@ describe('engine basics', () => {
     expect(passAfterDiscard.state.currentPlayerIndex).toBe(1);
   });
 
+  it('applies custom hand-limit ruleset on end turn', () => {
+    const state = createGame({
+      seed: 60,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+      ruleset: {
+        maxHandAtEndTurn: 5,
+      },
+    });
+    state.currentPlayerIndex = 0;
+    state.turn.phase = 'action';
+    state.turn.playsUsed = 2;
+    state.players[0].hand = [
+      'money_1#x1',
+      'money_2#x2',
+      'money_3#x3',
+      'money_4#x4',
+      'money_5#x5',
+      'money_1#x6',
+    ];
+
+    const blockedPass = applyAction(state, { type: 'pass_turn', playerId: 'p1' });
+    expect(blockedPass.error?.code).toBe('hand_limit');
+    const legal = getLegalActions(state, 'p1');
+    expect(legal.every((item) => item.action.type === 'discard_card')).toBe(true);
+  });
+
   it('uses friendly labels in forced deal pending actions', () => {
     const state = createGame({
       seed: 25,
@@ -471,5 +557,132 @@ describe('engine basics', () => {
 
     const legal = getLegalActions(state, 'p1');
     expect(legal.some((item) => item.action.type === 'play_action' && item.action.cardId === 'double_rent#d1')).toBe(true);
+  });
+
+  it('blocks non-pending actions while a payment request is unresolved', () => {
+    const state = mkState();
+    state.pending = {
+      kind: 'payment',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        amount: 3,
+        reason: 'Debt Collector',
+        actionCardId: 'debt_collector#d1',
+      },
+    };
+
+    const blocked = applyAction(state, { type: 'pass_turn', playerId: 'p1' });
+    expect(blocked.error?.code).toBe('unresolved_pending');
+    expect(blocked.state).toBe(state);
+  });
+
+  it('rejects rent-target selection from non-source player during pending rent', () => {
+    const state = mkState();
+    state.pending = {
+      kind: 'rent',
+      payload: {
+        sourcePlayerId: 'p1',
+        actionCardId: 'rent_color#r1',
+        color: 'brown',
+        amount: 2,
+      },
+    };
+
+    const result = applyAction(state, {
+      type: 'play_action',
+      playerId: 'p2',
+      cardId: 'rent_color#r1',
+      targetPlayerId: 'p1',
+      color: 'brown',
+    });
+    expect(result.error?.code).toBe('invalid_action');
+  });
+
+  it('rejects payment selection for cards the payer does not own', () => {
+    const state = mkState();
+    state.pending = {
+      kind: 'payment',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        amount: 2,
+        reason: "It's My Birthday",
+        actionCardId: 'its_my_birthday#b1',
+      },
+    };
+    state.players[1].bank = ['money_1#owned'];
+
+    const result = applyAction(state, {
+      type: 'pay_request',
+      playerId: 'p2',
+      cards: ['money_2#not-owned'],
+    });
+    expect(result.error?.code).toBe('invalid_action');
+    expect(result.state.pending?.kind).toBe('payment');
+    expect(result.state.players[1].bank).toEqual(['money_1#owned']);
+  });
+
+  it('restores both property groups when forced deal destination is invalid', () => {
+    const state = mkState();
+    state.pending = {
+      kind: 'forced_deal',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        actionCardId: 'forced_deal#fd1',
+      },
+    };
+    state.players[0].properties.utility = [{ cardId: 'utility_1#u1', assignedColor: 'utility' }];
+    state.players[1].properties.brown = [{ cardId: 'brown_1#b1', assignedColor: 'brown' }];
+
+    const result = applyAction(state, {
+      type: 'forced_deal_pick',
+      playerId: 'p1',
+      giveCardId: 'utility_1#u1',
+      giveColor: 'utility',
+      takeCardId: 'brown_1#b1',
+      takeColor: 'brown',
+      destinationColor: 'red',
+    });
+
+    expect(result.error?.code).toBe('invalid_action');
+    expect(result.state.players[0].properties.utility.map((entry) => entry.cardId)).toEqual(['utility_1#u1']);
+    expect(result.state.players[1].properties.brown.map((entry) => entry.cardId)).toEqual(['brown_1#b1']);
+  });
+
+  it('uses custom ruleset values in turn prompts', () => {
+    const state = createGame({
+      seed: 77,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+      ruleset: {
+        maxPlaysPerTurn: 5,
+        maxHandAtEndTurn: 9,
+      },
+    });
+    state.currentPlayerIndex = 0;
+    state.turn.phase = 'action';
+    state.turn.playsUsed = 2;
+    state.players[0].hand = [
+      'money_1#a1',
+      'money_2#a2',
+      'money_3#a3',
+      'money_4#a4',
+      'money_5#a5',
+      'money_1#a6',
+      'money_2#a7',
+      'money_3#a8',
+    ];
+
+    const mainPrompt = getNextPrompt(state);
+    expect(mainPrompt.text).toContain('play up to 3 cards or pass');
+
+    state.players[0].hand.push('money_4#a9', 'money_5#a10');
+    state.turn.playsUsed = 5;
+    const discardPrompt = getNextPrompt(state);
+    expect(discardPrompt.text).toContain('discard down to 9 cards');
   });
 });

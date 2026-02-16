@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatPropertyColor, getCardDefinition, type PropertyColor } from './cards/catalog';
+import { buildCoachHint, chooseHeuristicAction, chooseMonteCarloAction } from './ai';
 import {
   applyAction,
   createGame,
@@ -8,19 +9,26 @@ import {
   getSuggestedPaymentCards,
   isGameOver,
   type Action,
+  type BotDifficulty,
+  type GameConfig,
   type GameState,
   type LegalAction,
   type PlayerConfig,
+  type PlayerController,
 } from './engine';
 import {
   clearLifetimeStats,
   clearMatchHistory,
+  clearGrowthMetrics,
   clearActiveGame,
   deleteSavedGameSlot,
   incrementGrowthMetric,
   loadActiveGame,
+  loadAchievementState,
+  loadDailyChallenge,
   loadSavedGameSlot,
   loadSavedGames,
+  loadGrowthMetrics,
   loadLifetimeStats,
   loadMatchHistory,
   loadUiPreferences,
@@ -29,18 +37,33 @@ import {
   upsertSavedGameSlot,
   saveLifetimeStats,
   saveMatchHistory,
+  saveAchievementState,
+  saveDailyChallenge,
   saveUiPreferences,
   type SavedGameSlotV1,
   type UiPreferencesV1,
 } from './persistence/storage';
 import {
+  achievementLabel,
+  applyMatchToAchievementState,
+  applyMatchToDailyChallenge,
   applyMatchToLifetime,
   buildMatchRecord,
   createDevStatsFixture,
+  defaultAchievementState,
+  defaultDailyChallenge,
+  ensureTodayDailyChallenge,
+  getNewAchievementUnlocks,
+  getUnlockedAchievementIds,
   buildPostGameSummary,
   type LifetimeStatsV1,
   type MatchRecordV1,
   type PostGameSummary,
+  type AchievementId,
+  type AchievementStateV1,
+  type DailyChallengeV1,
+  type GrowthMetricEvent,
+  type GrowthMetricsV1,
 } from './stats';
 import type { ActionVariantView } from './ui/components/PlayChooser';
 import { GameShell } from './ui/layout/GameShell';
@@ -53,14 +76,22 @@ import { SavedGamesScreen } from './ui/screens/SavedGamesScreen';
 import { SettingsScreen } from './ui/screens/SettingsScreen';
 import { SetupScreen } from './ui/screens/SetupScreen';
 import { StatsScreen } from './ui/screens/StatsScreen';
+import { MultiplayerScreen } from './ui/screens/MultiplayerScreen';
 import { generatePostGameSharePng, postGameShareFilename } from './ui/share/postGameShare';
+import { useFeedback } from './app/useFeedback';
+import { useMultiplayerRoom } from './app/useMultiplayerRoom';
 import type { RiskyActionConfirmation, SetupViewModel, ShareStatus } from './ui/types';
 import './App.css';
 
-type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over';
+type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over' | 'multiplayer';
 type SettingsBackScreen = 'home' | 'game';
 type SavedGamesBackScreen = 'home' | 'game';
 type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
+const DEFAULT_SETUP_RULES = {
+  winCompleteSets: 3,
+  maxHandAtEndTurn: 7,
+  maxPlaysPerTurn: 3,
+} as const;
 
 interface CardActionVariant extends ActionVariantView {
   action: Action;
@@ -81,6 +112,13 @@ function initialSetup(): SetupViewModel {
   return {
     playerCount: 2,
     playerNames: ['Player 1', 'Player 2', 'Player 3', 'Player 4'],
+    playerControllers: ['human', 'human', 'human', 'human'],
+    botDifficulties: ['easy', 'easy', 'easy', 'easy'],
+    customRules: {
+      winCompleteSets: DEFAULT_SETUP_RULES.winCompleteSets,
+      maxHandAtEndTurn: DEFAULT_SETUP_RULES.maxHandAtEndTurn,
+      maxPlaysPerTurn: DEFAULT_SETUP_RULES.maxPlaysPerTurn,
+    },
   };
 }
 
@@ -148,6 +186,13 @@ function autoSlotName(game: GameState): string {
   return `${trimmed} - Turn ${game.turnCount}`;
 }
 
+function sanitizeRuleset(input: SetupViewModel['customRules']): SetupViewModel['customRules'] {
+  const winCompleteSets = Number.isFinite(input.winCompleteSets) ? Math.min(5, Math.max(2, Math.round(input.winCompleteSets))) : DEFAULT_SETUP_RULES.winCompleteSets;
+  const maxHandAtEndTurn = Number.isFinite(input.maxHandAtEndTurn) ? Math.min(12, Math.max(4, Math.round(input.maxHandAtEndTurn))) : DEFAULT_SETUP_RULES.maxHandAtEndTurn;
+  const maxPlaysPerTurn = Number.isFinite(input.maxPlaysPerTurn) ? Math.min(6, Math.max(1, Math.round(input.maxPlaysPerTurn))) : DEFAULT_SETUP_RULES.maxPlaysPerTurn;
+  return { winCompleteSets, maxHandAtEndTurn, maxPlaysPerTurn };
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [settingsBackScreen, setSettingsBackScreen] = useState<SettingsBackScreen>('home');
@@ -159,6 +204,10 @@ function App() {
   const [revealedPlayerId, setRevealedPlayerId] = useState<string | null>(null);
   const [history, setHistory] = useState<MatchRecordV1[]>(() => loadMatchHistory());
   const [lifetime, setLifetime] = useState<LifetimeStatsV1>(() => loadLifetimeStats());
+  const [growthMetrics, setGrowthMetrics] = useState<GrowthMetricsV1>(() => loadGrowthMetrics());
+  const [achievementState, setAchievementState] = useState<AchievementStateV1>(() => loadAchievementState());
+  const [dailyChallenge, setDailyChallenge] = useState<DailyChallengeV1>(() => ensureTodayDailyChallenge(loadDailyChallenge()));
+  const [recentAchievementUnlocks, setRecentAchievementUnlocks] = useState<AchievementId[]>([]);
   const [savedSlots, setSavedSlots] = useState<SavedGameSlotV1[]>(() => loadSavedGames().slots);
   const [chooser, setChooser] = useState<PlayChooserState | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -175,6 +224,8 @@ function App() {
   const postGameTitleRef = useRef<HTMLHeadingElement | null>(null);
   const finalizedMatchRef = useRef<string | null>(null);
   const devAutoSeedAttemptedRef = useRef(false);
+  const botTurnSignatureRef = useRef<string | null>(null);
+  const coachHintMetricRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!game || isGameOver(game).done) return;
@@ -187,6 +238,13 @@ function App() {
   useEffect(() => {
     saveUiPreferences(uiPreferences);
   }, [uiPreferences]);
+
+  useEffect(() => {
+    const next = ensureTodayDailyChallenge(dailyChallenge);
+    if (next.day === dailyChallenge.day) return;
+    setDailyChallenge(next);
+    saveDailyChallenge(next);
+  }, [dailyChallenge]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -224,6 +282,11 @@ function App() {
     setDevSeedStatus(status);
   }, []);
 
+  const recordGrowthMetric = useCallback((event: GrowthMetricEvent) => {
+    const next = incrementGrowthMetric(event);
+    setGrowthMetrics(next);
+  }, []);
+
   useEffect(() => {
     if (!uiPreferences.devModeEnabled) {
       devAutoSeedAttemptedRef.current = false;
@@ -240,6 +303,32 @@ function App() {
   const isPaused = Boolean(game && uiPreferences.gamePaused && uiPreferences.pausedGameId === currentGameId);
   const reduceCelebrationEffects = uiPreferences.reducedEffects;
   const celebrationEnabled = Boolean(postGameSummary && !prefersReducedMotion && !reduceCelebrationEffects);
+  const { emitFeedback } = useFeedback({
+    soundEnabled: uiPreferences.soundEnabled,
+    hapticsEnabled: uiPreferences.hapticsEnabled,
+  });
+  const {
+    apiBase: multiplayerApiBase,
+    isLocalDevApi: multiplayerIsLocalDevApi,
+    playerName: multiplayerPlayerName,
+    setPlayerName: setMultiplayerPlayerName,
+    joinCode: multiplayerJoinCode,
+    setJoinCode: setMultiplayerJoinCode,
+    session: multiplayerSession,
+    roomView: multiplayerRoomView,
+    loading: multiplayerLoading,
+    error: multiplayerError,
+    connectionState: multiplayerConnectionState,
+    isHost: multiplayerIsHost,
+    healthOk: multiplayerHealthOk,
+    hostRoom: hostMultiplayerRoom,
+    joinRoom: joinMultiplayerRoom,
+    startMatch: startMultiplayerMatch,
+    runAction: runMultiplayerAction,
+    leaveRoom: leaveMultiplayerRoom,
+    refreshRoom: refreshMultiplayerRoom,
+    setError: setMultiplayerError,
+  } = useMultiplayerRoom({ enabled: screen === 'multiplayer' });
 
   useEffect(() => {
     if (!game || !prompt) {
@@ -252,12 +341,33 @@ function App() {
     }
   }, [game, prompt, turnSnapshots.length]);
 
-  const shouldShowShield = Boolean(game && prompt && !isGameOver(game).done && revealedPlayerId !== prompt.playerId);
-
   const legalActions = useMemo(() => {
     if (!game || !prompt) return [];
     return getLegalActions(game, prompt.playerId);
   }, [game, prompt]);
+  const promptPlayerState = useMemo(
+    () => (game && prompt ? game.players.find((player) => player.id === prompt.playerId) ?? null : null),
+    [game, prompt],
+  );
+  const isBotPromptPlayer = promptPlayerState?.controller === 'bot';
+  const shouldShowShield = Boolean(game && prompt && !isBotPromptPlayer && !isGameOver(game).done && revealedPlayerId !== prompt.playerId);
+  const coachHint = useMemo(() => {
+    if (!game || !prompt) return null;
+    if (!uiPreferences.experimental.aiCoach) return null;
+    if (promptPlayerState?.controller === 'bot') return null;
+    if (legalActions.length === 0) return null;
+    const mode = uiPreferences.experimental.aiOpponents ? 'hard' : 'easy';
+    return buildCoachHint(game, prompt.playerId, legalActions, mode);
+  }, [game, legalActions, prompt, promptPlayerState?.controller, uiPreferences.experimental.aiCoach, uiPreferences.experimental.aiOpponents]);
+  const unlockedAchievements = useMemo(() => getUnlockedAchievementIds(achievementState), [achievementState]);
+
+  useEffect(() => {
+    if (!coachHint || !game || !prompt) return;
+    const signature = `${game.updatedAt}:${prompt.playerId}`;
+    if (coachHintMetricRef.current === signature) return;
+    coachHintMetricRef.current = signature;
+    recordGrowthMetric('coach_hint_viewed');
+  }, [coachHint, game, prompt, recordGrowthMetric]);
 
   const playerNameById = useCallback((playerId: string): string => {
     if (!game) return playerId;
@@ -297,6 +407,7 @@ function App() {
       const option: CardActionVariant = {
         id: `${actionVariantId(item.action)}-${index}`,
         label: describeCardAction(item.action),
+        description: uiPreferences.experimental.contextualActionPreviews ? item.previewText : undefined,
         action: item.action,
         requiresConfirmation: item.requiresConfirmation,
         riskLevel: item.riskLevel,
@@ -307,7 +418,7 @@ function App() {
       variants.set(cardId, existing);
     });
     return variants;
-  }, [describeCardAction, legalActions]);
+  }, [describeCardAction, legalActions, uiPreferences.experimental.contextualActionPreviews]);
 
   const playableCardIds = useMemo(() => new Set(cardActionVariants.keys()), [cardActionVariants]);
 
@@ -327,6 +438,25 @@ function App() {
     if (!activePlayer) return 0;
     return Math.max(activePlayer.hand.length - 7, 0);
   }, [game, prompt]);
+
+  useEffect(() => {
+    if (screen !== 'game') return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'select' || tag === 'textarea' || target?.isContentEditable) return;
+      if (event.key.toLowerCase() === 'r' && shouldShowShield && prompt && !isPaused) {
+        event.preventDefault();
+        setRevealedPlayerId(prompt.playerId);
+      }
+      if (event.key.toLowerCase() === 'k' && !isPaused) {
+        event.preventDefault();
+        setShowRulesDrawer((prev) => !prev);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isPaused, prompt, screen, shouldShowShield]);
   const turnStatusText = useMemo(() => {
     if (!prompt) return '';
     if (prompt.kind === 'discard') {
@@ -431,6 +561,20 @@ function App() {
     applyDevFixture('reseeded');
   }, [applyDevFixture]);
 
+  const onHostMultiplayerRoom = useCallback(async () => {
+    const hosted = await hostMultiplayerRoom();
+    if (hosted) {
+      recordGrowthMetric('lan_room_hosted');
+    }
+  }, [hostMultiplayerRoom, recordGrowthMetric]);
+
+  const onJoinMultiplayerRoom = useCallback(async () => {
+    const joined = await joinMultiplayerRoom();
+    if (joined) {
+      recordGrowthMetric('lan_room_joined');
+    }
+  }, [joinMultiplayerRoom, recordGrowthMetric]);
+
   const openGame = useCallback((nextGame: GameState) => {
     finalizedMatchRef.current = null;
     setGame(nextGame);
@@ -444,19 +588,57 @@ function App() {
     setTurnSnapshots([]);
   }, []);
 
-  const startGameWithPlayers = useCallback((players: PlayerConfig[]) => {
-    const nextGame = createGame({ players, deckVersion: 'v1' });
+  const startGameWithPlayers = useCallback((players: PlayerConfig[], options?: { seed?: number; ruleset?: GameConfig['ruleset'] }) => {
+    const config: GameConfig = { players, deckVersion: 'v1' };
+    if (typeof options?.seed === 'number') config.seed = options.seed;
+    if (options?.ruleset) config.ruleset = options.ruleset;
+    const nextGame = createGame(config);
     setUiPreferences((prev) => ({ ...prev, gamePaused: false, pausedGameId: null }));
+    setRecentAchievementUnlocks([]);
     openGame(nextGame);
-  }, [openGame]);
+    recordGrowthMetric('game_started');
+  }, [openGame, recordGrowthMetric]);
 
   const startNewGame = () => {
     const players: PlayerConfig[] = setup.playerNames.slice(0, setup.playerCount).map((name, index) => ({
       id: `p${index + 1}`,
       name: name.trim() || `Player ${index + 1}`,
+      controller: setup.playerControllers[index] ?? 'human',
+      botDifficulty: setup.botDifficulties[index] ?? 'easy',
     }));
-    startGameWithPlayers(players);
+    startGameWithPlayers(players, {
+      ruleset: uiPreferences.experimental.customRules ? sanitizeRuleset(setup.customRules) : undefined,
+    });
   };
+
+  const startDailyChallengeMatch = useCallback(() => {
+    const players: PlayerConfig[] = [
+      {
+        id: 'p1',
+        name: setup.playerNames[0]?.trim() || 'Player 1',
+        controller: setup.playerControllers[0] ?? 'human',
+        botDifficulty: setup.botDifficulties[0] ?? 'easy',
+      },
+      {
+        id: 'p2',
+        name: setup.playerNames[1]?.trim() || 'Player 2',
+        controller: setup.playerControllers[1] ?? 'human',
+        botDifficulty: setup.botDifficulties[1] ?? 'easy',
+      },
+    ];
+    startGameWithPlayers(players, {
+      seed: dailyChallenge.seed,
+      ruleset: uiPreferences.experimental.customRules ? sanitizeRuleset(setup.customRules) : undefined,
+    });
+  }, [
+    dailyChallenge.seed,
+    setup.botDifficulties,
+    setup.customRules,
+    setup.playerControllers,
+    setup.playerNames,
+    startGameWithPlayers,
+    uiPreferences.experimental.customRules,
+  ]);
 
   const resumeGame = () => {
     const saved = loadActiveGame();
@@ -549,7 +731,7 @@ function App() {
     setError(null);
   };
 
-  const finalizeIfGameOver = (nextState: GameState) => {
+  const finalizeIfGameOver = useCallback((nextState: GameState) => {
     const status = isGameOver(nextState);
     if (!status.done || !status.winnerId) return;
     const matchId = `${nextState.createdAt}-${nextState.updatedAt}`;
@@ -562,6 +744,15 @@ function App() {
     const nextLifetime = applyMatchToLifetime(loadLifetimeStats(), matchRecord);
     saveLifetimeStats(nextLifetime);
     setLifetime(nextLifetime);
+    const previousAchievementState = loadAchievementState();
+    const nextAchievementState = applyMatchToAchievementState(previousAchievementState, matchRecord);
+    saveAchievementState(nextAchievementState);
+    setAchievementState(nextAchievementState);
+    setRecentAchievementUnlocks(getNewAchievementUnlocks(previousAchievementState, nextAchievementState));
+    const challengeForToday = ensureTodayDailyChallenge(loadDailyChallenge());
+    const nextChallenge = applyMatchToDailyChallenge(challengeForToday, matchRecord);
+    saveDailyChallenge(nextChallenge);
+    setDailyChallenge(nextChallenge);
     setPostGameSummary(buildPostGameSummary(nextState, nextLifetime));
     setRevealedPlayerId(null);
     setChooser(null);
@@ -570,17 +761,20 @@ function App() {
     setTurnSnapshots([]);
     setScreen('game_over');
     clearActiveGame();
-  };
+    recordGrowthMetric('game_completed');
+  }, [recordGrowthMetric]);
 
-  const runAction = (action: Action) => {
+  const runAction = useCallback((action: Action) => {
     if (!game || isPaused) return;
     const shouldSnapshot = isReversibleActionType(action.type) && prompt?.playerId === action.playerId;
     const snapshotBeforeAction = shouldSnapshot ? structuredClone(game) : null;
     const result = applyAction(game, action);
     if (result.error) {
       setError(result.error.message);
+      emitFeedback('error');
       return;
     }
+    emitFeedback('success');
     setError(null);
     const previousPromptPlayerId = prompt?.playerId ?? null;
     const nextPromptPlayerId = getNextPrompt(result.state).playerId;
@@ -599,7 +793,7 @@ function App() {
     setRiskyActionConfirmation(null);
     setGame(result.state);
     finalizeIfGameOver(result.state);
-  };
+  }, [emitFeedback, finalizeIfGameOver, game, isPaused, prompt]);
 
   const queueRiskyAction = (
     action: Action,
@@ -649,6 +843,37 @@ function App() {
     }
     runAction(action);
   };
+
+  useEffect(() => {
+    if (!game || !prompt || screen !== 'game' || isPaused) return;
+    if (!uiPreferences.experimental.aiOpponents) return;
+    if (!promptPlayerState || promptPlayerState.controller !== 'bot') return;
+    if (legalActions.length === 0) return;
+
+    const turnSignature = `${game.updatedAt}:${prompt.playerId}:${game.turn.playsUsed}:${game.pending?.kind ?? 'none'}`;
+    if (botTurnSignatureRef.current === turnSignature) return;
+    botTurnSignatureRef.current = turnSignature;
+
+    const handle = window.setTimeout(() => {
+      if (!game) return;
+      const decision = promptPlayerState.botDifficulty === 'hard'
+        ? chooseMonteCarloAction(game, prompt.playerId, legalActions, { simulations: 18, depth: 11 })
+        : chooseHeuristicAction(game, prompt.playerId, legalActions);
+      runAction(decision?.action ?? legalActions[0].action);
+      botTurnSignatureRef.current = null;
+    }, 480);
+
+    return () => window.clearTimeout(handle);
+  }, [
+    game,
+    isPaused,
+    legalActions,
+    prompt,
+    promptPlayerState,
+    runAction,
+    screen,
+    uiPreferences.experimental.aiOpponents,
+  ]);
 
   const undoLastPlay = () => {
     if (isPaused) return;
@@ -717,7 +942,7 @@ function App() {
     if (!game || !pendingPayment) return;
     const suggested = getSuggestedPaymentCards(game, pendingPayment.targetPlayerId, pendingPayment.amount);
     setSelectedPaymentCards(suggested);
-    incrementGrowthMetric('payment_auto_selected');
+    recordGrowthMetric('payment_auto_selected');
   };
 
   const clearStatsData = () => {
@@ -727,34 +952,62 @@ function App() {
     }
     clearMatchHistory();
     clearLifetimeStats();
+    clearGrowthMetrics();
     setHistory([]);
     setLifetime({ version: 1, players: {} });
+    setGrowthMetrics(loadGrowthMetrics());
+    const resetAchievements = defaultAchievementState();
+    saveAchievementState(resetAchievements);
+    setAchievementState(resetAchievements);
+    setRecentAchievementUnlocks([]);
+    const resetChallenge = defaultDailyChallenge();
+    saveDailyChallenge(resetChallenge);
+    setDailyChallenge(resetChallenge);
     setError(null);
   };
 
   const actionDetailText = (item: LegalAction): string | null => {
-    if (item.requestedAmount == null || item.collectibleCap == null) return null;
-    const detail = `Ask $${item.requestedAmount}, likely collect up to $${item.collectibleCap}`;
-    return item.requiresPropertyTransfer ? `${detail} (likely requires property transfer)` : detail;
+    const financialDetail = item.requestedAmount != null && item.collectibleCap != null
+      ? `Ask $${item.requestedAmount}, likely collect up to $${item.collectibleCap}${item.requiresPropertyTransfer ? ' (likely requires property transfer)' : ''}`
+      : null;
+    if (!uiPreferences.experimental.contextualActionPreviews) return financialDetail;
+    if (item.previewText && financialDetail) return `${item.previewText} ${financialDetail}`;
+    return item.previewText ?? financialDetail;
   };
 
-  const syncSetupPlayerNames = useCallback((names: string[]) => {
+  const syncSetupPlayerNames = useCallback(
+    (names: string[], controllers?: PlayerController[], difficulties?: BotDifficulty[], customRules?: GameConfig['ruleset']) => {
     setSetup((prev) => {
       const nextNames = [...prev.playerNames];
+      const nextControllers = [...prev.playerControllers];
+      const nextDifficulties = [...prev.botDifficulties];
       for (let index = 0; index < 4; index += 1) {
         if (index < names.length) {
           nextNames[index] = names[index];
+          nextControllers[index] = controllers?.[index] ?? 'human';
+          nextDifficulties[index] = difficulties?.[index] ?? 'easy';
         } else if (!nextNames[index]?.trim()) {
           nextNames[index] = `Player ${index + 1}`;
+          nextControllers[index] = 'human';
+          nextDifficulties[index] = 'easy';
         }
       }
       return {
         ...prev,
         playerCount: Math.min(4, Math.max(2, names.length)),
         playerNames: nextNames,
+        playerControllers: nextControllers,
+        botDifficulties: nextDifficulties,
+        customRules: customRules ? sanitizeRuleset({
+          winCompleteSets: customRules.winCompleteSets ?? prev.customRules.winCompleteSets,
+          maxHandAtEndTurn: customRules.maxHandAtEndTurn ?? prev.customRules.maxHandAtEndTurn,
+          maxPlaysPerTurn: customRules.maxPlaysPerTurn ?? prev.customRules.maxPlaysPerTurn,
+        }) : prev.customRules,
       };
     });
-  }, []);
+    },
+    [],
+  );
 
   const goHome = useCallback(() => {
     clearActiveGame();
@@ -771,22 +1024,32 @@ function App() {
     setShowRulesDrawer(false);
     setIsSharing(false);
     setShareStatus(null);
+    setMultiplayerError(null);
+    setRecentAchievementUnlocks([]);
     setRiskyActionConfirmation(null);
-  }, []);
+  }, [setMultiplayerError]);
 
   const startRematch = useCallback(() => {
     if (!game) return;
     const playerNames = game.players.map((player) => player.name);
-    syncSetupPlayerNames(playerNames);
+    const playerControllers = game.players.map((player) => player.controller ?? 'human');
+    const botDifficulties = game.players.map((player) => player.botDifficulty ?? 'easy');
+    syncSetupPlayerNames(playerNames, playerControllers, botDifficulties, game.ruleset);
     startGameWithPlayers(
-      playerNames.map((name, index) => ({
+      game.players.map((player, index) => ({
         id: `p${index + 1}`,
-        name,
+        name: player.name,
+        controller: player.controller ?? 'human',
+        botDifficulty: player.botDifficulty ?? 'easy',
       })),
+      {
+        ruleset: uiPreferences.experimental.customRules ? game.ruleset : undefined,
+      },
     );
     setIsSharing(false);
     setShareStatus(null);
-  }, [game, startGameWithPlayers, syncSetupPlayerNames]);
+    recordGrowthMetric('rematch_started');
+  }, [game, recordGrowthMetric, startGameWithPlayers, syncSetupPlayerNames, uiPreferences.experimental.customRules]);
 
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -812,19 +1075,19 @@ function App() {
 
   const sharePostGameImage = async () => {
     if (!postGameSummary || isSharing) return;
-    incrementGrowthMetric('share_image_clicked');
+    recordGrowthMetric('share_image_clicked');
     setIsSharing(true);
     setShareStatus(null);
     try {
       const blob = await generatePostGameSharePng(postGameSummary);
       const copied = await copyImageToClipboard(blob).catch(() => false);
       if (copied) {
-        incrementGrowthMetric('share_image_success');
+        recordGrowthMetric('share_image_success');
         setShareStatus({ tone: 'success', message: 'Brag image copied to your clipboard.' });
         return;
       }
       downloadBlob(blob, postGameShareFilename(postGameSummary));
-      incrementGrowthMetric('share_image_success');
+      recordGrowthMetric('share_image_success');
       setShareStatus({ tone: 'success', message: 'Brag image downloaded. Share it in your group chat.' });
     } catch {
       setShareStatus({ tone: 'error', message: 'Could not generate the share image. Please try again.' });
@@ -834,21 +1097,39 @@ function App() {
   };
 
   return (
-    <GameShell screenClassName={`screen-${screen}`} textScale={uiPreferences.textScale}>
+    <GameShell screenClassName={`screen-${screen}`} textScale={uiPreferences.textScale} highContrast={uiPreferences.highContrast}>
+      {screen === 'game' && prompt ? (
+        <p className="sr-only" aria-live="polite" aria-atomic="true">
+          Turn update. Active player {prompt.playerId}. Prompt type {prompt.kind}.
+        </p>
+      ) : null}
+
       {screen === 'home' ? (
         <HomeScreen
           error={error}
+          showDailyChallenge={uiPreferences.experimental.dailyChallenges}
+          dailyChallenge={dailyChallenge}
+          showAchievements={uiPreferences.experimental.achievements}
+          achievementSummary={{ unlocked: unlockedAchievements.length, total: 4 }}
+          showMultiplayer={true}
           onNewGame={() => setScreen('setup')}
+          onStartDailyChallenge={startDailyChallengeMatch}
           onResumeGame={resumeGame}
           onOpenSavedGames={() => openSavedGames('home')}
           onOpenStats={() => setScreen('stats')}
           onOpenSettings={() => openSettings('home')}
+          onOpenMultiplayer={() => {
+            setMultiplayerError(null);
+            setScreen('multiplayer');
+          }}
         />
       ) : null}
 
       {screen === 'setup' ? (
         <SetupScreen
           setup={setup}
+          allowAiOpponents={uiPreferences.experimental.aiOpponents}
+          allowCustomRules={uiPreferences.experimental.customRules}
           onPlayerCountChange={(playerCount) => setSetup((prev) => ({ ...prev, playerCount }))}
           onPlayerNameChange={(index, value) => {
             setSetup((prev) => {
@@ -856,6 +1137,29 @@ function App() {
               nextNames[index] = value;
               return { ...prev, playerNames: nextNames };
             });
+          }}
+          onPlayerControllerChange={(index, controller) => {
+            setSetup((prev) => {
+              const nextControllers = [...prev.playerControllers];
+              nextControllers[index] = controller;
+              return { ...prev, playerControllers: nextControllers };
+            });
+          }}
+          onPlayerDifficultyChange={(index, difficulty) => {
+            setSetup((prev) => {
+              const nextDifficulties = [...prev.botDifficulties];
+              nextDifficulties[index] = difficulty;
+              return { ...prev, botDifficulties: nextDifficulties };
+            });
+          }}
+          onChangeCustomRule={(rule, value) => {
+            setSetup((prev) => ({
+              ...prev,
+              customRules: {
+                ...prev.customRules,
+                [rule]: Number.isFinite(value) ? value : prev.customRules[rule],
+              },
+            }));
           }}
           onStartMatch={startNewGame}
           onBack={() => setScreen('home')}
@@ -884,13 +1188,15 @@ function App() {
           mainPhaseExhausted={mainPhaseExhausted}
           discardOverLimitCount={discardOverLimitCount}
           showRulesHints={uiPreferences.showRulesDrawerHints}
+          enhancedEventLog={uiPreferences.experimental.enhancedEventLog}
+          coachHint={coachHint}
           turnSnapshotsCount={turnSnapshots.length}
           showDebugActions={showDebugActions}
           actionDetailText={actionDetailText}
           onPauseToggle={togglePause}
           onOpenRules={() => {
             setShowRulesDrawer(true);
-            incrementGrowthMetric('rules_drawer_opened');
+            recordGrowthMetric('rules_drawer_opened');
           }}
           onOpenSavedGames={() => openSavedGames('game')}
           onOpenSettings={() => openSettings('game')}
@@ -918,7 +1224,39 @@ function App() {
         />
       ) : null}
 
-      {screen === 'stats' ? <StatsScreen history={history} lifetime={lifetime} onBack={() => setScreen('home')} /> : null}
+      {screen === 'multiplayer' ? (
+        <MultiplayerScreen
+          playerName={multiplayerPlayerName}
+          joinCode={multiplayerJoinCode}
+          session={multiplayerSession}
+          roomView={multiplayerRoomView}
+          loading={multiplayerLoading}
+          healthOk={multiplayerHealthOk}
+          apiBase={multiplayerApiBase}
+          isLocalDevApi={multiplayerIsLocalDevApi}
+          error={multiplayerError}
+          connectionState={multiplayerConnectionState}
+          isHost={multiplayerIsHost}
+          onPlayerNameChange={setMultiplayerPlayerName}
+          onJoinCodeChange={setMultiplayerJoinCode}
+          onHostRoom={onHostMultiplayerRoom}
+          onJoinRoom={onJoinMultiplayerRoom}
+          onStartMatch={startMultiplayerMatch}
+          onRunAction={runMultiplayerAction}
+          onRefresh={refreshMultiplayerRoom}
+          onLeaveRoom={leaveMultiplayerRoom}
+          onBack={() => setScreen('home')}
+        />
+      ) : null}
+
+      {screen === 'stats' ? (
+        <StatsScreen
+          history={history}
+          lifetime={lifetime}
+          growthMetrics={growthMetrics}
+          onBack={() => setScreen('home')}
+        />
+      ) : null}
 
       {screen === 'saved_games' ? (
         <SavedGamesScreen
@@ -939,10 +1277,22 @@ function App() {
           uiPreferences={uiPreferences}
           devSeedStatus={devSeedStatus}
           onToggleReducedEffects={(enabled) => setUiPreferences((prev) => ({ ...prev, reducedEffects: enabled }))}
+          onToggleHighContrast={(enabled) => setUiPreferences((prev) => ({ ...prev, highContrast: enabled }))}
+          onToggleSound={(enabled) => setUiPreferences((prev) => ({ ...prev, soundEnabled: enabled }))}
+          onToggleHaptics={(enabled) => setUiPreferences((prev) => ({ ...prev, hapticsEnabled: enabled }))}
           onChangeTextScale={(value) => setUiPreferences((prev) => ({ ...prev, textScale: value }))}
           onChangeTableDensity={(value) => setUiPreferences((prev) => ({ ...prev, tableDensity: value }))}
           onToggleConfirmRiskyActions={(enabled) => setUiPreferences((prev) => ({ ...prev, confirmRiskyActions: enabled }))}
           onToggleRulesDrawerHints={(enabled) => setUiPreferences((prev) => ({ ...prev, showRulesDrawerHints: enabled }))}
+          onToggleExperimentalFlag={(flag, enabled) => {
+            setUiPreferences((prev) => ({
+              ...prev,
+              experimental: {
+                ...prev.experimental,
+                [flag]: enabled,
+              },
+            }));
+          }}
           onToggleDevMode={onToggleDevMode}
           onReseedDevData={onReseedDevData}
           onClearStatsData={clearStatsData}
@@ -952,6 +1302,7 @@ function App() {
 
       {screen === 'game_over' && postGameSummary ? (
         <PostGameScreen
+          key={postGameSummary.endedAt}
           postGameSummary={postGameSummary}
           game={game}
           celebrationEnabled={celebrationEnabled}
@@ -959,6 +1310,10 @@ function App() {
           prefersReducedMotion={prefersReducedMotion}
           isSharing={isSharing}
           shareStatus={shareStatus}
+          replayEvents={game?.history ?? []}
+          showReplayTimeline={uiPreferences.experimental.replayTimeline}
+          showAchievements={uiPreferences.experimental.achievements}
+          recentAchievementUnlockLabels={recentAchievementUnlocks.map(achievementLabel)}
           titleRef={postGameTitleRef}
           formatDuration={formatDuration}
           onToggleReduceEffects={(enabled) => setUiPreferences((prev) => ({ ...prev, reducedEffects: enabled }))}
@@ -966,8 +1321,10 @@ function App() {
           onShareImage={sharePostGameImage}
           onOpenSetup={() => {
             const names = game?.players.map((player) => player.name);
+            const controllers = game?.players.map((player) => player.controller ?? 'human');
+            const difficulties = game?.players.map((player) => player.botDifficulty ?? 'easy');
             if (names && names.length > 0) {
-              syncSetupPlayerNames(names);
+              syncSetupPlayerNames(names, controllers, difficulties, game?.ruleset);
             }
             setScreen('setup');
             setPostGameSummary(null);

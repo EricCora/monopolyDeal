@@ -1,11 +1,14 @@
 import type { GameState } from '../engine';
-import type { GrowthMetricEvent, GrowthMetricsV1, LifetimeStatsV1, MatchRecordV1 } from '../stats/types';
+import { defaultAchievementState, defaultDailyChallenge, ensureTodayDailyChallenge } from '../stats/retention';
+import type { AchievementStateV1, DailyChallengeV1, GrowthMetricEvent, GrowthMetricsV1, LifetimeStatsV1, MatchRecordV1 } from '../stats/types';
 
 const ACTIVE_GAME_KEY = 'monopolyDeal.activeGame.v1';
 const SAVED_GAMES_KEY = 'monopolyDeal.savedGames.v1';
 const MATCH_HISTORY_KEY = 'monopolyDeal.matchHistory.v1';
 const LIFETIME_STATS_KEY = 'monopolyDeal.lifetimeStats.v1';
 const GROWTH_METRICS_KEY = 'monopolyDeal.growthMetrics.v1';
+const ACHIEVEMENTS_KEY = 'monopolyDeal.achievements.v1';
+const DAILY_CHALLENGE_KEY = 'monopolyDeal.dailyChallenge.v1';
 const UI_PREFERENCES_KEY = 'monopolyDeal.uiPreferences.v1';
 const MAX_SAVED_GAME_SLOTS = 5;
 
@@ -35,6 +38,20 @@ export interface UiPreferencesV1 {
   textScale: 'normal' | 'large';
   confirmRiskyActions: boolean;
   showRulesDrawerHints: boolean;
+  highContrast: boolean;
+  soundEnabled: boolean;
+  hapticsEnabled: boolean;
+  experimental: {
+    aiOpponents: boolean;
+    aiCoach: boolean;
+    replayTimeline: boolean;
+    dailyChallenges: boolean;
+    achievements: boolean;
+    lanMultiplayer: boolean;
+    customRules: boolean;
+    enhancedEventLog: boolean;
+    contextualActionPreviews: boolean;
+  };
   devModeEnabled: boolean;
   gamePaused: boolean;
   pausedGameId: string | null;
@@ -222,6 +239,65 @@ export function saveLifetimeStats(stats: LifetimeStatsV1): void {
   localStorage.setItem(LIFETIME_STATS_KEY, JSON.stringify(stats));
 }
 
+function parseNonNegative(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+export function loadAchievementState(): AchievementStateV1 {
+  const raw = localStorage.getItem(ACHIEVEMENTS_KEY);
+  if (!raw) return defaultAchievementState();
+  try {
+    const parsed = JSON.parse(raw) as Partial<AchievementStateV1>;
+    if (parsed.version !== 1) return defaultAchievementState();
+    return {
+      version: 1,
+      counters: {
+        wins: parseNonNegative(parsed.counters?.wins),
+        actions: parseNonNegative(parsed.counters?.actions),
+        gamesPlayed: parseNonNegative(parsed.counters?.gamesPlayed),
+        quickWins: parseNonNegative(parsed.counters?.quickWins),
+      },
+      unlockedAt: {
+        first_win: parseNonNegative(parsed.unlockedAt?.first_win) || undefined,
+        ten_wins: parseNonNegative(parsed.unlockedAt?.ten_wins) || undefined,
+        action_century: parseNonNegative(parsed.unlockedAt?.action_century) || undefined,
+        quick_win: parseNonNegative(parsed.unlockedAt?.quick_win) || undefined,
+      },
+    };
+  } catch {
+    return defaultAchievementState();
+  }
+}
+
+export function saveAchievementState(state: AchievementStateV1): void {
+  localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(state));
+}
+
+export function loadDailyChallenge(): DailyChallengeV1 {
+  const raw = localStorage.getItem(DAILY_CHALLENGE_KEY);
+  if (!raw) return defaultDailyChallenge();
+  try {
+    const parsed = JSON.parse(raw) as Partial<DailyChallengeV1>;
+    if (parsed.version !== 1) return defaultDailyChallenge();
+    return ensureTodayDailyChallenge({
+      version: 1,
+      day: typeof parsed.day === 'string' ? parsed.day : defaultDailyChallenge().day,
+      seed: parseNonNegative(parsed.seed),
+      targetTurns: Math.max(1, parseNonNegative(parsed.targetTurns)),
+      completed: Boolean(parsed.completed),
+      attempts: parseNonNegative(parsed.attempts),
+      bestTurnCount: parsed.bestTurnCount == null ? null : Math.max(1, parseNonNegative(parsed.bestTurnCount)),
+    });
+  } catch {
+    return defaultDailyChallenge();
+  }
+}
+
+export function saveDailyChallenge(challenge: DailyChallengeV1): void {
+  localStorage.setItem(DAILY_CHALLENGE_KEY, JSON.stringify(challenge));
+}
+
 function defaultGrowthMetrics(): GrowthMetricsV1 {
   return {
     version: 1,
@@ -230,6 +306,12 @@ function defaultGrowthMetrics(): GrowthMetricsV1 {
       share_image_success: 0,
       payment_auto_selected: 0,
       rules_drawer_opened: 0,
+      game_started: 0,
+      game_completed: 0,
+      rematch_started: 0,
+      lan_room_hosted: 0,
+      lan_room_joined: 0,
+      coach_hint_viewed: 0,
     },
   };
 }
@@ -252,6 +334,12 @@ export function loadGrowthMetrics(): GrowthMetricsV1 {
         share_image_success: parseMetricCount(parsed.events?.share_image_success),
         payment_auto_selected: parseMetricCount(parsed.events?.payment_auto_selected),
         rules_drawer_opened: parseMetricCount(parsed.events?.rules_drawer_opened),
+        game_started: parseMetricCount(parsed.events?.game_started),
+        game_completed: parseMetricCount(parsed.events?.game_completed),
+        rematch_started: parseMetricCount(parsed.events?.rematch_started),
+        lan_room_hosted: parseMetricCount(parsed.events?.lan_room_hosted),
+        lan_room_joined: parseMetricCount(parsed.events?.lan_room_joined),
+        coach_hint_viewed: parseMetricCount(parsed.events?.coach_hint_viewed),
       },
     };
   } catch {
@@ -284,6 +372,20 @@ function defaultUiPreferences(): UiPreferencesV1 {
     textScale: 'normal',
     confirmRiskyActions: true,
     showRulesDrawerHints: true,
+    highContrast: false,
+    soundEnabled: false,
+    hapticsEnabled: false,
+    experimental: {
+      aiOpponents: false,
+      aiCoach: false,
+      replayTimeline: false,
+      dailyChallenges: false,
+      achievements: false,
+      lanMultiplayer: false,
+      customRules: false,
+      enhancedEventLog: false,
+      contextualActionPreviews: false,
+    },
     devModeEnabled: false,
     gamePaused: false,
     pausedGameId: null,
@@ -298,6 +400,7 @@ export function loadUiPreferences(): UiPreferencesV1 {
     if (parsed.version !== 1) return defaultUiPreferences();
     const density = parsed.tableDensity === 'compact' ? 'compact' : 'cozy';
     const textScale = parsed.textScale === 'large' ? 'large' : 'normal';
+    const experimentalParsed = parsed.experimental;
     return {
       version: 1,
       reducedEffects: Boolean(parsed.reducedEffects),
@@ -305,6 +408,20 @@ export function loadUiPreferences(): UiPreferencesV1 {
       textScale,
       confirmRiskyActions: parsed.confirmRiskyActions !== false,
       showRulesDrawerHints: parsed.showRulesDrawerHints !== false,
+      highContrast: Boolean(parsed.highContrast),
+      soundEnabled: Boolean(parsed.soundEnabled),
+      hapticsEnabled: Boolean(parsed.hapticsEnabled),
+      experimental: {
+        aiOpponents: Boolean(experimentalParsed?.aiOpponents),
+        aiCoach: Boolean(experimentalParsed?.aiCoach),
+        replayTimeline: Boolean(experimentalParsed?.replayTimeline),
+        dailyChallenges: Boolean(experimentalParsed?.dailyChallenges),
+        achievements: Boolean(experimentalParsed?.achievements),
+        lanMultiplayer: Boolean(experimentalParsed?.lanMultiplayer),
+        customRules: Boolean(experimentalParsed?.customRules),
+        enhancedEventLog: Boolean(experimentalParsed?.enhancedEventLog),
+        contextualActionPreviews: Boolean(experimentalParsed?.contextualActionPreviews),
+      },
       devModeEnabled: Boolean(parsed.devModeEnabled),
       gamePaused: Boolean(parsed.gamePaused),
       pausedGameId: typeof parsed.pausedGameId === 'string' ? parsed.pausedGameId : null,
@@ -324,4 +441,8 @@ export function clearMatchHistory(): void {
 
 export function clearLifetimeStats(): void {
   localStorage.removeItem(LIFETIME_STATS_KEY);
+}
+
+export function clearGrowthMetrics(): void {
+  localStorage.removeItem(GROWTH_METRICS_KEY);
 }

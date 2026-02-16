@@ -2,16 +2,27 @@ import type { PropertyColor } from '../cards/catalog';
 
 export type PlayerId = string;
 export type ZoneType = 'hand' | 'bank' | 'property';
+export type PlayerController = 'human' | 'bot';
+export type BotDifficulty = 'easy' | 'hard';
 
 export interface PlayerConfig {
   id: PlayerId;
   name: string;
+  controller?: PlayerController;
+  botDifficulty?: BotDifficulty;
 }
 
 export interface GameConfig {
   players: PlayerConfig[];
   seed?: number;
   deckVersion?: 'v1';
+  ruleset?: Partial<RulesetV1>;
+}
+
+export interface RulesetV1 {
+  winCompleteSets: number;
+  maxHandAtEndTurn: number;
+  maxPlaysPerTurn: number;
 }
 
 export interface PropertyCardPlacement {
@@ -22,6 +33,8 @@ export interface PropertyCardPlacement {
 export interface PlayerState {
   id: PlayerId;
   name: string;
+  controller?: PlayerController;
+  botDifficulty?: BotDifficulty;
   hand: string[];
   bank: string[];
   properties: Record<PropertyColor, PropertyCardPlacement[]>;
@@ -104,6 +117,7 @@ export interface GameState {
   createdAt: number;
   updatedAt: number;
   deckVersion: 'v1';
+  ruleset?: RulesetV1;
   players: PlayerState[];
   drawPile: string[];
   discardPile: string[];
