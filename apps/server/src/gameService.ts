@@ -86,6 +86,12 @@ function requireSession(room: MultiplayerRoom, playerId: PlayerId, sessionToken:
   return player;
 }
 
+function assertReconnectWindowOpen(player: RoomParticipant, now = nowMs()): void {
+  if (!player.connected && now > player.reconnectDeadlineMs) {
+    throw new Error('reconnect_expired');
+  }
+}
+
 function migrateHost(room: MultiplayerRoom): void {
   const currentHost = findPlayer(room, room.hostPlayerId);
   if (currentHost?.connected) return;
@@ -151,6 +157,28 @@ function connectedLobbyPlayers(room: MultiplayerRoom): RoomParticipant[] {
   return room.players.filter((player) => player.connected);
 }
 
+function reclaimExpiredLobbyParticipants(room: MultiplayerRoom, now = nowMs()): void {
+  if (room.status !== 'lobby') return;
+  const nextPlayers = room.players.filter((player) => player.connected || player.reconnectDeadlineMs > now);
+  if (nextPlayers.length === room.players.length) return;
+  room.players = nextPlayers;
+  if (room.players.length === 0) {
+    room.hostPlayerId = 'p1';
+  } else {
+    migrateHost(room);
+  }
+  room.updatedAt = now;
+}
+
+function nextAvailableLobbyPlayerId(room: MultiplayerRoom): PlayerId {
+  const taken = new Set(room.players.map((player) => player.id));
+  for (let index = 1; index <= 4; index += 1) {
+    const candidate = `p${index}` as PlayerId;
+    if (!taken.has(candidate)) return candidate;
+  }
+  throw new Error('room_full');
+}
+
 function bumpUpdatedAt(room: MultiplayerRoom): void {
   room.updatedAt = nowMs();
 }
@@ -204,15 +232,16 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
   if (room.status !== 'lobby' || room.game) {
     throw new Error('room_started');
   }
+  reclaimExpiredLobbyParticipants(room);
   if (room.players.length >= 4) {
     throw new Error('room_full');
   }
-  const playerId = `p${room.players.length + 1}` as PlayerId;
+  const playerId = nextAvailableLobbyPlayerId(room);
   const token = randomToken();
   const now = nowMs();
   room.players.push({
     id: playerId,
-    name: sanitizeName(playerName, `Player ${room.players.length + 1}`),
+    name: sanitizeName(playerName, `Player ${playerId.slice(1)}`),
     sessionToken: token,
     connected: true,
     lastSeenAt: now,
@@ -230,9 +259,7 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
 export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string): RoomSessionResponse {
   const player = requireSession(room, playerId, sessionToken);
   const now = nowMs();
-  if (!player.connected && now > player.reconnectDeadlineMs) {
-    throw new Error('reconnect_expired');
-  }
+  assertReconnectWindowOpen(player, now);
   touchPlayer(player);
   bumpUpdatedAt(room);
   return {
@@ -306,8 +333,10 @@ export function applyRoomAction(
 
 export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken: string): MultiplayerRoomView {
   const viewer = requireSession(room, viewerId, sessionToken);
+  assertReconnectWindowOpen(viewer);
   touchPlayer(viewer);
   updateStatusFromGame(room);
+  bumpUpdatedAt(room);
   const started = Boolean(room.game);
   const promptPlayerId = room.game ? getNextPrompt(room.game).playerId : undefined;
   const legalActions = room.game && viewer.connected ? getLegalActions(room.game, viewerId) : [];
@@ -339,6 +368,7 @@ export function pruneInactiveRooms(rooms: Map<string, MultiplayerRoom>, now = no
       if (now - player.lastSeenAt <= STALE_CONNECTION_MS) continue;
       markDisconnected(room, player);
     }
+    reclaimExpiredLobbyParticipants(room, now);
 
     const inactiveForMs = now - room.updatedAt;
     const ttl = room.status === 'lobby' ? 30 * 60 * 1000 : room.status === 'finished' ? 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;

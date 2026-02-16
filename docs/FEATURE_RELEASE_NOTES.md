@@ -22,6 +22,10 @@ Branch: `codex/deep-research-improvements`
 - Presence-aware room state and reconnect deadline messaging in UI
 - Server-side host migration and disconnect grace window (5 minutes)
 - Server health endpoint and inactivity cleanup to handle stale sessions/shutdowns
+- Multiplayer lifecycle hardening:
+- `/state` polling now refreshes room activity to prevent false inactivity cleanup
+- Expired disconnected lobby participants are reclaimed before `room_full` checks
+- `/state` now returns `reconnect_expired` when disconnected reconnect windows have elapsed
 - Accessibility/game-feel improvements:
 - High contrast mode, keyboard shortcuts, live-region updates
 - Sound and haptics toggles
