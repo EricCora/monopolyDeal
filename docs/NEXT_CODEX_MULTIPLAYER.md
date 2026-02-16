@@ -1,32 +1,33 @@
-# Next Codex Session: Multiplayer Simplification
+# Next Codex Session: Multiplayer Hosted UX Follow-Through
 
-Purpose: make multiplayer feel consumer-grade for non-technical users (no terminal/IP steps for players).
+Purpose: build on shipped multiplayer gameplay parity by reducing onboarding friction for non-technical players.
 
 ## Current State (as of latest commits)
 
-- One-click multiplayer UI exists in app (`Play Multiplayer`, room code flow).
-- Local dev is simpler (`npm run dev:all`) and now auto-opens browser.
-- Localhost API fallback and actionable unreachable messaging are fixed.
-- Multiplayer server startup/runtime import issues are fixed for local development.
+- Active multiplayer matches now render the full table experience (`GameTableScreen`) instead of minimal action buttons.
+- Host-only room controls exist for pause/resume and checkpoint save/load/delete.
+- Active prompt player controls include undo/reset-turn backed by server-authoritative snapshots.
+- Multiplayer mutations are revision-guarded to reduce stale write conflicts.
+- Local development supports one-command startup via `npm run dev:all`.
 
 ## Next Objective
 
-Ship an invite-link, hosted-first multiplayer experience so two non-technical users can play by opening a URL and entering a name.
+Ship invite-link and deep-link join flow so non-technical players can open a URL and join directly with minimal manual entry.
 
 ## Required Outcomes
 
-1. No terminal steps for player 2.
-2. Host can share one invite link (not just a room code).
-3. Join page auto-fills room code from URL.
-4. Production users do not see local-dev troubleshooting text.
-5. Local development flow remains available for contributors.
+1. Host can share an invite link from the multiplayer lobby.
+2. Opening `/join/:roomCode` routes directly into multiplayer join flow.
+3. Join code is auto-filled from URL path.
+4. Production copy remains non-technical while preserving dev diagnostics in dev only.
+5. Existing parity features (pause/checkpoints/undo/reset/reconnect) remain stable.
 
 ## Implementation Scope
 
 ### 1) Invite Link Flow
 
-- Add a canonical join route format: `/join/:roomCode`.
-- On host success, render:
+- Add canonical join route format: `/join/:roomCode`.
+- On host room creation, render:
   - `Copy Room Code`
   - `Copy Invite Link`
 - Invite link target:
@@ -34,37 +35,30 @@ Ship an invite-link, hosted-first multiplayer experience so two non-technical us
 
 ### 2) Deep-Link Join Behavior
 
-- On app load, detect if path matches `/join/:roomCode`.
+- On app load, detect `/join/:roomCode`.
 - Auto-route to multiplayer screen.
-- Auto-populate join code from URL segment.
-- Keep player name editable before join action.
+- Pre-fill join code from route.
+- Keep player name editable before submit.
 
-### 3) Production-First Multiplayer UX
+### 3) Production-First Messaging
 
 - Keep local diagnostics dev-only:
   - API base helper line
   - `npm run dev:all` guidance
-- Production copy should be simple:
-  - “Create or join with a private room code.”
-  - concise retry messaging without technical details.
+- Keep production copy simple and non-technical.
 
-### 4) Deployment Readiness Docs
+### 4) Documentation Follow-Through
 
-- Add a small “Hosted Multiplayer Quick Deploy” section to README:
-  - frontend host + backend host
-  - set `VITE_MULTIPLAYER_API_URL`
-  - verify `/api/multiplayer/health`
-- Add a short “Player Onboarding” snippet:
-  - open URL
-  - host shares invite link
-  - join and start.
+- Update README with hosted invite-link quick start.
+- Update release notes with deep-link join behavior.
+- Keep LLM guide aligned with route and flow changes.
 
 ## Suggested File Touch List
 
 - `src/App.tsx`
 - `src/ui/screens/MultiplayerScreen.tsx`
 - `src/app/useMultiplayerRoom.ts`
-- `src/network/multiplayerClient.ts` (only if link-join needs helper updates)
+- `src/network/multiplayerClient.ts` (if helper changes are needed)
 - `src/test/app.test.tsx`
 - `README.md`
 - `docs/FEATURE_RELEASE_NOTES.md`
@@ -73,10 +67,10 @@ Ship an invite-link, hosted-first multiplayer experience so two non-technical us
 
 Automated:
 
-1. Joining via deep link path sets multiplayer screen + prefilled join code.
-2. Invite link button appears for host after room creation.
-3. Production copy does not include local-dev troubleshooting text.
-4. Existing multiplayer smoke tests remain passing.
+1. Navigating directly to `/join/:roomCode` opens multiplayer join UI with prefilled code.
+2. Host sees invite-link copy control after room creation.
+3. Production copy excludes local troubleshooting details.
+4. Existing multiplayer parity tests continue to pass.
 
 Verification commands:
 
@@ -90,19 +84,19 @@ Verification commands:
 2. Host taps `Host Multiplayer Game`.
 3. Host taps `Copy Invite Link` and sends it.
 4. Player 2 opens link on another laptop/phone.
-5. App opens multiplayer screen with join code already filled.
-6. Player 2 enters name and taps join.
-7. Host starts match.
+5. App opens multiplayer join flow with code already filled.
+6. Player 2 enters name and joins.
+7. Host starts match and parity controls still function.
 
 ## Non-Goals (for this next session)
 
 - Matchmaking/lobbies beyond private invites.
 - Accounts/authentication.
-- Dedicated relay/turn servers beyond current room API model.
+- Websocket transport migration (still deferred from parity release).
 
 ## Definition of Done
 
 - Invite-link flow implemented and tested.
-- Docs updated for hosted-first usage.
-- Production UX is non-technical by default.
-- Local contributor workflow still works via `npm run dev:all`.
+- Deep-link join route works from a clean browser session.
+- Docs updated and consistent with shipped behavior.
+- No regressions to existing multiplayer parity controls.

@@ -24,6 +24,7 @@ This file tracks execution progress of `docs/deep-research-improvement-plan.md` 
 - [x] Add achievements and daily challenge seed workflow
 - [x] Add LAN multiplayer server/client architecture (room code flow)
 - [x] Replace manual LAN setup UX with one-click hosted multiplayer room flow
+- [x] Upgrade multiplayer to rich in-match table parity with host controls and server-authoritative snapshots
 - [x] Add custom rules/ruleset support + safe card-pack extension points
 - [x] Expand analytics and release documentation
 
@@ -36,6 +37,7 @@ This file tracks execution progress of `docs/deep-research-improvement-plan.md` 
 - `8b9a357` refactor(engine): extract core helpers and broaden pending-flow regression coverage
 - `ebad365` feat(app+analytics): add orchestration hooks and growth telemetry insights
 - `2230360` feat(multiplayer): ship one-click hosted room flow with reconnect and host migration
+- `c731c3b` feat(multiplayer): ship rich in-match parity with host controls and revision-safe room actions
 
 ## Notes
 - This tracker is intentionally append-only for auditability during rapid iteration.
