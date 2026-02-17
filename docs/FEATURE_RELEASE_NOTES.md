@@ -14,7 +14,13 @@ Branch: `codex/deep-research-improvements`
 - Added explicit self-identification in lobby roster (`You` tag + highlighted row).
 - Upgraded multiplayer visual hierarchy (room hero, status pills, action grouping, activity timeline).
 - Added dynamic polish (hero sheen, connection pulse, elevated hover states) to reduce static panel feel.
-- Shifted the app palette away from blue-heavy gradients toward a board-inspired green/gold/red direction.
+- Shifted the app palette away from blue-heavy gradients toward a flagship arcade direction.
+- Arcade flagship UI overhaul:
+- Added dual table style support (`classic_green`, `neon_arcade`) persisted in UI preferences.
+- Rebuilt Settings IA into compact grouped cards with custom accessible switches and collapsed Experimental section.
+- Upgraded card visuals with action SVG iconography, textured faces, richer card-back motif, and smoother interaction/selection animation.
+- Added felt table surface treatment, pile summary cards, and deeper seat/panel styling for active table play.
+- Upgraded Home and Post-game presentation with stronger CTA hierarchy, dynamic hero motion, and trophy-forward victory styling.
 - Reversible release controls: client/server feature flags for push and reactions.
 - Multiplayer funnel + push health telemetry counters added to growth metrics.
 - Experimental feature flags for AI opponents, AI coach, replay timeline, daily challenges, achievements, custom rules, enhanced event log, and contextual previews.
