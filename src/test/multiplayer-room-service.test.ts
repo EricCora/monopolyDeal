@@ -7,6 +7,7 @@ import {
   loadRoomCheckpoint,
   pauseRoom,
   pruneInactiveRooms,
+  reconnectRoom,
   resetTurnRoomActions,
   resumeRoom,
   roomView,
@@ -178,6 +179,56 @@ describe('multiplayer room service lifecycle', () => {
     const staleRevision = room.revision - 1;
 
     expect(() => pauseRoom(room, session.playerId, session.sessionToken, staleRevision)).toThrowError('revision_conflict');
+  });
+
+  it('reassigns host back to the original host after reconnect', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+
+    leaveRoom(room, session.playerId, session.sessionToken);
+    expect(room.hostPlayerId).toBe(playerTwo.playerId);
+
+    reconnectRoom(room, session.playerId, session.sessionToken);
+    expect(room.hostPlayerId).toBe(session.playerId);
+  });
+
+  it('starts a lobby match from a compatible checkpoint when requested', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+    const checkpoint = saveRoomCheckpoint(room, session.playerId, session.sessionToken, 'Resume');
+    const checkpointGame = structuredClone(room.checkpoints[room.checkpoints.length - 1].game);
+
+    // Simulate a persisted lobby resume scenario with checkpoints retained.
+    room.game = null;
+    room.status = 'lobby';
+
+    const resumedRoom = startRoom(room, session.playerId, session.sessionToken, undefined, undefined, checkpoint.id);
+    const resumedGame = resumedRoom.game;
+    if (!resumedGame) throw new Error('expected resumed game');
+    expect(resumedGame.players.map((player) => player.id)).toEqual(checkpointGame.players.map((player) => player.id));
+    expect(room.hostPlayerId).toBe(session.playerId);
+    expect(room.players.some((entry) => entry.id === playerTwo.playerId)).toBe(true);
+  });
+
+  it('rejects checkpoint start when checkpoint players do not match lobby players', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+    const checkpoint = saveRoomCheckpoint(room, session.playerId, session.sessionToken, 'Resume');
+
+    room.game = null;
+    room.status = 'lobby';
+    room.players = room.players.filter((entry) => entry.id !== 'p2');
+    joinRoom(room, 'Replacement');
+
+    expect(() => startRoom(room, session.playerId, session.sessionToken, undefined, undefined, checkpoint.id)).toThrowError(
+      'checkpoint_player_mismatch',
+    );
   });
 
   it('allows leave with stale expected revision for valid session cleanup', () => {

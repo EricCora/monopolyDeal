@@ -467,6 +467,141 @@ describe('App', () => {
     });
   });
 
+  it('allows sly deal selection by clicking target property card', () => {
+    const slyState: GameState = {
+      ...structuredClone(baseState),
+      pending: {
+        kind: 'sly_deal',
+        payload: {
+          sourcePlayerId: 'p1',
+          targetPlayerId: 'p2',
+          actionCardId: 'sly_deal#s1',
+        },
+      },
+    };
+    mockedCreateGame.mockImplementationOnce(() => slyState);
+    mockedGetNextPrompt.mockImplementation(() => ({
+      playerId: 'p1',
+      text: 'Alpha: choose a card to steal.',
+      kind: 'selection',
+    }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Take Brown from Beta to Brown',
+        action: {
+          type: 'sly_deal_pick',
+          playerId: 'p1',
+          cardId: 'brown_1#b3',
+          sourceColor: 'brown',
+          destinationColor: 'brown',
+        },
+      },
+    ]);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /brown card/i }));
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'sly_deal_pick',
+      playerId: 'p1',
+      cardId: 'brown_1#b3',
+      sourceColor: 'brown',
+      destinationColor: 'brown',
+    });
+  });
+
+  it('supports forced deal two-step selection by clicking own then opponent property cards', () => {
+    const forcedState: GameState = {
+      ...structuredClone(baseState),
+      players: [
+        {
+          ...structuredClone(baseState.players[0]),
+          properties: {
+            brown: [{ cardId: 'brown_1#a9', assignedColor: 'brown' }],
+            light_blue: [],
+            pink: [],
+            orange: [],
+            red: [],
+            yellow: [],
+            green: [],
+            dark_blue: [],
+            railroad: [],
+            utility: [],
+          },
+        },
+        {
+          ...structuredClone(baseState.players[1]),
+          properties: {
+            brown: [],
+            light_blue: [],
+            pink: [],
+            orange: [],
+            red: [],
+            yellow: [],
+            green: [],
+            dark_blue: [],
+            railroad: [{ cardId: 'railroad_1#b9', assignedColor: 'railroad' }],
+            utility: [],
+          },
+        },
+      ],
+      pending: {
+        kind: 'forced_deal',
+        payload: {
+          sourcePlayerId: 'p1',
+          targetPlayerId: 'p2',
+          actionCardId: 'forced_deal#f1',
+        },
+      },
+    };
+    mockedCreateGame.mockImplementationOnce(() => forcedState);
+    mockedGetNextPrompt.mockImplementation(() => ({
+      playerId: 'p1',
+      text: 'Alpha: choose cards to swap.',
+      kind: 'selection',
+    }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Swap Brown for Railroad',
+        action: {
+          type: 'forced_deal_pick',
+          playerId: 'p1',
+          giveCardId: 'brown_1#a9',
+          giveColor: 'brown',
+          takeCardId: 'railroad_1#b9',
+          takeColor: 'railroad',
+          destinationColor: 'railroad',
+        },
+      },
+    ]);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+
+    const alphaPanel = screen.getByRole('heading', { name: 'Alpha' }).closest('article');
+    const betaPanel = screen.getByRole('heading', { name: 'Beta' }).closest('article');
+    expect(alphaPanel).not.toBeNull();
+    expect(betaPanel).not.toBeNull();
+
+    fireEvent.click(within(alphaPanel as HTMLElement).getByRole('button', { name: /brown card/i }));
+    fireEvent.click(within(betaPanel as HTMLElement).getByRole('button', { name: /railroad card/i }));
+
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'forced_deal_pick',
+      playerId: 'p1',
+      giveCardId: 'brown_1#a9',
+      giveColor: 'brown',
+      takeCardId: 'railroad_1#b9',
+      takeColor: 'railroad',
+      destinationColor: 'railroad',
+    });
+  });
+
   it('shows risky action confirmation dialog and cancels safely', () => {
     mockedGetNextPrompt.mockImplementation(() => ({
       playerId: 'p1',
@@ -815,6 +950,74 @@ describe('App', () => {
 
     expect(await screen.findByText(/multiplayer server not reachable at/i)).toBeInTheDocument();
     expect(screen.getByText(/run npm run dev:lan:all/i)).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
+  });
+
+  it('allows host to start lobby match from a checkpoint when available', async () => {
+    const now = Date.now();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/api/multiplayer/health')) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.endsWith('/api/multiplayer/rooms') && (!init?.method || init.method === 'POST')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            playerId: 'p1',
+            sessionToken: 'token',
+            reconnectDeadlineMs: now + 30_000,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/multiplayer/rooms/ABCDE/state')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            status: 'lobby',
+            started: false,
+            hostPlayerId: 'p1',
+            yourPlayerId: 'p1',
+            players: [
+              { id: 'p1', name: 'Host', handCount: 0, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: true },
+              { id: 'p2', name: 'Guest', handCount: 0, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: false },
+            ],
+            legalActions: [],
+            paused: false,
+            revision: 2,
+            turnSnapshotCount: 0,
+            checkpointSlots: [{ id: 'cp-1', name: 'Checkpoint A', savedAt: now - 1_000 }],
+            canStart: true,
+            reconnectDeadlineMs: now + 30_000,
+            serverTime: now,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/multiplayer/rooms/ABCDE/start')) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    vi.spyOn(window, 'prompt').mockReturnValue('1');
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+    fireEvent.change(await screen.findByLabelText(/your name/i), { target: { value: 'Host' } });
+    fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
+    expect(await screen.findByRole('button', { name: /start from checkpoint/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /start from checkpoint/i }));
+    await waitFor(() => {
+      expect(fetchSpy.mock.calls.some(([input]) => String(input).includes('/api/multiplayer/rooms/ABCDE/start'))).toBe(true);
+    });
+    const startCall = fetchSpy.mock.calls.find(([input]) => String(input).includes('/api/multiplayer/rooms/ABCDE/start'));
+    expect(startCall).toBeDefined();
+    if (!startCall) throw new Error('missing start call');
+    const checkpointStartPayload = JSON.parse(String(startCall[1]?.body ?? '{}')) as Record<string, unknown>;
+    expect(checkpointStartPayload.checkpointId).toBe('cp-1');
 
     fetchSpy.mockRestore();
   });

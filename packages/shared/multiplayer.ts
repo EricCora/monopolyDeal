@@ -62,7 +62,10 @@ export interface ReconnectRoomRequest {
   expectedRevision?: number;
 }
 
-export type StartRoomRequest = ReconnectRoomRequest;
+export interface StartRoomRequest extends ReconnectRoomRequest {
+  seed?: number;
+  checkpointId?: string;
+}
 
 export type LeaveRoomRequest = ReconnectRoomRequest;
 

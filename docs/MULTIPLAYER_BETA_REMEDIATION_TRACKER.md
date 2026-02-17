@@ -5,8 +5,7 @@ Source checklist: `docs/BETA_MULTIPLAYER_BUGS_CHECKLIST.md`
 
 ## Scope
 
-This pass implements prioritized multiplayer hardening for **P0/P1** issues first.
-P2 items are intentionally deferred to a follow-up branch after stabilization.
+This pass now includes full prioritized multiplayer hardening across **P0/P1/P2** checklist items.
 
 ## Decision Log
 
@@ -30,6 +29,12 @@ P2 items are intentionally deferred to a follow-up branch after stabilization.
 - [x] Phase 4: Stability
   - [x] STAB-01 blank-screen hardening path coverage
 - [x] Phase 5: Documentation and release notes alignment
+- [x] Phase 6: P2 completion pass
+  - [x] MP-ROOM-02 original host preference on reconnect
+  - [x] MP-ROOM-03 lobby resume-from-checkpoint flow
+  - [x] MP-VIS-01 compact rent readability polish
+  - [x] MP-VIS-02 rent action card rent clarity
+  - [x] UX-DEALS-01 click-driven deal/swap selection
 
 ## Verification Log
 
@@ -42,11 +47,11 @@ P2 items are intentionally deferred to a follow-up branch after stabilization.
   - `npm run test` passed (`115` tests)
   - `npm run build` passed
   - `npm run lint` passed with one existing warning in `src/ui/components/StatsDashboard.tsx` (`react-hooks/incompatible-library` from `useReactTable`)
+- `2026-02-16`: P2 completion verification
+  - `npm run test` passed (`123` tests)
+  - `npm run build` passed
+  - `npm run lint` passed with one existing warning in `src/ui/components/StatsDashboard.tsx` (`react-hooks/incompatible-library` from `useReactTable`)
 
-## Deferred Backlog (P2 follow-up)
+## Deferred Backlog
 
-- MP-ROOM-02 original-host preference on stable reconnect
-- MP-ROOM-03 lobby resume-from-checkpoint flow
-- MP-VIS-01 compact rent readability polish
-- MP-VIS-02 rent action card rent-matrix clarity
-- UX-DEALS-01 click-driven swap/deal target selection UX
+- None from `docs/BETA_MULTIPLAYER_BUGS_CHECKLIST.md` as of `2026-02-16`.

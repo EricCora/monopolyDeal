@@ -72,6 +72,20 @@ describe('Card UI', () => {
     expect(model.themeClass).toBe('theme-wild-any');
   });
 
+  it('shows rent action summaries for rent cards', () => {
+    render(
+      <>
+        <CardView cardId="rent_pink_orange#1" size="sm" />
+        <CardView cardId="rent_color#1" size="sm" />
+      </>,
+    );
+
+    expect(screen.getAllByLabelText(/rent action summary/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/Pink \$1\/\$2\/\$4/i)).toBeInTheDocument();
+    expect(screen.getByText(/Any Color Set/i)).toBeInTheDocument();
+    expect(screen.getByText(/Rent range: \$1-\$8/i)).toBeInTheDocument();
+  });
+
   it('highlights the full-set rent step for property cards', () => {
     const { container } = render(<CardView cardId="railroad_1#1" />);
     const fullSetSteps = container.querySelectorAll('.card-rent-step.is-fullset');

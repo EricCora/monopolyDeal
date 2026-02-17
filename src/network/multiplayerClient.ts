@@ -49,6 +49,7 @@ export function multiplayerErrorMessage(code: string): string {
   if (code === 'no_turn_snapshot') return 'No undo snapshots are available for this turn.';
   if (code === 'checkpoint_slots_full') return 'Checkpoint slots are full. Delete one and try again.';
   if (code === 'checkpoint_not_found') return 'Checkpoint not found. Refresh the room and try again.';
+  if (code === 'checkpoint_player_mismatch') return 'Checkpoint players do not match the current lobby lineup.';
   if (code === 'network_unavailable' || code === 'request_failed') return 'Couldn\'t connect right now. Retrying...';
   return 'Could not complete multiplayer request. Please try again.';
 }
@@ -143,6 +144,7 @@ export async function startMultiplayerRoom(
   session: MultiplayerSession,
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
+  checkpointId?: string,
 ): Promise<void> {
   await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/start`, {
     method: 'POST',
@@ -151,6 +153,7 @@ export async function startMultiplayerRoom(
       playerId: session.playerId,
       sessionToken: session.sessionToken,
       expectedRevision,
+      checkpointId,
     }),
   });
 }

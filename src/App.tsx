@@ -106,6 +106,11 @@ interface PlayChooserState {
   variants: CardActionVariant[];
 }
 
+interface ForcedDealSelectionState {
+  cardId: string;
+  color: PropertyColor;
+}
+
 type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
 
 function initialSetup(): SetupViewModel {
@@ -240,6 +245,7 @@ function App() {
   const [chooser, setChooser] = useState<PlayChooserState | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [selectedPaymentCards, setSelectedPaymentCards] = useState<string[]>([]);
+  const [forcedDealSelection, setForcedDealSelection] = useState<ForcedDealSelectionState | null>(null);
   const [showDebugActions, setShowDebugActions] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -689,6 +695,16 @@ function App() {
     screen,
     setMultiplayerError,
   ]);
+
+  useEffect(() => {
+    if (screen === 'multiplayer') {
+      if (multiplayerGame?.pending?.kind === 'forced_deal') return;
+      setForcedDealSelection(null);
+      return;
+    }
+    if (game?.pending?.kind === 'forced_deal') return;
+    setForcedDealSelection(null);
+  }, [game?.pending?.kind, multiplayerGame?.pending?.kind, screen]);
 
   const pendingPayment = game?.pending?.kind === 'payment' ? game.pending.payload : null;
   const canSaveCurrentGame = Boolean(game && !isGameOver(game).done);
@@ -1221,6 +1237,94 @@ function App() {
     setSelectedPaymentCards((prev) => (prev.includes(cardId) ? prev.filter((id) => id !== cardId) : [...prev, cardId]));
   };
 
+  const handleSelectionPropertyPick = (
+    mode: 'local' | 'multiplayer',
+    ownerPlayerId: string,
+    color: PropertyColor,
+    cardId: string,
+  ) => {
+    const legalPool = mode === 'multiplayer' ? multiplayerLegalActions : legalActions;
+    const pending = mode === 'multiplayer' ? multiplayerGame?.pending : game?.pending;
+    const promptForMode = mode === 'multiplayer' ? multiplayerPrompt : prompt;
+    const activePlayerId = mode === 'multiplayer' ? multiplayerRoomView?.yourPlayerId : prompt?.playerId;
+
+    if (!pending || pending.kind === 'payment' || pending.kind === 'counter' || pending.kind === 'rent') return;
+    if (!promptForMode || promptForMode.kind !== 'selection') return;
+    if (!activePlayerId || promptForMode.playerId !== activePlayerId) return;
+
+    if (pending.kind === 'sly_deal') {
+      const matches = legalPool.filter((entry) =>
+        entry.action.type === 'sly_deal_pick'
+        && entry.action.cardId === cardId
+        && entry.action.sourceColor === color,
+      );
+      if (matches.length === 0) return;
+      if (matches.length === 1) {
+        if (mode === 'multiplayer') {
+          runMultiplayerActionWithConfirmation(matches[0].action, matches[0]);
+        } else {
+          runAction(matches[0].action);
+        }
+        return;
+      }
+      setChooser({
+        cardId,
+        cardLabel: getCardDefinition(cardId).name,
+        variants: matches.map((item, index) => ({
+          id: `selection-${index}-${actionVariantId(item.action)}`,
+          label: item.label,
+          action: item.action,
+        })),
+      });
+      return;
+    }
+
+    if (pending.kind === 'deal_breaker') {
+      const selected = legalPool.find((entry) => entry.action.type === 'deal_breaker_pick' && entry.action.color === color);
+      if (!selected) return;
+      if (mode === 'multiplayer') {
+        runMultiplayerActionWithConfirmation(selected.action, selected);
+      } else {
+        runAction(selected.action);
+      }
+      return;
+    }
+
+    if (pending.kind === 'forced_deal') {
+      if (ownerPlayerId === activePlayerId) {
+        setForcedDealSelection((prev) => (prev?.cardId === cardId ? null : { cardId, color }));
+        return;
+      }
+      if (!forcedDealSelection) return;
+      const matches = legalPool.filter((entry) =>
+        entry.action.type === 'forced_deal_pick'
+        && entry.action.giveCardId === forcedDealSelection.cardId
+        && entry.action.giveColor === forcedDealSelection.color
+        && entry.action.takeCardId === cardId
+        && entry.action.takeColor === color,
+      );
+      if (matches.length === 0) return;
+      if (matches.length === 1) {
+        if (mode === 'multiplayer') {
+          runMultiplayerActionWithConfirmation(matches[0].action, matches[0]);
+        } else {
+          runAction(matches[0].action);
+        }
+        setForcedDealSelection(null);
+        return;
+      }
+      setChooser({
+        cardId,
+        cardLabel: getCardDefinition(cardId).name,
+        variants: matches.map((item, index) => ({
+          id: `selection-${index}-${actionVariantId(item.action)}`,
+          label: item.label,
+          action: item.action,
+        })),
+      });
+    }
+  };
+
   const submitMultiplayerSelectedPayment = () => {
     if (!multiplayerPendingPayment || !multiplayerPaymentCanSubmit) return;
     runMultiplayerActionWithConfirmation({
@@ -1476,6 +1580,7 @@ function App() {
           revealedPlayerId={revealedPlayerId}
           playableCardIds={playableCardIds}
           selectedCardId={selectedCardId}
+          selectedSelectionCardId={forcedDealSelection?.cardId ?? null}
           selectedPaymentCards={selectedPaymentCards}
           selectedPaymentTotal={selectedPaymentTotal}
           totalPayableValue={totalPayableValue}
@@ -1506,6 +1611,9 @@ function App() {
           }}
           onRunAction={runActionWithConfirmation}
           onCardClick={handleCardClick}
+          onPropertySelectionClick={(ownerPlayerId, color, cardId) => {
+            handleSelectionPropertyPick('local', ownerPlayerId, color, cardId);
+          }}
           onPaymentCardToggle={handlePaymentCardToggle}
           onAutoSelectPayment={autoSelectPayment}
           onSubmitSelectedPayment={submitSelectedPayment}
@@ -1545,6 +1653,7 @@ function App() {
           revealedPlayerId={multiplayerRoomView.yourPlayerId}
           playableCardIds={multiplayerPlayableCardIds}
           selectedCardId={selectedCardId}
+          selectedSelectionCardId={forcedDealSelection?.cardId ?? null}
           selectedPaymentCards={selectedPaymentCards}
           selectedPaymentTotal={multiplayerSelectedPaymentTotal}
           totalPayableValue={multiplayerTotalPayableValue}
@@ -1605,6 +1714,9 @@ function App() {
           }}
           onRunAction={runMultiplayerActionWithConfirmation}
           onCardClick={handleMultiplayerCardClick}
+          onPropertySelectionClick={(ownerPlayerId, color, cardId) => {
+            handleSelectionPropertyPick('multiplayer', ownerPlayerId, color, cardId);
+          }}
           onPaymentCardToggle={handleMultiplayerPaymentCardToggle}
           onAutoSelectPayment={autoSelectMultiplayerPayment}
           onSubmitSelectedPayment={submitMultiplayerSelectedPayment}

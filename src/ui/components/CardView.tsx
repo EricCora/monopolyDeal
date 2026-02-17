@@ -94,6 +94,14 @@ export function CardView({
           </span>
         ) : null}
 
+        {model.rentActionLines && model.rentActionLines.length > 0 ? (
+          <span className={`card-rent-action ${isCompactRent ? 'is-compact' : ''}`} aria-label="Rent action summary">
+            {model.rentActionLines.map((line) => (
+              <span key={`${model.cardId}-${line}`} className="card-rent-action-line">{line}</span>
+            ))}
+          </span>
+        ) : null}
+
         {annotation ? <span className="card-annotation">{annotation}</span> : null}
       </span>
     </button>

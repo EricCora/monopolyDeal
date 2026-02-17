@@ -44,6 +44,7 @@ interface GameTableScreenProps {
   revealedPlayerId: string | null;
   playableCardIds: Set<string>;
   selectedCardId: string | null;
+  selectedSelectionCardId?: string | null;
   selectedPaymentCards: string[];
   selectedPaymentTotal: number;
   totalPayableValue: number;
@@ -79,6 +80,7 @@ interface GameTableScreenProps {
   onToggleDebugActions: () => void;
   onRunAction: (action: Action, source?: LegalAction) => void;
   onCardClick: (cardId: string) => void;
+  onPropertySelectionClick: (ownerPlayerId: string, color: PropertyColor, cardId: string) => void;
   onPaymentCardToggle: (cardId: string) => void;
   onAutoSelectPayment: () => void;
   onSubmitSelectedPayment: () => void;
@@ -125,6 +127,7 @@ export function GameTableScreen({
   revealedPlayerId,
   playableCardIds,
   selectedCardId,
+  selectedSelectionCardId = null,
   selectedPaymentCards,
   selectedPaymentTotal,
   totalPayableValue,
@@ -155,6 +158,7 @@ export function GameTableScreen({
   onToggleDebugActions,
   onRunAction,
   onCardClick,
+  onPropertySelectionClick,
   onPaymentCardToggle,
   onAutoSelectPayment,
   onSubmitSelectedPayment,
@@ -285,6 +289,7 @@ export function GameTableScreen({
               const handInteractive = Boolean(canSeeHand && prompt.playerId === player.id && !over.done && !isPaused);
               const isPaymentPayer = pendingPayment?.targetPlayerId === player.id;
               const paymentSelectionEnabled = Boolean(isPaymentPayer && revealedPlayerId === player.id && !over.done && !isPaused);
+              const selectionCardPickingEnabled = Boolean(prompt.kind === 'selection' && revealedPlayerId === prompt.playerId && !over.done && !isPaused);
               const inlineActions = isPromptPlayer
                 ? (
                     pendingPayment
@@ -437,10 +442,18 @@ export function GameTableScreen({
                                   key={`${player.id}-${color}-${entry.cardId}`}
                                   cardId={entry.cardId}
                                   size="sm"
-                                  interactive={paymentSelectionEnabled}
-                                  playable={paymentSelectionEnabled}
-                                  selected={selectedPaymentCards.includes(entry.cardId)}
-                                  onClick={() => onPaymentCardToggle(entry.cardId)}
+                                  interactive={paymentSelectionEnabled || selectionCardPickingEnabled}
+                                  playable={paymentSelectionEnabled || selectionCardPickingEnabled}
+                                  selected={selectedPaymentCards.includes(entry.cardId) || selectedSelectionCardId === entry.cardId}
+                                  onClick={() => {
+                                    if (paymentSelectionEnabled) {
+                                      onPaymentCardToggle(entry.cardId);
+                                      return;
+                                    }
+                                    if (selectionCardPickingEnabled) {
+                                      onPropertySelectionClick(player.id, color, entry.cardId);
+                                    }
+                                  }}
                                   annotation={entry.assignedColor !== color ? `as ${colorLabel(entry.assignedColor)}` : undefined}
                                 />
                               ))}

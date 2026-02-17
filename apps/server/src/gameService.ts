@@ -44,6 +44,7 @@ export interface MultiplayerRoom {
   code: string;
   createdAt: number;
   updatedAt: number;
+  originalHostPlayerId: PlayerId;
   hostPlayerId: PlayerId;
   status: MultiplayerRoomStatus;
   players: RoomParticipant[];
@@ -324,6 +325,7 @@ export function createRoom(
     code,
     createdAt,
     updatedAt: createdAt,
+    originalHostPlayerId: playerId,
     hostPlayerId: playerId,
     status: 'lobby',
     players: [{
@@ -386,6 +388,9 @@ export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, session
   ensureExpectedRevision(room, expectedRevision);
   assertReconnectWindowOpen(player, now);
   touchPlayer(player);
+  if (player.id === room.originalHostPlayerId && room.hostPlayerId !== player.id) {
+    room.hostPlayerId = player.id;
+  }
   commitMutation(room);
   return {
     roomCode: room.code,
@@ -402,7 +407,14 @@ export function leaveRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToke
   incrementRevision(room);
 }
 
-export function startRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, seed?: number, expectedRevision?: number): MultiplayerRoom {
+export function startRoom(
+  room: MultiplayerRoom,
+  playerId: PlayerId,
+  sessionToken: string,
+  seed?: number,
+  expectedRevision?: number,
+  checkpointId?: string,
+): MultiplayerRoom {
   ensureExpectedRevision(room, expectedRevision);
   requireSession(room, playerId, sessionToken);
   requireHost(room, playerId);
@@ -414,11 +426,22 @@ export function startRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToke
     throw new Error('minimum_players_required');
   }
   const players: PlayerConfig[] = activePlayers.map((player) => ({ id: player.id, name: player.name }));
-  room.game = createGame({
-    players,
-    deckVersion: 'v1',
-    seed,
-  });
+  if (checkpointId) {
+    const checkpoint = findCheckpoint(room, checkpointId);
+    const lobbyPlayerById = new Map(activePlayers.map((entry) => [entry.id, entry.name]));
+    const sameParticipants = checkpoint.game.players.length === activePlayers.length
+      && checkpoint.game.players.every((entry) => lobbyPlayerById.get(entry.id) === entry.name);
+    if (!sameParticipants) {
+      throw new Error('checkpoint_player_mismatch');
+    }
+    room.game = structuredClone(checkpoint.game);
+  } else {
+    room.game = createGame({
+      players,
+      deckVersion: 'v1',
+      seed,
+    });
+  }
   room.paused = false;
   room.pausedByPlayerId = undefined;
   room.turnSnapshots = [];

@@ -189,7 +189,9 @@ Paste something like:
   - Exiting and returning within reconnect window re-enters the match.
   - Forgetting the room requires a fresh room or explicit reconnect credentials.
 
-### [ ] MP-ROOM-02 (P2) Prefer switching host back to original host on stable rejoin
+### [x] MP-ROOM-02 (P2) Prefer switching host back to original host on stable rejoin
+
+- **Status (2026-02-16)**: Implemented in `codex/multiplayer-beta-hardening-p0p1`.
 
 - **Report**: Host gets re-assigned properly, but should attempt to switch back to original host if they rejoin and are stable.
 - **Relevant code**
@@ -199,7 +201,9 @@ Paste something like:
 - **Acceptance criteria**
   - Original host can regain host automatically on reconnect without disrupting play.
 
-### [ ] MP-ROOM-03 (P2) Offer resume-from-checkpoint at match start when same players
+### [x] MP-ROOM-03 (P2) Offer resume-from-checkpoint at match start when same players
+
+- **Status (2026-02-16)**: Implemented in `codex/multiplayer-beta-hardening-p0p1`.
 
 - **Report**: Starting a multiplayer match should offer resuming from checkpoint if same players.
 - **Relevant code**
@@ -213,7 +217,9 @@ Paste something like:
 
 ## 5) Visual clarity: rent on cards
 
-### [ ] MP-VIS-01 (P2) Rent is hard to see on cards in multiplayer
+### [x] MP-VIS-01 (P2) Rent is hard to see on cards in multiplayer
+
+- **Status (2026-02-16)**: Implemented in `codex/multiplayer-beta-hardening-p0p1`.
 
 - **Report**: In multiplayer, rent is sometimes hard to see on cards.
 - **Relevant code**
@@ -225,7 +231,9 @@ Paste something like:
 - **Acceptance criteria**
   - Rent ladder is legible in typical multiplayer table density.
 
-### [ ] MP-VIS-02 (P2) Hard to see what rent *action* cards will charge
+### [x] MP-VIS-02 (P2) Hard to see what rent *action* cards will charge
+
+- **Status (2026-02-16)**: Implemented in `codex/multiplayer-beta-hardening-p0p1`.
 
 - **Report**: It is hard to see what each card will charge for rent.
 - **Relevant code**
@@ -255,7 +263,9 @@ Paste something like:
 - **Acceptance criteria**
   - Default gameplay does not present a wall of action buttons for common flows.
 
-### [ ] UX-DEALS-01 (P2) Click cards to select paid/requested cards during swaps/deals
+### [x] UX-DEALS-01 (P2) Click cards to select paid/requested cards during swaps/deals
+
+- **Status (2026-02-16)**: Implemented in `codex/multiplayer-beta-hardening-p0p1`.
 
 - **Report**: Selecting via text bubbles for swaps/deals is clunky; allow clicking cards.
 - **Relevant code**

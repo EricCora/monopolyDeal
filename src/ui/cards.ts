@@ -13,6 +13,7 @@ export interface CardVisualModel {
   cardRole: 'money' | 'property' | 'wild' | 'action' | 'building';
   colorLabel?: string;
   rentSteps?: RentStep[];
+  rentActionLines?: string[];
   setSize?: number;
   actionBadge?: string;
   kindClass: 'money' | 'property' | 'wild' | 'action' | 'building';
@@ -68,6 +69,22 @@ function colorLabelFromCard(card: CardDefinition): string | undefined {
 function rentStepsFromScale(rentScale: number[] | undefined): RentStep[] | undefined {
   if (!rentScale || rentScale.length === 0) return undefined;
   return rentScale.map((rent, index) => ({ setCount: index + 1, rent }));
+}
+
+function rentActionLinesFromCard(card: CardDefinition): string[] | undefined {
+  if (card.kind !== 'action') return undefined;
+  if (card.actionKind !== 'rent' && card.actionKind !== 'rent_wild') return undefined;
+  const entries = Object.entries(card.rentMatrix ?? {}) as Array<[PropertyColor, number[]]>;
+  if (entries.length === 0) return undefined;
+
+  if (card.actionKind === 'rent' && entries.length > 4) {
+    const allValues = entries.flatMap(([, scale]) => scale);
+    const min = Math.min(...allValues);
+    const max = Math.max(...allValues);
+    return ['Any Color Set', `Rent range: $${min}-$${max}`];
+  }
+
+  return entries.slice(0, 3).map(([color, scale]) => `${formatPropertyColor(color)} ${scale.map((rent) => `$${rent}`).join('/')}`);
 }
 
 function themeFromCard(card: CardDefinition): { themeClass: string; accent: string; splitAccent?: string } {
@@ -132,6 +149,7 @@ export function getCardVisualModel(cardId: string): CardVisualModel {
     cardRole: card.kind,
     colorLabel: colorLabelFromCard(card),
     rentSteps: rentStepsFromScale(rentScale),
+    rentActionLines: rentActionLinesFromCard(card),
     setSize,
     actionBadge: actionBadgeFromCard(card),
     kindClass: card.kind,

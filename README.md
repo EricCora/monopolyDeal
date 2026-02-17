@@ -31,9 +31,12 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Full multiplayer in-match table view (same board/event/action surfaces as local play)
 - Multiplayer winner overlay with clear winner callout at match end
 - Host-controlled multiplayer pause/resume and checkpoint save/load/delete controls
+- Lobby host can start a match directly from an available checkpoint when lineup is compatible
 - Multiplayer `Exit Match` (keeps reconnect session) and `Forget Room` (permanent disconnect) actions
 - Multiplayer undo/reset-turn controls for the active player with server-authoritative snapshots
 - In-match per-player connection pills and richer lobby disconnect timing labels
+- Pending deal interactions (`Sly Deal`, `Forced Deal`, `Deal Breaker`) support card-click selection flows
+- Rent action cards now show compact rent summaries; compact rent ladders have improved readability
 - Experimental feature flags for AI opponents, AI coach hints, replay timeline, daily challenges, achievements, and custom rules
 - Auto-save + resume via `localStorage`
 
@@ -157,6 +160,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Active multiplayer matches now open the full game table experience.
 - Rules Reference drawer is available from active multiplayer matches.
 - Host controls: `Pause/Resume`, `Save Checkpoint`, `Load Checkpoint`, `Delete Checkpoint`.
+- Lobby host controls include `Start Match` and `Start From Checkpoint` (when checkpoint data exists).
 - Player session controls: `Exit Match` (retain reconnect) and `Forget Room` (clear session).
 - Active-turn controls: `Undo Last Play`, `Reset Turn Plays` (when snapshot history exists).
 - Multiplayer state mutations are revision-guarded to prevent stale updates.

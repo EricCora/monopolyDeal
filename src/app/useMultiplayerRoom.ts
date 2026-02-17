@@ -238,13 +238,13 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
     await leaveRoomInternal(true);
   }, [leaveRoomInternal]);
 
-  const startMatch = useCallback(async () => {
+  const startMatch = useCallback(async (checkpointId?: string) => {
     const current = session;
     if (!current) return;
     setLoading(true);
     setError(null);
     try {
-      await startMultiplayerRoom(current, apiBase, expectedRevision);
+      await startMultiplayerRoom(current, apiBase, expectedRevision, checkpointId);
       await refreshRoom(current);
     } catch (startError) {
       const code = startError instanceof Error ? startError.message : 'request_failed';

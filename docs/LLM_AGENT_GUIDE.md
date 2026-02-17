@@ -38,6 +38,7 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
   - `src/ui/components/ActionConfirmDialog.tsx` handles risky-action confirmation flow.
   - `src/ui/components/RulesDrawer.tsx` provides in-game rules/set/rent quick reference.
+  - Selection pending flows now support property-card click interactions for deal actions; keep action-button fallback intact.
   - `src/ui/theme/` contains tokenized CSS split by base/components/screens.
 
 ## Data Model Cheat Sheet
@@ -176,6 +177,8 @@ When card rendering, responsive layout, or modal/prompt orchestration changes:
 - `src/engine/game.ts` is large; regressions are likely when changing shared helpers.
 - `src/App.tsx` coordinates many UI states (chooser, payment selection, pass-and-play shield, pause state, settings routing, undo snapshots).
 - In multiplayer mode, `GameTableScreen` is reused for active matches; server room state remains authoritative for pause/snapshots/checkpoints.
+- Host migration now includes original-host re-preference after reconnect; preserve this when modifying reconnect/migration logic.
+- Lobby `Start From Checkpoint` uses checkpoint participant compatibility checks (id + name) before starting from saved state.
 - Multiplayer legality matching must treat `pay_request.cards` as order-insensitive to avoid false `illegal_action` rejects for manual payment selection order.
 - Multiplayer rules drawer is available in both local and multiplayer game screens; when changing screen gate logic, preserve this parity.
 - Growth telemetry uses `monopolyDeal.growthMetrics.v1` and is surfaced in `StatsDashboard`.
