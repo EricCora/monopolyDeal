@@ -24,6 +24,13 @@ body {
   color: var(--text-main);
 }
 
+.game-shell.table-style-classic-green {
+  --surface-0: #0d160f;
+  --surface-1: #152219;
+  --surface-2: #1e3124;
+  --surface-3: #294036;
+}
+
 .game-shell.table-style-neon-arcade {
   --surface-0: #110a1f;
   --surface-1: #1a1230;
