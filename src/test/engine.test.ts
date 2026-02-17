@@ -485,7 +485,7 @@ describe('engine basics', () => {
     expect(targetC?.requiresPropertyTransfer).toBe(true);
   });
 
-  it('requires discard when ending a turn above hand limit', () => {
+  it('allows action plays above hand limit until end-turn discard is requested', () => {
     const state = createGame({
       seed: 29,
       players: [
@@ -495,7 +495,7 @@ describe('engine basics', () => {
     });
     state.currentPlayerIndex = 0;
     state.turn.phase = 'action';
-    state.turn.playsUsed = 3;
+    state.turn.playsUsed = 1;
     state.pending = null;
     state.players[0].hand = [
       'money_1#x1',
@@ -508,20 +508,20 @@ describe('engine basics', () => {
       'debt_collector#x8',
     ];
 
-    const blockedPass = applyAction(state, { type: 'pass_turn', playerId: 'p1' });
-    expect(blockedPass.error?.code).toBe('hand_limit');
+    const legalBeforeEndTurn = getLegalActions(state, 'p1');
+    expect(legalBeforeEndTurn.some((item) => item.action.type !== 'discard_card')).toBe(true);
 
-    const legal = getLegalActions(state, 'p1');
+    const blockedPass = applyAction(state, { type: 'pass_turn', playerId: 'p1' });
+    expect(blockedPass.error).toBeUndefined();
+
+    const legal = getLegalActions(blockedPass.state, 'p1');
     expect(legal.length).toBe(8);
     expect(legal.every((item) => item.action.type === 'discard_card')).toBe(true);
 
-    const afterDiscard = applyAction(state, { type: 'discard_card', playerId: 'p1', cardId: 'money_1#x1' }).state;
+    const afterDiscard = applyAction(blockedPass.state, { type: 'discard_card', playerId: 'p1', cardId: 'money_1#x1' }).state;
     expect(afterDiscard.players[0].hand.length).toBe(7);
     expect(afterDiscard.discardPile).toContain('money_1#x1');
-
-    const passAfterDiscard = applyAction(afterDiscard, { type: 'pass_turn', playerId: 'p1' });
-    expect(passAfterDiscard.error).toBeUndefined();
-    expect(passAfterDiscard.state.currentPlayerIndex).toBe(1);
+    expect(afterDiscard.currentPlayerIndex).toBe(1);
   });
 
   it('applies custom hand-limit ruleset on end turn', () => {
@@ -548,8 +548,8 @@ describe('engine basics', () => {
     ];
 
     const blockedPass = applyAction(state, { type: 'pass_turn', playerId: 'p1' });
-    expect(blockedPass.error?.code).toBe('hand_limit');
-    const legal = getLegalActions(state, 'p1');
+    expect(blockedPass.error).toBeUndefined();
+    const legal = getLegalActions(blockedPass.state, 'p1');
     expect(legal.every((item) => item.action.type === 'discard_card')).toBe(true);
   });
 

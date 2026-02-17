@@ -46,6 +46,7 @@ export interface TurnState {
   phase: TurnPhase;
   playsUsed: number;
   doubleRentMultiplier: number;
+  endingTurn?: boolean;
 }
 
 export interface GameEvent {

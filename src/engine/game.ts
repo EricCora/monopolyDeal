@@ -463,7 +463,7 @@ export function createGame(config: GameConfig): GameState {
     drawPile: shuffled,
     discardPile: [],
     currentPlayerIndex: 0,
-    turn: { phase: 'draw', playsUsed: 0, doubleRentMultiplier: 1 },
+    turn: { phase: 'draw', playsUsed: 0, doubleRentMultiplier: 1, endingTurn: false },
     pending: null,
     history: [],
     turnCount: 1,
@@ -527,14 +527,19 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     const drawAmount = player.hand.length === 0 ? 5 : 2;
     const drawn = drawCards(state, player, drawAmount);
     state.turn.phase = 'action';
+    state.turn.endingTurn = false;
     pushEvent(events, 'draw', `${player.name} drew ${drawn.length} cards.`);
   }
 
   if (action.type === 'pass_turn') {
     if (getCurrentPlayer(state).id !== player.id) return setErr(error('invalid_action', 'Not your turn.'));
     if (state.turn.phase !== 'action') return setErr(error('invalid_phase', 'Cannot pass now.'));
-    const err = finishTurn(state, events);
-    if (err) return setErr(err);
+    if (player.hand.length > ruleset(state).maxHandAtEndTurn) {
+      state.turn.endingTurn = true;
+    } else {
+      const err = finishTurn(state, events);
+      if (err) return setErr(err);
+    }
   }
 
   if (action.type === 'discard_card') {
@@ -542,6 +547,10 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
     discard(state, action.cardId);
     pushEvent(events, 'discard', `${player.name} discarded ${cardLabel(action.cardId)}.`);
+    if (state.turn.endingTurn && player.hand.length <= ruleset(state).maxHandAtEndTurn) {
+      const err = finishTurn(state, events);
+      if (err) return setErr(err);
+    }
   }
 
   if (action.type === 'play_to_bank') {

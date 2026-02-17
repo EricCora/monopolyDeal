@@ -309,10 +309,14 @@ export function nextPlayerIndex(state: GameState, fromIndex = state.currentPlaye
 }
 
 export function requiresEndTurnDiscard(state: GameState, player: PlayerState): boolean {
+  const overHandLimit = player.hand.length > ruleset(state).maxHandAtEndTurn;
+  const mustResolveEndTurn =
+    Boolean(state.turn.endingTurn) || state.turn.playsUsed >= ruleset(state).maxPlaysPerTurn;
   return !state.pending
     && state.turn.phase === 'action'
     && getCurrentPlayer(state).id === player.id
-    && player.hand.length > ruleset(state).maxHandAtEndTurn;
+    && overHandLimit
+    && mustResolveEndTurn;
 }
 
 export function finishTurn(state: GameState, events: GameEvent[]): RuleError | undefined {
@@ -324,7 +328,7 @@ export function finishTurn(state: GameState, events: GameEvent[]): RuleError | u
     );
   }
   state.currentPlayerIndex = nextPlayerIndex(state);
-  state.turn = { phase: 'draw', playsUsed: 0, doubleRentMultiplier: 1 };
+  state.turn = { phase: 'draw', playsUsed: 0, doubleRentMultiplier: 1, endingTurn: false };
   state.turnCount += 1;
   pushEvent(events, 'turn_passed', `${current.name} ended their turn.`);
   return undefined;

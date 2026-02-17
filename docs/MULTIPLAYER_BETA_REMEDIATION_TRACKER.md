@@ -12,6 +12,7 @@ This pass now includes full prioritized multiplayer hardening across **P0/P1/P2*
 - `2026-02-16`: `Leave Room` behavior for active matches should default to **Exit + keep reconnect capability**.
 - `2026-02-16`: Keep strict engine invariants unchanged; fix multiplayer issues via server legality normalization + UI/flow cleanup rather than bypassing rules.
 - `2026-02-17`: Post-checkpoint QA regressions should be tracked as explicit follow-up fixes (with tests), not silent polish edits.
+- `2026-02-17`: End-turn hand-limit enforcement must only gate discard during explicit end-turn resolution, not during normal action plays.
 
 ## Phase Checklist
 
@@ -41,6 +42,7 @@ This pass now includes full prioritized multiplayer hardening across **P0/P1/P2*
   - [x] MP-VIS-03 hand rent card summary removes cluttered mini-boxes
   - [x] MP-UX-03 advanced legal actions list uses ordered numbering
   - [x] MP-UX-04 action labels colorize property tokens in chooser/debug contexts
+  - [x] MP-RULE-01 end-turn discard gating aligns with Monopoly Deal flow (play first, discard at end)
 
 ## Verification Log
 
@@ -65,6 +67,9 @@ This pass now includes full prioritized multiplayer hardening across **P0/P1/P2*
   - `npm run test -- src/test/play-chooser.test.tsx src/test/app.test.tsx src/test/card-ui.test.tsx` passed (`52` tests)
   - `npm run build` passed
   - `npm run lint` passed with one existing warning in `src/ui/components/StatsDashboard.tsx` (`react-hooks/incompatible-library` from `useReactTable`)
+- `2026-02-17`: End-turn discard flow verification
+  - `npm run test -- src/test/engine.test.ts src/test/app.test.tsx src/test/multiplayer-room-service.test.ts` passed (`83` tests)
+  - `npm run build` passed
 
 ## Deferred Backlog
 
