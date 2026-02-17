@@ -1499,6 +1499,21 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: /game table/i })).toBeInTheDocument();
   });
 
+  it('keeps experimental settings collapsed by default and applies table style class changes', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
+    const accordion = screen.getByRole('button', { name: /experimental features/i });
+    expect(accordion).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('checkbox', { name: /ai opponents/i })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/table style/i), { target: { value: 'neon_arcade' } });
+    expect(document.querySelector('.game-shell')).toHaveClass('table-style-neon-arcade');
+
+    fireEvent.click(accordion);
+    expect(screen.getByRole('checkbox', { name: /ai opponents/i })).toBeInTheDocument();
+  });
+
   it('navigates to a dedicated game-over screen and focuses the victory title', async () => {
     mockedApplyAction.mockImplementationOnce((state: GameState) => ({
       state: {

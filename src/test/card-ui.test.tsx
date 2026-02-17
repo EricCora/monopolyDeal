@@ -24,6 +24,15 @@ describe('Card UI', () => {
     expect(screen.getByLabelText(/rent ladder/i)).toBeInTheDocument();
     expect(screen.getByText(/^rent$/i)).toBeInTheDocument();
     expect(screen.getByText('$2')).toBeInTheDocument();
+    expect(document.querySelector('.card-badge-icon')).toBeInTheDocument();
+  });
+
+  it('maps action icon metadata with fallback-safe behavior', () => {
+    const actionModel = getCardVisualModel('debt_collector#1');
+    const moneyModel = getCardVisualModel('money_5#1');
+
+    expect(actionModel.actionIcon).toBeDefined();
+    expect(moneyModel.actionIcon).toBeUndefined();
   });
 
   it('uses dedicated rent card themes instead of generic action blue', () => {
