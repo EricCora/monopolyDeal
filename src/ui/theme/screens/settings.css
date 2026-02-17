@@ -1,8 +1,8 @@
 .settings-screen {
   background:
-    radial-gradient(circle at 80% 8%, rgba(86, 174, 222, 0.18), transparent 36%),
-    radial-gradient(circle at 12% 88%, rgba(125, 223, 176, 0.14), transparent 42%),
-    linear-gradient(160deg, rgba(11, 24, 37, 0.95), rgba(8, 19, 30, 0.92));
+    radial-gradient(circle at 80% 8%, rgba(230, 188, 92, 0.2), transparent 36%),
+    radial-gradient(circle at 12% 88%, rgba(117, 175, 108, 0.16), transparent 42%),
+    linear-gradient(160deg, rgba(16, 31, 21, 0.95), rgba(10, 20, 14, 0.94));
 }
 
 .settings-subtitle {
@@ -10,9 +10,9 @@
 }
 
 .settings-section {
-  border: 1px solid #36556f;
+  border: 1px solid #5a7350;
   border-radius: var(--radius-md);
-  background: rgba(8, 24, 37, 0.9);
+  background: rgba(17, 33, 21, 0.9);
   padding: 0.8rem;
   margin-top: 0.7rem;
 }
@@ -42,7 +42,7 @@
   margin: 0.5rem 0 0;
   padding: 0.45rem 0.55rem;
   border-radius: 8px;
-  border: 1px solid #3e6d66;
-  background: rgba(18, 56, 50, 0.45);
-  color: #bdeed9;
+  border: 1px solid #77955e;
+  background: rgba(35, 69, 33, 0.45);
+  color: #d5f0cb;
 }

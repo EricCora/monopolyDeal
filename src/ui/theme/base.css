@@ -13,9 +13,9 @@ body {
   color: var(--text-main);
   font-family: var(--font-body);
   background:
-    radial-gradient(circle at 12% 10%, rgba(58, 150, 161, 0.14), transparent 44%),
-    radial-gradient(circle at 84% 0%, rgba(247, 191, 76, 0.2), transparent 36%),
-    linear-gradient(180deg, #03070d, #071018 48%, #08131d);
+    radial-gradient(circle at 14% 10%, rgba(107, 161, 96, 0.16), transparent 42%),
+    radial-gradient(circle at 84% 0%, rgba(239, 194, 90, 0.2), transparent 36%),
+    linear-gradient(180deg, #070d08, #0c1710 50%, #09120c);
 }
 
 .game-shell {
@@ -29,15 +29,15 @@ body {
 }
 
 .game-shell.is-high-contrast {
-  --surface-panel: rgba(8, 14, 20, 0.98);
-  --line-soft: #78a7cf;
-  --line-strong: #9dcaee;
+  --surface-panel: rgba(10, 15, 11, 0.98);
+  --line-soft: #9bc89a;
+  --line-strong: #d2efd2;
   --text-main: #ffffff;
-  --text-muted: #e4f3ff;
-  --text-subtle: #c8dff2;
-  --accent: #70ffea;
-  --accent-strong: #52e7d1;
-  --accent-alt: #ffd36f;
+  --text-muted: #edf7ea;
+  --text-subtle: #cee2c9;
+  --accent: #ff8f80;
+  --accent-strong: #ff7567;
+  --accent-alt: #ffe08a;
 }
 
 .game-shell-inner {
@@ -117,18 +117,18 @@ select {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   padding: 0.62rem 0.75rem;
-  background: rgba(10, 24, 37, 0.78);
+  background: rgba(15, 31, 19, 0.82);
   color: var(--text-main);
   min-height: 44px;
 }
 
 button {
-  border: 1px solid rgba(76, 194, 179, 0.46);
+  border: 1px solid rgba(239, 196, 90, 0.46);
   border-radius: var(--radius-pill);
   padding: 0.62rem 1rem;
   min-height: 44px;
-  background: linear-gradient(135deg, #1a8f82, #11685f);
-  color: #f5fffd;
+  background: linear-gradient(140deg, #325d30, #234420);
+  color: #f7fff4;
   cursor: pointer;
   transition:
     transform var(--motion-fast) var(--ease-standard),
@@ -171,8 +171,8 @@ button:disabled {
 
 .error {
   color: #ffd4d4;
-  background: rgba(124, 27, 27, 0.4);
-  border: 1px solid rgba(200, 97, 97, 0.6);
+  background: rgba(130, 39, 29, 0.45);
+  border: 1px solid rgba(212, 113, 96, 0.72);
   border-radius: var(--radius-sm);
   padding: 0.5rem 0.7rem;
   width: fit-content;

@@ -57,6 +57,21 @@ function pushLabel(state: MultiplayerPushState): string {
   return 'Live updates disabled';
 }
 
+function connectionTone(state: MultiplayerConnectionState): 'is-positive' | 'is-neutral' | 'is-warning' | 'is-danger' {
+  if (state === 'connected') return 'is-positive';
+  if (state === 'connecting') return 'is-neutral';
+  if (state === 'reconnecting') return 'is-warning';
+  if (state === 'disconnected') return 'is-danger';
+  return 'is-neutral';
+}
+
+function pushTone(state: MultiplayerPushState): 'is-positive' | 'is-neutral' | 'is-warning' {
+  if (state === 'connected') return 'is-positive';
+  if (state === 'connecting') return 'is-neutral';
+  if (state === 'fallback' || state === 'unsupported') return 'is-warning';
+  return 'is-neutral';
+}
+
 function deadlineLabel(deadlineMs: number): string {
   if (!Number.isFinite(deadlineMs) || deadlineMs <= Date.now()) return 'expired';
   const seconds = Math.max(0, Math.floor((deadlineMs - Date.now()) / 1000));
@@ -155,43 +170,59 @@ export function MultiplayerScreen({
       {import.meta.env.DEV ? <p className="setup-subtitle">Multiplayer API: {apiBase}</p> : null}
 
       {!session ? (
-        <>
-          <label>
-            Your Name
-            <input value={playerName} onChange={(event) => onPlayerNameChange(event.target.value)} />
-          </label>
-          <div className="actions multiplayer-primary-actions">
-            <button type="button" className="cta-primary" onClick={onHostRoom} disabled={loading}>
-              Host Multiplayer Game
-            </button>
-          </div>
+        <div className="multiplayer-entry-grid">
+          <section className="multiplayer-entry-card" aria-label="Host room">
+            <h3>Host Room</h3>
+            <p>Create a private table and share the invite link with your group.</p>
+            <label>
+              Your Name
+              <input value={playerName} onChange={(event) => onPlayerNameChange(event.target.value)} />
+            </label>
+            <div className="actions multiplayer-primary-actions">
+              <button type="button" className="cta-primary" onClick={onHostRoom} disabled={loading}>
+                Host Multiplayer Game
+              </button>
+            </div>
+          </section>
 
-          <label>
-            Join Code
-            <input
-              value={joinCode}
-              onChange={(event) => onJoinCodeChange(event.target.value)}
-              placeholder="Enter room code"
-            />
-          </label>
-          <div className="actions multiplayer-primary-actions">
-            <button type="button" onClick={onJoinRoom} disabled={loading || joinCode.trim().length < 4}>
-              Join Multiplayer Game
-            </button>
-          </div>
-        </>
+          <section className="multiplayer-entry-card" aria-label="Join room">
+            <h3>Join Room</h3>
+            <p>Use a room code or invite URL to jump straight into the lobby.</p>
+            <label>
+              Join Code
+              <input
+                value={joinCode}
+                onChange={(event) => onJoinCodeChange(event.target.value)}
+                placeholder="Enter room code"
+              />
+            </label>
+            <div className="actions multiplayer-primary-actions">
+              <button type="button" onClick={onJoinRoom} disabled={loading || joinCode.trim().length < 4}>
+                Join Multiplayer Game
+              </button>
+            </div>
+          </section>
+        </div>
       ) : (
-        <>
-          <section className="settings-section" aria-label="Room session">
-            <h3>Room {session.roomCode}</h3>
-            <p>Status: {connectionLabel(connectionState)}</p>
-            <p>{pushLabel(pushState)}</p>
-            <p>Rejoin window: {deadlineLabel(session.reconnectDeadlineMs)}</p>
-            <div className="actions">
+        <div className="multiplayer-room-shell">
+          <section className="multiplayer-room-hero" aria-label="Room session">
+            <div className="multiplayer-room-heading">
+              <h3>Room {session.roomCode}</h3>
+              <div className="multiplayer-status-strip" aria-label="Room connection status">
+                <span className={`multiplayer-status-pill ${connectionTone(connectionState)}`}>
+                  {connectionLabel(connectionState)}
+                </span>
+                <span className={`multiplayer-status-pill ${pushTone(pushState)}`}>
+                  {pushLabel(pushState)}
+                </span>
+              </div>
+            </div>
+            <p className="multiplayer-room-rejoin">Rejoin window: {deadlineLabel(session.reconnectDeadlineMs)}</p>
+            <div className="actions multiplayer-room-actions">
               <button type="button" onClick={copyRoomCode} disabled={loading}>
                 Copy Room Code
               </button>
-              <button type="button" onClick={copyInviteLink} disabled={loading}>
+              <button type="button" className="cta-primary" onClick={copyInviteLink} disabled={loading}>
                 Copy Invite Link
               </button>
               <button type="button" onClick={onRefresh} disabled={loading}>
@@ -214,18 +245,20 @@ export function MultiplayerScreen({
           </section>
 
           {roomView ? (
-            <section className="settings-section" aria-label="Room state">
-              <h3>{roomView.started ? 'Match Live' : 'Lobby'}</h3>
-              <p>
-                {roomView.winnerId
-                  ? `Winner: ${roomView.winnerId}`
-                  : roomView.promptPlayerId
-                    ? `Turn: ${roomView.promptPlayerId}`
-                    : 'Waiting for players.'}
-              </p>
+            <section className="multiplayer-lobby-shell" aria-label="Room state">
+              <header className="multiplayer-lobby-header">
+                <h3>{roomView.started ? 'Match Live' : 'Lobby'}</h3>
+                <p className="multiplayer-lobby-status">
+                  {roomView.winnerId
+                    ? `Winner: ${roomView.winnerId}`
+                    : roomView.promptPlayerId
+                      ? `Turn: ${roomView.promptPlayerId}`
+                      : 'Waiting for players.'}
+                </p>
+              </header>
               {!roomView.started && you ? (
-                <div className="actions">
-                  <button type="button" onClick={() => onSetReady(!you.ready)} disabled={loading}>
+                <div className="actions multiplayer-ready-actions">
+                  <button type="button" className="cta-primary" onClick={() => onSetReady(!you.ready)} disabled={loading}>
                     {you.ready ? 'Mark Not Ready' : 'Mark Ready'}
                   </button>
                 </div>
@@ -246,25 +279,43 @@ export function MultiplayerScreen({
                 </div>
               ) : null}
 
-              <ul>
-                {roomView.players.map((player) => (
-                  <li key={player.id}>
-                    {player.name}
-                    {player.isHost ? ' (Host)' : ''}
-                    {player.ready ? ' (Ready)' : ''}
-                    {' | '}
-                    {playerConnectionLabel(player.connected, player.lastSeenAt)}
-                    {' | hand '}
-                    {player.handCount}
-                    {' | bank '}
-                    {player.bankCount}
-                    {' | sets '}
-                    {player.completeSets}
-                  </li>
-                ))}
-              </ul>
+              <div className="multiplayer-roster-wrap">
+                <table className="multiplayer-roster-table">
+                  <caption className="sr-only">Room roster</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Player</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Hand</th>
+                      <th scope="col">Bank</th>
+                      <th scope="col">Sets</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {roomView.players.map((player) => (
+                      <tr key={player.id}>
+                        <td className="multiplayer-player-cell">
+                          <span className="multiplayer-player-name">{player.name}</span>
+                          <span className="multiplayer-player-tags">
+                            {player.isHost ? <span className="multiplayer-player-tag">Host</span> : null}
+                            {player.ready ? <span className="multiplayer-player-tag is-ready">Ready</span> : null}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`multiplayer-connection-chip ${player.connected ? 'is-online' : 'is-offline'}`}>
+                            {playerConnectionLabel(player.connected, player.lastSeenAt)}
+                          </span>
+                        </td>
+                        <td>{player.handCount}</td>
+                        <td>{player.bankCount}</td>
+                        <td>{player.completeSets}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               {roomView.legalActions.length > 0 ? (
-                <div className="actions">
+                <div className="actions multiplayer-lobby-legal-actions">
                   {roomView.legalActions.map((item, index) => (
                     <button key={`multiplayer-action-${index}`} type="button" onClick={() => onRunAction(index)} disabled={loading}>
                       {item.label}
@@ -272,11 +323,11 @@ export function MultiplayerScreen({
                   ))}
                 </div>
               ) : (
-                <p>Waiting for your turn or for the host to start.</p>
+                <p className="multiplayer-lobby-waiting">Waiting for your turn or for the host to start.</p>
               )}
 
               {roomView.activityFeed.length > 0 ? (
-                <section className="settings-section" aria-label="Recent room activity">
+                <section className="multiplayer-activity-panel" aria-label="Recent room activity">
                   <h4>Recent Activity</h4>
                   <ul className="multiplayer-activity-feed">
                     {roomView.activityFeed.slice(0, 8).map((item) => (
@@ -287,7 +338,7 @@ export function MultiplayerScreen({
               ) : null}
             </section>
           ) : null}
-        </>
+        </div>
       )}
 
       {error ? <p className="error">{error}</p> : null}

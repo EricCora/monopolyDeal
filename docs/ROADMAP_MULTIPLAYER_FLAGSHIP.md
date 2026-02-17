@@ -28,6 +28,10 @@ Purpose: make multiplayer feel seamless, social, and premium while keeping chang
 - Reliability UX
   - Multiplayer reconnect/disconnect overlay in active table view
   - Push status surfaced in lobby (`live`, `fallback`, `unsupported`, `disabled`)
+- Premium presentation
+  - Multiplayer lobby upgraded from bullet-list blocks to a structured roster table with status tags/chips
+  - Room hero now highlights connection and live-update health with explicit visual affordances
+  - Multiplayer palette refreshed to a board-inspired green/gold/red style direction
 - Feature flags and telemetry
   - UI flags: `multiplayerPushEnabled`, `multiplayerReactionsEnabled`
   - Server flags: `MULTIPLAYER_PUSH_ENABLED`, `MULTIPLAYER_REACTIONS_ENABLED`

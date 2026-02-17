@@ -35,6 +35,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Lobby host can start a match directly from an available checkpoint when lineup is compatible
 - Lobby ready-check state and quick preset reactions
 - Multiplayer activity feed (joins/reconnects/host changes/ready/reactions/checkpoints)
+- Flagship lobby presentation refresh with structured roster table, clearer status pills, and stronger action hierarchy
 - Hybrid live updates: server push notifications with polling fallback
 - Multiplayer `Exit Match` (keeps reconnect session) and `Forget Room` (permanent disconnect) actions
 - Multiplayer undo/reset-turn controls for the active player with server-authoritative snapshots

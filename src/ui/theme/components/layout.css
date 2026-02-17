@@ -39,10 +39,10 @@
   justify-content: space-between;
   align-items: center;
   gap: 0.8rem;
-  border: 1px solid #4b7a9c;
+  border: 1px solid #7c9d6c;
   border-radius: 10px;
   padding: 0.5rem 0.65rem;
-  background: rgba(15, 46, 66, 0.82);
+  background: rgba(31, 53, 28, 0.82);
 }
 
 .multiplayer-host-notice p {
@@ -79,25 +79,25 @@
   align-items: baseline;
   padding: 0.3rem 0.45rem;
   border-radius: 8px;
-  border: 1px solid #2a4252;
-  color: #aec7da;
-  background: rgba(7, 22, 33, 0.56);
+  border: 1px solid #4a634c;
+  color: #c8d9c5;
+  background: rgba(16, 30, 18, 0.62);
   font-size: 0.84rem;
 }
 
 .turn-phase-step strong {
-  color: #d8ebfb;
+  color: #ebf3e7;
 }
 
 .turn-phase-step.is-active {
-  border-color: #6099c1;
-  background: rgba(18, 58, 86, 0.48);
-  color: #f2f9ff;
+  border-color: #d4b46c;
+  background: rgba(87, 69, 29, 0.4);
+  color: #fff6db;
 }
 
 .turn-phase-step.is-done {
-  border-color: #4f7d67;
-  color: #b4dbc5;
+  border-color: #5f935f;
+  color: #d5f0d4;
 }
 
 .action-rail-caption {
@@ -114,25 +114,25 @@
   margin: 0.15rem 0 0.45rem;
   padding: 0.42rem 0.55rem;
   border-radius: 8px;
-  border: 1px solid #2f526b;
-  background: rgba(7, 22, 33, 0.86);
+  border: 1px solid #5a7a53;
+  background: rgba(16, 31, 18, 0.88);
   color: var(--text-main);
   font-size: 0.92rem;
 }
 
 .turn-status.is-required {
-  border-color: #bb9344;
-  background: rgba(88, 61, 17, 0.35);
-  color: #ffe1a9;
+  border-color: #d2a05c;
+  background: rgba(105, 68, 26, 0.42);
+  color: #ffe9bf;
   font-weight: 600;
 }
 
 .inline-action-panel {
   margin-top: 0.65rem;
   padding: 0.62rem;
-  border: 1px solid #2b536a;
+  border: 1px solid #5a7852;
   border-radius: 10px;
-  background: rgba(8, 25, 39, 0.85);
+  background: rgba(15, 30, 18, 0.88);
 }
 
 .inline-must-act {
@@ -149,9 +149,9 @@
   margin: 0.2rem 0 0.35rem;
   padding: 0.35rem 0.5rem;
   border-radius: 8px;
-  border: 1px solid #88662d;
-  background: rgba(103, 77, 27, 0.36);
-  color: #ffde9d;
+  border: 1px solid #b08549;
+  background: rgba(118, 81, 31, 0.4);
+  color: #ffe0ac;
   font-size: 0.88rem;
 }
 
@@ -168,9 +168,9 @@
 
 .payment-panel {
   margin-bottom: 0.55rem;
-  border: 1px solid #355873;
+  border: 1px solid #5d7859;
   border-radius: 10px;
-  background: rgba(10, 28, 43, 0.76);
+  background: rgba(15, 30, 19, 0.82);
   padding: 0.55rem 0.65rem;
 }
 
@@ -192,7 +192,7 @@
   border: 1px solid var(--line-soft);
   border-radius: 12px;
   padding: 0.8rem;
-  background: rgba(7, 23, 36, 0.88);
+  background: rgba(14, 28, 18, 0.9);
   box-shadow: var(--shadow-sm);
 }
 
@@ -218,23 +218,23 @@
   border-radius: 999px;
   font-size: 0.72rem;
   letter-spacing: 0.02em;
-  border: 1px solid #355873;
-  background: rgba(16, 41, 58, 0.88);
+  border: 1px solid #5f7b5d;
+  background: rgba(27, 45, 28, 0.88);
 }
 
 .connection-pill.is-online {
-  border-color: #2f9b60;
-  background: rgba(29, 103, 66, 0.28);
+  border-color: #66ab6a;
+  background: rgba(29, 94, 48, 0.33);
 }
 
 .connection-pill.is-offline {
-  border-color: #ad7a4e;
-  background: rgba(96, 58, 34, 0.34);
+  border-color: #cb8f5f;
+  background: rgba(105, 65, 35, 0.38);
 }
 
 .multiplayer-social-panel {
-  border-color: #3d617b;
-  background: linear-gradient(180deg, rgba(10, 29, 44, 0.92), rgba(7, 20, 31, 0.92));
+  border-color: #5b7652;
+  background: linear-gradient(180deg, rgba(18, 35, 22, 0.92), rgba(12, 25, 16, 0.92));
 }
 
 .multiplayer-reaction-actions {
@@ -251,7 +251,7 @@
 }
 
 .multiplayer-activity-feed li {
-  color: #d8eafb;
+  color: #dbe9d7;
   font-size: 0.9rem;
 }
 
@@ -339,8 +339,8 @@
 .paused-card {
   width: min(520px, calc(100% - 2rem));
   border-radius: 14px;
-  border: 2px solid #4f7390;
-  background: linear-gradient(170deg, rgba(12, 28, 44, 0.97), rgba(8, 19, 30, 0.96));
+  border: 2px solid #77965f;
+  background: linear-gradient(170deg, rgba(19, 36, 24, 0.97), rgba(12, 24, 16, 0.96));
   box-shadow: var(--shadow-md);
   padding: 1.35rem;
   text-align: center;

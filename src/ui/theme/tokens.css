@@ -1,21 +1,21 @@
 :root {
-  --surface-0: #071018;
-  --surface-1: #0f1c2a;
-  --surface-2: #16283a;
-  --surface-3: #1d3448;
-  --surface-panel: rgba(12, 26, 38, 0.9);
+  --surface-0: #0d160f;
+  --surface-1: #152219;
+  --surface-2: #1e3124;
+  --surface-3: #294036;
+  --surface-panel: rgba(15, 28, 19, 0.9);
   --surface-card: linear-gradient(160deg, #f7f5ef, #eae7db);
-  --line-strong: #4f6f8d;
-  --line-soft: #2a445d;
-  --text-main: #f1f6ff;
-  --text-muted: #a9c0d8;
-  --text-subtle: #8098b0;
-  --text-dark: #182430;
-  --accent: #4cc2b3;
-  --accent-strong: #2ea293;
-  --accent-alt: #f3c35b;
-  --danger: #e67878;
-  --success: #71d79d;
+  --line-strong: #68805c;
+  --line-soft: #3a533f;
+  --text-main: #f2f7ef;
+  --text-muted: #c6d4c2;
+  --text-subtle: #96aa94;
+  --text-dark: #18241c;
+  --accent: #cb4a3a;
+  --accent-strong: #a93226;
+  --accent-alt: #efc45a;
+  --danger: #e37d6d;
+  --success: #76ca8f;
 
   --radius-sm: 10px;
   --radius-md: 14px;
@@ -23,9 +23,9 @@
   --radius-pill: 999px;
 
   --shadow-xs: 0 1px 4px rgba(0, 0, 0, 0.18);
-  --shadow-sm: 0 8px 16px rgba(3, 9, 16, 0.35);
-  --shadow-md: 0 14px 28px rgba(2, 6, 13, 0.46);
-  --shadow-glow: 0 0 0 1px rgba(76, 194, 179, 0.45), 0 0 28px rgba(76, 194, 179, 0.2);
+  --shadow-sm: 0 8px 16px rgba(3, 10, 5, 0.36);
+  --shadow-md: 0 14px 28px rgba(2, 8, 4, 0.46);
+  --shadow-glow: 0 0 0 1px rgba(239, 196, 90, 0.45), 0 0 28px rgba(239, 196, 90, 0.22);
 
   --space-1: 0.3rem;
   --space-2: 0.5rem;
@@ -35,8 +35,8 @@
   --space-6: 1.6rem;
   --space-7: 2rem;
 
-  --font-display: 'Rajdhani', 'Trebuchet MS', 'Avenir Next', sans-serif;
-  --font-body: 'Inter', 'Segoe UI', 'Avenir Next', sans-serif;
+  --font-display: 'Bebas Neue', 'Oswald', 'Avenir Next Condensed', 'Trebuchet MS', sans-serif;
+  --font-body: 'Nunito Sans', 'Avenir Next', 'Trebuchet MS', sans-serif;
 
   --motion-fast: 140ms;
   --motion-base: 220ms;

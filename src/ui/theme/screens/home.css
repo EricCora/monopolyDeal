@@ -1,8 +1,8 @@
 .home-screen {
   background:
-    radial-gradient(circle at 12% 15%, rgba(81, 164, 173, 0.18), transparent 34%),
-    radial-gradient(circle at 82% 4%, rgba(246, 198, 99, 0.23), transparent 38%),
-    linear-gradient(160deg, rgba(11, 27, 40, 0.92), rgba(8, 19, 30, 0.92));
+    radial-gradient(circle at 12% 15%, rgba(120, 171, 108, 0.2), transparent 34%),
+    radial-gradient(circle at 82% 4%, rgba(240, 194, 95, 0.25), transparent 38%),
+    linear-gradient(160deg, rgba(16, 31, 21, 0.94), rgba(10, 20, 14, 0.94));
 }
 
 .home-hero {
