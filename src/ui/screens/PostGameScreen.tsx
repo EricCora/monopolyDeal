@@ -64,6 +64,7 @@ export function PostGameScreen({
 
       <header className="postgame-hero">
         <p className="postgame-kicker">Match Complete</p>
+        <span className="postgame-trophy" aria-hidden="true">Champion</span>
         <h2 id="postgame-title" ref={titleRef} tabIndex={-1}>
           {postGameSummary.winnerName ?? 'Unknown Player'} Wins!
         </h2>

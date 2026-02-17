@@ -46,10 +46,10 @@ export function HomeScreen({
       </div>
 
       <div className="home-actions actions" aria-label="Home actions">
-        <button onClick={onNewGame}>New Game</button>
+        <button className="home-primary-action" onClick={onNewGame}>New Game</button>
         {showDailyChallenge ? <button onClick={onStartDailyChallenge}>Start Daily Challenge</button> : null}
         <button onClick={onResumeGame}>Resume Saved Game</button>
-        {showMultiplayer ? <button onClick={onOpenMultiplayer}>Play Multiplayer</button> : null}
+        {showMultiplayer ? <button className="home-secondary-accent" onClick={onOpenMultiplayer}>Play Multiplayer</button> : null}
         <button onClick={onOpenSavedGames}>Saved Games</button>
         <button onClick={onOpenStats}>Stats & History</button>
         <button onClick={onOpenSettings}>Settings</button>
