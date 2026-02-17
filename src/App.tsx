@@ -84,7 +84,7 @@ import type { RiskyActionConfirmation, SetupViewModel, ShareStatus } from './ui/
 import './App.css';
 
 type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over' | 'multiplayer';
-type SettingsBackScreen = 'home' | 'game';
+type SettingsBackScreen = 'home' | 'game' | 'multiplayer';
 type SavedGamesBackScreen = 'home' | 'game';
 type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
 const DEFAULT_SETUP_RULES = {
@@ -104,6 +104,11 @@ interface PlayChooserState {
   cardId: string;
   cardLabel: string;
   variants: CardActionVariant[];
+}
+
+interface ForcedDealSelectionState {
+  cardId: string;
+  color: PropertyColor;
 }
 
 type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
@@ -147,6 +152,26 @@ function actionCardName(action: Action): string {
 function cardMoneyValue(cardId: string): number {
   const def = getCardDefinition(cardId);
   return def.moneyValue ?? def.value;
+}
+
+function canonicalizePaymentCards(cardIds: string[]): string[] {
+  return [...cardIds].sort((left, right) => {
+    const valueDelta = cardMoneyValue(left) - cardMoneyValue(right);
+    if (valueDelta !== 0) return valueDelta;
+    return left.localeCompare(right);
+  });
+}
+
+function normalizeActionForComparison(action: Action): Action {
+  if (action.type !== 'pay_request') return action;
+  return {
+    ...action,
+    cards: [...action.cards].sort((left, right) => left.localeCompare(right)),
+  };
+}
+
+function actionsEqualForLegality(left: Action, right: Action): boolean {
+  return JSON.stringify(normalizeActionForComparison(left)) === JSON.stringify(normalizeActionForComparison(right));
 }
 
 function isReversibleActionType(actionType: Action['type']): actionType is ReversibleActionType {
@@ -220,7 +245,9 @@ function App() {
   const [chooser, setChooser] = useState<PlayChooserState | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [selectedPaymentCards, setSelectedPaymentCards] = useState<string[]>([]);
+  const [forcedDealSelection, setForcedDealSelection] = useState<ForcedDealSelectionState | null>(null);
   const [showDebugActions, setShowDebugActions] = useState(false);
+  const [showMultiplayerDebugActions, setShowMultiplayerDebugActions] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [shareStatus, setShareStatus] = useState<ShareStatus>(null);
@@ -341,6 +368,7 @@ function App() {
     saveCheckpoint: saveMultiplayerCheckpoint,
     loadCheckpoint: loadMultiplayerCheckpoint,
     deleteCheckpoint: deleteMultiplayerCheckpoint,
+    exitRoom: exitMultiplayerRoom,
     leaveRoom: leaveMultiplayerRoom,
     refreshRoom: refreshMultiplayerRoom,
     setError: setMultiplayerError,
@@ -542,8 +570,15 @@ function App() {
     if (!activePlayer) return 0;
     return Math.max(activePlayer.hand.length - 7, 0);
   }, [multiplayerGame, multiplayerPrompt]);
+  const multiplayerPromptPlayerName = useMemo(() => {
+    if (!multiplayerGame || !multiplayerPrompt) return null;
+    return multiplayerGame.players.find((player) => player.id === multiplayerPrompt.playerId)?.name ?? multiplayerPrompt.playerId;
+  }, [multiplayerGame, multiplayerPrompt]);
   const multiplayerTurnStatusText = useMemo(() => {
     if (!multiplayerPrompt) return '';
+    if (multiplayerRoomView && multiplayerPrompt.playerId !== multiplayerRoomView.yourPlayerId) {
+      return `Waiting for ${multiplayerPromptPlayerName ?? multiplayerPrompt.playerId} to act.`;
+    }
     if (multiplayerPrompt.kind === 'discard') {
       return multiplayerDiscardOverLimitCount > 0
         ? `Discard ${multiplayerDiscardOverLimitCount} card${multiplayerDiscardOverLimitCount === 1 ? '' : 's'} to end turn.`
@@ -555,7 +590,27 @@ function App() {
     if (multiplayerPrompt.kind === 'draw') return 'Draw to start the turn.';
     if (multiplayerMainPhaseExhausted) return '3/3 plays used. Pass turn or use non-play actions.';
     return 'Play cards from hand or pass turn.';
-  }, [multiplayerDiscardOverLimitCount, multiplayerMainPhaseExhausted, multiplayerPrompt]);
+  }, [
+    multiplayerDiscardOverLimitCount,
+    multiplayerMainPhaseExhausted,
+    multiplayerPrompt,
+    multiplayerPromptPlayerName,
+    multiplayerRoomView,
+  ]);
+  const multiplayerConnectionByPlayerId = useMemo(() => {
+    if (!multiplayerRoomView) return {} as Record<string, { connected: boolean; lastSeenAt: number; reconnectDeadlineMs: number }>;
+    return multiplayerRoomView.players.reduce<Record<string, { connected: boolean; lastSeenAt: number; reconnectDeadlineMs: number }>>(
+      (acc, player) => {
+        acc[player.id] = {
+          connected: player.connected,
+          lastSeenAt: player.lastSeenAt,
+          reconnectDeadlineMs: player.reconnectDeadlineMs,
+        };
+        return acc;
+      },
+      {},
+    );
+  }, [multiplayerRoomView]);
   const multiplayerPendingPayment = multiplayerGame?.pending?.kind === 'payment' ? multiplayerGame.pending.payload : null;
   const multiplayerPendingPaymentPlayer = useMemo(() => {
     if (!multiplayerGame || !multiplayerPendingPayment) return null;
@@ -596,6 +651,61 @@ function App() {
     uiPreferences.experimental.aiCoach,
     uiPreferences.experimental.aiOpponents,
   ]);
+
+  useEffect(() => {
+    const yourPlayerId = multiplayerRoomView?.yourPlayerId;
+    const promptPlayerId = multiplayerPrompt?.playerId;
+    const promptKind = multiplayerPrompt?.kind;
+    if (screen !== 'multiplayer') return;
+    if (!yourPlayerId || !promptPlayerId || !promptKind) {
+      setChooser(null);
+      setSelectedCardId(null);
+      setSelectedPaymentCards([]);
+      return;
+    }
+
+    const yourPrompt = promptPlayerId === yourPlayerId;
+    if (!yourPrompt || promptKind !== 'main') {
+      setChooser(null);
+      setSelectedCardId(null);
+    }
+
+    if (multiplayerPendingPayment?.targetPlayerId !== yourPlayerId) {
+      setSelectedPaymentCards([]);
+    }
+  }, [
+    multiplayerPendingPayment?.targetPlayerId,
+    multiplayerPrompt?.kind,
+    multiplayerPrompt?.playerId,
+    multiplayerRoomView?.yourPlayerId,
+    screen,
+  ]);
+
+  useEffect(() => {
+    if (screen !== 'multiplayer') return;
+    if (!multiplayerRoomView?.started) return;
+    if (multiplayerGame && multiplayerPrompt) return;
+    setMultiplayerError('Room state was incomplete. Refreshing now.');
+    void refreshMultiplayerRoom();
+  }, [
+    multiplayerGame,
+    multiplayerPrompt,
+    multiplayerRoomView?.revision,
+    multiplayerRoomView?.started,
+    refreshMultiplayerRoom,
+    screen,
+    setMultiplayerError,
+  ]);
+
+  useEffect(() => {
+    if (screen === 'multiplayer') {
+      if (multiplayerGame?.pending?.kind === 'forced_deal') return;
+      setForcedDealSelection(null);
+      return;
+    }
+    if (game?.pending?.kind === 'forced_deal') return;
+    setForcedDealSelection(null);
+  }, [game?.pending?.kind, multiplayerGame?.pending?.kind, screen]);
 
   const pendingPayment = game?.pending?.kind === 'payment' ? game.pending.payload : null;
   const canSaveCurrentGame = Boolean(game && !isGameOver(game).done);
@@ -638,6 +748,10 @@ function App() {
   }, []);
 
   const closeSettings = useCallback(() => {
+    if (settingsBackScreen === 'multiplayer') {
+      setScreen('multiplayer');
+      return;
+    }
     if (settingsBackScreen === 'game' && game) {
       setScreen('game');
       return;
@@ -975,7 +1089,7 @@ function App() {
   const runMultiplayerActionByPayload = useCallback(async (action: Action) => {
     if (!multiplayerRoomView) return;
     const index = multiplayerRoomView.legalActions.findIndex(
-      (item) => JSON.stringify(item.action) === JSON.stringify(action),
+      (item) => actionsEqualForLegality(item.action, action),
     );
     if (index < 0) {
       setMultiplayerError('That action is no longer legal. Refreshing room state.');
@@ -1002,6 +1116,9 @@ function App() {
     ) {
       return;
     }
+    // Close local chooser/select state immediately after user commits an action.
+    setChooser(null);
+    setSelectedCardId(null);
     void runMultiplayerActionByPayload(action);
   };
 
@@ -1094,7 +1211,7 @@ function App() {
     runAction({
       type: 'pay_request',
       playerId: pendingPayment.targetPlayerId,
-      cards: selectedPaymentCards,
+      cards: canonicalizePaymentCards(selectedPaymentCards),
     });
   };
 
@@ -1121,12 +1238,100 @@ function App() {
     setSelectedPaymentCards((prev) => (prev.includes(cardId) ? prev.filter((id) => id !== cardId) : [...prev, cardId]));
   };
 
+  const handleSelectionPropertyPick = (
+    mode: 'local' | 'multiplayer',
+    ownerPlayerId: string,
+    color: PropertyColor,
+    cardId: string,
+  ) => {
+    const legalPool = mode === 'multiplayer' ? multiplayerLegalActions : legalActions;
+    const pending = mode === 'multiplayer' ? multiplayerGame?.pending : game?.pending;
+    const promptForMode = mode === 'multiplayer' ? multiplayerPrompt : prompt;
+    const activePlayerId = mode === 'multiplayer' ? multiplayerRoomView?.yourPlayerId : prompt?.playerId;
+
+    if (!pending || pending.kind === 'payment' || pending.kind === 'counter' || pending.kind === 'rent') return;
+    if (!promptForMode || promptForMode.kind !== 'selection') return;
+    if (!activePlayerId || promptForMode.playerId !== activePlayerId) return;
+
+    if (pending.kind === 'sly_deal') {
+      const matches = legalPool.filter((entry) =>
+        entry.action.type === 'sly_deal_pick'
+        && entry.action.cardId === cardId
+        && entry.action.sourceColor === color,
+      );
+      if (matches.length === 0) return;
+      if (matches.length === 1) {
+        if (mode === 'multiplayer') {
+          runMultiplayerActionWithConfirmation(matches[0].action, matches[0]);
+        } else {
+          runAction(matches[0].action);
+        }
+        return;
+      }
+      setChooser({
+        cardId,
+        cardLabel: getCardDefinition(cardId).name,
+        variants: matches.map((item, index) => ({
+          id: `selection-${index}-${actionVariantId(item.action)}`,
+          label: item.label,
+          action: item.action,
+        })),
+      });
+      return;
+    }
+
+    if (pending.kind === 'deal_breaker') {
+      const selected = legalPool.find((entry) => entry.action.type === 'deal_breaker_pick' && entry.action.color === color);
+      if (!selected) return;
+      if (mode === 'multiplayer') {
+        runMultiplayerActionWithConfirmation(selected.action, selected);
+      } else {
+        runAction(selected.action);
+      }
+      return;
+    }
+
+    if (pending.kind === 'forced_deal') {
+      if (ownerPlayerId === activePlayerId) {
+        setForcedDealSelection((prev) => (prev?.cardId === cardId ? null : { cardId, color }));
+        return;
+      }
+      if (!forcedDealSelection) return;
+      const matches = legalPool.filter((entry) =>
+        entry.action.type === 'forced_deal_pick'
+        && entry.action.giveCardId === forcedDealSelection.cardId
+        && entry.action.giveColor === forcedDealSelection.color
+        && entry.action.takeCardId === cardId
+        && entry.action.takeColor === color,
+      );
+      if (matches.length === 0) return;
+      if (matches.length === 1) {
+        if (mode === 'multiplayer') {
+          runMultiplayerActionWithConfirmation(matches[0].action, matches[0]);
+        } else {
+          runAction(matches[0].action);
+        }
+        setForcedDealSelection(null);
+        return;
+      }
+      setChooser({
+        cardId,
+        cardLabel: getCardDefinition(cardId).name,
+        variants: matches.map((item, index) => ({
+          id: `selection-${index}-${actionVariantId(item.action)}`,
+          label: item.label,
+          action: item.action,
+        })),
+      });
+    }
+  };
+
   const submitMultiplayerSelectedPayment = () => {
     if (!multiplayerPendingPayment || !multiplayerPaymentCanSubmit) return;
     runMultiplayerActionWithConfirmation({
       type: 'pay_request',
       playerId: multiplayerPendingPayment.targetPlayerId,
-      cards: selectedPaymentCards,
+      cards: canonicalizePaymentCards(selectedPaymentCards),
     });
   };
 
@@ -1376,6 +1581,7 @@ function App() {
           revealedPlayerId={revealedPlayerId}
           playableCardIds={playableCardIds}
           selectedCardId={selectedCardId}
+          selectedSelectionCardId={forcedDealSelection?.cardId ?? null}
           selectedPaymentCards={selectedPaymentCards}
           selectedPaymentTotal={selectedPaymentTotal}
           totalPayableValue={totalPayableValue}
@@ -1406,6 +1612,9 @@ function App() {
           }}
           onRunAction={runActionWithConfirmation}
           onCardClick={handleCardClick}
+          onPropertySelectionClick={(ownerPlayerId, color, cardId) => {
+            handleSelectionPropertyPick('local', ownerPlayerId, color, cardId);
+          }}
           onPaymentCardToggle={handlePaymentCardToggle}
           onAutoSelectPayment={autoSelectPayment}
           onSubmitSelectedPayment={submitSelectedPayment}
@@ -1436,6 +1645,7 @@ function App() {
               : 'Gameplay is paused by the host.'
           }
           connectionStatusLabel={multiplayerConnectionLabel(multiplayerConnectionState)}
+          playerConnectionById={multiplayerConnectionByPlayerId}
           isMultiplayerHost={multiplayerIsHost}
           checkpointSlots={multiplayerRoomView.checkpointSlots}
           checkpointLoading={multiplayerCheckpointLoading}
@@ -1444,12 +1654,17 @@ function App() {
           revealedPlayerId={multiplayerRoomView.yourPlayerId}
           playableCardIds={multiplayerPlayableCardIds}
           selectedCardId={selectedCardId}
+          selectedSelectionCardId={forcedDealSelection?.cardId ?? null}
           selectedPaymentCards={selectedPaymentCards}
           selectedPaymentTotal={multiplayerSelectedPaymentTotal}
           totalPayableValue={multiplayerTotalPayableValue}
           paymentCanSubmit={multiplayerPaymentCanSubmit}
           pendingPayment={multiplayerPendingPayment}
-          chooser={chooser}
+          chooser={
+            multiplayerPrompt.playerId === multiplayerRoomView.yourPlayerId
+              ? chooser
+              : null
+          }
           shouldShowShield={false}
           turnStatusText={multiplayerTurnStatusText}
           isMandatoryPrompt={multiplayerIsMandatoryPrompt}
@@ -1459,7 +1674,7 @@ function App() {
           enhancedEventLog={uiPreferences.experimental.enhancedEventLog}
           coachHint={multiplayerCoachHint}
           turnSnapshotsCount={multiplayerRoomView.turnSnapshotCount}
-          showDebugActions={false}
+          showDebugActions={showMultiplayerDebugActions}
           actionDetailText={actionDetailText}
           onPauseToggle={() => {
             if (!multiplayerIsHost) return;
@@ -1472,8 +1687,13 @@ function App() {
           onRefreshMultiplayer={() => {
             void refreshMultiplayerRoom();
           }}
-          onLeaveMultiplayer={() => {
+          onExitMultiplayer={() => {
+            void exitMultiplayerRoom();
+            setScreen('home');
+          }}
+          onForgetMultiplayer={() => {
             void leaveMultiplayerRoom();
+            setScreen('home');
           }}
           onSaveCheckpoint={(name) => {
             void saveMultiplayerCheckpoint(name);
@@ -1489,12 +1709,15 @@ function App() {
             recordGrowthMetric('rules_drawer_opened');
           }}
           onOpenSavedGames={() => {}}
-          onOpenSettings={() => openSettings('home')}
+          onOpenSettings={() => openSettings('multiplayer')}
           onToggleDebugActions={() => {
-            // debug actions are local-only.
+            setShowMultiplayerDebugActions((prev) => !prev);
           }}
           onRunAction={runMultiplayerActionWithConfirmation}
           onCardClick={handleMultiplayerCardClick}
+          onPropertySelectionClick={(ownerPlayerId, color, cardId) => {
+            handleSelectionPropertyPick('multiplayer', ownerPlayerId, color, cardId);
+          }}
           onPaymentCardToggle={handleMultiplayerPaymentCardToggle}
           onAutoSelectPayment={autoSelectMultiplayerPayment}
           onSubmitSelectedPayment={submitMultiplayerSelectedPayment}
@@ -1511,7 +1734,10 @@ function App() {
           onRevealTurn={() => {
             // no pass-and-play shield for multiplayer.
           }}
-          onNavigateHome={() => setScreen('home')}
+          onNavigateHome={() => {
+            void exitMultiplayerRoom();
+            setScreen('home');
+          }}
         />
       ) : null}
 
@@ -1643,7 +1869,7 @@ function App() {
         />
       ) : null}
 
-      {screen === 'game' && showRulesDrawer ? <RulesDrawer onClose={() => setShowRulesDrawer(false)} /> : null}
+      {(screen === 'game' || screen === 'multiplayer') && showRulesDrawer ? <RulesDrawer onClose={() => setShowRulesDrawer(false)} /> : null}
 
     </GameShell>
   );

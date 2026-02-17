@@ -170,7 +170,7 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'start') {
-      startRoom(room, payload.playerId, payload.sessionToken, payload.seed, payload.expectedRevision);
+      startRoom(room, payload.playerId, payload.sessionToken, payload.seed, payload.expectedRevision, payload.checkpointId);
       snapshotAll();
       writeJson(res, 200, { ok: true });
       return;

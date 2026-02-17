@@ -83,3 +83,35 @@ A change is complete when all are true:
 - Tests pass locally.
 - Types compile (`npm run build`).
 - Any user-visible behavior changes are documented.
+
+## 9) Refactor Safety Protocol (Required)
+
+Use this protocol for any refactor or architecture-leaning change, even if behavior is intended to stay the same.
+
+1. Define behavior contracts before edits:
+- List what must remain true (player-visible flows, invariants, error handling).
+- Identify where each contract is tested today.
+- If untested, add characterization tests first.
+
+2. Keep change batches small and convergent:
+- Prefer short-lived branches and phased commits.
+- Avoid mixing broad structural refactors with unrelated behavior updates.
+
+3. Prefer stable test shape (pyramid):
+- Keep most checks in unit/engine tests.
+- Add focused integration/UI tests only for boundary behavior.
+- Avoid relying on end-to-end-only validation.
+
+4. Guard high-risk UI changes:
+- For card rendering/layout or multiplayer prompts, add/adjust targeted UI tests.
+- If behavior cannot be asserted automatically, document a manual verification script in the change summary.
+
+5. Review for code health, not perfection:
+- Require evidence that the change improves or preserves code health.
+- Block merges that knowingly reduce behavior confidence without a tracked follow-up.
+
+6. Documentation sync is mandatory:
+- Update `README.md` and/or `docs/LLM_AGENT_GUIDE.md` whenever workflows, UX, or architecture behavior changes.
+- Update active tracker docs when running phased bug-fix programs.
+
+For detailed templates/checklists, see `docs/REFRACTOR_SAFETY_PLAYBOOK.md`.

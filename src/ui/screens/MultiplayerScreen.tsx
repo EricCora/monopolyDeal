@@ -16,7 +16,7 @@ interface MultiplayerScreenProps {
   onJoinCodeChange: (value: string) => void;
   onHostRoom: () => void;
   onJoinRoom: () => void;
-  onStartMatch: () => void;
+  onStartMatch: (checkpointId?: string) => void;
   onRunAction: (index: number) => void;
   onRefresh: () => void;
   onLeaveRoom: () => void;
@@ -38,6 +38,14 @@ function deadlineLabel(deadlineMs: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
   return `${minutes}m ${remainder}s`;
+}
+
+function playerConnectionLabel(connected: boolean, lastSeenAt: number): string {
+  if (connected) return 'Connected';
+  const secondsAgo = Math.max(0, Math.floor((Date.now() - lastSeenAt) / 1000));
+  if (secondsAgo < 60) return `Disconnected (${secondsAgo}s ago)`;
+  const minutesAgo = Math.floor(secondsAgo / 60);
+  return `Disconnected (${minutesAgo}m ago)`;
 }
 
 export function MultiplayerScreen({
@@ -66,6 +74,22 @@ export function MultiplayerScreen({
     if (!session) return;
     if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
     void navigator.clipboard.writeText(session.roomCode);
+  };
+
+  const startFromCheckpoint = () => {
+    if (!roomView || roomView.checkpointSlots.length === 0) {
+      onStartMatch();
+      return;
+    }
+    if (typeof window === 'undefined') {
+      onStartMatch(roomView.checkpointSlots[0].id);
+      return;
+    }
+    const options = roomView.checkpointSlots.map((slot, index) => `${index + 1}. ${slot.name}`).join('\n');
+    const chosen = window.prompt(`Resume from which checkpoint?\n${options}`, '1');
+    const index = Number(chosen) - 1;
+    if (!Number.isFinite(index) || index < 0 || index >= roomView.checkpointSlots.length) return;
+    onStartMatch(roomView.checkpointSlots[index].id);
   };
 
   return (
@@ -126,11 +150,16 @@ export function MultiplayerScreen({
                 Refresh
               </button>
               <button type="button" onClick={onLeaveRoom} disabled={loading}>
-                Leave Room
+                Forget Room
               </button>
               {roomView && roomView.canStart && isHost ? (
-                <button type="button" onClick={onStartMatch} disabled={loading}>
+                <button type="button" onClick={() => onStartMatch()} disabled={loading}>
                   Start Match
+                </button>
+              ) : null}
+              {roomView && roomView.canStart && isHost && roomView.checkpointSlots.length > 0 ? (
+                <button type="button" onClick={startFromCheckpoint} disabled={loading}>
+                  Start From Checkpoint
                 </button>
               ) : null}
             </div>
@@ -150,7 +179,7 @@ export function MultiplayerScreen({
                 {roomView.players.map((player) => (
                   <li key={player.id}>
                     {player.name}
-                    {player.isHost ? ' (Host)' : ''} | {player.connected ? 'Connected' : 'Disconnected'} | hand {player.handCount} | bank {player.bankCount} | sets {player.completeSets}
+                    {player.isHost ? ' (Host)' : ''} | {playerConnectionLabel(player.connected, player.lastSeenAt)} | hand {player.handCount} | bank {player.bankCount} | sets {player.completeSets}
                   </li>
                 ))}
               </ul>

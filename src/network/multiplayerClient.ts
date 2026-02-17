@@ -39,7 +39,7 @@ export function getMultiplayerApiBase(): string {
 export function multiplayerErrorMessage(code: string): string {
   if (code === 'room_not_found') return 'Room code not found. Double-check the code and try again.';
   if (code === 'room_full') return 'This room is already full.';
-  if (code === 'room_started') return 'This match already started. Ask the host for a fresh room code.';
+  if (code === 'room_started') return 'This match already started. Re-enter from Multiplayer to reconnect, or ask the host for a fresh room.';
   if (code === 'invalid_session') return 'Your multiplayer session expired. Please rejoin the room.';
   if (code === 'reconnect_expired') return 'Rejoin window expired. Please rejoin with the room code.';
   if (code === 'minimum_players_required') return 'At least 2 players are required to start.';
@@ -49,6 +49,7 @@ export function multiplayerErrorMessage(code: string): string {
   if (code === 'no_turn_snapshot') return 'No undo snapshots are available for this turn.';
   if (code === 'checkpoint_slots_full') return 'Checkpoint slots are full. Delete one and try again.';
   if (code === 'checkpoint_not_found') return 'Checkpoint not found. Refresh the room and try again.';
+  if (code === 'checkpoint_player_mismatch') return 'Checkpoint players do not match the current lobby lineup.';
   if (code === 'network_unavailable' || code === 'request_failed') return 'Couldn\'t connect right now. Retrying...';
   return 'Could not complete multiplayer request. Please try again.';
 }
@@ -143,6 +144,7 @@ export async function startMultiplayerRoom(
   session: MultiplayerSession,
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
+  checkpointId?: string,
 ): Promise<void> {
   await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/start`, {
     method: 'POST',
@@ -151,6 +153,7 @@ export async function startMultiplayerRoom(
       playerId: session.playerId,
       sessionToken: session.sessionToken,
       expectedRevision,
+      checkpointId,
     }),
   });
 }

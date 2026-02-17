@@ -303,6 +303,84 @@ describe('engine basics', () => {
     expect(total).toBeGreaterThanOrEqual(3);
   });
 
+  it('prefers exact single-card payments when available', () => {
+    const state = createGame({
+      seed: 142,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.players[1].bank = ['money_1#b1', 'money_2#b2', 'money_3#b3'];
+    state.players[1].properties = {
+      brown: [],
+      light_blue: [],
+      pink: [],
+      orange: [],
+      red: [],
+      yellow: [],
+      green: [],
+      dark_blue: [],
+      railroad: [],
+      utility: [],
+    };
+
+    const suggested = getSuggestedPaymentCards(state, 'p2', 3);
+    expect(suggested).toEqual(['money_3#b3']);
+  });
+
+  it('does not include zero-value cards when an exact single payment exists', () => {
+    const state = createGame({
+      seed: 143,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.players[1].bank = ['money_3#b3', 'wild_all#b0'];
+    state.players[1].properties = {
+      brown: [],
+      light_blue: [],
+      pink: [],
+      orange: [],
+      red: [],
+      yellow: [],
+      green: [],
+      dark_blue: [],
+      railroad: [],
+      utility: [],
+    };
+
+    const suggested = getSuggestedPaymentCards(state, 'p2', 3);
+    expect(suggested).toEqual(['money_3#b3']);
+  });
+
+  it('prefers an exact bank card over an exact property card', () => {
+    const state = createGame({
+      seed: 144,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.players[1].bank = ['money_4#b4'];
+    state.players[1].properties = {
+      brown: [],
+      light_blue: [],
+      pink: [],
+      orange: [],
+      red: [],
+      yellow: [],
+      green: [],
+      dark_blue: [{ cardId: 'dark_blue_1#p4', assignedColor: 'dark_blue' }],
+      railroad: [],
+      utility: [],
+    };
+
+    const suggested = getSuggestedPaymentCards(state, 'p2', 4);
+    expect(suggested).toEqual(['money_4#b4']);
+  });
+
   it('suggests maximum payable cards when payer cannot meet requested amount', () => {
     const state = createGame({
       seed: 41,
@@ -433,7 +511,7 @@ describe('engine basics', () => {
     expect(targetC?.requiresPropertyTransfer).toBe(true);
   });
 
-  it('requires discard when ending a turn above hand limit', () => {
+  it('allows action plays above hand limit until end-turn discard is requested', () => {
     const state = createGame({
       seed: 29,
       players: [
@@ -443,7 +521,7 @@ describe('engine basics', () => {
     });
     state.currentPlayerIndex = 0;
     state.turn.phase = 'action';
-    state.turn.playsUsed = 3;
+    state.turn.playsUsed = 1;
     state.pending = null;
     state.players[0].hand = [
       'money_1#x1',
@@ -456,20 +534,20 @@ describe('engine basics', () => {
       'debt_collector#x8',
     ];
 
-    const blockedPass = applyAction(state, { type: 'pass_turn', playerId: 'p1' });
-    expect(blockedPass.error?.code).toBe('hand_limit');
+    const legalBeforeEndTurn = getLegalActions(state, 'p1');
+    expect(legalBeforeEndTurn.some((item) => item.action.type !== 'discard_card')).toBe(true);
 
-    const legal = getLegalActions(state, 'p1');
+    const blockedPass = applyAction(state, { type: 'pass_turn', playerId: 'p1' });
+    expect(blockedPass.error).toBeUndefined();
+
+    const legal = getLegalActions(blockedPass.state, 'p1');
     expect(legal.length).toBe(8);
     expect(legal.every((item) => item.action.type === 'discard_card')).toBe(true);
 
-    const afterDiscard = applyAction(state, { type: 'discard_card', playerId: 'p1', cardId: 'money_1#x1' }).state;
+    const afterDiscard = applyAction(blockedPass.state, { type: 'discard_card', playerId: 'p1', cardId: 'money_1#x1' }).state;
     expect(afterDiscard.players[0].hand.length).toBe(7);
     expect(afterDiscard.discardPile).toContain('money_1#x1');
-
-    const passAfterDiscard = applyAction(afterDiscard, { type: 'pass_turn', playerId: 'p1' });
-    expect(passAfterDiscard.error).toBeUndefined();
-    expect(passAfterDiscard.state.currentPlayerIndex).toBe(1);
+    expect(afterDiscard.currentPlayerIndex).toBe(1);
   });
 
   it('applies custom hand-limit ruleset on end turn', () => {
@@ -496,8 +574,8 @@ describe('engine basics', () => {
     ];
 
     const blockedPass = applyAction(state, { type: 'pass_turn', playerId: 'p1' });
-    expect(blockedPass.error?.code).toBe('hand_limit');
-    const legal = getLegalActions(state, 'p1');
+    expect(blockedPass.error).toBeUndefined();
+    const legal = getLegalActions(blockedPass.state, 'p1');
     expect(legal.every((item) => item.action.type === 'discard_card')).toBe(true);
   });
 

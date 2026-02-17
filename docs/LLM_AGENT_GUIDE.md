@@ -32,12 +32,13 @@ Purpose: give coding agents enough context to make correct, low-regression chang
 - `src/ui/` + `src/App.tsx`
   - `App.tsx` owns state/actions and passes typed props to screen containers.
   - `src/app/useFeedback.ts` encapsulates sound/haptic emission.
-  - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, polling/reconnect lifecycle, and host/player room controls (pause/undo/checkpoints).
+  - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, polling/reconnect lifecycle, and host/player room controls (pause/undo/checkpoints) plus `Exit Match` (retain reconnect session) vs `Forget Room` (clear session).
   - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition.
   - `src/ui/screens/SavedGamesScreen.tsx` manages manual save slots (load/save-over/rename/delete).
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
   - `src/ui/components/ActionConfirmDialog.tsx` handles risky-action confirmation flow.
   - `src/ui/components/RulesDrawer.tsx` provides in-game rules/set/rent quick reference.
+  - Selection pending flows now support property-card click interactions for deal actions; keep action-button fallback intact.
   - `src/ui/theme/` contains tokenized CSS split by base/components/screens.
 
 ## Data Model Cheat Sheet
@@ -130,11 +131,56 @@ Do not model multiple simultaneous pending effects.
 - UI-only change:
   - Rendering + user interaction test
 
+## Regression Prevention System
+
+Use this section when a change risks "silent behavior loss" during refactors.
+
+### A) Behavior Contract Mapping (before coding)
+
+For each touched area, record:
+1. User-visible contract (what must still work).
+2. Invariant contract (what must still be true internally).
+3. Test coverage location.
+4. Missing coverage to add before or during refactor.
+
+Suggested contract anchors in this repo:
+- Turn progression and pending exclusivity: `src/test/engine.test.ts`
+- Multiplayer lifecycle/action legality: `src/test/multiplayer-room-service.test.ts`
+- App orchestration and screen transitions: `src/test/app.test.tsx`
+- Card visual model/theme assumptions: `src/test/card-ui.test.tsx`
+
+### B) Refactor Change-Set Rules
+
+1. Characterization tests first for previously untested behavior.
+2. Structural refactor and behavior change should be separate commits when feasible.
+3. Keep branch slices phase-based with tracker updates after each phase.
+4. Add explicit rollback notes for risky deltas (what to revert first if regression appears).
+
+### C) Regression Gates (must pass before handoff)
+
+1. `npm run test`
+2. `npm run build`
+3. `npm run lint` (or document pre-existing warnings)
+4. Docs sync:
+- user-visible workflow changes reflected in `README.md`
+- agent-facing architecture/workflow changes reflected in this guide
+
+### D) UI/Visual Reliability Rule
+
+When card rendering, responsive layout, or modal/prompt orchestration changes:
+1. Add/adjust targeted UI tests for the changed contract.
+2. Include at least one explicit manual smoke path in the implementation summary.
+3. If exact visual fidelity is critical and not captured by tests, log follow-up snapshot coverage work in tracker docs.
+
 ## Known Hotspots
 
 - `src/engine/game.ts` is large; regressions are likely when changing shared helpers.
 - `src/App.tsx` coordinates many UI states (chooser, payment selection, pass-and-play shield, pause state, settings routing, undo snapshots).
 - In multiplayer mode, `GameTableScreen` is reused for active matches; server room state remains authoritative for pause/snapshots/checkpoints.
+- Host migration now includes original-host re-preference after reconnect; preserve this when modifying reconnect/migration logic.
+- Lobby `Start From Checkpoint` uses checkpoint participant compatibility checks (id + name) before starting from saved state.
+- Multiplayer legality matching must treat `pay_request.cards` as order-insensitive to avoid false `illegal_action` rejects for manual payment selection order.
+- Multiplayer rules drawer is available in both local and multiplayer game screens; when changing screen gate logic, preserve this parity.
 - Growth telemetry uses `monopolyDeal.growthMetrics.v1` and is surfaced in `StatsDashboard`.
 - Card rendering/fit is split between `src/ui/components/CardView.tsx`, `src/ui/components/HandFan.tsx`, and `src/ui/theme/components/cards.css`.
 - Draw-phase prompt intentionally uses rail hand layout for readability; non-draw prompts still use auto-fit.
@@ -156,6 +202,9 @@ Use this checklist for feature-milestone commits:
 5. For persistence/stat changes:
 - Keep `version: 1` readers backward-compatible.
 - Treat new fields as additive + optional defaults.
+6. For refactors:
+- Confirm behavior contract mapping exists for impacted flows.
+- Confirm at least one regression test was added/updated for each bug class fixed.
 
 ## Recommended Agent Prompt Template
 

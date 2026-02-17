@@ -46,6 +46,19 @@ Branch: `codex/deep-research-improvements`
 - Analytics expansion:
 - Extended growth telemetry counters (starts, completions, rematches, LAN host/join, coach hint views, share conversion)
 - Stats dashboard now shows telemetry KPIs and growth-event chart
+- Multiplayer beta hardening:
+- Pending-action chooser now closes when multiplayer prompt ownership changes, avoiding stale local action UI.
+- Multiplayer winner overlay now appears in-table when the match ends.
+- Rules drawer now opens during multiplayer matches (same escape/focus behavior as local).
+- `pay_request` legality now compares structurally with order-insensitive card sets; manual payment order no longer causes false `illegal_action`.
+- Auto-payment selection now consistently prefers exact single-card matches when available.
+- Active match controls split into `Exit Match` (keep reconnect session) and `Forget Room` (clear session).
+- In-match player cards now show compact connection status pills.
+- Multiplayer fallback guard now refreshes incomplete room payloads instead of risking blank-screen render paths.
+- Original host is re-preferred automatically after successful reconnect.
+- Hosts can start a lobby match from an available checkpoint when player lineup matches checkpoint participants.
+- Pending deal selections now support property-card click flows for `sly_deal`, `forced_deal`, and `deal_breaker` (with chooser fallback for multi-destination variants).
+- Compact rent ladders increased legibility; rent action cards now include inline rent summary lines for faster at-a-glance charge estimation.
 
 ## Interface And Data Updates
 
@@ -81,6 +94,8 @@ Branch: `codex/deep-research-improvements`
 - `npm run test`
 - `npm run build`
 - `npm run lint` (passes with pre-existing TanStack table warning)
+- Additional targeted hardening run:
+- `npm run test -- src/test/multiplayer-room-service.test.ts src/test/multiplayer-client.test.ts src/test/engine.test.ts src/test/app.test.tsx`
 
 ## Manual Smoke Focus
 

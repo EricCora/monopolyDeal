@@ -65,6 +65,34 @@ describe('Card UI', () => {
     }
   });
 
+  it('uses compact labels for wild any cards to avoid small-card text clipping', () => {
+    const model = getCardVisualModel('wild_all#1');
+    expect(model.subtitle).toBe('Wild Any Color');
+    expect(model.colorLabel).toBe('All Property Colors');
+    expect(model.themeClass).toBe('theme-wild-any');
+  });
+
+  it('shows rent action summaries for rent cards', () => {
+    render(
+      <>
+        <CardView cardId="rent_pink_orange#1" size="sm" />
+        <CardView cardId="rent_color#1" size="sm" />
+      </>,
+    );
+
+    expect(screen.getAllByLabelText(/rent action summary/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/Pink \$1\/\$2\/\$4/i)).toBeInTheDocument();
+    expect(screen.getByText(/Any Color Set/i)).toBeInTheDocument();
+    expect(screen.getByText(/Rent range: \$1-\$8/i)).toBeInTheDocument();
+  });
+
+  it('uses simplified rent summary in hand context to avoid clutter', () => {
+    render(<CardView cardId="dark_blue_1#1" size="lg" context="hand" />);
+
+    expect(screen.getByLabelText(/rent summary/i)).toHaveTextContent('Rent $3/$8');
+    expect(screen.queryByLabelText(/rent ladder/i)).not.toBeInTheDocument();
+  });
+
   it('highlights the full-set rent step for property cards', () => {
     const { container } = render(<CardView cardId="railroad_1#1" />);
     const fullSetSteps = container.querySelectorAll('.card-rent-step.is-fullset');

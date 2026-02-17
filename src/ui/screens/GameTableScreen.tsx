@@ -35,6 +35,7 @@ interface GameTableScreenProps {
   isPaused: boolean;
   pauseReasonText?: string;
   connectionStatusLabel?: string;
+  playerConnectionById?: Record<string, { connected: boolean; lastSeenAt: number; reconnectDeadlineMs: number }>;
   isMultiplayerHost?: boolean;
   checkpointSlots?: { id: string; name: string; savedAt: number }[];
   checkpointLoading?: boolean;
@@ -43,6 +44,7 @@ interface GameTableScreenProps {
   revealedPlayerId: string | null;
   playableCardIds: Set<string>;
   selectedCardId: string | null;
+  selectedSelectionCardId?: string | null;
   selectedPaymentCards: string[];
   selectedPaymentTotal: number;
   totalPayableValue: number;
@@ -67,7 +69,8 @@ interface GameTableScreenProps {
   actionDetailText: (item: LegalAction) => string | null;
   onPauseToggle: () => void;
   onRefreshMultiplayer?: () => void;
-  onLeaveMultiplayer?: () => void;
+  onExitMultiplayer?: () => void;
+  onForgetMultiplayer?: () => void;
   onSaveCheckpoint?: (name: string) => void;
   onLoadCheckpoint?: (checkpointId: string) => void;
   onDeleteCheckpoint?: (checkpointId: string) => void;
@@ -77,6 +80,7 @@ interface GameTableScreenProps {
   onToggleDebugActions: () => void;
   onRunAction: (action: Action, source?: LegalAction) => void;
   onCardClick: (cardId: string) => void;
+  onPropertySelectionClick: (ownerPlayerId: string, color: PropertyColor, cardId: string) => void;
   onPaymentCardToggle: (cardId: string) => void;
   onAutoSelectPayment: () => void;
   onSubmitSelectedPayment: () => void;
@@ -114,6 +118,7 @@ export function GameTableScreen({
   isPaused,
   pauseReasonText,
   connectionStatusLabel,
+  playerConnectionById = {},
   isMultiplayerHost = false,
   checkpointSlots = [],
   checkpointLoading = false,
@@ -122,6 +127,7 @@ export function GameTableScreen({
   revealedPlayerId,
   playableCardIds,
   selectedCardId,
+  selectedSelectionCardId = null,
   selectedPaymentCards,
   selectedPaymentTotal,
   totalPayableValue,
@@ -141,7 +147,8 @@ export function GameTableScreen({
   actionDetailText,
   onPauseToggle,
   onRefreshMultiplayer,
-  onLeaveMultiplayer,
+  onExitMultiplayer,
+  onForgetMultiplayer,
   onSaveCheckpoint,
   onLoadCheckpoint,
   onDeleteCheckpoint,
@@ -151,6 +158,7 @@ export function GameTableScreen({
   onToggleDebugActions,
   onRunAction,
   onCardClick,
+  onPropertySelectionClick,
   onPaymentCardToggle,
   onAutoSelectPayment,
   onSubmitSelectedPayment,
@@ -162,6 +170,9 @@ export function GameTableScreen({
 }: GameTableScreenProps) {
   const over = isGameOver(game);
   const isMultiplayer = mode === 'multiplayer';
+  const winnerName = over.done && over.winnerId
+    ? game.players.find((player) => player.id === over.winnerId)?.name ?? over.winnerId
+    : null;
 
   const saveCheckpointInteractive = () => {
     if (!onSaveCheckpoint || !isMultiplayerHost || isPaused) return;
@@ -218,7 +229,8 @@ export function GameTableScreen({
             {isMultiplayer ? (
               <>
                 <button onClick={onRefreshMultiplayer} disabled={isPaused || checkpointLoading}>Refresh</button>
-                <button onClick={onLeaveMultiplayer} disabled={checkpointLoading}>Leave Room</button>
+                <button onClick={onExitMultiplayer} disabled={checkpointLoading}>Exit Match</button>
+                <button onClick={onForgetMultiplayer} disabled={checkpointLoading}>Forget Room</button>
                 {isMultiplayerHost ? (
                   <>
                     <button onClick={saveCheckpointInteractive} disabled={checkpointLoading || isPaused}>Save Checkpoint</button>
@@ -277,6 +289,7 @@ export function GameTableScreen({
               const handInteractive = Boolean(canSeeHand && prompt.playerId === player.id && !over.done && !isPaused);
               const isPaymentPayer = pendingPayment?.targetPlayerId === player.id;
               const paymentSelectionEnabled = Boolean(isPaymentPayer && revealedPlayerId === player.id && !over.done && !isPaused);
+              const selectionCardPickingEnabled = Boolean(prompt.kind === 'selection' && revealedPlayerId === prompt.playerId && !over.done && !isPaused);
               const inlineActions = isPromptPlayer
                 ? (
                     pendingPayment
@@ -293,6 +306,11 @@ export function GameTableScreen({
                   <header>
                     <h3>{player.name}</h3>
                     <p>{getSetCompletionCount(player)} complete sets</p>
+                    {isMultiplayer ? (
+                      <p className={`connection-pill ${playerConnectionById[player.id]?.connected ? 'is-online' : 'is-offline'}`}>
+                        {playerConnectionById[player.id]?.connected ? 'Online' : 'Disconnected'}
+                      </p>
+                    ) : null}
                   </header>
 
                   {isPromptPlayer && canSeeHand && !over.done ? (
@@ -424,10 +442,18 @@ export function GameTableScreen({
                                   key={`${player.id}-${color}-${entry.cardId}`}
                                   cardId={entry.cardId}
                                   size="sm"
-                                  interactive={paymentSelectionEnabled}
-                                  playable={paymentSelectionEnabled}
-                                  selected={selectedPaymentCards.includes(entry.cardId)}
-                                  onClick={() => onPaymentCardToggle(entry.cardId)}
+                                  interactive={paymentSelectionEnabled || selectionCardPickingEnabled}
+                                  playable={paymentSelectionEnabled || selectionCardPickingEnabled}
+                                  selected={selectedPaymentCards.includes(entry.cardId) || selectedSelectionCardId === entry.cardId}
+                                  onClick={() => {
+                                    if (paymentSelectionEnabled) {
+                                      onPaymentCardToggle(entry.cardId);
+                                      return;
+                                    }
+                                    if (selectionCardPickingEnabled) {
+                                      onPropertySelectionClick(player.id, color, entry.cardId);
+                                    }
+                                  }}
                                   annotation={entry.assignedColor !== color ? `as ${colorLabel(entry.assignedColor)}` : undefined}
                                 />
                               ))}
@@ -479,6 +505,26 @@ export function GameTableScreen({
           <div className="paused-card card-enter">
             <h3>Game Paused</h3>
             <p>{pauseReasonText ?? 'Gameplay is locked until you press Resume in the top bar.'}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {isMultiplayer && over.done ? (
+        <div className="winner-overlay" role="dialog" aria-modal="true" aria-label="Multiplayer winner">
+          <div className="winner-card card-enter">
+            <h3>Match Complete</h3>
+            <p>
+              Winner: <strong>{winnerName ?? 'Unknown player'}</strong>
+            </p>
+            <p>Use Exit Match to leave and keep reconnect access, or Forget Room to disconnect permanently.</p>
+            <div className="winner-actions">
+              <button type="button" onClick={onExitMultiplayer} disabled={checkpointLoading}>
+                Exit Match
+              </button>
+              <button type="button" onClick={onForgetMultiplayer} disabled={checkpointLoading}>
+                Forget Room
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

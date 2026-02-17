@@ -205,13 +205,34 @@ export function generatePaymentOptions(player: PlayerState, targetAmount: number
   ];
   if (allCards.length === 0) return [[]];
 
+  const sorted = [...allCards].sort((left, right) => {
+    const valueDelta = cardMoneyValue(left) - cardMoneyValue(right);
+    if (valueDelta !== 0) return valueDelta;
+    return left.localeCompare(right);
+  });
   const options: string[][] = [];
-  const sorted = [...allCards].sort((a, b) => cardMoneyValue(a) - cardMoneyValue(b));
+  const seen = new Set<string>();
+  const MAX_OPTIONS = 120;
+
+  const addOption = (cards: string[]) => {
+    if (cards.length === 0) return;
+    const normalized = [...cards].sort((left, right) => left.localeCompare(right));
+    const key = normalized.join('|');
+    if (seen.has(key)) return;
+    seen.add(key);
+    options.push(normalized);
+  };
+
+  for (const cardId of sorted) {
+    if (cardMoneyValue(cardId) === targetAmount) {
+      addOption([cardId]);
+    }
+  }
 
   function backtrack(index: number, selected: string[], total: number): void {
-    if (options.length > 25) return;
+    if (options.length >= MAX_OPTIONS) return;
     if (total >= targetAmount) {
-      options.push([...selected]);
+      addOption(selected);
       return;
     }
     if (index >= sorted.length) return;
@@ -224,10 +245,23 @@ export function generatePaymentOptions(player: PlayerState, targetAmount: number
   }
 
   backtrack(0, [], 0);
-  if (options.length === 0) {
-    return [sorted];
-  }
-  return options;
+  if (options.length === 0) addOption(sorted);
+
+  options.sort((left, right) => {
+    const leftTotal = left.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0);
+    const rightTotal = right.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0);
+    const leftMeets = leftTotal >= targetAmount;
+    const rightMeets = rightTotal >= targetAmount;
+    if (leftMeets !== rightMeets) return leftMeets ? -1 : 1;
+
+    const leftOverpay = leftMeets ? leftTotal - targetAmount : targetAmount - leftTotal;
+    const rightOverpay = rightMeets ? rightTotal - targetAmount : targetAmount - rightTotal;
+    if (leftOverpay !== rightOverpay) return leftOverpay - rightOverpay;
+    if (left.length !== right.length) return left.length - right.length;
+    return leftTotal - rightTotal;
+  });
+
+  return options.slice(0, 25);
 }
 
 export function findPropertyColorByCard(player: PlayerState, cardId: string): PropertyColor | null {
@@ -275,10 +309,14 @@ export function nextPlayerIndex(state: GameState, fromIndex = state.currentPlaye
 }
 
 export function requiresEndTurnDiscard(state: GameState, player: PlayerState): boolean {
+  const overHandLimit = player.hand.length > ruleset(state).maxHandAtEndTurn;
+  const mustResolveEndTurn =
+    Boolean(state.turn.endingTurn) || state.turn.playsUsed >= ruleset(state).maxPlaysPerTurn;
   return !state.pending
     && state.turn.phase === 'action'
     && getCurrentPlayer(state).id === player.id
-    && player.hand.length > ruleset(state).maxHandAtEndTurn;
+    && overHandLimit
+    && mustResolveEndTurn;
 }
 
 export function finishTurn(state: GameState, events: GameEvent[]): RuleError | undefined {
@@ -290,7 +328,7 @@ export function finishTurn(state: GameState, events: GameEvent[]): RuleError | u
     );
   }
   state.currentPlayerIndex = nextPlayerIndex(state);
-  state.turn = { phase: 'draw', playsUsed: 0, doubleRentMultiplier: 1 };
+  state.turn = { phase: 'draw', playsUsed: 0, doubleRentMultiplier: 1, endingTurn: false };
   state.turnCount += 1;
   pushEvent(events, 'turn_passed', `${current.name} ended their turn.`);
   return undefined;

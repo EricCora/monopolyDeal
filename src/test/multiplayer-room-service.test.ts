@@ -7,6 +7,7 @@ import {
   loadRoomCheckpoint,
   pauseRoom,
   pruneInactiveRooms,
+  reconnectRoom,
   resetTurnRoomActions,
   resumeRoom,
   roomView,
@@ -180,6 +181,56 @@ describe('multiplayer room service lifecycle', () => {
     expect(() => pauseRoom(room, session.playerId, session.sessionToken, staleRevision)).toThrowError('revision_conflict');
   });
 
+  it('reassigns host back to the original host after reconnect', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+
+    leaveRoom(room, session.playerId, session.sessionToken);
+    expect(room.hostPlayerId).toBe(playerTwo.playerId);
+
+    reconnectRoom(room, session.playerId, session.sessionToken);
+    expect(room.hostPlayerId).toBe(session.playerId);
+  });
+
+  it('starts a lobby match from a compatible checkpoint when requested', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+    const checkpoint = saveRoomCheckpoint(room, session.playerId, session.sessionToken, 'Resume');
+    const checkpointGame = structuredClone(room.checkpoints[room.checkpoints.length - 1].game);
+
+    // Simulate a persisted lobby resume scenario with checkpoints retained.
+    room.game = null;
+    room.status = 'lobby';
+
+    const resumedRoom = startRoom(room, session.playerId, session.sessionToken, undefined, undefined, checkpoint.id);
+    const resumedGame = resumedRoom.game;
+    if (!resumedGame) throw new Error('expected resumed game');
+    expect(resumedGame.players.map((player) => player.id)).toEqual(checkpointGame.players.map((player) => player.id));
+    expect(room.hostPlayerId).toBe(session.playerId);
+    expect(room.players.some((entry) => entry.id === playerTwo.playerId)).toBe(true);
+  });
+
+  it('rejects checkpoint start when checkpoint players do not match lobby players', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+    const checkpoint = saveRoomCheckpoint(room, session.playerId, session.sessionToken, 'Resume');
+
+    room.game = null;
+    room.status = 'lobby';
+    room.players = room.players.filter((entry) => entry.id !== 'p2');
+    joinRoom(room, 'Replacement');
+
+    expect(() => startRoom(room, session.playerId, session.sessionToken, undefined, undefined, checkpoint.id)).toThrowError(
+      'checkpoint_player_mismatch',
+    );
+  });
+
   it('allows leave with stale expected revision for valid session cleanup', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
@@ -191,5 +242,50 @@ describe('multiplayer room service lifecycle', () => {
 
     const disconnected = findParticipant(room, playerTwo.playerId);
     expect(disconnected.connected).toBe(false);
+  });
+
+  it('accepts manual pay_request card order when cards are otherwise legal', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+
+    if (!room.game) throw new Error('expected game');
+    const payer = room.game.players.find((player) => player.id === playerTwo.playerId);
+    if (!payer) throw new Error('expected payer');
+    payer.bank = ['money_1#pay1', 'money_2#pay2'];
+    payer.properties = {
+      brown: [],
+      light_blue: [],
+      pink: [],
+      orange: [],
+      red: [],
+      yellow: [],
+      green: [],
+      dark_blue: [],
+      railroad: [],
+      utility: [],
+    };
+    room.game.pending = {
+      kind: 'payment',
+      payload: {
+        sourcePlayerId: session.playerId,
+        targetPlayerId: playerTwo.playerId,
+        amount: 3,
+        reason: 'rent',
+        actionCardId: 'rent#test',
+      },
+    };
+
+    const legal = roomView(room, playerTwo.playerId, playerTwo.sessionToken).legalActions;
+    const payAction = legal.find((entry) => entry.action.type === 'pay_request' && entry.action.cards.length === 2)?.action;
+    expect(payAction).toBeDefined();
+    if (!payAction || payAction.type !== 'pay_request') throw new Error('expected pay action');
+
+    const reversed = {
+      ...payAction,
+      cards: [...payAction.cards].reverse(),
+    };
+    expect(() => applyRoomAction(room, playerTwo.playerId, playerTwo.sessionToken, reversed)).not.toThrow();
   });
 });

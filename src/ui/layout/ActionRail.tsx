@@ -1,5 +1,6 @@
 import type { TurnPhase, TurnPrompt } from '../../engine';
 import type { LegalAction } from '../../engine';
+import { ActionLabelText } from '../components/ActionLabelText';
 
 interface ActionRailProps {
   isMandatoryPrompt: boolean;
@@ -58,14 +59,16 @@ export function ActionRail({
       ) : null}
       <div className="debug-actions">
         <button type="button" onClick={onToggleDebugActions} disabled={isPaused}>
-          {showDebugActions ? 'Hide' : 'Show'} All Legal Actions ({legalActions.length})
+          {showDebugActions ? 'Hide' : 'Show'} Advanced Legal Actions ({legalActions.length})
         </button>
         {showDebugActions && (
-          <ul className="debug-action-list">
+          <ol className="debug-action-list">
             {legalActions.map((item, index) => (
-              <li key={`debug-${item.label}-${index}`}>{item.label}</li>
+              <li key={`debug-${item.label}-${index}`}>
+                <ActionLabelText text={item.label} />
+              </li>
             ))}
-          </ul>
+          </ol>
         )}
       </div>
     </aside>

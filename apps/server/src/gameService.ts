@@ -44,6 +44,7 @@ export interface MultiplayerRoom {
   code: string;
   createdAt: number;
   updatedAt: number;
+  originalHostPlayerId: PlayerId;
   hostPlayerId: PlayerId;
   status: MultiplayerRoomStatus;
   players: RoomParticipant[];
@@ -161,6 +162,8 @@ function roomPlayerSummary(room: MultiplayerRoom): MultiplayerPlayerSummary[] {
       bankCount: 0,
       completeSets: 0,
       connected: entry.connected,
+      lastSeenAt: entry.lastSeenAt,
+      reconnectDeadlineMs: entry.reconnectDeadlineMs,
       isHost: entry.id === room.hostPlayerId,
     }));
   }
@@ -174,9 +177,23 @@ function roomPlayerSummary(room: MultiplayerRoom): MultiplayerPlayerSummary[] {
       bankCount: player.bank.length,
       completeSets: getSetCompletionCount(player),
       connected: Boolean(entry?.connected),
+      lastSeenAt: entry?.lastSeenAt ?? room.updatedAt,
+      reconnectDeadlineMs: entry?.reconnectDeadlineMs ?? room.updatedAt,
       isHost: player.id === room.hostPlayerId,
     };
   });
+}
+
+function canonicalizeCardIds(cardIds: string[]): string[] {
+  return [...cardIds].sort((left, right) => left.localeCompare(right));
+}
+
+function normalizeActionForComparison(action: Action): Action {
+  if (action.type !== 'pay_request') return action;
+  return {
+    ...action,
+    cards: canonicalizeCardIds(action.cards),
+  };
 }
 
 function maskForViewer(state: GameState, viewerId: PlayerId): GameState {
@@ -308,6 +325,7 @@ export function createRoom(
     code,
     createdAt,
     updatedAt: createdAt,
+    originalHostPlayerId: playerId,
     hostPlayerId: playerId,
     status: 'lobby',
     players: [{
@@ -370,6 +388,9 @@ export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, session
   ensureExpectedRevision(room, expectedRevision);
   assertReconnectWindowOpen(player, now);
   touchPlayer(player);
+  if (player.id === room.originalHostPlayerId && room.hostPlayerId !== player.id) {
+    room.hostPlayerId = player.id;
+  }
   commitMutation(room);
   return {
     roomCode: room.code,
@@ -386,7 +407,14 @@ export function leaveRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToke
   incrementRevision(room);
 }
 
-export function startRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, seed?: number, expectedRevision?: number): MultiplayerRoom {
+export function startRoom(
+  room: MultiplayerRoom,
+  playerId: PlayerId,
+  sessionToken: string,
+  seed?: number,
+  expectedRevision?: number,
+  checkpointId?: string,
+): MultiplayerRoom {
   ensureExpectedRevision(room, expectedRevision);
   requireSession(room, playerId, sessionToken);
   requireHost(room, playerId);
@@ -398,11 +426,22 @@ export function startRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToke
     throw new Error('minimum_players_required');
   }
   const players: PlayerConfig[] = activePlayers.map((player) => ({ id: player.id, name: player.name }));
-  room.game = createGame({
-    players,
-    deckVersion: 'v1',
-    seed,
-  });
+  if (checkpointId) {
+    const checkpoint = findCheckpoint(room, checkpointId);
+    const lobbyPlayerById = new Map(activePlayers.map((entry) => [entry.id, entry.name]));
+    const sameParticipants = checkpoint.game.players.length === activePlayers.length
+      && checkpoint.game.players.every((entry) => lobbyPlayerById.get(entry.id) === entry.name);
+    if (!sameParticipants) {
+      throw new Error('checkpoint_player_mismatch');
+    }
+    room.game = structuredClone(checkpoint.game);
+  } else {
+    room.game = createGame({
+      players,
+      deckVersion: 'v1',
+      seed,
+    });
+  }
   room.paused = false;
   room.pausedByPlayerId = undefined;
   room.turnSnapshots = [];
@@ -452,7 +491,8 @@ export function applyRoomAction(
     throw new Error('player_action_mismatch');
   }
   const legal = getLegalActions(game, playerId);
-  const isLegal = legal.some((entry) => JSON.stringify(entry.action) === JSON.stringify(action));
+  const normalizedAction = JSON.stringify(normalizeActionForComparison(action));
+  const isLegal = legal.some((entry) => JSON.stringify(normalizeActionForComparison(entry.action)) === normalizedAction);
   if (!isLegal) {
     throw new Error('illegal_action');
   }

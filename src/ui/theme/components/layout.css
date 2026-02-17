@@ -194,19 +194,93 @@
   margin: 0.2rem 0 0;
 }
 
+.connection-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.35rem;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  border: 1px solid #355873;
+  background: rgba(16, 41, 58, 0.88);
+}
+
+.connection-pill.is-online {
+  border-color: #2f9b60;
+  background: rgba(29, 103, 66, 0.28);
+}
+
+.connection-pill.is-offline {
+  border-color: #ad7a4e;
+  background: rgba(96, 58, 34, 0.34);
+}
+
 .debug-actions {
   margin-top: 0.55rem;
 }
 
 .debug-action-list {
   margin: 0.5rem 0 0;
-  padding-left: 1.2rem;
+  padding-left: 1.5rem;
   max-height: 220px;
   overflow: auto;
 }
 
 .debug-action-list li {
   margin: 0.2rem 0;
+}
+
+.action-label-text {
+  display: inline;
+}
+
+.action-color-token {
+  font-weight: 700;
+}
+
+.action-color-token.is-any {
+  color: #f7f9ff;
+}
+
+.action-color-token.is-brown {
+  color: var(--card-color-brown);
+}
+
+.action-color-token.is-light-blue {
+  color: var(--card-color-light-blue);
+}
+
+.action-color-token.is-pink {
+  color: var(--card-color-pink);
+}
+
+.action-color-token.is-orange {
+  color: var(--card-color-orange);
+}
+
+.action-color-token.is-red {
+  color: var(--card-color-red);
+}
+
+.action-color-token.is-yellow {
+  color: var(--card-color-yellow);
+}
+
+.action-color-token.is-green {
+  color: var(--card-color-green);
+}
+
+.action-color-token.is-dark-blue {
+  color: var(--card-color-dark-blue);
+}
+
+.action-color-token.is-railroad {
+  color: var(--card-color-railroad);
+}
+
+.action-color-token.is-utility {
+  color: var(--card-color-utility);
 }
 
 .game-table-screen.is-paused .top-bar {
@@ -235,6 +309,37 @@
 
 .paused-card p {
   margin: 0.5rem 0 0;
+}
+
+.winner-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: var(--z-shield);
+  background: rgba(5, 13, 21, 0.75);
+}
+
+.winner-card {
+  width: min(540px, calc(100% - 2rem));
+  border-radius: 14px;
+  border: 2px solid #4d8bbb;
+  background: linear-gradient(170deg, rgba(11, 33, 53, 0.96), rgba(8, 21, 35, 0.96));
+  box-shadow: var(--shadow-md);
+  padding: 1.35rem;
+  text-align: center;
+}
+
+.winner-card p {
+  margin: 0.45rem 0 0;
+}
+
+.winner-actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
 }
 
 .shield {

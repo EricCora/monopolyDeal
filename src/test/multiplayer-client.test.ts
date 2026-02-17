@@ -52,4 +52,8 @@ describe('multiplayerErrorMessage', () => {
   it('maps room paused for user clarity', () => {
     expect(multiplayerErrorMessage('room_paused')).toMatch(/paused/i);
   });
+
+  it('maps room started to reconnect guidance', () => {
+    expect(multiplayerErrorMessage('room_started')).toMatch(/reconnect/i);
+  });
 });
