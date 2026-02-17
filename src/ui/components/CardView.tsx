@@ -92,8 +92,8 @@ export function CardView({
                   key={`${model.cardId}-rent-${step.setCount}`}
                   className={`card-rent-step ${step.setCount === model.setSize ? 'is-fullset' : ''}`}
                 >
-                  <span>{step.setCount}</span>
-                  <span>${step.rent}</span>
+                  <span className="card-rent-count">{step.setCount}</span>
+                  <span className="card-rent-value">${step.rent}</span>
                 </span>
               ))}
             </span>

@@ -105,9 +105,12 @@ describe('Card UI', () => {
   it('highlights the full-set rent step for property cards', () => {
     const { container } = render(<CardView cardId="railroad_1#1" />);
     const fullSetSteps = container.querySelectorAll('.card-rent-step.is-fullset');
+    const rentValues = container.querySelectorAll('.card-rent-value');
 
     expect(fullSetSteps.length).toBe(1);
     expect(fullSetSteps[0]?.textContent).toContain('$4');
+    expect(rentValues.length).toBeGreaterThan(0);
+    expect(Array.from(rentValues).some((node) => node.textContent === '$4')).toBe(true);
   });
 
   it('uses auto fit mode for fan/rail hand layout based on available width', async () => {

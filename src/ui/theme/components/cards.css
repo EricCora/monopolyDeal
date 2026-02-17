@@ -98,6 +98,8 @@
   content: '';
   position: absolute;
   inset: 0;
+  z-index: 0;
+  opacity: 0.42;
   background:
     radial-gradient(circle at 14% 14%, rgba(255, 255, 255, 0.18), transparent 36%),
     repeating-linear-gradient(35deg, rgba(0, 0, 0, 0.02) 0 2px, rgba(255, 255, 255, 0.03) 2px 4px);
@@ -156,6 +158,8 @@
 }
 
 .card-face > span {
+  position: relative;
+  z-index: 1;
   min-width: 0;
 }
 
@@ -279,6 +283,15 @@
   padding: 0.08rem 0.1rem;
 }
 
+.card-rent-count,
+.card-rent-value {
+  color: inherit;
+}
+
+.card-rent-value {
+  font-weight: 700;
+}
+
 .card-rent-step.is-fullset {
   border-color: #1e7a5f;
   background: #d9f4e9;
@@ -314,7 +327,8 @@
 }
 
 .card-rent.is-compact .card-rent-step {
-  font-size: 0.5rem;
+  font-size: 0.56rem;
+  line-height: 1.12;
   border-radius: 4px;
   padding: 0.07rem 0.1rem;
   border-color: rgba(72, 103, 127, 0.55);
@@ -525,6 +539,7 @@
   border-radius: 999px;
   border: 1px solid rgba(23, 39, 54, 0.14);
   background: rgba(255, 255, 255, 0.2);
+  z-index: 0;
   pointer-events: none;
 }
 
