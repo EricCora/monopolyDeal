@@ -34,6 +34,21 @@
   margin-top: 0;
 }
 
+.multiplayer-host-notice {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  border: 1px solid #4b7a9c;
+  border-radius: 10px;
+  padding: 0.5rem 0.65rem;
+  background: rgba(15, 46, 66, 0.82);
+}
+
+.multiplayer-host-notice p {
+  margin: 0;
+}
+
 .game-table-grid {
   display: grid;
   grid-template-columns: minmax(240px, 320px) 1fr;
@@ -184,6 +199,7 @@
 .player.active {
   border-color: var(--accent-alt);
   box-shadow: var(--shadow-glow);
+  animation: player-focus-pulse 420ms ease-out;
 }
 
 .player > section {
@@ -214,6 +230,29 @@
 .connection-pill.is-offline {
   border-color: #ad7a4e;
   background: rgba(96, 58, 34, 0.34);
+}
+
+.multiplayer-social-panel {
+  border-color: #3d617b;
+  background: linear-gradient(180deg, rgba(10, 29, 44, 0.92), rgba(7, 20, 31, 0.92));
+}
+
+.multiplayer-reaction-actions {
+  margin-bottom: 0.4rem;
+}
+
+.multiplayer-activity-feed {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.22rem;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.multiplayer-activity-feed li {
+  color: #d8eafb;
+  font-size: 0.9rem;
 }
 
 .debug-actions {
@@ -363,6 +402,40 @@
 .shield-card p,
 .shield-card h3 {
   color: #2b3946;
+}
+
+.network-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: var(--z-shield);
+  background: rgba(5, 12, 20, 0.74);
+}
+
+.network-card {
+  width: min(520px, calc(100% - 2rem));
+  border-radius: 14px;
+  border: 2px solid #5f83a2;
+  background: linear-gradient(170deg, rgba(11, 29, 45, 0.98), rgba(7, 19, 29, 0.96));
+  box-shadow: var(--shadow-md);
+  padding: 1.35rem;
+  text-align: center;
+}
+
+.network-card p {
+  margin: 0.5rem 0 0;
+}
+
+@keyframes player-focus-pulse {
+  0% {
+    transform: translateY(2px) scale(0.996);
+    filter: saturate(0.9);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    filter: saturate(1);
+  }
 }
 
 @media (max-width: 1120px) {

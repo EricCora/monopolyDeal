@@ -2,6 +2,9 @@ import type { Action, GameState, LegalAction } from '../engine';
 
 export type MultiplayerRoomStatus = 'lobby' | 'active' | 'finished';
 export type MultiplayerConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
+export type MultiplayerPushState = 'disabled' | 'unsupported' | 'connecting' | 'connected' | 'fallback';
+export type MultiplayerReaction = 'nice' | 'wow' | 'gg' | 'oops';
+export type MultiplayerActivityKind = 'lobby' | 'connection' | 'host' | 'ready' | 'reaction' | 'match' | 'checkpoint' | 'system';
 
 export interface MultiplayerPlayerSummary {
   id: string;
@@ -13,6 +16,16 @@ export interface MultiplayerPlayerSummary {
   lastSeenAt: number;
   reconnectDeadlineMs: number;
   isHost: boolean;
+  ready: boolean;
+}
+
+export interface MultiplayerActivityFeedItem {
+  id: number;
+  createdAt: number;
+  kind: MultiplayerActivityKind;
+  message: string;
+  playerId?: string;
+  reaction?: MultiplayerReaction;
 }
 
 export interface MultiplayerRoomView {
@@ -34,6 +47,8 @@ export interface MultiplayerRoomView {
   canStart: boolean;
   reconnectDeadlineMs: number;
   serverTime: number;
+  activityFeed: MultiplayerActivityFeedItem[];
+  lastEventId: number;
 }
 
 export interface MultiplayerCheckpointSummary {
@@ -64,4 +79,12 @@ export interface MultiplayerActionPayload {
   sessionToken: string;
   action: Action;
   expectedRevision?: number;
+}
+
+export interface MultiplayerRoomEventEnvelope {
+  roomCode: string;
+  revision: number;
+  reason: string;
+  serverTime: number;
+  eventId: number;
 }

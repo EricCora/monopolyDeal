@@ -16,14 +16,28 @@ import {
   resetMultiplayerRoomTurn,
   resumeMultiplayerRoom,
   saveMultiplayerCheckpoint,
+  sendMultiplayerReaction,
+  setMultiplayerReady,
   startMultiplayerRoom,
+  subscribeMultiplayerRoomEvents,
   undoMultiplayerRoomAction,
 } from '../network/multiplayerClient';
-import type { MultiplayerCheckpointSummary, MultiplayerConnectionState, MultiplayerRoomView, MultiplayerSession } from '../network/multiplayerTypes';
+import type {
+  MultiplayerCheckpointSummary,
+  MultiplayerConnectionState,
+  MultiplayerPushState,
+  MultiplayerReaction,
+  MultiplayerRoomView,
+  MultiplayerSession,
+} from '../network/multiplayerTypes';
+import type { GrowthMetricEvent } from '../stats';
 
 interface UseMultiplayerRoomOptions {
   enabled: boolean;
   pollIntervalMs?: number;
+  pushEnabled?: boolean;
+  reactionsEnabled?: boolean;
+  onMetricEvent?: (event: GrowthMetricEvent) => void;
 }
 
 const SESSION_KEY = 'monopolyDeal.multiplayerSession.v1';
@@ -78,7 +92,13 @@ function isLocalApiBase(apiBase: string): boolean {
   }
 }
 
-export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMultiplayerRoomOptions) {
+export function useMultiplayerRoom({
+  enabled,
+  pollIntervalMs = 2_000,
+  pushEnabled = true,
+  reactionsEnabled = true,
+  onMetricEvent,
+}: UseMultiplayerRoomOptions) {
   const [apiBase] = useState(() => getMultiplayerApiBase());
   const [isLocalDevApi] = useState(() => isLocalApiBase(apiBase));
   const [playerName, setPlayerName] = useState('Player');
@@ -86,25 +106,52 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
   const [session, setSession] = useState<MultiplayerSession | null>(null);
   const [roomView, setRoomView] = useState<MultiplayerRoomView | null>(null);
   const [connectionState, setConnectionState] = useState<MultiplayerConnectionState>('idle');
+  const [pushState, setPushState] = useState<MultiplayerPushState>(pushEnabled ? 'connecting' : 'disabled');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   const reconnectAttemptRef = useRef(0);
   const autoReconnectAttemptedRef = useRef(false);
   const [checkpointLoading, setCheckpointLoading] = useState(false);
+  const [hostChangeNotice, setHostChangeNotice] = useState<string | null>(null);
+  const lastHostPlayerIdRef = useRef<string | null>(null);
+  const lastEventIdRef = useRef(0);
+  const pushRefreshInFlightRef = useRef(false);
+  const pushRefreshQueuedRef = useRef(false);
+  const pushFallbackMetricSentRef = useRef(false);
 
   const expectedRevision = roomView?.revision;
 
   const clearSession = useCallback(() => {
     setSession(null);
     setRoomView(null);
+    setHostChangeNotice(null);
+    lastHostPlayerIdRef.current = null;
+    lastEventIdRef.current = 0;
     saveStoredSession(null);
   }, []);
 
   const refreshRoom = useCallback(async (activeSession?: MultiplayerSession | null): Promise<MultiplayerRoomView | null> => {
     const current = activeSession ?? session;
     if (!current) return null;
-    const next = await loadMultiplayerRoomState(current, apiBase);
+    const loaded = await loadMultiplayerRoomState(current, apiBase);
+    const next: MultiplayerRoomView = {
+      ...loaded,
+      players: loaded.players.map((player) => ({
+        ...player,
+        ready: Boolean(player.ready),
+      })),
+      activityFeed: Array.isArray(loaded.activityFeed) ? loaded.activityFeed : [],
+      lastEventId: Number.isFinite(loaded.lastEventId) ? loaded.lastEventId : loaded.revision,
+    };
+
+    if (lastHostPlayerIdRef.current && lastHostPlayerIdRef.current !== next.hostPlayerId) {
+      const hostName = next.players.find((player) => player.id === next.hostPlayerId)?.name ?? next.hostPlayerId;
+      setHostChangeNotice(`${hostName} is now host.`);
+    }
+    lastHostPlayerIdRef.current = next.hostPlayerId;
+    lastEventIdRef.current = Math.max(lastEventIdRef.current, next.lastEventId ?? next.revision);
+
     setRoomView(next);
     setConnectionState('connected');
     setError(null);
@@ -116,6 +163,25 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
     saveStoredSession(nextSession);
     return next;
   }, [apiBase, session]);
+
+  const refreshFromPush = useCallback(() => {
+    if (pushRefreshInFlightRef.current) {
+      pushRefreshQueuedRef.current = true;
+      return;
+    }
+    pushRefreshInFlightRef.current = true;
+    refreshRoom()
+      .catch(() => {
+        setConnectionState('reconnecting');
+      })
+      .finally(() => {
+        pushRefreshInFlightRef.current = false;
+        if (pushRefreshQueuedRef.current) {
+          pushRefreshQueuedRef.current = false;
+          refreshFromPush();
+        }
+      });
+  }, [refreshRoom]);
 
   const reconnectSession = useCallback(async (activeSession?: MultiplayerSession | null): Promise<boolean> => {
     const current = activeSession ?? session;
@@ -134,13 +200,15 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
       saveStoredSession(nextSession);
       await refreshRoom(nextSession);
       setConnectionState('connected');
+      onMetricEvent?.('multiplayer_reconnect_success');
       return true;
     } catch (reconnectError) {
       const code = reconnectError instanceof Error ? reconnectError.message : 'request_failed';
       setError(multiplayerErrorMessage(code));
+      onMetricEvent?.('multiplayer_reconnect_failed');
       return false;
     }
-  }, [apiBase, expectedRevision, refreshRoom, session]);
+  }, [apiBase, expectedRevision, onMetricEvent, refreshRoom, session]);
 
   const hostRoom = useCallback(async (): Promise<boolean> => {
     setLoading(true);
@@ -162,6 +230,8 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
       setSession(nextSession);
       saveStoredSession(nextSession);
       await refreshRoom(nextSession);
+      onMetricEvent?.('multiplayer_host_started');
+      onMetricEvent?.('lan_room_hosted');
       return true;
     } catch (hostError) {
       const code = hostError instanceof Error ? hostError.message : 'request_failed';
@@ -171,7 +241,7 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
     } finally {
       setLoading(false);
     }
-  }, [apiBase, playerName, refreshRoom]);
+  }, [apiBase, onMetricEvent, playerName, refreshRoom]);
 
   const joinRoom = useCallback(async (): Promise<boolean> => {
     setLoading(true);
@@ -194,16 +264,19 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
       setSession(nextSession);
       saveStoredSession(nextSession);
       await refreshRoom(nextSession);
+      onMetricEvent?.('multiplayer_join_success');
+      onMetricEvent?.('lan_room_joined');
       return true;
     } catch (joinError) {
       const code = joinError instanceof Error ? joinError.message : 'request_failed';
       setError(multiplayerErrorMessage(code));
       setConnectionState('disconnected');
+      onMetricEvent?.('multiplayer_join_failed');
       return false;
     } finally {
       setLoading(false);
     }
-  }, [apiBase, joinCode, playerName, refreshRoom]);
+  }, [apiBase, joinCode, onMetricEvent, playerName, refreshRoom]);
 
   const leaveRoomInternal = useCallback(async (forgetSession: boolean) => {
     const current = session;
@@ -271,6 +344,35 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
       setLoading(false);
     }
   }, [apiBase, expectedRevision, refreshRoom, roomView, session]);
+
+  const setReady = useCallback(async (ready: boolean) => {
+    const current = session;
+    if (!current) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await setMultiplayerReady(current, ready, apiBase, expectedRevision);
+      await refreshRoom(current);
+    } catch (readyError) {
+      const code = readyError instanceof Error ? readyError.message : 'request_failed';
+      setError(multiplayerErrorMessage(code));
+    } finally {
+      setLoading(false);
+    }
+  }, [apiBase, expectedRevision, refreshRoom, session]);
+
+  const sendReaction = useCallback(async (reaction: MultiplayerReaction) => {
+    const current = session;
+    if (!current || !reactionsEnabled) return;
+    setError(null);
+    try {
+      await sendMultiplayerReaction(current, reaction, apiBase, expectedRevision);
+      await refreshRoom(current);
+    } catch (reactionError) {
+      const code = reactionError instanceof Error ? reactionError.message : 'request_failed';
+      setError(multiplayerErrorMessage(code));
+    }
+  }, [apiBase, expectedRevision, reactionsEnabled, refreshRoom, session]);
 
   const pauseMatch = useCallback(async () => {
     const current = session;
@@ -461,7 +563,67 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
   }, [enabled, reconnectSession]);
 
   useEffect(() => {
+    if (!enabled || !session || !pushEnabled) {
+      setPushState(pushEnabled ? 'connecting' : 'disabled');
+      return;
+    }
+
+    pushFallbackMetricSentRef.current = false;
+    setPushState('connecting');
+    let cancelled = false;
+    let subscription: { close: () => void } | null = null;
+
+    try {
+      subscription = subscribeMultiplayerRoomEvents(
+        session,
+        {
+          onOpen: () => {
+            if (cancelled) return;
+            setPushState('connected');
+            onMetricEvent?.('multiplayer_push_connected');
+          },
+          onEvent: (event) => {
+            if (cancelled) return;
+            if (event.eventId <= lastEventIdRef.current) return;
+            lastEventIdRef.current = event.eventId;
+            refreshFromPush();
+          },
+          onDisconnect: () => {
+            if (cancelled) return;
+            setPushState('fallback');
+            onMetricEvent?.('multiplayer_push_disconnected');
+            if (!pushFallbackMetricSentRef.current) {
+              onMetricEvent?.('multiplayer_push_fallback');
+              pushFallbackMetricSentRef.current = true;
+            }
+          },
+        },
+        apiBase,
+        lastEventIdRef.current,
+      );
+    } catch (pushError) {
+      if (cancelled) return;
+      const code = pushError instanceof Error ? pushError.message : 'push_not_supported';
+      if (code === 'push_not_supported') {
+        setPushState('unsupported');
+      } else {
+        setPushState('fallback');
+      }
+      if (!pushFallbackMetricSentRef.current) {
+        onMetricEvent?.('multiplayer_push_fallback');
+        pushFallbackMetricSentRef.current = true;
+      }
+    }
+
+    return () => {
+      cancelled = true;
+      subscription?.close();
+    };
+  }, [apiBase, enabled, onMetricEvent, pushEnabled, refreshFromPush, session]);
+
+  useEffect(() => {
     if (!enabled || !session) return;
+    const effectivePollIntervalMs = pushState === 'connected' ? Math.max(pollIntervalMs, 8_000) : pollIntervalMs;
     const timer = window.setInterval(() => {
       refreshRoom().catch(async () => {
         setConnectionState('reconnecting');
@@ -475,9 +637,9 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
         }
         reconnectAttemptRef.current = 0;
       });
-    }, pollIntervalMs);
+    }, effectivePollIntervalMs);
     return () => window.clearInterval(timer);
-  }, [enabled, pollIntervalMs, reconnectSession, refreshRoom, session]);
+  }, [enabled, pollIntervalMs, pushState, reconnectSession, refreshRoom, session]);
 
   useEffect(() => {
     if (!enabled || !session) return;
@@ -508,11 +670,17 @@ export function useMultiplayerRoom({ enabled, pollIntervalMs = 2_000 }: UseMulti
     checkpointLoading,
     error,
     connectionState,
+    pushState,
+    reactionsEnabled,
+    hostChangeNotice,
+    clearHostChangeNotice: () => setHostChangeNotice(null),
     isHost,
     hostRoom,
     joinRoom,
     startMatch,
     runAction,
+    setReady,
+    sendReaction,
     pauseMatch,
     resumeMatch,
     undoLastAction,

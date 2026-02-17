@@ -14,6 +14,7 @@ import { PlayChooser, type ActionVariantView } from '../components/PlayChooser';
 import { RecentEvents } from '../components/RecentEvents';
 import { ActionRail } from '../layout/ActionRail';
 import { TopBar } from '../layout/TopBar';
+import type { MultiplayerActivityFeedItem, MultiplayerConnectionState, MultiplayerReaction } from '../../network/multiplayerTypes';
 
 interface CardActionVariant extends ActionVariantView {
   action: Action;
@@ -35,9 +36,15 @@ interface GameTableScreenProps {
   isPaused: boolean;
   pauseReasonText?: string;
   connectionStatusLabel?: string;
+  multiplayerConnectionState?: MultiplayerConnectionState;
   playerConnectionById?: Record<string, { connected: boolean; lastSeenAt: number; reconnectDeadlineMs: number }>;
   isMultiplayerHost?: boolean;
   checkpointSlots?: { id: string; name: string; savedAt: number }[];
+  activityFeed?: MultiplayerActivityFeedItem[];
+  hostChangeNotice?: string | null;
+  onDismissHostChangeNotice?: () => void;
+  reactionsEnabled?: boolean;
+  onSendReaction?: (reaction: MultiplayerReaction) => void;
   checkpointLoading?: boolean;
   legalActions: LegalAction[];
   contextualActions: LegalAction[];
@@ -111,6 +118,13 @@ function renderHiddenHand(cardCount: number) {
   );
 }
 
+const REACTIONS: Array<{ id: MultiplayerReaction; label: string }> = [
+  { id: 'nice', label: 'Nice' },
+  { id: 'wow', label: 'Wow' },
+  { id: 'gg', label: 'GG' },
+  { id: 'oops', label: 'Oops' },
+];
+
 export function GameTableScreen({
   mode = 'local',
   game,
@@ -118,9 +132,15 @@ export function GameTableScreen({
   isPaused,
   pauseReasonText,
   connectionStatusLabel,
+  multiplayerConnectionState,
   playerConnectionById = {},
   isMultiplayerHost = false,
   checkpointSlots = [],
+  activityFeed = [],
+  hostChangeNotice = null,
+  onDismissHostChangeNotice,
+  reactionsEnabled = false,
+  onSendReaction,
   checkpointLoading = false,
   legalActions,
   contextualActions,
@@ -251,6 +271,17 @@ export function GameTableScreen({
         )}
       />
 
+      {isMultiplayer && hostChangeNotice ? (
+        <section className="multiplayer-host-notice" aria-label="Host change notice">
+          <p>{hostChangeNotice}</p>
+          {onDismissHostChangeNotice ? (
+            <button type="button" onClick={onDismissHostChangeNotice}>
+              Dismiss
+            </button>
+          ) : null}
+        </section>
+      ) : null}
+
       <div className="game-table-grid">
         <ActionRail
           isMandatoryPrompt={isMandatoryPrompt}
@@ -276,6 +307,27 @@ export function GameTableScreen({
               <p className="inline-prompt-text">{coachHint.summary}</p>
               {coachHint.alternatives.length > 0 ? (
                 <p className="inline-prompt-text">Alternatives: {coachHint.alternatives.join(' | ')}</p>
+              ) : null}
+            </section>
+          ) : null}
+
+          {isMultiplayer && (reactionsEnabled || activityFeed.length > 0) ? (
+            <section className="panel multiplayer-social-panel" aria-label="Multiplayer social">
+              {reactionsEnabled && onSendReaction ? (
+                <div className="actions multiplayer-reaction-actions">
+                  {REACTIONS.map((reaction) => (
+                    <button key={`reaction-${reaction.id}`} type="button" onClick={() => onSendReaction(reaction.id)} disabled={isPaused}>
+                      {reaction.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {activityFeed.length > 0 ? (
+                <ul className="multiplayer-activity-feed">
+                  {activityFeed.slice(0, 6).map((entry) => (
+                    <li key={entry.id}>{entry.message}</li>
+                  ))}
+                </ul>
               ) : null}
             </section>
           ) : null}
@@ -496,6 +548,36 @@ export function GameTableScreen({
               Next action: <strong>{game.players.find((player) => player.id === prompt.playerId)?.name ?? prompt.playerId}</strong>
             </p>
             <button onClick={onRevealTurn}>Reveal Turn</button>
+          </div>
+        </div>
+      ) : null}
+
+      {isMultiplayer && !over.done && (multiplayerConnectionState === 'reconnecting' || multiplayerConnectionState === 'disconnected') ? (
+        <div className="network-overlay" role="dialog" aria-modal="true" aria-label="Multiplayer connection status">
+          <div className="network-card card-enter">
+            <h3>{multiplayerConnectionState === 'reconnecting' ? 'Reconnecting...' : 'Connection Lost'}</h3>
+            <p>
+              {multiplayerConnectionState === 'reconnecting'
+                ? 'Trying to restore your room session. You can wait here while reconnect attempts continue.'
+                : 'Unable to reconnect automatically. Refresh room state or exit the match.'}
+            </p>
+            <div className="winner-actions">
+              {onRefreshMultiplayer ? (
+                <button type="button" onClick={onRefreshMultiplayer}>
+                  Refresh
+                </button>
+              ) : null}
+              {onExitMultiplayer ? (
+                <button type="button" onClick={onExitMultiplayer}>
+                  Exit Match
+                </button>
+              ) : null}
+              {onForgetMultiplayer ? (
+                <button type="button" onClick={onForgetMultiplayer}>
+                  Forget Room
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}

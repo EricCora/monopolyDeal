@@ -4,6 +4,13 @@ Branch: `codex/deep-research-improvements`
 
 ## What Landed
 
+- Flagship multiplayer follow-through:
+- Invite-link onboarding with canonical deep-link route (`/join/:roomCode`) and lobby `Copy Invite Link`.
+- Hybrid push transport: server event stream endpoint + client push subscription with polling fallback.
+- Social lobby/game upgrades: per-player ready state, quick preset reactions, and bounded activity feed.
+- Reliability UX upgrades: reconnect/disconnect in-match overlay and host-change visibility notices.
+- Reversible release controls: client/server feature flags for push and reactions.
+- Multiplayer funnel + push health telemetry counters added to growth metrics.
 - Experimental feature flags for AI opponents, AI coach, replay timeline, daily challenges, achievements, custom rules, enhanced event log, and contextual previews.
 - AI gameplay stack:
 - Heuristic bot decisions
@@ -79,6 +86,20 @@ Branch: `codex/deep-research-improvements`
 - Uses `VITE_MULTIPLAYER_API_URL` with localhost-aware fallback (`http://localhost:8787` in local dev, same-origin fallback otherwise).
 - Multiplayer unreachable messaging now includes actionable local guidance for starting the backend service.
 - Added pause/resume/undo/reset-turn/checkpoint endpoint helpers and revision-aware mutation payloads.
+- Added `/ready` and `/reaction` endpoint helpers plus `subscribeMultiplayerRoomEvents` for push updates.
+- Added runtime feature-flag resolver (`VITE_MULTIPLAYER_PUSH_ENABLED`, `VITE_MULTIPLAYER_REACTIONS_ENABLED`).
+- `packages/shared/multiplayer.ts` + `src/network/multiplayerTypes.ts`:
+- `MultiplayerPlayerSummary` now includes `ready`.
+- `MultiplayerRoomView` now includes `activityFeed` and `lastEventId`.
+- Added reaction and push envelope shared types.
+- `apps/server/src/index.ts`:
+- Added event stream endpoint `GET /api/multiplayer/rooms/:roomCode/events`.
+- Added ready endpoint `POST /api/multiplayer/rooms/:roomCode/ready`.
+- Added reaction endpoint `POST /api/multiplayer/rooms/:roomCode/reaction`.
+- Added server flags: `MULTIPLAYER_PUSH_ENABLED`, `MULTIPLAYER_REACTIONS_ENABLED`.
+- `apps/server/src/gameService.ts`:
+- Room participants now track `ready` and reaction cooldown timestamps.
+- Room state now stores bounded activity feed entries for lobby/match status context.
 - `src/stats/dashboard.ts`:
 - `buildStatsDashboardModel` now accepts optional growth metrics input and returns `growthKpis` plus `growthEvents` series.
 
@@ -105,3 +126,6 @@ Branch: `codex/deep-research-improvements`
 4. Use custom rules and validate prompts/limits match configured values.
 5. Open Multiplayer screen and validate host/join/start/refresh/leave workflow without manual server URL entry.
 6. Open Stats & History and verify new growth telemetry cards/chart update after gameplay actions.
+7. Host a room and verify `Copy Invite Link` shares `/join/<ROOM_CODE>` URL that pre-fills join form on open.
+8. Confirm lobby ready toggles and quick reactions appear in room activity feed for all connected players.
+9. Simulate push disconnect (or unsupported browser) and verify polling fallback keeps room state usable.

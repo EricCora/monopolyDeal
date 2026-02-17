@@ -135,6 +135,7 @@ vi.mock('../ui/share/postGameShare', () => ({
 
 describe('App', () => {
   beforeEach(() => {
+    window.history.replaceState({}, '', '/');
     localStorage.clear();
     mockedApplyAction.mockClear();
     mockedCreateGame.mockReset();
@@ -181,6 +182,7 @@ describe('App', () => {
       writable: true,
       value: {
         write: vi.fn().mockResolvedValue(undefined),
+        writeText: vi.fn().mockResolvedValue(undefined),
       },
     });
     Object.defineProperty(window, 'confirm', {
@@ -831,6 +833,17 @@ describe('App', () => {
           lan_room_hosted: 1,
           lan_room_joined: 1,
           coach_hint_viewed: 1,
+          multiplayer_host_started: 0,
+          multiplayer_join_success: 0,
+          multiplayer_join_failed: 0,
+          multiplayer_invite_copied: 0,
+          multiplayer_deep_link_opened: 0,
+          multiplayer_reconnect_success: 0,
+          multiplayer_reconnect_failed: 0,
+          multiplayer_match_completed: 0,
+          multiplayer_push_connected: 0,
+          multiplayer_push_disconnected: 0,
+          multiplayer_push_fallback: 0,
         },
       }),
     );
@@ -942,6 +955,25 @@ describe('App', () => {
     fetchSpy.mockRestore();
   });
 
+  it('routes deep-link join URLs to multiplayer and prefills join code', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    window.history.pushState({}, '', '/join/abcde');
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: /multiplayer/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/join code/i)).toHaveValue('ABCDE');
+    const metrics = JSON.parse(localStorage.getItem(GROWTH_METRICS_KEY) ?? '{}') as { events?: Record<string, number> };
+    expect(metrics.events?.multiplayer_deep_link_opened).toBe(1);
+
+    fetchSpy.mockRestore();
+  });
+
   it('shows local troubleshooting guidance when multiplayer health check fails', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network_unavailable'));
 
@@ -950,6 +982,67 @@ describe('App', () => {
 
     expect(await screen.findByText(/multiplayer server not reachable at/i)).toBeInTheDocument();
     expect(screen.getByText(/run npm run dev:lan:all/i)).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
+  });
+
+  it('copies invite links from hosted multiplayer lobby', async () => {
+    const now = Date.now();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/api/multiplayer/health')) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.endsWith('/api/multiplayer/rooms') && (!init?.method || init.method === 'POST')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            playerId: 'p1',
+            sessionToken: 'token',
+            reconnectDeadlineMs: now + 30_000,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/multiplayer/rooms/ABCDE/state')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            status: 'lobby',
+            started: false,
+            hostPlayerId: 'p1',
+            yourPlayerId: 'p1',
+            players: [
+              { id: 'p1', name: 'Host', handCount: 0, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: true, ready: false },
+              { id: 'p2', name: 'Guest', handCount: 0, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: false, ready: false },
+            ],
+            legalActions: [],
+            paused: false,
+            revision: 2,
+            turnSnapshotCount: 0,
+            checkpointSlots: [],
+            canStart: true,
+            reconnectDeadlineMs: now + 30_000,
+            serverTime: now,
+            activityFeed: [],
+            lastEventId: 2,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+    fireEvent.change(await screen.findByLabelText(/your name/i), { target: { value: 'Host' } });
+    fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
+    const copyInviteButton = await screen.findByRole('button', { name: /copy invite link/i });
+    fireEvent.click(copyInviteButton);
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringMatching(/\/join\/ABCDE$/));
+    const metrics = JSON.parse(localStorage.getItem(GROWTH_METRICS_KEY) ?? '{}') as { events?: Record<string, number> };
+    expect(metrics.events?.multiplayer_invite_copied).toBe(1);
 
     fetchSpy.mockRestore();
   });

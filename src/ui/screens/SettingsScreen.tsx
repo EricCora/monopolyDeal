@@ -220,6 +220,24 @@ export function SettingsScreen({
             onChange={(event) => onToggleExperimentalFlag('contextualActionPreviews', event.target.checked)}
           />
         </label>
+
+        <label className="settings-field settings-toggle">
+          <span>Multiplayer Live Push Updates</span>
+          <input
+            type="checkbox"
+            checked={uiPreferences.experimental.multiplayerPushEnabled}
+            onChange={(event) => onToggleExperimentalFlag('multiplayerPushEnabled', event.target.checked)}
+          />
+        </label>
+
+        <label className="settings-field settings-toggle">
+          <span>Multiplayer Reactions</span>
+          <input
+            type="checkbox"
+            checked={uiPreferences.experimental.multiplayerReactionsEnabled}
+            onChange={(event) => onToggleExperimentalFlag('multiplayerReactionsEnabled', event.target.checked)}
+          />
+        </label>
       </section>
 
       <section className="settings-section" aria-label="Data controls">

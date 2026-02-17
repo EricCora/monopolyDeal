@@ -79,6 +79,17 @@ describe('stats dashboard helpers', () => {
         lan_room_hosted: 1,
         lan_room_joined: 2,
         coach_hint_viewed: 5,
+        multiplayer_host_started: 1,
+        multiplayer_join_success: 2,
+        multiplayer_join_failed: 1,
+        multiplayer_invite_copied: 3,
+        multiplayer_deep_link_opened: 2,
+        multiplayer_reconnect_success: 2,
+        multiplayer_reconnect_failed: 1,
+        multiplayer_match_completed: 1,
+        multiplayer_push_connected: 3,
+        multiplayer_push_disconnected: 1,
+        multiplayer_push_fallback: 1,
       },
     };
     const model = buildStatsDashboardModel(fixture.history, fixture.lifetime, undefined, metrics);

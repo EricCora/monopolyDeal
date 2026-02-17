@@ -22,3 +22,33 @@
   padding: 0.65rem;
   margin: 0;
 }
+
+.multiplayer-screen {
+  background:
+    radial-gradient(circle at 10% 12%, rgba(64, 157, 230, 0.22), transparent 34%),
+    radial-gradient(circle at 84% 78%, rgba(86, 194, 143, 0.18), transparent 36%),
+    linear-gradient(165deg, rgba(8, 21, 33, 0.96), rgba(5, 16, 26, 0.95));
+}
+
+.multiplayer-primary-actions {
+  margin-bottom: 0.5rem;
+}
+
+.multiplayer-primary-actions .cta-primary {
+  background: linear-gradient(160deg, rgba(77, 178, 233, 0.9), rgba(46, 133, 190, 0.9));
+  color: #04111d;
+  font-weight: 700;
+}
+
+.multiplayer-activity-feed {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.25rem;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.multiplayer-activity-feed li {
+  color: #d9ebfa;
+}

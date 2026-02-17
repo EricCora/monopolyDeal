@@ -1,5 +1,12 @@
 import type { Action } from '../engine';
-import type { MultiplayerCheckpointSummary, MultiplayerRoomSessionResponse, MultiplayerRoomView, MultiplayerSession } from './multiplayerTypes';
+import type {
+  MultiplayerCheckpointSummary,
+  MultiplayerReaction,
+  MultiplayerRoomEventEnvelope,
+  MultiplayerRoomSessionResponse,
+  MultiplayerRoomView,
+  MultiplayerSession,
+} from './multiplayerTypes';
 
 function normalizeApiBase(input: string): string {
   return input.endsWith('/') ? input.slice(0, -1) : input;
@@ -15,6 +22,13 @@ export interface ResolveMultiplayerApiBaseOptions {
   origin?: string | null;
 }
 
+export interface MultiplayerFeatureFlags {
+  multiplayerPushEnabled: boolean;
+  multiplayerReactionsEnabled: boolean;
+}
+
+export const MULTIPLAYER_REACTION_OPTIONS: MultiplayerReaction[] = ['nice', 'wow', 'gg', 'oops'];
+
 export function resolveMultiplayerApiBase({ envUrl, hostname, origin }: ResolveMultiplayerApiBaseOptions): string {
   if (typeof envUrl === 'string' && envUrl.trim().length > 0) {
     return normalizeApiBase(envUrl.trim());
@@ -26,6 +40,13 @@ export function resolveMultiplayerApiBase({ envUrl, hostname, origin }: ResolveM
     return normalizeApiBase(origin.trim());
   }
   return 'http://localhost:8787';
+}
+
+export function resolveMultiplayerFeatureFlags(): MultiplayerFeatureFlags {
+  return {
+    multiplayerPushEnabled: import.meta.env.VITE_MULTIPLAYER_PUSH_ENABLED !== 'false',
+    multiplayerReactionsEnabled: import.meta.env.VITE_MULTIPLAYER_REACTIONS_ENABLED !== 'false',
+  };
 }
 
 export function getMultiplayerApiBase(): string {
@@ -50,6 +71,9 @@ export function multiplayerErrorMessage(code: string): string {
   if (code === 'checkpoint_slots_full') return 'Checkpoint slots are full. Delete one and try again.';
   if (code === 'checkpoint_not_found') return 'Checkpoint not found. Refresh the room and try again.';
   if (code === 'checkpoint_player_mismatch') return 'Checkpoint players do not match the current lobby lineup.';
+  if (code === 'reaction_rate_limited') return 'Reaction sent too quickly. Please wait a moment.';
+  if (code === 'reactions_disabled') return 'Reactions are disabled for this room.';
+  if (code === 'push_disabled') return 'Live room updates are disabled for this server.';
   if (code === 'network_unavailable' || code === 'request_failed') return 'Couldn\'t connect right now. Retrying...';
   return 'Could not complete multiplayer request. Please try again.';
 }
@@ -323,4 +347,111 @@ export async function deleteMultiplayerCheckpoint(
       expectedRevision,
     }),
   });
+}
+
+export async function setMultiplayerReady(
+  session: MultiplayerSession,
+  ready: boolean,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<void> {
+  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/ready`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      playerId: session.playerId,
+      sessionToken: session.sessionToken,
+      ready,
+      expectedRevision,
+    }),
+  });
+}
+
+export async function sendMultiplayerReaction(
+  session: MultiplayerSession,
+  reaction: MultiplayerReaction,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<void> {
+  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reaction`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      playerId: session.playerId,
+      sessionToken: session.sessionToken,
+      reaction,
+      expectedRevision,
+    }),
+  });
+}
+
+export interface MultiplayerRoomEventSubscription {
+  close: () => void;
+}
+
+export interface MultiplayerRoomEventHandlers {
+  onOpen?: () => void;
+  onEvent: (event: MultiplayerRoomEventEnvelope) => void;
+  onDisconnect?: () => void;
+}
+
+export function subscribeMultiplayerRoomEvents(
+  session: MultiplayerSession,
+  handlers: MultiplayerRoomEventHandlers,
+  apiBase = getMultiplayerApiBase(),
+  lastEventId?: number,
+): MultiplayerRoomEventSubscription {
+  if (typeof window === 'undefined' || typeof window.EventSource !== 'function') {
+    throw new Error('push_not_supported');
+  }
+  const params = new URLSearchParams({
+    playerId: session.playerId,
+    sessionToken: session.sessionToken,
+  });
+  if (typeof lastEventId === 'number' && Number.isFinite(lastEventId) && lastEventId > 0) {
+    params.set('lastEventId', String(lastEventId));
+  }
+
+  const source = new window.EventSource(
+    `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/events?${params.toString()}`,
+  );
+  let closed = false;
+
+  const handleEvent = (payload: string) => {
+    try {
+      const parsed = JSON.parse(payload) as MultiplayerRoomEventEnvelope;
+      if (!parsed || typeof parsed !== 'object') return;
+      if (typeof parsed.eventId !== 'number' || typeof parsed.revision !== 'number') return;
+      handlers.onEvent(parsed);
+    } catch {
+      // ignore malformed event payloads
+    }
+  };
+
+  source.addEventListener('open', () => {
+    handlers.onOpen?.();
+  });
+  source.addEventListener('room_update', (event) => {
+    const message = event as MessageEvent;
+    if (typeof message.data === 'string') {
+      handleEvent(message.data);
+    }
+  });
+  source.onmessage = (event) => {
+    if (typeof event.data === 'string') {
+      handleEvent(event.data);
+    }
+  };
+  source.onerror = () => {
+    if (closed) return;
+    handlers.onDisconnect?.();
+    source.close();
+  };
+
+  return {
+    close: () => {
+      closed = true;
+      source.close();
+    },
+  };
 }

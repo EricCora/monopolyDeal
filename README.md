@@ -25,13 +25,17 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Payment assistant auto-select for pending payment flows
 - In-game rules reference drawer with property set/rent lookup and pending-flow help
 - Stats filters (player/winner/date range) and settings data controls for clearing local stats/history
-- Growth telemetry counters (starts/completions/rematches/share conversion/LAN activity/coach usage) surfaced in Stats & History
+- Growth telemetry counters (starts/completions/rematches/share conversion/LAN activity/coach usage + multiplayer funnel/push health) surfaced in Stats & History
 - Manual saved-game slots (up to 5) with load/save-over/rename/delete controls
 - One-click multiplayer room flow (host/join/reconnect) with no manual server URL entry
+- Invite-link multiplayer onboarding (`/join/:roomCode` deep links with auto-filled join code)
 - Full multiplayer in-match table view (same board/event/action surfaces as local play)
 - Multiplayer winner overlay with clear winner callout at match end
 - Host-controlled multiplayer pause/resume and checkpoint save/load/delete controls
 - Lobby host can start a match directly from an available checkpoint when lineup is compatible
+- Lobby ready-check state and quick preset reactions
+- Multiplayer activity feed (joins/reconnects/host changes/ready/reactions/checkpoints)
+- Hybrid live updates: server push notifications with polling fallback
 - Multiplayer `Exit Match` (keeps reconnect session) and `Forget Room` (permanent disconnect) actions
 - Multiplayer undo/reset-turn controls for the active player with server-authoritative snapshots
 - In-match per-player connection pills and richer lobby disconnect timing labels
@@ -95,6 +99,7 @@ Use the `Settings` screen from Home (or the in-game top bar) to control:
 - Dev Mode toggle and sample data reseed tools
 - Local data controls (clear match history + lifetime stats + growth telemetry)
 - Experimental features toggle section (AI/replay/challenges/achievements/custom rules)
+  - Includes multiplayer rollback toggles for live push updates and reactions
 
 ## Saved Games
 
@@ -153,6 +158,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 
 - Local pass-and-play
 - Private-room multiplayer (hosted API path)
+- Private invite-link multiplayer (`/join/:roomCode`)
 - Legacy LAN scaffold is retained in the repo for development fallback but is not the primary user flow
 
 ### Multiplayer Match Controls
@@ -161,14 +167,24 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Rules Reference drawer is available from active multiplayer matches.
 - Host controls: `Pause/Resume`, `Save Checkpoint`, `Load Checkpoint`, `Delete Checkpoint`.
 - Lobby host controls include `Start Match` and `Start From Checkpoint` (when checkpoint data exists).
+- Lobby includes `Copy Room Code` and `Copy Invite Link` actions.
+- Lobby includes player-ready status and quick reaction controls.
 - Player session controls: `Exit Match` (retain reconnect) and `Forget Room` (clear session).
 - Active-turn controls: `Undo Last Play`, `Reset Turn Plays` (when snapshot history exists).
 - Multiplayer state mutations are revision-guarded to prevent stale updates.
+- Multiplayer activity feed and host-change notices are surfaced in lobby/in-match UI.
 
 ## Multiplayer Deployment Notes
 
 Set `VITE_MULTIPLAYER_API_URL` to your deployed multiplayer API origin.
 See `.env.example` for the expected variable.
+
+Optional multiplayer behavior flags:
+
+- `VITE_MULTIPLAYER_PUSH_ENABLED` (`true` by default) to enable client push subscriptions.
+- `VITE_MULTIPLAYER_REACTIONS_ENABLED` (`true` by default) to enable quick reactions.
+- `MULTIPLAYER_PUSH_ENABLED` (`true` by default) to enable server event stream endpoint.
+- `MULTIPLAYER_REACTIONS_ENABLED` (`true` by default) to enable server reaction endpoint.
 
 For local multiplayer development, the backend service is required.
 Use the one-command startup:

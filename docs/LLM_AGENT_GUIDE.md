@@ -4,8 +4,9 @@ Purpose: give coding agents enough context to make correct, low-regression chang
 
 ## Current Handoff Focus
 
-- Next multiplayer simplification implementation spec:
-  - `docs/NEXT_CODEX_MULTIPLAYER.md`
+- Flagship multiplayer roadmap and tradeoff ledger:
+  - `docs/ROADMAP_MULTIPLAYER_FLAGSHIP.md`
+  - `docs/MULTIPLAYER_CONCESSIONS_LOG.md`
 
 ## Architecture Snapshot
 
@@ -24,15 +25,19 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Heuristic and rollout decision helpers plus explainable coach hint generation.
 - `src/network/`
   - Hosted multiplayer client API wrappers (`src/network/multiplayerClient.ts`) for room create/join/reconnect/start/state/action/leave plus pause/resume/undo/reset-turn/checkpoint flows.
+  - Adds lobby-ready (`/ready`) and quick-reaction (`/reaction`) helpers.
+  - Adds live room event subscription (`/events`) with polling fallback behavior.
   - In local dev, Vite proxies `/api/multiplayer` to `http://localhost:8787` so LAN clients can use same-origin API calls from the UI host URL.
   - Legacy LAN wrappers remain for development fallback.
 - `apps/server/`
   - Multiplayer API server scaffold with room lifecycle, reconnect windows, host migration, revision-guarded mutations, turn snapshots, checkpoints, and best-effort snapshot persistence.
+  - Adds server push event stream endpoint (`GET /api/multiplayer/rooms/:roomCode/events`) for hybrid push updates.
+  - Room state now includes player-ready state and bounded activity feed entries.
   - Recommended two-device startup command: `npm run dev:lan:all` (LAN UI + multiplayer server).
 - `src/ui/` + `src/App.tsx`
   - `App.tsx` owns state/actions and passes typed props to screen containers.
   - `src/app/useFeedback.ts` encapsulates sound/haptic emission.
-  - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, polling/reconnect lifecycle, and host/player room controls (pause/undo/checkpoints) plus `Exit Match` (retain reconnect session) vs `Forget Room` (clear session).
+  - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, live-push subscription + polling fallback, reconnect lifecycle, and host/player controls (pause/undo/checkpoints/ready/reactions) plus `Exit Match` (retain reconnect session) vs `Forget Room` (clear session).
   - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition.
   - `src/ui/screens/SavedGamesScreen.tsx` manages manual save slots (load/save-over/rename/delete).
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
@@ -182,6 +187,8 @@ When card rendering, responsive layout, or modal/prompt orchestration changes:
 - Multiplayer legality matching must treat `pay_request.cards` as order-insensitive to avoid false `illegal_action` rejects for manual payment selection order.
 - Multiplayer rules drawer is available in both local and multiplayer game screens; when changing screen gate logic, preserve this parity.
 - Growth telemetry uses `monopolyDeal.growthMetrics.v1` and is surfaced in `StatsDashboard`.
+- Multiplayer growth telemetry now includes funnel + push health counters; keep additive compatibility for v1 payload readers.
+- Room push dedupe depends on `lastEventId`/`revision`; avoid duplicating refresh storms when touching event subscription logic.
 - Card rendering/fit is split between `src/ui/components/CardView.tsx`, `src/ui/components/HandFan.tsx`, and `src/ui/theme/components/cards.css`.
 - Draw-phase prompt intentionally uses rail hand layout for readability; non-draw prompts still use auto-fit.
 - Rent/double-rent/counter interactions are edge-case heavy.

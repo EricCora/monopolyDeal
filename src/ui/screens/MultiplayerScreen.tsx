@@ -1,4 +1,10 @@
-import type { MultiplayerConnectionState, MultiplayerRoomView, MultiplayerSession } from '../../network/multiplayerTypes';
+import type {
+  MultiplayerConnectionState,
+  MultiplayerPushState,
+  MultiplayerReaction,
+  MultiplayerRoomView,
+  MultiplayerSession,
+} from '../../network/multiplayerTypes';
 
 interface MultiplayerScreenProps {
   playerName: string;
@@ -11,17 +17,29 @@ interface MultiplayerScreenProps {
   isLocalDevApi: boolean;
   error: string | null;
   connectionState: MultiplayerConnectionState;
+  pushState: MultiplayerPushState;
   isHost: boolean;
+  reactionsEnabled: boolean;
   onPlayerNameChange: (value: string) => void;
   onJoinCodeChange: (value: string) => void;
   onHostRoom: () => void;
   onJoinRoom: () => void;
   onStartMatch: (checkpointId?: string) => void;
   onRunAction: (index: number) => void;
+  onSetReady: (ready: boolean) => void;
+  onSendReaction: (reaction: MultiplayerReaction) => void;
+  onCopyInviteLink: () => void;
   onRefresh: () => void;
   onLeaveRoom: () => void;
   onBack: () => void;
 }
+
+const REACTIONS: Array<{ id: MultiplayerReaction; label: string }> = [
+  { id: 'nice', label: 'Nice' },
+  { id: 'wow', label: 'Wow' },
+  { id: 'gg', label: 'GG' },
+  { id: 'oops', label: 'Oops' },
+];
 
 function connectionLabel(state: MultiplayerConnectionState): string {
   if (state === 'connected') return 'Connected';
@@ -29,6 +47,14 @@ function connectionLabel(state: MultiplayerConnectionState): string {
   if (state === 'reconnecting') return 'Reconnecting';
   if (state === 'disconnected') return 'Disconnected';
   return 'Idle';
+}
+
+function pushLabel(state: MultiplayerPushState): string {
+  if (state === 'connected') return 'Live updates active';
+  if (state === 'connecting') return 'Connecting live updates';
+  if (state === 'fallback') return 'Live updates unavailable, using polling';
+  if (state === 'unsupported') return 'Live updates unsupported on this browser';
+  return 'Live updates disabled';
 }
 
 function deadlineLabel(deadlineMs: number): string {
@@ -59,13 +85,18 @@ export function MultiplayerScreen({
   isLocalDevApi,
   error,
   connectionState,
+  pushState,
   isHost,
+  reactionsEnabled,
   onPlayerNameChange,
   onJoinCodeChange,
   onHostRoom,
   onJoinRoom,
   onStartMatch,
   onRunAction,
+  onSetReady,
+  onSendReaction,
+  onCopyInviteLink,
   onRefresh,
   onLeaveRoom,
   onBack,
@@ -74,6 +105,15 @@ export function MultiplayerScreen({
     if (!session) return;
     if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
     void navigator.clipboard.writeText(session.roomCode);
+  };
+
+  const copyInviteLink = () => {
+    if (!session) return;
+    if (typeof window === 'undefined') return;
+    const inviteLink = `${window.location.origin}/join/${session.roomCode}`;
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
+    void navigator.clipboard.writeText(inviteLink);
+    onCopyInviteLink();
   };
 
   const startFromCheckpoint = () => {
@@ -92,13 +132,17 @@ export function MultiplayerScreen({
     onStartMatch(roomView.checkpointSlots[index].id);
   };
 
+  const you = session && roomView
+    ? roomView.players.find((player) => player.id === session.playerId) ?? null
+    : null;
+
   return (
-    <section className="panel setup-screen card-enter">
+    <section className="panel setup-screen multiplayer-screen card-enter">
       <h2>Multiplayer</h2>
       <p className="setup-subtitle">
         {isLocalDevApi
           ? 'Local testing uses a local multiplayer service.'
-          : 'Create or join with a private room code.'}
+          : 'Create or join with a private room code or invite link.'}
       </p>
 
       {healthOk === false ? (
@@ -116,8 +160,8 @@ export function MultiplayerScreen({
             Your Name
             <input value={playerName} onChange={(event) => onPlayerNameChange(event.target.value)} />
           </label>
-          <div className="actions">
-            <button type="button" onClick={onHostRoom} disabled={loading}>
+          <div className="actions multiplayer-primary-actions">
+            <button type="button" className="cta-primary" onClick={onHostRoom} disabled={loading}>
               Host Multiplayer Game
             </button>
           </div>
@@ -130,7 +174,7 @@ export function MultiplayerScreen({
               placeholder="Enter room code"
             />
           </label>
-          <div className="actions">
+          <div className="actions multiplayer-primary-actions">
             <button type="button" onClick={onJoinRoom} disabled={loading || joinCode.trim().length < 4}>
               Join Multiplayer Game
             </button>
@@ -141,10 +185,14 @@ export function MultiplayerScreen({
           <section className="settings-section" aria-label="Room session">
             <h3>Room {session.roomCode}</h3>
             <p>Status: {connectionLabel(connectionState)}</p>
+            <p>{pushLabel(pushState)}</p>
             <p>Rejoin window: {deadlineLabel(session.reconnectDeadlineMs)}</p>
             <div className="actions">
               <button type="button" onClick={copyRoomCode} disabled={loading}>
                 Copy Room Code
+              </button>
+              <button type="button" onClick={copyInviteLink} disabled={loading}>
+                Copy Invite Link
               </button>
               <button type="button" onClick={onRefresh} disabled={loading}>
                 Refresh
@@ -175,11 +223,43 @@ export function MultiplayerScreen({
                     ? `Turn: ${roomView.promptPlayerId}`
                     : 'Waiting for players.'}
               </p>
+              {!roomView.started && you ? (
+                <div className="actions">
+                  <button type="button" onClick={() => onSetReady(!you.ready)} disabled={loading}>
+                    {you.ready ? 'Mark Not Ready' : 'Mark Ready'}
+                  </button>
+                </div>
+              ) : null}
+
+              {reactionsEnabled ? (
+                <div className="actions multiplayer-reaction-actions" aria-label="Quick reactions">
+                  {REACTIONS.map((reaction) => (
+                    <button
+                      key={reaction.id}
+                      type="button"
+                      onClick={() => onSendReaction(reaction.id)}
+                      disabled={loading}
+                    >
+                      {reaction.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
               <ul>
                 {roomView.players.map((player) => (
                   <li key={player.id}>
                     {player.name}
-                    {player.isHost ? ' (Host)' : ''} | {playerConnectionLabel(player.connected, player.lastSeenAt)} | hand {player.handCount} | bank {player.bankCount} | sets {player.completeSets}
+                    {player.isHost ? ' (Host)' : ''}
+                    {player.ready ? ' (Ready)' : ''}
+                    {' | '}
+                    {playerConnectionLabel(player.connected, player.lastSeenAt)}
+                    {' | hand '}
+                    {player.handCount}
+                    {' | bank '}
+                    {player.bankCount}
+                    {' | sets '}
+                    {player.completeSets}
                   </li>
                 ))}
               </ul>
@@ -194,6 +274,17 @@ export function MultiplayerScreen({
               ) : (
                 <p>Waiting for your turn or for the host to start.</p>
               )}
+
+              {roomView.activityFeed.length > 0 ? (
+                <section className="settings-section" aria-label="Recent room activity">
+                  <h4>Recent Activity</h4>
+                  <ul className="multiplayer-activity-feed">
+                    {roomView.activityFeed.slice(0, 8).map((item) => (
+                      <li key={item.id}>{item.message}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
             </section>
           ) : null}
         </>

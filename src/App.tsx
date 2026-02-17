@@ -80,6 +80,7 @@ import { MultiplayerScreen } from './ui/screens/MultiplayerScreen';
 import { generatePostGameSharePng, postGameShareFilename } from './ui/share/postGameShare';
 import { useFeedback } from './app/useFeedback';
 import { useMultiplayerRoom } from './app/useMultiplayerRoom';
+import { resolveMultiplayerFeatureFlags } from './network/multiplayerClient';
 import type { RiskyActionConfirmation, SetupViewModel, ShareStatus } from './ui/types';
 import './App.css';
 
@@ -200,12 +201,23 @@ function formatDuration(seconds: number): string {
   return `${hours}h ${remainingMinutes}m`;
 }
 
-function multiplayerConnectionLabel(state: 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected'): string {
+function multiplayerConnectionLabel(
+  state: 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected',
+  pushState: 'disabled' | 'unsupported' | 'connecting' | 'connected' | 'fallback',
+): string {
+  if (state === 'connected' && pushState === 'connected') return 'Connected (Live)';
+  if (state === 'connected' && pushState === 'fallback') return 'Connected (Polling Fallback)';
   if (state === 'connected') return 'Connected';
   if (state === 'connecting') return 'Connecting';
   if (state === 'reconnecting') return 'Reconnecting';
   if (state === 'disconnected') return 'Disconnected';
   return 'Idle';
+}
+
+function parseJoinPathname(pathname: string): string | null {
+  const match = pathname.match(/^\/join\/([A-Za-z0-9]{4,8})\/?$/);
+  if (!match) return null;
+  return match[1].toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
 }
 
 function gameIdentity(game: GameState): string {
@@ -261,6 +273,8 @@ function App() {
   const devAutoSeedAttemptedRef = useRef(false);
   const botTurnSignatureRef = useRef<string | null>(null);
   const coachHintMetricRef = useRef<string | null>(null);
+  const multiplayerFinishedMetricRef = useRef<string | null>(null);
+  const deepLinkHandledRef = useRef(false);
 
   useEffect(() => {
     if (!game || isGameOver(game).done) return;
@@ -342,6 +356,9 @@ function App() {
     soundEnabled: uiPreferences.soundEnabled,
     hapticsEnabled: uiPreferences.hapticsEnabled,
   });
+  const runtimeFeatureFlags = useMemo(() => resolveMultiplayerFeatureFlags(), []);
+  const multiplayerPushEnabled = uiPreferences.experimental.multiplayerPushEnabled && runtimeFeatureFlags.multiplayerPushEnabled;
+  const multiplayerReactionsEnabled = uiPreferences.experimental.multiplayerReactionsEnabled && runtimeFeatureFlags.multiplayerReactionsEnabled;
   const {
     apiBase: multiplayerApiBase,
     isLocalDevApi: multiplayerIsLocalDevApi,
@@ -355,12 +372,17 @@ function App() {
     checkpointLoading: multiplayerCheckpointLoading,
     error: multiplayerError,
     connectionState: multiplayerConnectionState,
+    pushState: multiplayerPushState,
+    hostChangeNotice: multiplayerHostChangeNotice,
+    clearHostChangeNotice: clearMultiplayerHostChangeNotice,
     isHost: multiplayerIsHost,
     healthOk: multiplayerHealthOk,
     hostRoom: hostMultiplayerRoom,
     joinRoom: joinMultiplayerRoom,
     startMatch: startMultiplayerMatch,
     runAction: runMultiplayerAction,
+    setReady: setMultiplayerReadyState,
+    sendReaction: sendMultiplayerReactionAction,
     pauseMatch: pauseMultiplayerMatch,
     resumeMatch: resumeMultiplayerMatch,
     undoLastAction: undoMultiplayerAction,
@@ -372,7 +394,24 @@ function App() {
     leaveRoom: leaveMultiplayerRoom,
     refreshRoom: refreshMultiplayerRoom,
     setError: setMultiplayerError,
-  } = useMultiplayerRoom({ enabled: screen === 'multiplayer' });
+  } = useMultiplayerRoom({
+    enabled: screen === 'multiplayer',
+    pushEnabled: multiplayerPushEnabled,
+    reactionsEnabled: multiplayerReactionsEnabled,
+    onMetricEvent: recordGrowthMetric,
+  });
+
+  useEffect(() => {
+    if (deepLinkHandledRef.current) return;
+    deepLinkHandledRef.current = true;
+    if (typeof window === 'undefined') return;
+    const joinCodeFromPath = parseJoinPathname(window.location.pathname);
+    if (!joinCodeFromPath) return;
+    setMultiplayerJoinCode(joinCodeFromPath);
+    setMultiplayerError(null);
+    setScreen('multiplayer');
+    recordGrowthMetric('multiplayer_deep_link_opened');
+  }, [recordGrowthMetric, setMultiplayerError, setMultiplayerJoinCode]);
 
   useEffect(() => {
     if (!game || !prompt) {
@@ -653,6 +692,16 @@ function App() {
   ]);
 
   useEffect(() => {
+    if (screen !== 'multiplayer' || !multiplayerRoomView || !multiplayerGame) return;
+    const status = isGameOver(multiplayerGame);
+    if (!status.done || !status.winnerId) return;
+    const signature = `${multiplayerRoomView.roomCode}:${status.winnerId}:${multiplayerRoomView.revision}`;
+    if (multiplayerFinishedMetricRef.current === signature) return;
+    multiplayerFinishedMetricRef.current = signature;
+    recordGrowthMetric('multiplayer_match_completed');
+  }, [multiplayerGame, multiplayerRoomView, recordGrowthMetric, screen]);
+
+  useEffect(() => {
     const yourPlayerId = multiplayerRoomView?.yourPlayerId;
     const promptPlayerId = multiplayerPrompt?.playerId;
     const promptKind = multiplayerPrompt?.kind;
@@ -801,18 +850,12 @@ function App() {
   }, [applyDevFixture]);
 
   const onHostMultiplayerRoom = useCallback(async () => {
-    const hosted = await hostMultiplayerRoom();
-    if (hosted) {
-      recordGrowthMetric('lan_room_hosted');
-    }
-  }, [hostMultiplayerRoom, recordGrowthMetric]);
+    await hostMultiplayerRoom();
+  }, [hostMultiplayerRoom]);
 
   const onJoinMultiplayerRoom = useCallback(async () => {
-    const joined = await joinMultiplayerRoom();
-    if (joined) {
-      recordGrowthMetric('lan_room_joined');
-    }
-  }, [joinMultiplayerRoom, recordGrowthMetric]);
+    await joinMultiplayerRoom();
+  }, [joinMultiplayerRoom]);
 
   const openGame = useCallback((nextGame: GameState) => {
     finalizedMatchRef.current = null;
@@ -1644,10 +1687,18 @@ function App() {
               ? `Gameplay is paused by ${multiplayerGame.players.find((player) => player.id === multiplayerRoomView.pausedByPlayerId)?.name ?? multiplayerRoomView.pausedByPlayerId}.`
               : 'Gameplay is paused by the host.'
           }
-          connectionStatusLabel={multiplayerConnectionLabel(multiplayerConnectionState)}
+          connectionStatusLabel={multiplayerConnectionLabel(multiplayerConnectionState, multiplayerPushState)}
+          multiplayerConnectionState={multiplayerConnectionState}
           playerConnectionById={multiplayerConnectionByPlayerId}
           isMultiplayerHost={multiplayerIsHost}
           checkpointSlots={multiplayerRoomView.checkpointSlots}
+          activityFeed={multiplayerRoomView.activityFeed}
+          hostChangeNotice={multiplayerHostChangeNotice}
+          onDismissHostChangeNotice={clearMultiplayerHostChangeNotice}
+          reactionsEnabled={multiplayerReactionsEnabled}
+          onSendReaction={(reaction) => {
+            void sendMultiplayerReactionAction(reaction);
+          }}
           checkpointLoading={multiplayerCheckpointLoading}
           legalActions={multiplayerLegalActions}
           contextualActions={multiplayerContextualActions}
@@ -1753,13 +1804,24 @@ function App() {
           isLocalDevApi={multiplayerIsLocalDevApi}
           error={multiplayerError}
           connectionState={multiplayerConnectionState}
+          pushState={multiplayerPushState}
           isHost={multiplayerIsHost}
+          reactionsEnabled={multiplayerReactionsEnabled}
           onPlayerNameChange={setMultiplayerPlayerName}
           onJoinCodeChange={setMultiplayerJoinCode}
           onHostRoom={onHostMultiplayerRoom}
           onJoinRoom={onJoinMultiplayerRoom}
           onStartMatch={startMultiplayerMatch}
           onRunAction={runMultiplayerAction}
+          onSetReady={(ready) => {
+            void setMultiplayerReadyState(ready);
+          }}
+          onSendReaction={(reaction) => {
+            void sendMultiplayerReactionAction(reaction);
+          }}
+          onCopyInviteLink={() => {
+            recordGrowthMetric('multiplayer_invite_copied');
+          }}
           onRefresh={refreshMultiplayerRoom}
           onLeaveRoom={leaveMultiplayerRoom}
           onBack={() => setScreen('home')}
