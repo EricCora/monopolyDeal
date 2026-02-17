@@ -1038,6 +1038,7 @@ describe('App', () => {
     fireEvent.change(await screen.findByLabelText(/your name/i), { target: { value: 'Host' } });
     fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
     const copyInviteButton = await screen.findByRole('button', { name: /copy invite link/i });
+    expect(screen.getByText(/^You$/)).toBeInTheDocument();
     fireEvent.click(copyInviteButton);
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringMatching(/\/join\/ABCDE$/));

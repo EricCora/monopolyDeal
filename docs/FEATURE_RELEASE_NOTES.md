@@ -11,7 +11,9 @@ Branch: `codex/deep-research-improvements`
 - Reliability UX upgrades: reconnect/disconnect in-match overlay and host-change visibility notices.
 - Multiplayer presentation refresh:
 - Rebuilt lobby into a structured roster table with clearer player status, hand/bank/set counts, and readiness tags.
+- Added explicit self-identification in lobby roster (`You` tag + highlighted row).
 - Upgraded multiplayer visual hierarchy (room hero, status pills, action grouping, activity timeline).
+- Added dynamic polish (hero sheen, connection pulse, elevated hover states) to reduce static panel feel.
 - Shifted the app palette away from blue-heavy gradients toward a board-inspired green/gold/red direction.
 - Reversible release controls: client/server feature flags for push and reactions.
 - Multiplayer funnel + push health telemetry counters added to growth metrics.

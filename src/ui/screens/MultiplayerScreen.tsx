@@ -293,10 +293,11 @@ export function MultiplayerScreen({
                   </thead>
                   <tbody>
                     {roomView.players.map((player) => (
-                      <tr key={player.id}>
+                      <tr key={player.id} className={player.id === session.playerId ? 'is-self' : undefined}>
                         <td className="multiplayer-player-cell">
                           <span className="multiplayer-player-name">{player.name}</span>
                           <span className="multiplayer-player-tags">
+                            {player.id === session.playerId ? <span className="multiplayer-player-tag is-self">You</span> : null}
                             {player.isHost ? <span className="multiplayer-player-tag">Host</span> : null}
                             {player.ready ? <span className="multiplayer-player-tag is-ready">Ready</span> : null}
                           </span>

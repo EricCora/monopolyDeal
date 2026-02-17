@@ -104,11 +104,25 @@
 }
 
 .multiplayer-room-hero {
+  position: relative;
   border: 1px solid #617d56;
   border-radius: 14px;
   padding: 0.85rem 0.92rem;
   background:
     linear-gradient(150deg, rgba(35, 53, 32, 0.96), rgba(16, 32, 22, 0.96));
+  overflow: hidden;
+}
+
+.multiplayer-room-hero::before {
+  content: '';
+  position: absolute;
+  inset: -180% auto auto -24%;
+  width: 44%;
+  height: 340%;
+  transform: rotate(26deg);
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(246, 212, 134, 0.18), rgba(255, 255, 255, 0));
+  animation: multiplayer-hero-sheen 5.8s ease-in-out infinite;
 }
 
 .multiplayer-room-heading {
@@ -139,12 +153,24 @@
   line-height: 1.2;
   color: #e4eddc;
   background: rgba(30, 47, 29, 0.84);
+  position: relative;
 }
 
 .multiplayer-status-pill.is-positive {
   border-color: #7ec17e;
   color: #daf8d6;
   background: rgba(38, 89, 51, 0.48);
+}
+
+.multiplayer-status-pill.is-positive::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  margin-right: 0.4rem;
+  background: #81db84;
+  box-shadow: 0 0 0 0 rgba(129, 219, 132, 0.6);
+  animation: multiplayer-pill-pulse 1.7s ease-out infinite;
 }
 
 .multiplayer-status-pill.is-neutral {
@@ -208,6 +234,15 @@
 .multiplayer-reaction-actions button {
   border-color: rgba(241, 191, 101, 0.55);
   background: linear-gradient(145deg, rgba(61, 86, 45, 0.92), rgba(35, 56, 28, 0.94));
+  transition:
+    transform 130ms ease,
+    box-shadow 130ms ease,
+    filter 130ms ease;
+}
+
+.multiplayer-reaction-actions button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 18px rgba(7, 16, 8, 0.3);
 }
 
 .multiplayer-roster-wrap {
@@ -247,6 +282,25 @@
   background: rgba(39, 55, 35, 0.38);
 }
 
+.multiplayer-roster-table tbody tr {
+  transition:
+    background-color 150ms ease,
+    transform 150ms ease;
+}
+
+.multiplayer-roster-table tbody tr:hover {
+  background: rgba(69, 94, 57, 0.48);
+}
+
+.multiplayer-roster-table tbody tr.is-self {
+  background:
+    linear-gradient(90deg, rgba(218, 170, 87, 0.2), rgba(80, 115, 61, 0.3));
+}
+
+.multiplayer-roster-table tbody tr.is-self td {
+  border-bottom-color: rgba(232, 194, 123, 0.5);
+}
+
 .multiplayer-player-cell {
   min-width: 180px;
 }
@@ -278,6 +332,13 @@
   border-color: #73b570;
   color: #d9ffd8;
   background: rgba(33, 96, 50, 0.38);
+}
+
+.multiplayer-player-tag.is-self {
+  border-color: #efc77a;
+  color: #fff0ca;
+  background: rgba(137, 95, 40, 0.42);
+  font-weight: 700;
 }
 
 .multiplayer-connection-chip {
@@ -352,6 +413,20 @@
   box-shadow: 0 0 0 3px rgba(230, 184, 101, 0.16);
 }
 
+.multiplayer-room-actions button,
+.multiplayer-lobby-legal-actions button {
+  transition:
+    transform 130ms ease,
+    box-shadow 130ms ease,
+    filter 130ms ease;
+}
+
+.multiplayer-room-actions button:hover:not(:disabled),
+.multiplayer-lobby-legal-actions button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 18px rgba(6, 15, 7, 0.3);
+}
+
 @media (max-width: 860px) {
   .multiplayer-room-heading {
     flex-direction: column;
@@ -403,6 +478,13 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .multiplayer-room-hero::before,
+  .multiplayer-status-pill.is-positive::before {
+    animation: none;
+  }
+}
+
 @keyframes multiplayer-slide-up {
   from {
     opacity: 0;
@@ -411,5 +493,30 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes multiplayer-pill-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(129, 219, 132, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 9px rgba(129, 219, 132, 0);
+  }
+}
+
+@keyframes multiplayer-hero-sheen {
+  0%,
+  36% {
+    transform: translateX(0) rotate(26deg);
+    opacity: 0;
+  }
+  46% {
+    opacity: 1;
+  }
+  62%,
+  100% {
+    transform: translateX(260%) rotate(26deg);
+    opacity: 0;
   }
 }
