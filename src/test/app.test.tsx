@@ -1239,7 +1239,10 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
     fireEvent.change(await screen.findByLabelText(/your name/i), { target: { value: 'Host' } });
     fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
-    expect(await screen.findByRole('dialog', { name: /multiplayer winner/i })).toBeInTheDocument();
+    const winnerDialog = await screen.findByRole('dialog', { name: /multiplayer winner/i });
+    expect(winnerDialog).toBeInTheDocument();
+    expect(within(winnerDialog).getByRole('button', { name: /exit match/i })).toBeInTheDocument();
+    expect(within(winnerDialog).getByRole('button', { name: /forget room/i })).toBeInTheDocument();
     expect(screen.getByText(/winner:/i)).toHaveTextContent('Alpha');
 
     fetchSpy.mockRestore();

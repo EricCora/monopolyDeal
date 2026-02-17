@@ -334,6 +334,14 @@
   margin: 0.45rem 0 0;
 }
 
+.winner-actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
 .shield {
   position: fixed;
   inset: 0;

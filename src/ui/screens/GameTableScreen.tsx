@@ -517,6 +517,14 @@ export function GameTableScreen({
               Winner: <strong>{winnerName ?? 'Unknown player'}</strong>
             </p>
             <p>Use Exit Match to leave and keep reconnect access, or Forget Room to disconnect permanently.</p>
+            <div className="winner-actions">
+              <button type="button" onClick={onExitMultiplayer} disabled={checkpointLoading}>
+                Exit Match
+              </button>
+              <button type="button" onClick={onForgetMultiplayer} disabled={checkpointLoading}>
+                Forget Room
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

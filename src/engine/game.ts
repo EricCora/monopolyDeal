@@ -61,9 +61,11 @@ export function getSuggestedPaymentCards(state: GameState, playerId: PlayerId, a
     ...player.bank,
     ...PROPERTY_COLORS.flatMap((color) => player.properties[color].map((entry) => entry.cardId)),
   ];
-  const exactSingle = availableCards
-    .filter((cardId) => cardMoneyValue(cardId) === amount)
+  const exactSingles = availableCards.filter((cardId) => cardMoneyValue(cardId) === amount);
+  const exactSingleFromBank = exactSingles
+    .filter((cardId) => player.bank.includes(cardId))
     .sort((left, right) => left.localeCompare(right))[0];
+  const exactSingle = exactSingleFromBank ?? exactSingles.sort((left, right) => left.localeCompare(right))[0];
   if (exactSingle) return [exactSingle];
   const options = generatePaymentOptions(player, amount);
   if (options.length === 0) return [];

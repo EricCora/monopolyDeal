@@ -355,6 +355,32 @@ describe('engine basics', () => {
     expect(suggested).toEqual(['money_3#b3']);
   });
 
+  it('prefers an exact bank card over an exact property card', () => {
+    const state = createGame({
+      seed: 144,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.players[1].bank = ['money_4#b4'];
+    state.players[1].properties = {
+      brown: [],
+      light_blue: [],
+      pink: [],
+      orange: [],
+      red: [],
+      yellow: [],
+      green: [],
+      dark_blue: [{ cardId: 'dark_blue_1#p4', assignedColor: 'dark_blue' }],
+      railroad: [],
+      utility: [],
+    };
+
+    const suggested = getSuggestedPaymentCards(state, 'p2', 4);
+    expect(suggested).toEqual(['money_4#b4']);
+  });
+
   it('suggests maximum payable cards when payer cannot meet requested amount', () => {
     const state = createGame({
       seed: 41,
