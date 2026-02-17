@@ -39,6 +39,8 @@ This pass now includes full prioritized multiplayer hardening across **P0/P1/P2*
 - [x] Phase 7: Post-checkpoint QA regressions
   - [x] MP-UX-02 multiplayer advanced legal actions toggle now opens/closes list
   - [x] MP-VIS-03 hand rent card summary removes cluttered mini-boxes
+  - [x] MP-UX-03 advanced legal actions list uses ordered numbering
+  - [x] MP-UX-04 action labels colorize property tokens in chooser/debug contexts
 
 ## Verification Log
 
@@ -57,6 +59,10 @@ This pass now includes full prioritized multiplayer hardening across **P0/P1/P2*
   - `npm run lint` passed with one existing warning in `src/ui/components/StatsDashboard.tsx` (`react-hooks/incompatible-library` from `useReactTable`)
 - `2026-02-17`: Post-checkpoint regression verification
   - `npm run test -- src/test/app.test.tsx src/test/card-ui.test.tsx` passed (`51` tests)
+  - `npm run build` passed
+  - `npm run lint` passed with one existing warning in `src/ui/components/StatsDashboard.tsx` (`react-hooks/incompatible-library` from `useReactTable`)
+- `2026-02-17`: Action-label clarity follow-up verification
+  - `npm run test -- src/test/play-chooser.test.tsx src/test/app.test.tsx src/test/card-ui.test.tsx` passed (`52` tests)
   - `npm run build` passed
   - `npm run lint` passed with one existing warning in `src/ui/components/StatsDashboard.tsx` (`react-hooks/incompatible-library` from `useReactTable`)
 

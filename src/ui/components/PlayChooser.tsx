@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { ActionLabelText } from './ActionLabelText';
 
 export interface ActionVariantView {
   id: string;
@@ -76,9 +77,12 @@ export function PlayChooser({ cardId, cardLabel, options, title = 'Choose Play',
           <p>{cardLabel ?? cardId}</p>
         </header>
         <div className="play-options">
-          {options.map((option) => (
+          {options.map((option, index) => (
             <button key={option.id} type="button" className="play-option" onClick={() => onChoose(option.id)}>
-              <span>{option.label}</span>
+              <span className="play-option-label-row">
+                <span className="play-option-index" aria-hidden="true">{index + 1}.</span>
+                <ActionLabelText text={option.label} />
+              </span>
               {option.description ? <small>{option.description}</small> : null}
             </button>
           ))}

@@ -222,13 +222,65 @@
 
 .debug-action-list {
   margin: 0.5rem 0 0;
-  padding-left: 1.2rem;
+  padding-left: 1.5rem;
   max-height: 220px;
   overflow: auto;
 }
 
 .debug-action-list li {
   margin: 0.2rem 0;
+}
+
+.action-label-text {
+  display: inline;
+}
+
+.action-color-token {
+  font-weight: 700;
+}
+
+.action-color-token.is-any {
+  color: #f7f9ff;
+}
+
+.action-color-token.is-brown {
+  color: var(--card-color-brown);
+}
+
+.action-color-token.is-light-blue {
+  color: var(--card-color-light-blue);
+}
+
+.action-color-token.is-pink {
+  color: var(--card-color-pink);
+}
+
+.action-color-token.is-orange {
+  color: var(--card-color-orange);
+}
+
+.action-color-token.is-red {
+  color: var(--card-color-red);
+}
+
+.action-color-token.is-yellow {
+  color: var(--card-color-yellow);
+}
+
+.action-color-token.is-green {
+  color: var(--card-color-green);
+}
+
+.action-color-token.is-dark-blue {
+  color: var(--card-color-dark-blue);
+}
+
+.action-color-token.is-railroad {
+  color: var(--card-color-railroad);
+}
+
+.action-color-token.is-utility {
+  color: var(--card-color-utility);
 }
 
 .game-table-screen.is-paused .top-bar {
