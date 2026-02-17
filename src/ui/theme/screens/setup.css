@@ -209,6 +209,10 @@
   box-shadow: 0 12px 24px rgba(5, 10, 6, 0.32);
 }
 
+.multiplayer-lobby-shell.is-loading {
+  min-height: 250px;
+}
+
 .multiplayer-lobby-header {
   display: flex;
   flex-wrap: wrap;
@@ -221,6 +225,35 @@
   margin: 0;
   color: #f0d288;
   font-weight: 600;
+}
+
+.multiplayer-skeleton-row,
+.multiplayer-skeleton-cell {
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(95, 118, 81, 0.36) 25%, rgba(152, 178, 130, 0.46) 50%, rgba(95, 118, 81, 0.36) 75%);
+  background-size: 220% 100%;
+  animation: multiplayer-skeleton-shimmer 1.25s linear infinite;
+}
+
+.multiplayer-skeleton-row {
+  height: 14px;
+  margin-top: 0.6rem;
+}
+
+.multiplayer-skeleton-row.is-wide {
+  width: 84%;
+}
+
+.multiplayer-skeleton-grid {
+  margin-top: 0.9rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.multiplayer-skeleton-cell {
+  height: 52px;
 }
 
 .multiplayer-ready-actions {
@@ -480,7 +513,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .multiplayer-room-hero::before,
-  .multiplayer-status-pill.is-positive::before {
+  .multiplayer-status-pill.is-positive::before,
+  .multiplayer-skeleton-row,
+  .multiplayer-skeleton-cell {
     animation: none;
   }
 }
@@ -518,5 +553,14 @@
   100% {
     transform: translateX(260%) rotate(26deg);
     opacity: 0;
+  }
+}
+
+@keyframes multiplayer-skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
   }
 }

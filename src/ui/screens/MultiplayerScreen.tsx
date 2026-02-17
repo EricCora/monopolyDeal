@@ -338,7 +338,23 @@ export function MultiplayerScreen({
                 </section>
               ) : null}
             </section>
-          ) : null}
+          ) : (
+            <section className="multiplayer-lobby-shell is-loading" aria-label="Loading room state">
+              <header className="multiplayer-lobby-header">
+                <h3>Syncing Room...</h3>
+                <p className="multiplayer-lobby-status">Fetching latest players and state.</p>
+              </header>
+              <div className="multiplayer-skeleton-row" />
+              <div className="multiplayer-skeleton-row" />
+              <div className="multiplayer-skeleton-row is-wide" />
+              <div className="multiplayer-skeleton-grid">
+                <div className="multiplayer-skeleton-cell" />
+                <div className="multiplayer-skeleton-cell" />
+                <div className="multiplayer-skeleton-cell" />
+                <div className="multiplayer-skeleton-cell" />
+              </div>
+            </section>
+          )}
         </div>
       )}
 
