@@ -247,6 +247,7 @@ function App() {
   const [selectedPaymentCards, setSelectedPaymentCards] = useState<string[]>([]);
   const [forcedDealSelection, setForcedDealSelection] = useState<ForcedDealSelectionState | null>(null);
   const [showDebugActions, setShowDebugActions] = useState(false);
+  const [showMultiplayerDebugActions, setShowMultiplayerDebugActions] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [shareStatus, setShareStatus] = useState<ShareStatus>(null);
@@ -1673,7 +1674,7 @@ function App() {
           enhancedEventLog={uiPreferences.experimental.enhancedEventLog}
           coachHint={multiplayerCoachHint}
           turnSnapshotsCount={multiplayerRoomView.turnSnapshotCount}
-          showDebugActions={false}
+          showDebugActions={showMultiplayerDebugActions}
           actionDetailText={actionDetailText}
           onPauseToggle={() => {
             if (!multiplayerIsHost) return;
@@ -1710,7 +1711,7 @@ function App() {
           onOpenSavedGames={() => {}}
           onOpenSettings={() => openSettings('multiplayer')}
           onToggleDebugActions={() => {
-            // debug actions are local-only.
+            setShowMultiplayerDebugActions((prev) => !prev);
           }}
           onRunAction={runMultiplayerActionWithConfirmation}
           onCardClick={handleMultiplayerCardClick}

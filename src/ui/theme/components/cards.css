@@ -261,6 +261,18 @@
   font-weight: 800;
 }
 
+.card-rent-hand-summary {
+  margin-top: auto;
+  font-size: calc(var(--card-meta-size) * 1.1);
+  line-height: 1.2;
+  font-weight: 800;
+  color: #1f3f53;
+  border-radius: 7px;
+  border: 1px solid rgba(78, 106, 128, 0.4);
+  background: rgba(241, 248, 252, 0.95);
+  padding: 0.14rem 0.24rem;
+}
+
 .card-rent.is-compact {
   padding: 0.14rem;
   border-color: rgba(58, 86, 108, 0.7);

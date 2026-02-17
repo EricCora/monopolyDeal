@@ -86,6 +86,13 @@ describe('Card UI', () => {
     expect(screen.getByText(/Rent range: \$1-\$8/i)).toBeInTheDocument();
   });
 
+  it('uses simplified rent summary in hand context to avoid clutter', () => {
+    render(<CardView cardId="dark_blue_1#1" size="lg" context="hand" />);
+
+    expect(screen.getByLabelText(/rent summary/i)).toHaveTextContent('Rent $3/$8');
+    expect(screen.queryByLabelText(/rent ladder/i)).not.toBeInTheDocument();
+  });
+
   it('highlights the full-set rent step for property cards', () => {
     const { container } = render(<CardView cardId="railroad_1#1" />);
     const fullSetSteps = container.querySelectorAll('.card-rent-step.is-fullset');

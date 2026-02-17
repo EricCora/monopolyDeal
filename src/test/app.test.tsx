@@ -1112,6 +1112,9 @@ describe('App', () => {
     expect(screen.getByText(/connection: connected/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /exit match/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /forget room/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /show advanced legal actions/i }));
+    expect(screen.getByRole('button', { name: /hide advanced legal actions/i })).toBeInTheDocument();
+    expect(document.querySelector('.debug-action-list li')?.textContent).toMatch(/pass turn/i);
 
     fetchSpy.mockRestore();
   });

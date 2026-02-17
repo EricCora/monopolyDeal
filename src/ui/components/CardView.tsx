@@ -56,6 +56,7 @@ export function CardView({
   };
   const isProperty = model.cardRole === 'property';
   const isCompactRent = size === 'sm';
+  const isHandRentSummary = isProperty && context === 'hand';
   const isHandCard = context === 'hand';
   const shouldShowSubtitle = !(isHandCard && size === 'lg' && (model.cardRole === 'money' || model.cardRole === 'property'));
 
@@ -77,7 +78,7 @@ export function CardView({
         {shouldShowSubtitle ? <span className="card-subtitle" title={model.subtitle}>{model.subtitle}</span> : null}
         {model.colorLabel ? <span className="card-color-label">{model.colorLabel}</span> : null}
 
-        {isProperty && model.rentSteps ? (
+        {isProperty && model.rentSteps && !isHandRentSummary ? (
           <span className={`card-rent ${isCompactRent ? 'is-compact' : ''}`} aria-label="Rent ladder">
             <span className="card-rent-label">Rent</span>
             <span className="card-rent-grid">
@@ -91,6 +92,12 @@ export function CardView({
                 </span>
               ))}
             </span>
+          </span>
+        ) : null}
+
+        {isHandRentSummary && model.rentSteps ? (
+          <span className="card-rent-hand-summary" aria-label="Rent summary">
+            Rent {model.rentSteps.map((step) => `$${step.rent}`).join('/')}
           </span>
         ) : null}
 
