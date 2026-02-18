@@ -1545,7 +1545,12 @@ function App() {
   };
 
   return (
-    <GameShell screenClassName={`screen-${screen}`} textScale={uiPreferences.textScale} highContrast={uiPreferences.highContrast}>
+    <GameShell
+      screenClassName={`screen-${screen}`}
+      textScale={uiPreferences.textScale}
+      highContrast={uiPreferences.highContrast}
+      tableStyle={uiPreferences.tableStyle}
+    >
       {screen === 'game' && prompt ? (
         <p className="sr-only" aria-live="polite" aria-atomic="true">
           Turn update. Active player {prompt.playerId}. Prompt type {prompt.kind}.
@@ -1861,6 +1866,7 @@ function App() {
           onToggleHaptics={(enabled) => setUiPreferences((prev) => ({ ...prev, hapticsEnabled: enabled }))}
           onChangeTextScale={(value) => setUiPreferences((prev) => ({ ...prev, textScale: value }))}
           onChangeTableDensity={(value) => setUiPreferences((prev) => ({ ...prev, tableDensity: value }))}
+          onChangeTableStyle={(value) => setUiPreferences((prev) => ({ ...prev, tableStyle: value }))}
           onToggleConfirmRiskyActions={(enabled) => setUiPreferences((prev) => ({ ...prev, confirmRiskyActions: enabled }))}
           onToggleRulesDrawerHints={(enabled) => setUiPreferences((prev) => ({ ...prev, showRulesDrawerHints: enabled }))}
           onToggleExperimentalFlag={(flag, enabled) => {

@@ -2,10 +2,10 @@
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at 10% 10%, rgba(255, 215, 128, 0.38), transparent 34%),
-    radial-gradient(circle at 90% 0%, rgba(123, 211, 199, 0.28), transparent 42%),
-    linear-gradient(170deg, #131e2b, #0f1a27 52%, #111f2b);
-  border-color: #5f7f97;
+    radial-gradient(circle at 10% 10%, rgba(255, 91, 132, 0.34), transparent 34%),
+    radial-gradient(circle at 90% 0%, rgba(73, 216, 255, 0.32), transparent 42%),
+    linear-gradient(170deg, #18153d, #121232 52%, #17163b);
+  border-color: #7a74c0;
 }
 
 .postgame-panel::before {
@@ -30,8 +30,8 @@
   margin: 0;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  background: rgba(243, 195, 91, 0.2);
-  color: #ffd995;
+  background: rgba(255, 116, 156, 0.22);
+  color: #ffd0de;
   font-weight: 700;
   letter-spacing: 0.01em;
   font-size: 0.82rem;
@@ -41,7 +41,7 @@
 .postgame-hero h2 {
   margin-top: 0.45rem;
   font-size: clamp(1.7rem, 3.8vw, 2.6rem);
-  color: #f2f8ff;
+  color: #f5f2ff;
 }
 
 .postgame-hero p {
@@ -53,7 +53,31 @@
 
 .postgame-meta {
   font-size: 0.86rem !important;
-  color: #9fb5cb !important;
+  color: #b8b4de !important;
+}
+
+.postgame-trophy {
+  margin-top: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 225, 142, 0.72);
+  background: rgba(154, 111, 24, 0.35);
+  color: #ffe6a8;
+  font-weight: 700;
+  padding: 0.14rem 0.56rem;
+}
+
+.postgame-trophy::before {
+  content: 'T';
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: rgba(255, 225, 142, 0.3);
+  font-size: 0.68rem;
 }
 
 .postgame-kpis {
@@ -219,8 +243,9 @@
 }
 
 .postgame-primary-action {
-  background: linear-gradient(140deg, #196a4f, #124f3b);
-  box-shadow: 0 8px 16px rgba(25, 106, 79, 0.22);
+  background: linear-gradient(140deg, #ff4f80, #be2f5a);
+  border-color: rgba(255, 175, 199, 0.75);
+  box-shadow: 0 8px 16px rgba(190, 47, 90, 0.22);
 }
 
 .postgame-celebration {
@@ -238,27 +263,27 @@
   height: 13px;
   border-radius: 3px;
   opacity: 0;
-  animation: confetti-fall 760ms ease-out forwards;
+  animation: confetti-fall 980ms ease-out forwards;
 }
 
 .confetti-dot:nth-child(5n + 1) {
-  background: #db6545;
+  background: #ff5b8a;
 }
 
 .confetti-dot:nth-child(5n + 2) {
-  background: #2c8a6f;
+  background: #3ecbe6;
 }
 
 .confetti-dot:nth-child(5n + 3) {
-  background: #d5a239;
+  background: #ffd260;
 }
 
 .confetti-dot:nth-child(5n + 4) {
-  background: #3d6999;
+  background: #7c70ff;
 }
 
 .confetti-dot:nth-child(5n + 5) {
-  background: #8a4f2d;
+  background: #ff8657;
 }
 
 .confetti-dot:nth-child(1) { left: 4%; animation-delay: 10ms; }

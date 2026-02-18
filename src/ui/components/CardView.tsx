@@ -63,7 +63,7 @@ export function CardView({
   return (
     <button
       type="button"
-      className={`card-view card-size-${size} card-context-${context} card-variant-${variant} card-elevation-${elevation} tone-${statusTone} ${model.themeClass} kind-${model.kindClass} role-${model.cardRole} ${interactive ? 'is-interactive' : ''} ${playable ? 'is-playable' : 'is-unplayable'} ${selected ? 'is-selected' : ''}`}
+      className={`card-view card-size-${size} card-context-${context} card-variant-${variant} card-elevation-${elevation} tone-${statusTone} ${model.themeClass} kind-${model.kindClass} role-${model.cardRole} ${model.motifClass ?? ''} ${interactive ? 'is-interactive' : ''} ${playable ? 'is-playable' : 'is-unplayable'} ${selected ? 'is-selected' : ''}`}
       style={style}
       onClick={onClick}
       disabled={!interactive || !onClick}
@@ -72,7 +72,12 @@ export function CardView({
       <span className="card-face">
         <span className="card-head">
           <span className="card-value">{model.valueBadge}</span>
-          {model.actionBadge ? <span className="card-badge">{model.actionBadge}</span> : null}
+          {model.actionBadge ? (
+            <span className="card-badge">
+              {model.actionIcon ? <img className="card-badge-icon" src={model.actionIcon} alt="" aria-hidden="true" /> : null}
+              <span>{model.actionBadge}</span>
+            </span>
+          ) : null}
         </span>
         <span className="card-title" title={model.title}>{model.title}</span>
         {shouldShowSubtitle ? <span className="card-subtitle" title={model.subtitle}>{model.subtitle}</span> : null}
@@ -87,8 +92,8 @@ export function CardView({
                   key={`${model.cardId}-rent-${step.setCount}`}
                   className={`card-rent-step ${step.setCount === model.setSize ? 'is-fullset' : ''}`}
                 >
-                  <span>{step.setCount}</span>
-                  <span>${step.rent}</span>
+                  <span className="card-rent-count">{step.setCount}</span>
+                  <span className="card-rent-value">${step.rent}</span>
                 </span>
               ))}
             </span>

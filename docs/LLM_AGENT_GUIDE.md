@@ -18,6 +18,7 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Card catalog, set sizes, rent scales, display helpers.
 - `src/persistence/`
   - `localStorage` read/write wrappers for active game, manual saved slots, stats, and UI preferences.
+  - `UiPreferencesV1` includes additive `tableStyle` (`classic_green` | `neon_arcade`) with backward-compatible defaulting.
 - `src/stats/`
   - Match record creation, lifetime aggregation, and dev fixture data.
   - Retention helpers (`src/stats/retention.ts`) for achievements and daily challenge progression.
@@ -45,6 +46,8 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - `src/ui/components/RulesDrawer.tsx` provides in-game rules/set/rent quick reference.
   - Selection pending flows now support property-card click interactions for deal actions; keep action-button fallback intact.
   - `src/ui/theme/` contains tokenized CSS split by base/components/screens.
+  - `GameShell` applies root table style classes (`table-style-classic-green`, `table-style-neon-arcade`) to drive felt/theme variants.
+  - `SettingsScreen` now uses compact grouped cards, custom switch UI, and a collapsed-by-default Experimental accordion.
 
 ## Data Model Cheat Sheet
 
@@ -190,6 +193,7 @@ When card rendering, responsive layout, or modal/prompt orchestration changes:
 - Multiplayer growth telemetry now includes funnel + push health counters; keep additive compatibility for v1 payload readers.
 - Room push dedupe depends on `lastEventId`/`revision`; avoid duplicating refresh storms when touching event subscription logic.
 - Card rendering/fit is split between `src/ui/components/CardView.tsx`, `src/ui/components/HandFan.tsx`, and `src/ui/theme/components/cards.css`.
+- Card visual metadata now includes optional action SVG icon paths; keep text badge fallback visible for resilience.
 - Draw-phase prompt intentionally uses rail hand layout for readability; non-draw prompts still use auto-fit.
 - Rent/double-rent/counter interactions are edge-case heavy.
 

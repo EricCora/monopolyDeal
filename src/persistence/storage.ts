@@ -35,6 +35,7 @@ export interface UiPreferencesV1 {
   version: 1;
   reducedEffects: boolean;
   tableDensity: 'cozy' | 'compact';
+  tableStyle: 'classic_green' | 'neon_arcade';
   textScale: 'normal' | 'large';
   confirmRiskyActions: boolean;
   showRulesDrawerHints: boolean;
@@ -393,6 +394,7 @@ function defaultUiPreferences(): UiPreferencesV1 {
     version: 1,
     reducedEffects: false,
     tableDensity: 'cozy',
+    tableStyle: 'classic_green',
     textScale: 'normal',
     confirmRiskyActions: true,
     showRulesDrawerHints: true,
@@ -425,12 +427,14 @@ export function loadUiPreferences(): UiPreferencesV1 {
     const parsed = JSON.parse(raw) as Partial<UiPreferencesV1>;
     if (parsed.version !== 1) return defaultUiPreferences();
     const density = parsed.tableDensity === 'compact' ? 'compact' : 'cozy';
+    const tableStyle = parsed.tableStyle === 'neon_arcade' ? 'neon_arcade' : 'classic_green';
     const textScale = parsed.textScale === 'large' ? 'large' : 'normal';
     const experimentalParsed = parsed.experimental;
     return {
       version: 1,
       reducedEffects: Boolean(parsed.reducedEffects),
       tableDensity: density,
+      tableStyle,
       textScale,
       confirmRiskyActions: parsed.confirmRiskyActions !== false,
       showRulesDrawerHints: parsed.showRulesDrawerHints !== false,

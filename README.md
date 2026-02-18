@@ -15,11 +15,14 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Undo for reversible plays during the active turn
 - Match history and lifetime win stats
 - Dedicated Settings screen for display options and dev tooling
+- Arcade-flagship visual direction with animated table ambiance, richer card surfaces, and stronger motion feedback
 - In-match Pause/Resume control with persistent paused state
 - Dev Mode tools to seed or reseed sample stats/history data
 - Responsive hand layout (fan auto-scales and falls back to rail when space is tight)
 - Property cards with rent ladder cells for faster set-to-rent readability
 - Post-game brag image share (clipboard with download fallback)
+- Home hero with animated card-back atmosphere and stronger CTA emphasis
+- Post-game celebration refresh with trophy treatment and richer confetti pulse
 - Guided turn rail with draw/play/end-step progress and clearer required-action cues
 - Risky action confirmation dialog for high-impact targeted/rent plays
 - Payment assistant auto-select for pending payment flows
@@ -100,7 +103,9 @@ Use the `Settings` screen from Home (or the in-game top bar) to control:
 - Dev Mode toggle and sample data reseed tools
 - Local data controls (clear match history + lifetime stats + growth telemetry)
 - Experimental features toggle section (AI/replay/challenges/achievements/custom rules)
+  - Collapsed by default to reduce settings clutter
   - Includes multiplayer rollback toggles for live push updates and reactions
+- Table style selector (`Classic Green` / `Neon Arcade`) persisted in local preferences
 
 ## Saved Games
 

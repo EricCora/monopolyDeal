@@ -183,6 +183,8 @@
 }
 
 .players-grid {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
   gap: 0.8rem;
@@ -192,8 +194,20 @@
   border: 1px solid var(--line-soft);
   border-radius: 12px;
   padding: 0.8rem;
-  background: rgba(14, 28, 18, 0.9);
-  box-shadow: var(--shadow-sm);
+  background: rgba(12, 24, 16, 0.84);
+  box-shadow: var(--table-seat-shadow), var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.player::before {
+  content: '';
+  position: absolute;
+  inset: -42% auto auto -22%;
+  width: 52%;
+  height: 120%;
+  background: radial-gradient(circle, var(--table-seat-highlight), transparent 74%);
+  pointer-events: none;
 }
 
 .player.active {

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { UiPreferencesV1 } from '../../persistence/storage';
 
 type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
@@ -11,6 +12,7 @@ interface SettingsScreenProps {
   onToggleHaptics: (enabled: boolean) => void;
   onChangeTextScale: (value: UiPreferencesV1['textScale']) => void;
   onChangeTableDensity: (value: UiPreferencesV1['tableDensity']) => void;
+  onChangeTableStyle: (value: UiPreferencesV1['tableStyle']) => void;
   onToggleConfirmRiskyActions: (enabled: boolean) => void;
   onToggleRulesDrawerHints: (enabled: boolean) => void;
   onToggleExperimentalFlag: (flag: keyof UiPreferencesV1['experimental'], enabled: boolean) => void;
@@ -36,6 +38,7 @@ export function SettingsScreen({
   onToggleHaptics,
   onChangeTextScale,
   onChangeTableDensity,
+  onChangeTableStyle,
   onToggleConfirmRiskyActions,
   onToggleRulesDrawerHints,
   onToggleExperimentalFlag,
@@ -45,96 +48,85 @@ export function SettingsScreen({
   onBack,
 }: SettingsScreenProps) {
   const statusMessage = devStatusMessage(devSeedStatus);
+  const [experimentalOpen, setExperimentalOpen] = useState(false);
+
+  const experimentalEnabledCount = Object.values(uiPreferences.experimental).filter(Boolean).length;
+
+  const renderToggle = (
+    label: string,
+    checked: boolean,
+    onChange: (value: boolean) => void,
+  ) => (
+    <label className="settings-toggle-card">
+      <span className="settings-toggle-label">{label}</span>
+      <input
+        className="settings-switch-input"
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span className="settings-switch-ui" aria-hidden="true">
+        <span className="settings-switch-thumb" />
+      </span>
+    </label>
+  );
 
   return (
     <section className="panel settings-screen card-enter">
       <h2>Settings</h2>
-      <p className="settings-subtitle">Control local display options, pause behavior, and development data tools.</p>
+      <p className="settings-subtitle">Tune visuals, controls, and experimentation without leaving your current table flow.</p>
+
+      <div className="actions settings-top-actions">
+        <button type="button" onClick={onBack}>Back</button>
+      </div>
 
       <section className="settings-section" aria-label="Display settings">
         <h3>Display</h3>
+        <div className="settings-grid">
+          {renderToggle('Reduced Celebration Effects', uiPreferences.reducedEffects, onToggleReducedEffects)}
+          {renderToggle('High Contrast Mode', uiPreferences.highContrast, onToggleHighContrast)}
+          {renderToggle('Sound Effects', uiPreferences.soundEnabled, onToggleSound)}
+          {renderToggle('Haptic Feedback (supported devices)', uiPreferences.hapticsEnabled, onToggleHaptics)}
+        </div>
 
-        <label className="settings-field settings-toggle">
-          <span>Reduced Celebration Effects</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.reducedEffects}
-            onChange={(event) => onToggleReducedEffects(event.target.checked)}
-          />
-        </label>
+        <div className="settings-select-grid">
+          <label className="settings-field">
+            <span>Text Scale</span>
+            <select value={uiPreferences.textScale} onChange={(event) => onChangeTextScale(event.target.value as UiPreferencesV1['textScale'])}>
+              <option value="normal">Normal</option>
+              <option value="large">Large</option>
+            </select>
+          </label>
+          <label className="settings-field">
+            <span>Table Density</span>
+            <select value={uiPreferences.tableDensity} onChange={(event) => onChangeTableDensity(event.target.value as UiPreferencesV1['tableDensity'])}>
+              <option value="cozy">Cozy</option>
+              <option value="compact">Compact</option>
+            </select>
+          </label>
+          <label className="settings-field">
+            <span>Table Style</span>
+            <select value={uiPreferences.tableStyle} onChange={(event) => onChangeTableStyle(event.target.value as UiPreferencesV1['tableStyle'])}>
+              <option value="classic_green">Classic Green</option>
+              <option value="neon_arcade">Neon Arcade</option>
+            </select>
+          </label>
+        </div>
+      </section>
 
-        <label className="settings-field settings-toggle">
-          <span>High Contrast Mode</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.highContrast}
-            onChange={(event) => onToggleHighContrast(event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field settings-toggle">
-          <span>Sound Effects</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.soundEnabled}
-            onChange={(event) => onToggleSound(event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field settings-toggle">
-          <span>Haptic Feedback (supported devices)</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.hapticsEnabled}
-            onChange={(event) => onToggleHaptics(event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field">
-          <span>Text Scale</span>
-          <select value={uiPreferences.textScale} onChange={(event) => onChangeTextScale(event.target.value as UiPreferencesV1['textScale'])}>
-            <option value="normal">Normal</option>
-            <option value="large">Large</option>
-          </select>
-        </label>
-
-        <label className="settings-field">
-          <span>Table Density</span>
-          <select value={uiPreferences.tableDensity} onChange={(event) => onChangeTableDensity(event.target.value as UiPreferencesV1['tableDensity'])}>
-            <option value="cozy">Cozy</option>
-            <option value="compact">Compact</option>
-          </select>
-        </label>
-
-        <label className="settings-field settings-toggle">
-          <span>Confirm Risky Actions</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.confirmRiskyActions}
-            onChange={(event) => onToggleConfirmRiskyActions(event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field settings-toggle">
-          <span>Show Rules Hints</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.showRulesDrawerHints}
-            onChange={(event) => onToggleRulesDrawerHints(event.target.checked)}
-          />
-        </label>
+      <section className="settings-section" aria-label="Gameplay preferences">
+        <h3>Gameplay Preferences</h3>
+        <div className="settings-grid">
+          {renderToggle('Confirm Risky Actions', uiPreferences.confirmRiskyActions, onToggleConfirmRiskyActions)}
+          {renderToggle('Show Rules Hints', uiPreferences.showRulesDrawerHints, onToggleRulesDrawerHints)}
+        </div>
       </section>
 
       <section className="settings-section" aria-label="Development tools">
         <h3>Development Tools</h3>
-        <label className="settings-field settings-toggle">
-          <span>Dev Mode</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.devModeEnabled}
-            onChange={(event) => onToggleDevMode(event.target.checked)}
-          />
-        </label>
+        <div className="settings-grid">
+          {renderToggle('Dev Mode', uiPreferences.devModeEnabled, onToggleDevMode)}
+        </div>
         <div className="actions">
           <button type="button" onClick={onReseedDevData} disabled={!uiPreferences.devModeEnabled}>
             Reseed Stats & History
@@ -144,116 +136,44 @@ export function SettingsScreen({
       </section>
 
       <section className="settings-section" aria-label="Experimental features">
-        <h3>Experimental Features</h3>
+        <button
+          type="button"
+          className="settings-accordion-button"
+          aria-expanded={experimentalOpen}
+          onClick={() => setExperimentalOpen((prev) => !prev)}
+        >
+          <span>Experimental Features</span>
+          <small>{experimentalEnabledCount} enabled</small>
+        </button>
         <p className="settings-subtitle">
           Advanced features under active development. Leave off for the most stable experience.
         </p>
-
-        <label className="settings-field settings-toggle">
-          <span>AI Opponents</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.experimental.aiOpponents}
-            onChange={(event) => onToggleExperimentalFlag('aiOpponents', event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field settings-toggle">
-          <span>AI Coach Hints</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.experimental.aiCoach}
-            onChange={(event) => onToggleExperimentalFlag('aiCoach', event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field settings-toggle">
-          <span>Replay Timeline</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.experimental.replayTimeline}
-            onChange={(event) => onToggleExperimentalFlag('replayTimeline', event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field settings-toggle">
-          <span>Daily Challenges</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.experimental.dailyChallenges}
-            onChange={(event) => onToggleExperimentalFlag('dailyChallenges', event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field settings-toggle">
-          <span>Achievements</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.experimental.achievements}
-            onChange={(event) => onToggleExperimentalFlag('achievements', event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field settings-toggle">
-          <span>Custom Rules</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.experimental.customRules}
-            onChange={(event) => onToggleExperimentalFlag('customRules', event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field settings-toggle">
-          <span>Enhanced Event Log</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.experimental.enhancedEventLog}
-            onChange={(event) => onToggleExperimentalFlag('enhancedEventLog', event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field settings-toggle">
-          <span>Contextual Action Previews</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.experimental.contextualActionPreviews}
-            onChange={(event) => onToggleExperimentalFlag('contextualActionPreviews', event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field settings-toggle">
-          <span>Multiplayer Live Push Updates</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.experimental.multiplayerPushEnabled}
-            onChange={(event) => onToggleExperimentalFlag('multiplayerPushEnabled', event.target.checked)}
-          />
-        </label>
-
-        <label className="settings-field settings-toggle">
-          <span>Multiplayer Reactions</span>
-          <input
-            type="checkbox"
-            checked={uiPreferences.experimental.multiplayerReactionsEnabled}
-            onChange={(event) => onToggleExperimentalFlag('multiplayerReactionsEnabled', event.target.checked)}
-          />
-        </label>
+        {experimentalOpen ? (
+          <div className="settings-grid settings-grid-experimental">
+            {renderToggle('AI Opponents', uiPreferences.experimental.aiOpponents, (enabled) => onToggleExperimentalFlag('aiOpponents', enabled))}
+            {renderToggle('AI Coach Hints', uiPreferences.experimental.aiCoach, (enabled) => onToggleExperimentalFlag('aiCoach', enabled))}
+            {renderToggle('Replay Timeline', uiPreferences.experimental.replayTimeline, (enabled) => onToggleExperimentalFlag('replayTimeline', enabled))}
+            {renderToggle('Daily Challenges', uiPreferences.experimental.dailyChallenges, (enabled) => onToggleExperimentalFlag('dailyChallenges', enabled))}
+            {renderToggle('Achievements', uiPreferences.experimental.achievements, (enabled) => onToggleExperimentalFlag('achievements', enabled))}
+            {renderToggle('Custom Rules', uiPreferences.experimental.customRules, (enabled) => onToggleExperimentalFlag('customRules', enabled))}
+            {renderToggle('Enhanced Event Log', uiPreferences.experimental.enhancedEventLog, (enabled) => onToggleExperimentalFlag('enhancedEventLog', enabled))}
+            {renderToggle('Contextual Action Previews', uiPreferences.experimental.contextualActionPreviews, (enabled) => onToggleExperimentalFlag('contextualActionPreviews', enabled))}
+            {renderToggle('Multiplayer Live Push Updates', uiPreferences.experimental.multiplayerPushEnabled, (enabled) => onToggleExperimentalFlag('multiplayerPushEnabled', enabled))}
+            {renderToggle('Multiplayer Reactions', uiPreferences.experimental.multiplayerReactionsEnabled, (enabled) => onToggleExperimentalFlag('multiplayerReactionsEnabled', enabled))}
+          </div>
+        ) : null}
       </section>
 
-      <section className="settings-section" aria-label="Data controls">
+      <section className="settings-section settings-danger-zone" aria-label="Data controls">
         <h3>Data Controls</h3>
+        <p className="settings-subtitle">Use carefully. This removes local match history and stats telemetry.</p>
         <div className="actions">
-          <button type="button" onClick={onClearStatsData}>
+          <button type="button" className="settings-danger-action" onClick={onClearStatsData}>
             Clear Stats & History
           </button>
         </div>
       </section>
 
-      <div className="actions">
-        <button type="button" onClick={onBack}>
-          Back
-        </button>
-      </div>
     </section>
   );
 }

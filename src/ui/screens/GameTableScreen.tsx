@@ -332,8 +332,20 @@ export function GameTableScreen({
             </section>
           ) : null}
 
-          <div className="players-grid">
-            {game.players.map((player) => {
+          <section className="table-surface" aria-label="Table surface">
+            <div className="table-pile-row" aria-label="Card piles">
+              <article className="table-pile-card">
+                <h4>Draw Pile</h4>
+                <p>{game.drawPile.length} cards</p>
+              </article>
+              <article className="table-pile-card">
+                <h4>Discard Pile</h4>
+                <p>{game.discardPile.length} cards</p>
+              </article>
+            </div>
+
+            <div className="players-grid">
+              {game.players.map((player) => {
               const canSeeHand = revealedPlayerId === player.id;
               const isCurrent = game.players[game.currentPlayerIndex].id === player.id;
               const isPromptPlayer = prompt.playerId === player.id;
@@ -519,8 +531,9 @@ export function GameTableScreen({
                   </section>
                 </article>
               );
-            })}
-          </div>
+              })}
+            </div>
+          </section>
 
           <RecentEvents events={game.history} enhancedGrouping={enhancedEventLog} />
         </div>

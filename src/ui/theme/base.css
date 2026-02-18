@@ -24,6 +24,38 @@ body {
   color: var(--text-main);
 }
 
+.game-shell.table-style-classic-green {
+  --surface-0: #0d160f;
+  --surface-1: #152219;
+  --surface-2: #1e3124;
+  --surface-3: #294036;
+}
+
+.game-shell.table-style-neon-arcade {
+  --surface-0: #110a1f;
+  --surface-1: #1a1230;
+  --surface-2: #241c40;
+  --surface-3: #312a57;
+  --surface-panel: rgba(23, 16, 45, 0.9);
+  --line-strong: #7c73c0;
+  --line-soft: #4e4587;
+  --text-main: #f2eeff;
+  --text-muted: #d1caf5;
+  --text-subtle: #a59ccc;
+  --accent: #ff507f;
+  --accent-strong: #d43c66;
+  --accent-alt: #47d7ff;
+  --danger: #ff7d9e;
+  --success: #7df3ba;
+  --shadow-glow: 0 0 0 1px rgba(71, 215, 255, 0.45), 0 0 30px rgba(255, 80, 127, 0.24);
+  --table-felt-base: radial-gradient(circle at 12% 12%, rgba(115, 92, 255, 0.2), transparent 30%), linear-gradient(180deg, #161032, #100b22);
+  --table-felt-pattern: linear-gradient(30deg, rgba(255, 255, 255, 0.04) 0 8%, transparent 8% 50%, rgba(0, 0, 0, 0.12) 50% 58%, transparent 58% 100%);
+  --table-felt-glow: radial-gradient(circle at 50% 22%, rgba(71, 215, 255, 0.28), transparent 46%);
+  --table-felt-border: rgba(114, 103, 187, 0.8);
+  --table-seat-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -10px 16px rgba(0, 0, 0, 0.38);
+  --table-seat-highlight: rgba(255, 80, 127, 0.2);
+}
+
 .game-shell.text-scale-large {
   font-size: 1.06rem;
 }
@@ -131,15 +163,20 @@ button {
   color: #f7fff4;
   cursor: pointer;
   transition:
-    transform var(--motion-fast) var(--ease-standard),
+    transform var(--motion-micro) var(--ease-emphasis),
     filter var(--motion-fast) var(--ease-standard),
-    box-shadow var(--motion-fast) var(--ease-standard);
+    box-shadow var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
 }
 
 button:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: translateY(-2px) scale(1.01);
   filter: brightness(1.08);
   box-shadow: var(--shadow-xs);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
 }
 
 button:focus-visible,
@@ -192,7 +229,7 @@ button:disabled {
 }
 
 .card-enter {
-  animation: reveal var(--motion-base) var(--ease-standard);
+  animation: reveal var(--motion-entry) var(--ease-emphasis);
 }
 
 @keyframes reveal {
@@ -228,6 +265,12 @@ button:disabled {
   .confetti-dot {
     animation: none !important;
     opacity: 0 !important;
+  }
+
+  * {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
 
