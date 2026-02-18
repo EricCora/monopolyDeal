@@ -68,7 +68,9 @@ export type GrowthMetricEvent =
   | 'multiplayer_match_completed'
   | 'multiplayer_push_connected'
   | 'multiplayer_push_disconnected'
-  | 'multiplayer_push_fallback';
+  | 'multiplayer_push_fallback'
+  | 'multiplayer_rate_limited'
+  | 'multiplayer_origin_blocked';
 
 export interface GrowthMetricsV1 {
   version: 1;
@@ -94,5 +96,7 @@ export interface GrowthMetricsV1 {
     multiplayer_push_connected: number;
     multiplayer_push_disconnected: number;
     multiplayer_push_fallback: number;
+    multiplayer_rate_limited: number;
+    multiplayer_origin_blocked: number;
   };
 }

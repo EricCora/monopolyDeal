@@ -326,6 +326,8 @@ function defaultGrowthMetrics(): GrowthMetricsV1 {
       multiplayer_push_connected: 0,
       multiplayer_push_disconnected: 0,
       multiplayer_push_fallback: 0,
+      multiplayer_rate_limited: 0,
+      multiplayer_origin_blocked: 0,
     },
   };
 }
@@ -365,6 +367,8 @@ export function loadGrowthMetrics(): GrowthMetricsV1 {
         multiplayer_push_connected: parseMetricCount(parsed.events?.multiplayer_push_connected),
         multiplayer_push_disconnected: parseMetricCount(parsed.events?.multiplayer_push_disconnected),
         multiplayer_push_fallback: parseMetricCount(parsed.events?.multiplayer_push_fallback),
+        multiplayer_rate_limited: parseMetricCount(parsed.events?.multiplayer_rate_limited),
+        multiplayer_origin_blocked: parseMetricCount(parsed.events?.multiplayer_origin_blocked),
       },
     };
   } catch {

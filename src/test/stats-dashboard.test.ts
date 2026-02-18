@@ -90,6 +90,8 @@ describe('stats dashboard helpers', () => {
         multiplayer_push_connected: 3,
         multiplayer_push_disconnected: 1,
         multiplayer_push_fallback: 1,
+        multiplayer_rate_limited: 2,
+        multiplayer_origin_blocked: 1,
       },
     };
     const model = buildStatsDashboardModel(fixture.history, fixture.lifetime, undefined, metrics);

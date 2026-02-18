@@ -50,6 +50,8 @@ describe('growth metrics storage', () => {
         multiplayer_push_connected: 0,
         multiplayer_push_disconnected: 0,
         multiplayer_push_fallback: 0,
+        multiplayer_rate_limited: 0,
+        multiplayer_origin_blocked: 0,
       },
     });
 
@@ -78,6 +80,8 @@ describe('growth metrics storage', () => {
         multiplayer_push_connected: 0,
         multiplayer_push_disconnected: 0,
         multiplayer_push_fallback: 0,
+        multiplayer_rate_limited: 0,
+        multiplayer_origin_blocked: 0,
       },
     });
   });
@@ -107,6 +111,8 @@ describe('growth metrics storage', () => {
         multiplayer_push_connected: 0,
         multiplayer_push_disconnected: 0,
         multiplayer_push_fallback: 0,
+        multiplayer_rate_limited: 0,
+        multiplayer_origin_blocked: 0,
       },
     });
 
@@ -143,6 +149,8 @@ describe('growth metrics storage', () => {
           multiplayer_push_connected: {},
           multiplayer_push_disconnected: [],
           multiplayer_push_fallback: 'oops',
+          multiplayer_rate_limited: {},
+          multiplayer_origin_blocked: [],
         },
       }),
     );

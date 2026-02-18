@@ -212,6 +212,8 @@ export function buildStatsDashboardModel(
     multiplayer_push_connected: 0,
     multiplayer_push_disconnected: 0,
     multiplayer_push_fallback: 0,
+    multiplayer_rate_limited: 0,
+    multiplayer_origin_blocked: 0,
   };
 
   const matchTrends = matchRows
@@ -284,6 +286,8 @@ export function buildStatsDashboardModel(
       { event: 'Push connected', count: growthEvents.multiplayer_push_connected },
       { event: 'Push disconnected', count: growthEvents.multiplayer_push_disconnected },
       { event: 'Push fallback', count: growthEvents.multiplayer_push_fallback },
+      { event: 'Rate limited responses', count: growthEvents.multiplayer_rate_limited },
+      { event: 'Origin blocked responses', count: growthEvents.multiplayer_origin_blocked },
     ],
   };
 }

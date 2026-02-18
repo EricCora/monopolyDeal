@@ -844,6 +844,8 @@ describe('App', () => {
           multiplayer_push_connected: 0,
           multiplayer_push_disconnected: 0,
           multiplayer_push_fallback: 0,
+          multiplayer_rate_limited: 0,
+          multiplayer_origin_blocked: 0,
         },
       }),
     );
