@@ -219,7 +219,7 @@ function legalForPending(state: GameState, player: PlayerState): LegalAction[] {
           requestedAmount,
           collectibleCap,
           requiresPropertyTransfer,
-          requiresConfirmation: true,
+          requiresConfirmation: false,
           riskLevel: requiresPropertyTransfer ? 'high' : 'medium',
           previewText: requiresPropertyTransfer
             ? 'This rent likely requires property transfer to cover payment.'

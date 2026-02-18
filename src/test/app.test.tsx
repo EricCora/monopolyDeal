@@ -239,6 +239,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
 
     expect(screen.getByText(/required: resolve this step/i)).toBeInTheDocument();
+    expect(screen.getByText(/payment requested/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /\$2 card/i }));
     fireEvent.click(screen.getByRole('button', { name: /confirm payment/i }));
 
@@ -635,6 +636,43 @@ describe('App', () => {
     expect(screen.getByRole('dialog', { name: /confirm risky action/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
     expect(mockedApplyAction).not.toHaveBeenCalled();
+  });
+
+  it('does not show a second confirmation for pending rent target selection', () => {
+    mockedGetNextPrompt.mockImplementation(() => ({
+      playerId: 'p1',
+      text: 'Alpha: choose who pays $3 rent for Brown.',
+      kind: 'selection',
+    }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Charge Beta rent for Brown',
+        action: {
+          type: 'play_action',
+          playerId: 'p1',
+          cardId: 'rent_color#r1',
+          targetPlayerId: 'p2',
+          color: 'brown',
+        },
+        requiresConfirmation: false,
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /charge beta rent for brown/i }));
+
+    expect(screen.queryByRole('dialog', { name: /confirm risky action/i })).not.toBeInTheDocument();
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'play_action',
+      playerId: 'p1',
+      cardId: 'rent_color#r1',
+      targetPlayerId: 'p2',
+      color: 'brown',
+    });
   });
 
   it('confirms risky action and dispatches exactly once', () => {

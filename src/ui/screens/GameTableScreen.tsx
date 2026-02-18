@@ -29,6 +29,12 @@ interface PlayChooserState {
   variants: CardActionVariant[];
 }
 
+interface PendingRequestBanner {
+  title: string;
+  detail: string;
+  tone: 'payment' | 'selection' | 'response';
+}
+
 interface GameTableScreenProps {
   mode?: 'local' | 'multiplayer';
   game: GameState;
@@ -100,6 +106,66 @@ interface GameTableScreenProps {
 
 function colorLabel(color: PropertyColor): string {
   return formatPropertyColor(color);
+}
+
+function pendingRequestBanner(game: GameState, playerId: string): PendingRequestBanner | null {
+  const pending = game.pending;
+  if (!pending) return null;
+
+  if (pending.kind === 'payment' && pending.payload.targetPlayerId === playerId) {
+    const sourceName = game.players.find((player) => player.id === pending.payload.sourcePlayerId)?.name ?? 'Another player';
+    return {
+      title: 'Payment Requested',
+      detail: `${sourceName} is requesting $${pending.payload.amount} for ${pending.payload.reason}. Select cards from bank and properties to submit payment.`,
+      tone: 'payment',
+    };
+  }
+
+  if (pending.kind === 'counter' && pending.payload.awaitingPlayerId === playerId) {
+    const sourceName = game.players.find((player) => player.id === pending.payload.sourcePlayerId)?.name ?? 'Another player';
+    return {
+      title: 'Counter Response Needed',
+      detail: `${sourceName} played ${getCardDisplayName(pending.payload.actionCardId)}. Decide whether to play Just Say No or resolve the action.`,
+      tone: 'response',
+    };
+  }
+
+  if (pending.kind === 'rent' && pending.payload.sourcePlayerId === playerId) {
+    return {
+      title: 'Rent Target Required',
+      detail: `Choose who pays $${pending.payload.amount} for ${colorLabel(pending.payload.color)} rent.`,
+      tone: 'selection',
+    };
+  }
+
+  if (pending.kind === 'sly_deal' && pending.payload.sourcePlayerId === playerId) {
+    const targetName = game.players.find((player) => player.id === pending.payload.targetPlayerId)?.name ?? 'target player';
+    return {
+      title: 'Steal a Property',
+      detail: `Pick one movable property from ${targetName}.`,
+      tone: 'selection',
+    };
+  }
+
+  if (pending.kind === 'forced_deal' && pending.payload.sourcePlayerId === playerId) {
+    const targetName = game.players.find((player) => player.id === pending.payload.targetPlayerId)?.name ?? 'target player';
+    return {
+      title: 'Swap Required',
+      detail: `Pick one of your properties, then a property from ${targetName} to complete the swap.`,
+      tone: 'selection',
+    };
+  }
+
+  if (pending.kind === 'deal_breaker' && pending.payload.sourcePlayerId === playerId) {
+    const targetName = game.players.find((player) => player.id === pending.payload.targetPlayerId)?.name ?? 'target player';
+    return {
+      title: 'Choose Set to Steal',
+      detail: `Pick a complete set to steal from ${targetName}.`,
+      tone: 'selection',
+    };
+  }
+
+  return null;
 }
 
 function renderHiddenHand(cardCount: number) {
@@ -354,6 +420,7 @@ export function GameTableScreen({
               const isPaymentPayer = pendingPayment?.targetPlayerId === player.id;
               const paymentSelectionEnabled = Boolean(isPaymentPayer && revealedPlayerId === player.id && !over.done && !isPaused);
               const selectionCardPickingEnabled = Boolean(prompt.kind === 'selection' && revealedPlayerId === prompt.playerId && !over.done && !isPaused);
+              const requestBanner = isPromptPlayer ? pendingRequestBanner(game, player.id) : null;
               const inlineActions = isPromptPlayer
                 ? (
                     pendingPayment
@@ -366,7 +433,7 @@ export function GameTableScreen({
               const propertyColors = (Object.keys(player.properties) as PropertyColor[]).filter((color) => player.properties[color].length > 0);
 
               return (
-                <article className={`player ${isCurrent ? 'active' : ''}`} key={player.id}>
+                <article className={`player ${isCurrent ? 'active' : ''} ${isPaymentPayer ? 'is-payment-requested' : ''}`} key={player.id}>
                   <header>
                     <h3>{player.name}</h3>
                     <p>{getSetCompletionCount(player)} complete sets</p>
@@ -386,6 +453,12 @@ export function GameTableScreen({
                           Hand size: <strong>{player.hand.length}</strong> | Limit: <strong>7</strong> | Need to discard:{' '}
                           <strong>{Math.max(player.hand.length - 7, 0)}</strong>
                         </p>
+                      ) : null}
+                      {requestBanner ? (
+                        <div className={`action-request-banner tone-${requestBanner.tone}`} role="status" aria-live="polite">
+                          <p className="action-request-title">{requestBanner.title}</p>
+                          <p className="action-request-detail">{requestBanner.detail}</p>
+                        </div>
                       ) : null}
                       <p className="inline-prompt-text">{prompt.text}</p>
 
