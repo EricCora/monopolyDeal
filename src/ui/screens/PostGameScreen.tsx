@@ -89,6 +89,31 @@ export function PostGameScreen({
         </article>
       </section>
 
+      <section className="postgame-recap-grid" aria-label="Recap highlights">
+        <article className="postgame-recap-card tone-winning">
+          <h3>Winning Move</h3>
+          <p>{postGameSummary.winningMove}</p>
+        </article>
+        <article className="postgame-recap-card tone-momentum">
+          <h3>Momentum Shift</h3>
+          <p>{postGameSummary.momentumShift}</p>
+        </article>
+        <article className="postgame-recap-card tone-cards">
+          <h3>Highlight Cards</h3>
+          {postGameSummary.highlightCards.length > 0 ? (
+            <ul className="postgame-highlight-card-list">
+              {postGameSummary.highlightCards.map((cardName) => (
+                <li key={cardName} className="postgame-highlight-card">
+                  {cardName}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="postgame-card-fallback">No standout cards captured this match.</p>
+          )}
+        </article>
+      </section>
+
       <section className="postgame-standings" aria-labelledby="standings-title">
         <div className="postgame-heading-row">
           <h3 id="standings-title">Final Standings</h3>

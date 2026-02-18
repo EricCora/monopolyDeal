@@ -96,6 +96,9 @@ describe('buildPostGameSummary', () => {
     expect(summary.players[0].name).toBe('Alpha');
     expect(summary.players[0].rank).toBe(1);
     expect(summary.players[0].lifetimeWins).toBe(4);
+    expect(summary.winningMove).toBe('Alpha charged Beta $3 rent.');
+    expect(summary.momentumShift).toContain('rent sequence');
+    expect(summary.highlightCards).toContain('Rent');
     expect(summary.recentEvents).toHaveLength(3);
     expect(summary.recentEvents[0].message).toBe('Alpha charged Beta $3 rent.');
   });
@@ -131,5 +134,33 @@ describe('buildPostGameSummary', () => {
 
     const summary = buildPostGameSummary(createState([p1, p2], history, 'p2'), { version: 1, players: {} });
     expect(summary.finalSwing).toBe('Alpha paid Beta $5.');
+  });
+
+  it('extracts deterministic recap fields for a deal breaker finish', () => {
+    const p1 = createPlayer('p1', 'Alpha');
+    const p2 = createPlayer('p2', 'Beta');
+    const history: GameEvent[] = [
+      { timestamp: 10_100, type: 'action', message: 'Alpha played Deal Breaker on Beta.' },
+      { timestamp: 10_200, type: 'deal_breaker', message: "Alpha stole Beta's dark_blue set." },
+    ];
+
+    const summary = buildPostGameSummary(createState([p1, p2], history, 'p1'), { version: 1, players: {} });
+    expect(summary.winningMove).toBe("Alpha stole Beta's dark_blue set.");
+    expect(summary.momentumShift).toContain('Deal Breaker');
+    expect(summary.highlightCards).toContain('Deal Breaker');
+  });
+
+  it('extracts deterministic recap fields for a set-completion finish', () => {
+    const p1 = createPlayer('p1', 'Alpha');
+    const p2 = createPlayer('p2', 'Beta');
+    const history: GameEvent[] = [
+      { timestamp: 10_100, type: 'property', message: 'Alpha placed Dark Blue Property in Dark Blue.' },
+      { timestamp: 10_250, type: 'property', message: 'Alpha placed Brown Property in Brown.' },
+    ];
+
+    const summary = buildPostGameSummary(createState([p1, p2], history, 'p1'), { version: 1, players: {} });
+    expect(summary.winningMove).toBe('Alpha placed Brown Property in Brown.');
+    expect(summary.momentumShift).toContain('property play');
+    expect(summary.highlightCards).toContain('Brown Property');
   });
 });
