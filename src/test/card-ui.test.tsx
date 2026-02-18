@@ -47,6 +47,21 @@ describe('Card UI', () => {
     expect(screen.getByRole('button', { name: /rent pink\/orange card/i })).toHaveClass('theme-rent-wild');
   });
 
+  it('shows explicit card type tags to separate property cards from rent action cards', () => {
+    render(
+      <>
+        <CardView cardId="brown_1#1" />
+        <CardView cardId="rent_color#1" />
+      </>,
+    );
+
+    const propertyCard = screen.getByRole('button', { name: /brown card/i });
+    const rentCard = screen.getByRole('button', { name: /rent \(any color\) card/i });
+
+    expect(within(propertyCard).getByLabelText(/card type/i)).toHaveTextContent('Property');
+    expect(within(rentCard).getByLabelText(/card type/i)).toHaveTextContent('Rent Action');
+  });
+
   it('renders card back when face down', () => {
     render(<CardView cardId="money_1#1" faceUp={false} />);
 

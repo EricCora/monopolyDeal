@@ -110,6 +110,77 @@
   font-weight: 800;
 }
 
+.postgame-recap-grid {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.postgame-recap-card {
+  border-radius: 12px;
+  border: 1px solid #4f6e86;
+  background: rgba(10, 26, 40, 0.86);
+  padding: 0.75rem 0.8rem;
+}
+
+.postgame-recap-card h3 {
+  margin: 0;
+  font-size: 0.84rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #aec5d9;
+}
+
+.postgame-recap-card p {
+  margin: 0.36rem 0 0;
+  color: #e7f1fb;
+}
+
+.postgame-recap-card.tone-winning {
+  border-color: #8cb676;
+  background: linear-gradient(160deg, rgba(42, 71, 38, 0.92), rgba(18, 38, 23, 0.84));
+}
+
+.postgame-recap-card.tone-momentum {
+  border-color: #7399c2;
+  background: linear-gradient(160deg, rgba(33, 52, 75, 0.9), rgba(17, 29, 48, 0.84));
+}
+
+.postgame-recap-card.tone-cards {
+  border-color: #c3a06a;
+  background: linear-gradient(160deg, rgba(78, 56, 26, 0.88), rgba(47, 32, 14, 0.84));
+}
+
+.postgame-highlight-card-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.postgame-highlight-card {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 215, 151, 0.66);
+  background: rgba(143, 100, 43, 0.5);
+  color: #ffe7bf;
+  font-size: 0.78rem;
+  padding: 0.18rem 0.5rem;
+  font-weight: 700;
+}
+
+.postgame-card-fallback {
+  margin-top: 0.4rem !important;
+  color: #dac8aa !important;
+  font-size: 0.85rem;
+}
+
 .postgame-standings {
   position: relative;
   z-index: 1;

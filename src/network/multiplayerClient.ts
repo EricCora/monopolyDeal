@@ -73,6 +73,9 @@ export function multiplayerErrorMessage(code: string): string {
   if (code === 'checkpoint_player_mismatch') return 'Checkpoint players do not match the current lobby lineup.';
   if (code === 'reaction_rate_limited') return 'Reaction sent too quickly. Please wait a moment.';
   if (code === 'reactions_disabled') return 'Reactions are disabled for this room.';
+  if (code === 'chat_rate_limited') return 'Chat message sent too quickly. Please wait a moment.';
+  if (code === 'chat_too_long') return 'Chat message is too long.';
+  if (code === 'chat_empty') return 'Chat message cannot be empty.';
   if (code === 'push_disabled') return 'Live room updates are disabled for this server.';
   if (code === 'network_unavailable' || code === 'request_failed') return 'Couldn\'t connect right now. Retrying...';
   return 'Could not complete multiplayer request. Please try again.';
@@ -380,6 +383,42 @@ export async function sendMultiplayerReaction(
       playerId: session.playerId,
       sessionToken: session.sessionToken,
       reaction,
+      expectedRevision,
+    }),
+  });
+}
+
+export async function sendMultiplayerChatMessage(
+  session: MultiplayerSession,
+  text: string,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<void> {
+  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      playerId: session.playerId,
+      sessionToken: session.sessionToken,
+      text,
+      expectedRevision,
+    }),
+  });
+}
+
+export async function setMultiplayerTyping(
+  session: MultiplayerSession,
+  typing: boolean,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<void> {
+  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/typing`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      playerId: session.playerId,
+      sessionToken: session.sessionToken,
+      typing,
       expectedRevision,
     }),
   });

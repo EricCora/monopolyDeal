@@ -2,6 +2,95 @@
 
 Branch: `codex/deep-research-improvements`
 
+## Update: Gameplay Clarity + Chat + Recap Polish
+
+Branch: `codex/gameplay-clarity-chat-polish`
+
+## Update: Multiplayer Recovery + Reaction UX + Steal/Draw Feedback
+
+Branch: `codex/gameplay-clarity-chat-polish`
+
+### What landed
+
+- Fixed stale-session resume dead-end:
+  - Auto-clears stale multiplayer sessions when reconnect fails with `room_not_found` or `reconnect_expired`.
+  - Preserves room code in the join field for fast rejoin.
+  - Replaces infinite "Syncing Room..." with explicit recovery cards/notices.
+- Upgraded reaction UX (UNO-style direction while keeping wire compatibility):
+  - Removed tiny inline reaction rows from table/lobby.
+  - Added quick emoji reaction tray inside chat dock, still mapped to `nice|wow|gg|oops`.
+  - Added short-lived per-player reaction burst badges on lobby roster and in-match player panels.
+  - Reaction entries remain in activity feed but are visually de-emphasized.
+- Added structured gameplay event metadata:
+  - `GameEvent.details` now supports draw and property-steal details.
+  - Draw events include `playerId`, `count`, and `reason` (`turn_draw`, `pass_go`, `effect`).
+  - Steal events include source/target ids, mode (`sly_deal`, `forced_deal`, `deal_breaker`), and affected `cardIds`.
+- Steal clarity pass:
+  - Added prominent in-table steal banner ("who stole what from whom").
+  - Added temporary source/target player glows and stolen-card/lane highlights.
+  - Added polite live-region status messaging for accessibility.
+- Draw feedback pass:
+  - Added visual deck representation on draw pile.
+  - Added deck-to-hand ghost-card animation triggered by draw event metadata.
+  - Animation is disabled when reduced motion/reduced effects is enabled.
+
+### Verification run for this update
+
+- `npm run test`
+- `npm run build`
+- `npm run lint` (passes; pre-existing React Compiler/TanStack warning remains in `StatsDashboard`)
+
+### What landed
+
+Gameplay clarity and correctness:
+- Pending-action prompts now explicitly describe actor, target, card/effect, and expected response for rent, debt, counters, and steals.
+- Event taxonomy normalized to `pay` for payment resolution telemetry/recap consistency (legacy `payment` remains tolerated in readers).
+- `play_to_bank` now rejects regular property cards while allowing wild/action/money/building cards per official rules split.
+- `pay_request` validation now enforces minimum payable amount when possible; shortfall is accepted only when payer total is insufficient.
+- Multiplayer `pay_request` legality check is structural/order-insensitive so valid manual card picks are accepted.
+- Removed double-confirm rent friction by skipping secondary confirmation on pending rent target resolution.
+- Added prominent in-panel request banners (`Payment Requested`, `Respond to Counter`, `Select Property Target`) so players can see required actions without relying on logs.
+- Rent and property visual distinction improved with explicit card role badges (for example `Rent Action` vs `Property`).
+
+Multiplayer chat:
+- Added room chat backend with bounded history, typing indicators (TTL), sanitization, max-length guard, and rate limiting.
+- Added endpoints: `POST /api/multiplayer/rooms/:roomCode/chat` and `POST /api/multiplayer/rooms/:roomCode/typing`.
+- Added chat/typing fields to shared room contracts and backward-compatible runtime normalization for legacy room snapshots.
+- Added bottom-left multiplayer chat dock with collapsible chat pill, unread badge, composer, typing indicator, mention highlight for `@yourName`, and ARIA `log` semantics.
+
+Postgame recap upgrade:
+- `PostGameSummary` now includes deterministic `winningMove`, `momentumShift`, and `highlightCards`.
+- Postgame screen now presents recap cards for winning move, momentum shift, and standout cards.
+- Share image model now uses recap story fields (winning move + momentum shift + highlight cards).
+
+### Verification run for this update
+
+- `npm run test -- src/test/multiplayer-room-service.test.ts src/test/multiplayer-chat-dock.test.tsx src/test/card-ui.test.tsx src/test/app.test.tsx`
+- `npm run test -- src/test/post-game.test.ts src/test/app.test.tsx`
+
+### Manual smoke scripts added/recommended
+
+1. Manual payment edge case (`Debt Collector`):
+   - Set up a pending payment where payer can fully cover amount.
+   - Confirm manual selection rejects underpayment and accepts valid full/over payment.
+   - Set up a pending payment where payer cannot cover amount.
+   - Confirm only “pay all available” selections are accepted.
+
+2. Rent confirmation and request visibility:
+   - Play a rent action requiring target selection.
+   - Confirm only one confirmation layer appears.
+   - Confirm affected player panel shows explicit payment request banner.
+
+3. Multiplayer chat:
+   - In lobby and in active match, send messages from two players.
+   - Verify unread badge increments while collapsed and resets when opened.
+   - Verify typing indicator appears/disappears.
+   - Verify `@name` mention highlight appears for non-self messages.
+
+4. Postgame recap:
+   - Finish matches through rent closeout, deal-breaker closeout, and set-completion closeout patterns.
+   - Verify `Winning Move`, `Momentum Shift`, and `Highlight Cards` populate deterministically.
+
 ## What Landed
 
 - Flagship multiplayer follow-through:

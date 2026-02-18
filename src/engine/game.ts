@@ -18,6 +18,7 @@ import {
   MAX_HAND_AT_END_TURN,
   PROPERTY_COLORS,
   addToProperty,
+  canCardBeBanked,
   canCardBePlacedInColor,
   canPlayDoubleRent,
   cardLabel,
@@ -218,7 +219,7 @@ function legalForPending(state: GameState, player: PlayerState): LegalAction[] {
           requestedAmount,
           collectibleCap,
           requiresPropertyTransfer,
-          requiresConfirmation: true,
+          requiresConfirmation: false,
           riskLevel: requiresPropertyTransfer ? 'high' : 'medium',
           previewText: requiresPropertyTransfer
             ? 'This rent likely requires property transfer to cover payment.'
@@ -309,7 +310,7 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
     for (const cardId of player.hand) {
       const card = getCardDefinition(cardId);
 
-      const moneyPlayable = card.kind === 'money' || card.kind === 'action' || card.kind === 'building' || card.kind === 'wild';
+      const moneyPlayable = canCardBeBanked(card);
       if (moneyPlayable) {
         actions.push({
           label: `Bank ${card.name}`,
@@ -530,7 +531,12 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     const drawn = drawCards(state, player, drawAmount);
     state.turn.phase = 'action';
     state.turn.endingTurn = false;
-    pushEvent(events, 'draw', `${player.name} drew ${drawn.length} cards.`);
+    pushEvent(events, 'draw', `${player.name} drew ${drawn.length} cards.`, {
+      kind: 'draw',
+      playerId: player.id,
+      count: drawn.length,
+      reason: 'turn_draw',
+    });
   }
 
   if (action.type === 'pass_turn') {
@@ -560,6 +566,10 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     if (state.turn.phase !== 'action') return setErr(error('invalid_phase', 'Cannot play now.'));
     if (state.turn.playsUsed >= ruleset(state).maxPlaysPerTurn) {
       return setErr(error('illegal_play_limit', `Already used ${ruleset(state).maxPlaysPerTurn} plays this turn.`));
+    }
+    const card = getCardDefinition(action.cardId);
+    if (!canCardBeBanked(card)) {
+      return setErr(error('invalid_action', 'Only money, action, building, and wild cards can be banked.'));
     }
     if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
     player.bank.push(action.cardId);
@@ -679,7 +689,12 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
 
       if (actionKind === 'pass_go') {
         const drawn = drawCards(state, player, 2);
-        pushEvent(events, 'action', `${player.name} played Pass Go and drew ${drawn.length}.`);
+        pushEvent(events, 'action', `${player.name} played Pass Go and drew ${drawn.length}.`, {
+          kind: 'draw',
+          playerId: player.id,
+          count: drawn.length,
+          reason: 'pass_go',
+        });
       }
 
       if (actionKind === 'double_rent') {
@@ -833,9 +848,16 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
       }
     }
 
-    let total = 0;
+    const total = [...selected].reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0);
+    const payableTotal = totalPayableValue(payer);
+    if (payableTotal >= req.amount && total < req.amount) {
+      return setErr(error('invalid_action', `Payment must total at least $${req.amount}.`));
+    }
+    if (payableTotal < req.amount && total < payableTotal) {
+      return setErr(error('invalid_action', 'Player must pay all available cards when total funds are insufficient.'));
+    }
+
     for (const cardId of selected) {
-      total += cardMoneyValue(cardId);
       const bankIdx = payer.bank.indexOf(cardId);
       if (bankIdx >= 0) {
         payer.bank.splice(bankIdx, 1);
@@ -854,7 +876,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     }
 
     state.pending = null;
-    pushEvent(events, 'payment', `${payer.name} paid ${collector.name} $${Math.min(total, req.amount)} (${req.reason}).`);
+    pushEvent(events, 'pay', `${payer.name} paid ${collector.name} $${Math.min(total, req.amount)} (${req.reason}).`);
     continuePaymentChain(state, req, events);
   }
 
@@ -876,7 +898,13 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
 
     addToProperty(source, action.cardId, action.destinationColor);
     state.pending = null;
-    pushEvent(events, 'sly_deal', `${source.name} took ${cardLabel(action.cardId)} from ${target.name}.`);
+    pushEvent(events, 'sly_deal', `${source.name} took ${cardLabel(action.cardId)} from ${target.name}.`, {
+      kind: 'property_steal',
+      sourcePlayerId: source.id,
+      targetPlayerId: target.id,
+      cardIds: [action.cardId],
+      mode: 'sly_deal',
+    });
   }
 
   if (action.type === 'forced_deal_pick') {
@@ -908,7 +936,13 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     addToProperty(target, give.cardId, targetDestColor);
 
     state.pending = null;
-    pushEvent(events, 'forced_deal', `${source.name} swapped ${cardLabel(action.giveCardId)} for ${cardLabel(action.takeCardId)}.`);
+    pushEvent(events, 'forced_deal', `${source.name} swapped ${cardLabel(action.giveCardId)} for ${cardLabel(action.takeCardId)}.`, {
+      kind: 'property_steal',
+      sourcePlayerId: source.id,
+      targetPlayerId: target.id,
+      cardIds: [action.giveCardId, action.takeCardId],
+      mode: 'forced_deal',
+    });
   }
 
   if (action.type === 'deal_breaker_pick') {
@@ -929,7 +963,13 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     }
 
     state.pending = null;
-    pushEvent(events, 'deal_breaker', `${source.name} stole ${target.name}'s ${action.color} set.`);
+    pushEvent(events, 'deal_breaker', `${source.name} stole ${target.name}'s ${action.color} set.`, {
+      kind: 'property_steal',
+      sourcePlayerId: source.id,
+      targetPlayerId: target.id,
+      cardIds: cards.map((entry) => entry.cardId),
+      mode: 'deal_breaker',
+    });
   }
 
   checkWinner(state);
@@ -948,6 +988,10 @@ export function isGameOver(state: GameState): { done: boolean; winnerId?: Player
   return winner ? { done: true, winnerId: winner.id } : { done: false };
 }
 
+function playerName(state: GameState, playerId: PlayerId, fallback: string): string {
+  return getPlayer(state, playerId)?.name ?? fallback;
+}
+
 export function getNextPrompt(state: GameState): TurnPrompt {
   const currentPlayer = getCurrentPlayer(state);
   if (requiresEndTurnDiscard(state, currentPlayer)) {
@@ -960,26 +1004,60 @@ export function getNextPrompt(state: GameState): TurnPrompt {
 
   if (state.pending?.kind === 'counter') {
     const pendingPlayer = getPlayer(state, state.pending.payload.awaitingPlayerId);
+    const sourceName = playerName(state, state.pending.payload.sourcePlayerId, 'Player');
+    const actionCardName = cardLabel(state.pending.payload.actionCardId);
     return {
       playerId: pendingPlayer?.id ?? currentPlayer.id,
-      text: `${pendingPlayer?.name ?? 'Player'}: respond with Just Say No or resolve.`,
+      text: `${pendingPlayer?.name ?? 'Player'}: respond to ${sourceName}'s ${actionCardName} with Just Say No or resolve.`,
       kind: 'response',
     };
   }
 
   if (state.pending?.kind === 'payment') {
     const pendingPlayer = getPlayer(state, state.pending.payload.targetPlayerId);
+    const sourceName = playerName(state, state.pending.payload.sourcePlayerId, 'Player');
     return {
       playerId: pendingPlayer?.id ?? currentPlayer.id,
-      text: `${pendingPlayer?.name ?? 'Player'}: choose payment cards totaling $${state.pending.payload.amount}.`,
+      text: `${pendingPlayer?.name ?? 'Player'}: pay ${sourceName} $${state.pending.payload.amount} for ${state.pending.payload.reason}.`,
       kind: 'payment',
     };
   }
 
-  if (state.pending) {
+  if (state.pending?.kind === 'rent') {
+    const sourceName = playerName(state, state.pending.payload.sourcePlayerId, 'Player');
     return {
-      playerId: currentPlayer.id,
-      text: `${currentPlayer.name}: resolve the pending card effect.`,
+      playerId: state.pending.payload.sourcePlayerId,
+      text: `${sourceName}: choose who pays $${state.pending.payload.amount} rent for ${colorLabel(state.pending.payload.color)}.`,
+      kind: 'selection',
+    };
+  }
+
+  if (state.pending?.kind === 'sly_deal') {
+    const sourceName = playerName(state, state.pending.payload.sourcePlayerId, 'Player');
+    const targetName = playerName(state, state.pending.payload.targetPlayerId, 'target');
+    return {
+      playerId: state.pending.payload.sourcePlayerId,
+      text: `${sourceName}: choose a property card to steal from ${targetName}.`,
+      kind: 'selection',
+    };
+  }
+
+  if (state.pending?.kind === 'forced_deal') {
+    const sourceName = playerName(state, state.pending.payload.sourcePlayerId, 'Player');
+    const targetName = playerName(state, state.pending.payload.targetPlayerId, 'target');
+    return {
+      playerId: state.pending.payload.sourcePlayerId,
+      text: `${sourceName}: choose one of your properties, then a property from ${targetName} to swap.`,
+      kind: 'selection',
+    };
+  }
+
+  if (state.pending?.kind === 'deal_breaker') {
+    const sourceName = playerName(state, state.pending.payload.sourcePlayerId, 'Player');
+    const targetName = playerName(state, state.pending.payload.targetPlayerId, 'target');
+    return {
+      playerId: state.pending.payload.sourcePlayerId,
+      text: `${sourceName}: choose a complete set to steal from ${targetName}.`,
       kind: 'selection',
     };
   }

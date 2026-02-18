@@ -68,6 +68,7 @@ import {
 import type { ActionVariantView } from './ui/components/PlayChooser';
 import { GameShell } from './ui/layout/GameShell';
 import { ActionConfirmDialog } from './ui/components/ActionConfirmDialog';
+import { MultiplayerChatDock } from './ui/components/MultiplayerChatDock';
 import { RulesDrawer } from './ui/components/RulesDrawer';
 import { GameTableScreen } from './ui/screens/GameTableScreen';
 import { HomeScreen } from './ui/screens/HomeScreen';
@@ -265,6 +266,8 @@ function App() {
   const [shareStatus, setShareStatus] = useState<ShareStatus>(null);
   const [riskyActionConfirmation, setRiskyActionConfirmation] = useState<RiskyActionConfirmation | null>(null);
   const [showRulesDrawer, setShowRulesDrawer] = useState(false);
+  const [multiplayerChatOpen, setMultiplayerChatOpen] = useState(false);
+  const [multiplayerChatUnread, setMultiplayerChatUnread] = useState(0);
   const [turnSnapshots, setTurnSnapshots] = useState<GameState[]>([]);
   const [uiPreferences, setUiPreferences] = useState<UiPreferencesV1>(() => loadUiPreferences());
   const [devSeedStatus, setDevSeedStatus] = useState<DevSeedStatus>(null);
@@ -274,6 +277,8 @@ function App() {
   const botTurnSignatureRef = useRef<string | null>(null);
   const coachHintMetricRef = useRef<string | null>(null);
   const multiplayerFinishedMetricRef = useRef<string | null>(null);
+  const multiplayerChatLastSeenRef = useRef(0);
+  const multiplayerTypingSentRef = useRef(false);
   const deepLinkHandledRef = useRef(false);
 
   useEffect(() => {
@@ -371,10 +376,13 @@ function App() {
     loading: multiplayerLoading,
     checkpointLoading: multiplayerCheckpointLoading,
     error: multiplayerError,
+    errorCode: multiplayerErrorCode,
+    recoveryNotice: multiplayerRecoveryNotice,
     connectionState: multiplayerConnectionState,
     pushState: multiplayerPushState,
     hostChangeNotice: multiplayerHostChangeNotice,
     clearHostChangeNotice: clearMultiplayerHostChangeNotice,
+    clearRecoveryNotice: clearMultiplayerRecoveryNotice,
     isHost: multiplayerIsHost,
     healthOk: multiplayerHealthOk,
     hostRoom: hostMultiplayerRoom,
@@ -383,6 +391,8 @@ function App() {
     runAction: runMultiplayerAction,
     setReady: setMultiplayerReadyState,
     sendReaction: sendMultiplayerReactionAction,
+    sendChatMessage: sendMultiplayerChatMessageAction,
+    setTyping: setMultiplayerTypingIndicator,
     pauseMatch: pauseMultiplayerMatch,
     resumeMatch: resumeMultiplayerMatch,
     undoLastAction: undoMultiplayerAction,
@@ -412,6 +422,23 @@ function App() {
     setScreen('multiplayer');
     recordGrowthMetric('multiplayer_deep_link_opened');
   }, [recordGrowthMetric, setMultiplayerError, setMultiplayerJoinCode]);
+
+  const multiplayerChatSessionKey = `${multiplayerSession?.roomCode ?? ''}:${multiplayerSession?.playerId ?? ''}`;
+
+  useEffect(() => {
+    if (screen === 'multiplayer' && multiplayerChatSessionKey.length > 1) {
+      setMultiplayerChatOpen(false);
+      setMultiplayerChatUnread(0);
+      multiplayerChatLastSeenRef.current = 0;
+      multiplayerTypingSentRef.current = false;
+      return;
+    }
+    if (screen === 'multiplayer') return;
+    setMultiplayerChatOpen(false);
+    setMultiplayerChatUnread(0);
+    multiplayerChatLastSeenRef.current = 0;
+    multiplayerTypingSentRef.current = false;
+  }, [multiplayerChatSessionKey, screen]);
 
   useEffect(() => {
     if (!game || !prompt) {
@@ -547,9 +574,7 @@ function App() {
         ? `Discard ${discardOverLimitCount} card${discardOverLimitCount === 1 ? '' : 's'} to end turn.`
         : 'Discard step complete. You can pass turn.';
     }
-    if (prompt.kind === 'payment') return 'Payment is required before any other action.';
-    if (prompt.kind === 'response') return 'Respond to Just Say No chain.';
-    if (prompt.kind === 'selection') return 'Resolve the pending card effect.';
+    if (prompt.kind === 'payment' || prompt.kind === 'response' || prompt.kind === 'selection') return prompt.text;
     if (prompt.kind === 'draw') return 'Draw to start the turn.';
     if (mainPhaseExhausted) return '3/3 plays used. Pass turn or use non-play actions.';
     return 'Play cards from hand or pass turn.';
@@ -623,9 +648,9 @@ function App() {
         ? `Discard ${multiplayerDiscardOverLimitCount} card${multiplayerDiscardOverLimitCount === 1 ? '' : 's'} to end turn.`
         : 'Discard step complete. You can pass turn.';
     }
-    if (multiplayerPrompt.kind === 'payment') return 'Payment is required before any other action.';
-    if (multiplayerPrompt.kind === 'response') return 'Respond to Just Say No chain.';
-    if (multiplayerPrompt.kind === 'selection') return 'Resolve the pending card effect.';
+    if (multiplayerPrompt.kind === 'payment' || multiplayerPrompt.kind === 'response' || multiplayerPrompt.kind === 'selection') {
+      return multiplayerPrompt.text;
+    }
     if (multiplayerPrompt.kind === 'draw') return 'Draw to start the turn.';
     if (multiplayerMainPhaseExhausted) return '3/3 plays used. Pass turn or use non-play actions.';
     return 'Play cards from hand or pass turn.';
@@ -650,6 +675,37 @@ function App() {
       {},
     );
   }, [multiplayerRoomView]);
+  const multiplayerTypingNames = useMemo(() => {
+    if (!multiplayerRoomView) return [] as string[];
+    const nameById = new Map(multiplayerRoomView.players.map((player) => [player.id, player.name]));
+    return multiplayerRoomView.typingPlayerIds
+      .filter((playerId) => playerId !== multiplayerRoomView.yourPlayerId)
+      .map((playerId) => nameById.get(playerId))
+      .filter((name): name is string => Boolean(name));
+  }, [multiplayerRoomView]);
+
+  useEffect(() => {
+    if (screen !== 'multiplayer' || !multiplayerRoomView) return;
+    const chatMessages = multiplayerRoomView.chatMessages ?? [];
+    if (chatMessages.length === 0) return;
+    const latestId = chatMessages[chatMessages.length - 1]?.id ?? 0;
+    if (latestId <= multiplayerChatLastSeenRef.current) return;
+
+    if (multiplayerChatOpen) {
+      multiplayerChatLastSeenRef.current = latestId;
+      setMultiplayerChatUnread(0);
+      return;
+    }
+
+    const unseenFromOthers = chatMessages.filter((message) => (
+      message.id > multiplayerChatLastSeenRef.current
+      && message.playerId !== multiplayerRoomView.yourPlayerId
+    )).length;
+    if (unseenFromOthers > 0) {
+      setMultiplayerChatUnread((count) => count + unseenFromOthers);
+    }
+    multiplayerChatLastSeenRef.current = latestId;
+  }, [multiplayerChatOpen, multiplayerRoomView, screen]);
   const multiplayerPendingPayment = multiplayerGame?.pending?.kind === 'payment' ? multiplayerGame.pending.payload : null;
   const multiplayerPendingPaymentPlayer = useMemo(() => {
     if (!multiplayerGame || !multiplayerPendingPayment) return null;
@@ -1423,6 +1479,13 @@ function App() {
     return item.previewText ?? financialDetail;
   };
 
+  const handleMultiplayerTypingChange = useCallback((typing: boolean) => {
+    if (!multiplayerSession) return;
+    if (multiplayerTypingSentRef.current === typing) return;
+    multiplayerTypingSentRef.current = typing;
+    void setMultiplayerTypingIndicator(typing);
+  }, [multiplayerSession, setMultiplayerTypingIndicator]);
+
   const syncSetupPlayerNames = useCallback(
     (names: string[], controllers?: PlayerController[], difficulties?: BotDifficulty[], customRules?: GameConfig['ruleset']) => {
     setSetup((prev) => {
@@ -1624,6 +1687,7 @@ function App() {
           game={game}
           prompt={prompt}
           isPaused={isPaused}
+          reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
           legalActions={legalActions}
           contextualActions={contextualActions}
           revealedPlayerId={revealedPlayerId}
@@ -1687,6 +1751,7 @@ function App() {
           game={multiplayerGame}
           prompt={multiplayerPrompt}
           isPaused={multiplayerRoomView.paused}
+          reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
           pauseReasonText={
             multiplayerRoomView.pausedByPlayerId
               ? `Gameplay is paused by ${multiplayerGame.players.find((player) => player.id === multiplayerRoomView.pausedByPlayerId)?.name ?? multiplayerRoomView.pausedByPlayerId}.`
@@ -1700,10 +1765,6 @@ function App() {
           activityFeed={multiplayerRoomView.activityFeed}
           hostChangeNotice={multiplayerHostChangeNotice}
           onDismissHostChangeNotice={clearMultiplayerHostChangeNotice}
-          reactionsEnabled={multiplayerReactionsEnabled}
-          onSendReaction={(reaction) => {
-            void sendMultiplayerReactionAction(reaction);
-          }}
           checkpointLoading={multiplayerCheckpointLoading}
           legalActions={multiplayerLegalActions}
           contextualActions={multiplayerContextualActions}
@@ -1808,10 +1869,11 @@ function App() {
           apiBase={multiplayerApiBase}
           isLocalDevApi={multiplayerIsLocalDevApi}
           error={multiplayerError}
+          errorCode={multiplayerErrorCode}
+          recoveryNotice={multiplayerRecoveryNotice}
           connectionState={multiplayerConnectionState}
           pushState={multiplayerPushState}
           isHost={multiplayerIsHost}
-          reactionsEnabled={multiplayerReactionsEnabled}
           onPlayerNameChange={setMultiplayerPlayerName}
           onJoinCodeChange={setMultiplayerJoinCode}
           onHostRoom={onHostMultiplayerRoom}
@@ -1821,14 +1883,12 @@ function App() {
           onSetReady={(ready) => {
             void setMultiplayerReadyState(ready);
           }}
-          onSendReaction={(reaction) => {
-            void sendMultiplayerReactionAction(reaction);
-          }}
           onCopyInviteLink={() => {
             recordGrowthMetric('multiplayer_invite_copied');
           }}
           onRefresh={refreshMultiplayerRoom}
           onLeaveRoom={leaveMultiplayerRoom}
+          onClearRecoveryNotice={clearMultiplayerRecoveryNotice}
           onBack={() => setScreen('home')}
         />
       ) : null}
@@ -1934,6 +1994,38 @@ function App() {
             runAction(riskyActionConfirmation.action);
           }}
           onCancel={() => setRiskyActionConfirmation(null)}
+        />
+      ) : null}
+
+      {screen === 'multiplayer' && multiplayerRoomView && multiplayerSession ? (
+        <MultiplayerChatDock
+          messages={multiplayerRoomView.chatMessages}
+          typingNames={multiplayerTypingNames}
+          yourPlayerId={multiplayerRoomView.yourPlayerId}
+          yourName={multiplayerSession.playerName}
+          isOpen={multiplayerChatOpen}
+          unreadCount={multiplayerChatUnread}
+          disabled={multiplayerLoading || multiplayerCheckpointLoading}
+          reactionsEnabled={multiplayerReactionsEnabled}
+          onToggle={() => {
+            setMultiplayerChatOpen((open) => {
+              const nextOpen = !open;
+              if (nextOpen) {
+                setMultiplayerChatUnread(0);
+                const latestId = multiplayerRoomView.chatMessages[multiplayerRoomView.chatMessages.length - 1]?.id ?? 0;
+                multiplayerChatLastSeenRef.current = latestId;
+              }
+              return nextOpen;
+            });
+          }}
+          onSendMessage={(text) => {
+            void sendMultiplayerChatMessageAction(text);
+            multiplayerTypingSentRef.current = false;
+          }}
+          onSendReaction={(reaction) => {
+            void sendMultiplayerReactionAction(reaction);
+          }}
+          onTypingChange={handleMultiplayerTypingChange}
         />
       ) : null}
 

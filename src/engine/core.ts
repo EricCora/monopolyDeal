@@ -71,8 +71,10 @@ export function ruleset(state: GameState): RulesetV1 {
   return state.ruleset ?? DEFAULT_RULESET;
 }
 
-export function pushEvent(events: GameEvent[], type: string, message: string): void {
-  events.push({ timestamp: now(), type, message });
+export function pushEvent(events: GameEvent[], type: string, message: string, details?: GameEvent['details']): void {
+  const nextEvent: GameEvent = { timestamp: now(), type, message };
+  if (details) nextEvent.details = details;
+  events.push(nextEvent);
 }
 
 export function error(code: RuleError['code'], message: string): RuleError {
@@ -278,6 +280,13 @@ export function canCardBePlacedInColor(card: CardDefinition, color: PropertyColo
   if (card.kind === 'wild') return (card.colors ?? []).includes(color);
   if (card.kind === 'building') return true;
   return false;
+}
+
+export function canCardBeBanked(card: CardDefinition): boolean {
+  return card.kind === 'money'
+    || card.kind === 'action'
+    || card.kind === 'building'
+    || card.kind === 'wild';
 }
 
 function hasPlayableRentCard(player: PlayerState, excludedCardId?: string): boolean {

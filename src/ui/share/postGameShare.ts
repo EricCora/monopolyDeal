@@ -4,7 +4,9 @@ export interface PostGameShareModel {
   winnerName: string;
   turns: number;
   durationLabel: string;
-  finalSwing: string;
+  winningMove: string;
+  momentumShift: string;
+  highlightCards: string;
   endedAtLabel: string;
   appUrl: string;
 }
@@ -55,14 +57,18 @@ export function buildPostGameShareModel(summary: PostGameSummary): PostGameShare
     winnerName: summary.winnerName ?? 'Unknown Player',
     turns: summary.turnCount,
     durationLabel: durationLabel(summary.durationSec),
-    finalSwing: summary.finalSwing,
+    winningMove: summary.winningMove,
+    momentumShift: summary.momentumShift,
+    highlightCards: summary.highlightCards.length > 0 ? summary.highlightCards.join(' • ') : 'No standout cards recorded',
     endedAtLabel: new Date(summary.endedAt).toLocaleString(),
     appUrl,
   };
 }
 
 function buildSvg(model: PostGameShareModel): string {
-  const swingLines = wrapLines(model.finalSwing, 54, 3).map(xmlEscape);
+  const winningMoveLines = wrapLines(model.winningMove, 54, 2).map(xmlEscape);
+  const momentumLines = wrapLines(model.momentumShift, 54, 2).map(xmlEscape);
+  const highlightCardsLine = xmlEscape(model.highlightCards);
   return `
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <defs>
@@ -91,14 +97,19 @@ function buildSvg(model: PostGameShareModel): string {
   <text x="330" y="256" fill="#4a5a66" font-size="34" font-family="Avenir Next, Segoe UI, sans-serif">Duration: ${xmlEscape(model.durationLabel)}</text>
   <text x="650" y="256" fill="#4a5a66" font-size="34" font-family="Avenir Next, Segoe UI, sans-serif">Finished: ${xmlEscape(model.endedAtLabel)}</text>
 
-  <rect x="90" y="292" width="1020" height="178" rx="18" fill="#f8f2e4" stroke="#d7c8a9" stroke-dasharray="8 8" />
-  <text x="120" y="340" fill="#2d3d49" font-size="34" font-family="Trebuchet MS, Gill Sans, sans-serif" font-weight="700">Final swing</text>
-  ${swingLines
-    .map((line, index) => `<text x="120" y="${388 + index * 42}" fill="#465764" font-size="33" font-family="Avenir Next, Segoe UI, sans-serif">${line}</text>`)
+  <rect x="90" y="292" width="1020" height="212" rx="18" fill="#f8f2e4" stroke="#d7c8a9" stroke-dasharray="8 8" />
+  <text x="120" y="338" fill="#2d3d49" font-size="30" font-family="Trebuchet MS, Gill Sans, sans-serif" font-weight="700">Winning move</text>
+  ${winningMoveLines
+    .map((line, index) => `<text x="120" y="${374 + index * 34}" fill="#465764" font-size="30" font-family="Avenir Next, Segoe UI, sans-serif">${line}</text>`)
     .join('\n')}
+  <text x="120" y="440" fill="#2d3d49" font-size="30" font-family="Trebuchet MS, Gill Sans, sans-serif" font-weight="700">Momentum shift</text>
+  ${momentumLines
+    .map((line, index) => `<text x="120" y="${476 + index * 30}" fill="#465764" font-size="27" font-family="Avenir Next, Segoe UI, sans-serif">${line}</text>`)
+    .join('\n')}
+  <text x="120" y="534" fill="#2d3d49" font-size="24" font-family="Avenir Next, Segoe UI, sans-serif">Highlight cards: ${highlightCardsLine}</text>
 
-  <text x="90" y="540" fill="#1d6b4f" font-size="31" font-family="Avenir Next, Segoe UI, sans-serif" font-weight="700">${xmlEscape(model.appUrl)}</text>
-  <text x="90" y="574" fill="#51606b" font-size="24" font-family="Avenir Next, Segoe UI, sans-serif">Pass-and-play for 2-4 players</text>
+  <text x="90" y="580" fill="#1d6b4f" font-size="31" font-family="Avenir Next, Segoe UI, sans-serif" font-weight="700">${xmlEscape(model.appUrl)}</text>
+  <text x="90" y="610" fill="#51606b" font-size="24" font-family="Avenir Next, Segoe UI, sans-serif">Pass-and-play for 2-4 players</text>
 </svg>`.trim();
 }
 

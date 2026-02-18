@@ -52,6 +52,36 @@ describe('engine basics', () => {
     expect(fourth.error?.code).toBe('illegal_play_limit');
   });
 
+  it('rejects banking regular property cards', () => {
+    const state = mkState();
+    state.players[0].hand = ['brown_1#p1'];
+
+    const result = applyAction(state, {
+      type: 'play_to_bank',
+      playerId: 'p1',
+      cardId: 'brown_1#p1',
+    });
+
+    expect(result.error?.code).toBe('invalid_action');
+    expect(result.state.players[0].hand).toContain('brown_1#p1');
+    expect(result.state.players[0].bank).toHaveLength(0);
+  });
+
+  it('allows banking wild cards', () => {
+    const state = mkState();
+    state.players[0].hand = ['wild_red_yellow#w1'];
+
+    const result = applyAction(state, {
+      type: 'play_to_bank',
+      playerId: 'p1',
+      cardId: 'wild_red_yellow#w1',
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.state.players[0].bank).toContain('wild_red_yellow#w1');
+    expect(result.state.players[0].hand).toHaveLength(0);
+  });
+
   it('applies custom max plays per turn ruleset', () => {
     const state = createGame({
       seed: 50,
@@ -699,6 +729,191 @@ describe('engine basics', () => {
     expect(result.error?.code).toBe('invalid_action');
     expect(result.state.pending?.kind).toBe('payment');
     expect(result.state.players[1].bank).toEqual(['money_1#owned']);
+  });
+
+  it('requires full payment amount when payer can cover the debt', () => {
+    const state = mkState();
+    state.pending = {
+      kind: 'payment',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        amount: 3,
+        reason: 'Debt Collector',
+        actionCardId: 'debt_collector#d1',
+      },
+    };
+    state.players[1].bank = ['money_1#p2a', 'money_2#p2b'];
+
+    const result = applyAction(state, {
+      type: 'pay_request',
+      playerId: 'p2',
+      cards: ['money_1#p2a'],
+    });
+
+    expect(result.error?.code).toBe('invalid_action');
+    expect(result.state.pending?.kind).toBe('payment');
+    expect(result.state.players[1].bank).toEqual(['money_1#p2a', 'money_2#p2b']);
+  });
+
+  it('allows shortfall payment when payer cannot fully cover debt', () => {
+    const state = mkState();
+    state.pending = {
+      kind: 'payment',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        amount: 6,
+        reason: 'Debt Collector',
+        actionCardId: 'debt_collector#d1',
+      },
+    };
+    state.players[1].bank = ['money_2#p2a'];
+    state.players[1].properties.brown = [{ cardId: 'brown_1#p2b', assignedColor: 'brown' }];
+
+    const partial = applyAction(state, {
+      type: 'pay_request',
+      playerId: 'p2',
+      cards: ['money_2#p2a'],
+    });
+    expect(partial.error?.code).toBe('invalid_action');
+    expect(partial.state.pending?.kind).toBe('payment');
+
+    const full = applyAction(state, {
+      type: 'pay_request',
+      playerId: 'p2',
+      cards: ['money_2#p2a', 'brown_1#p2b'],
+    });
+    expect(full.error).toBeUndefined();
+    expect(full.state.pending).toBeNull();
+  });
+
+  it('draws five cards when starting draw phase with an empty hand', () => {
+    const state = createGame({
+      seed: 97,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.currentPlayerIndex = 0;
+    state.turn.phase = 'draw';
+    state.players[0].hand = [];
+
+    const result = applyAction(state, { type: 'draw_cards', playerId: 'p1' });
+
+    expect(result.error).toBeUndefined();
+    expect(result.state.players[0].hand).toHaveLength(5);
+    expect(result.state.turn.phase).toBe('action');
+    expect(result.events[0]?.details).toMatchObject({
+      kind: 'draw',
+      playerId: 'p1',
+      count: 5,
+      reason: 'turn_draw',
+    });
+  });
+
+  it('emits draw details when pass go is played', () => {
+    const state = mkState();
+    state.players[0].hand = ['pass_go#pg1'];
+
+    const result = applyAction(state, {
+      type: 'play_action',
+      playerId: 'p1',
+      cardId: 'pass_go#pg1',
+    });
+
+    const drawEvent = result.events.find((event) => event.details?.kind === 'draw');
+    expect(drawEvent?.details).toMatchObject({
+      kind: 'draw',
+      playerId: 'p1',
+      count: 2,
+      reason: 'pass_go',
+    });
+  });
+
+  it('emits property steal details for sly deal, forced deal, and deal breaker resolutions', () => {
+    const slyState = mkState();
+    slyState.pending = {
+      kind: 'sly_deal',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        actionCardId: 'sly_deal#sd1',
+      },
+    };
+    slyState.players[1].properties.brown = [{ cardId: 'brown_1#b1', assignedColor: 'brown' }];
+    const slyResult = applyAction(slyState, {
+      type: 'sly_deal_pick',
+      playerId: 'p1',
+      cardId: 'brown_1#b1',
+      sourceColor: 'brown',
+      destinationColor: 'brown',
+    });
+    expect(slyResult.events[0]?.details).toMatchObject({
+      kind: 'property_steal',
+      mode: 'sly_deal',
+      sourcePlayerId: 'p1',
+      targetPlayerId: 'p2',
+      cardIds: ['brown_1#b1'],
+    });
+
+    const forcedState = mkState();
+    forcedState.pending = {
+      kind: 'forced_deal',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        actionCardId: 'forced_deal#fd1',
+      },
+    };
+    forcedState.players[0].properties.utility = [{ cardId: 'utility_1#u1', assignedColor: 'utility' }];
+    forcedState.players[1].properties.brown = [{ cardId: 'brown_1#b1', assignedColor: 'brown' }];
+    const forcedResult = applyAction(forcedState, {
+      type: 'forced_deal_pick',
+      playerId: 'p1',
+      giveCardId: 'utility_1#u1',
+      giveColor: 'utility',
+      takeCardId: 'brown_1#b1',
+      takeColor: 'brown',
+      destinationColor: 'brown',
+    });
+    expect(forcedResult.events[0]?.details).toMatchObject({
+      kind: 'property_steal',
+      mode: 'forced_deal',
+      sourcePlayerId: 'p1',
+      targetPlayerId: 'p2',
+      cardIds: ['utility_1#u1', 'brown_1#b1'],
+    });
+
+    const dealBreakerState = mkState();
+    dealBreakerState.pending = {
+      kind: 'deal_breaker',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        actionCardId: 'deal_breaker#db1',
+      },
+    };
+    dealBreakerState.players[1].properties.brown = [
+      { cardId: 'brown_1#b1', assignedColor: 'brown' },
+      { cardId: 'brown_1#b2', assignedColor: 'brown' },
+    ];
+    const dealBreakerResult = applyAction(dealBreakerState, {
+      type: 'deal_breaker_pick',
+      playerId: 'p1',
+      color: 'brown',
+    });
+    expect(dealBreakerResult.events[0]?.details).toMatchObject({
+      kind: 'property_steal',
+      mode: 'deal_breaker',
+      sourcePlayerId: 'p1',
+      targetPlayerId: 'p2',
+    });
+    expect(dealBreakerResult.events[0]?.details?.kind).toBe('property_steal');
+    if (dealBreakerResult.events[0]?.details?.kind === 'property_steal') {
+      expect(dealBreakerResult.events[0].details.cardIds).toEqual(expect.arrayContaining(['brown_1#b1', 'brown_1#b2']));
+    }
   });
 
   it('restores both property groups when forced deal destination is invalid', () => {

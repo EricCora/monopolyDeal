@@ -12,6 +12,7 @@ import {
 } from '../../../src/engine/index.ts';
 import type {
   MultiplayerActivityFeedItem,
+  MultiplayerChatMessage,
   MultiplayerCheckpointSummary,
   MultiplayerPlayerSummary,
   MultiplayerReaction,
@@ -24,7 +25,11 @@ const RECONNECT_WINDOW_MS = 5 * 60 * 1000;
 const STALE_CONNECTION_MS = 12_000;
 const MAX_CHECKPOINTS = 5;
 const MAX_ACTIVITY_FEED = 24;
+const MAX_CHAT_MESSAGES = 150;
 const REACTION_COOLDOWN_MS = 1_500;
+const CHAT_COOLDOWN_MS = 700;
+const MAX_CHAT_MESSAGE_LENGTH = 280;
+const TYPING_TTL_MS = 4_500;
 export const ROOM_REACTION_OPTIONS: MultiplayerReaction[] = ['nice', 'wow', 'gg', 'oops'];
 
 type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
@@ -38,6 +43,7 @@ interface RoomParticipant {
   reconnectDeadlineMs: number;
   ready: boolean;
   lastReactionAt: number;
+  lastChatAt: number;
 }
 
 interface RoomCheckpoint {
@@ -65,6 +71,9 @@ export interface MultiplayerRoom {
   checkpoints: RoomCheckpoint[];
   activityFeed: RoomActivityEntry[];
   nextActivityId: number;
+  chatMessages: MultiplayerChatMessage[];
+  nextChatId: number;
+  typingByPlayerId: Record<string, number>;
 }
 
 export function normalizeRoomForRuntime(room: MultiplayerRoom): MultiplayerRoom {
@@ -72,11 +81,31 @@ export function normalizeRoomForRuntime(room: MultiplayerRoom): MultiplayerRoom 
   room.nextActivityId = Number.isFinite(room.nextActivityId)
     ? Math.max(Number(room.nextActivityId), room.activityFeed.length + 1)
     : (room.activityFeed.length + 1);
+  room.chatMessages = Array.isArray(room.chatMessages)
+    ? room.chatMessages
+      .filter((entry) => entry && typeof entry === 'object' && typeof entry.playerId === 'string' && typeof entry.playerName === 'string')
+      .map((entry, index) => ({
+        id: Number.isFinite(entry.id) ? Number(entry.id) : index + 1,
+        createdAt: Number.isFinite(entry.createdAt) ? Number(entry.createdAt) : nowMs(),
+        playerId: entry.playerId,
+        playerName: entry.playerName.slice(0, 28),
+        text: sanitizeChatText(String(entry.text ?? '')),
+      }))
+      .filter((entry) => entry.text.length > 0)
+      .slice(-MAX_CHAT_MESSAGES)
+    : [];
+  room.nextChatId = Number.isFinite(room.nextChatId)
+    ? Math.max(Number(room.nextChatId), room.chatMessages.length + 1)
+    : (room.chatMessages.length + 1);
+  room.typingByPlayerId = room.typingByPlayerId && typeof room.typingByPlayerId === 'object'
+    ? room.typingByPlayerId
+    : {};
   const players = Array.isArray(room.players) ? room.players : [];
   room.players = players.map((player) => ({
     ...player,
     ready: Boolean(player.ready),
     lastReactionAt: Number.isFinite(player.lastReactionAt) ? Number(player.lastReactionAt) : 0,
+    lastChatAt: Number.isFinite(player.lastChatAt) ? Number(player.lastChatAt) : 0,
   }));
   return room;
 }
@@ -113,6 +142,21 @@ function sanitizeName(name: string, fallback: string): string {
 function sanitizeCheckpointName(name: string): string {
   const trimmed = name.trim();
   return trimmed.length > 0 ? trimmed.slice(0, 48) : 'Checkpoint';
+}
+
+function sanitizeChatText(text: string): string {
+  const compact = text.replace(/\s+/g, ' ').trim();
+  return compact.slice(0, MAX_CHAT_MESSAGE_LENGTH);
+}
+
+function pruneExpiredTyping(room: MultiplayerRoom, now = nowMs()): void {
+  const entries = Object.entries(room.typingByPlayerId);
+  if (entries.length === 0) return;
+  for (const [playerId, deadline] of entries) {
+    if (!Number.isFinite(deadline) || deadline <= now) {
+      delete room.typingByPlayerId[playerId];
+    }
+  }
 }
 
 function reactionLabel(reaction: MultiplayerReaction): string {
@@ -207,6 +251,7 @@ function markDisconnected(room: MultiplayerRoom, player: RoomParticipant): void 
   player.connected = false;
   player.lastSeenAt = now;
   player.reconnectDeadlineMs = now + RECONNECT_WINDOW_MS;
+  delete room.typingByPlayerId[player.id];
   appendActivity(room, 'connection', `${player.name} disconnected.`, { playerId: player.id });
   const migrated = migrateHost(room);
   if (migrated) {
@@ -284,6 +329,7 @@ function reclaimExpiredLobbyParticipants(room: MultiplayerRoom, now = nowMs()): 
   const nextPlayers = room.players.filter((player) => player.connected || player.reconnectDeadlineMs > now);
   if (nextPlayers.length === room.players.length) return;
   expired.forEach((player) => {
+    delete room.typingByPlayerId[player.id];
     appendActivity(room, 'connection', `${player.name} left the lobby.`, { playerId: player.id });
   });
   room.players = nextPlayers;
@@ -413,6 +459,7 @@ export function createRoom(
       reconnectDeadlineMs: createdAt + RECONNECT_WINDOW_MS,
       ready: false,
       lastReactionAt: 0,
+      lastChatAt: 0,
     }],
     game: null,
     paused: false,
@@ -421,6 +468,9 @@ export function createRoom(
     checkpoints: [],
     activityFeed: [],
     nextActivityId: 1,
+    chatMessages: [],
+    nextChatId: 1,
+    typingByPlayerId: {},
   };
   appendActivity(room, 'lobby', `${room.players[0].name} created the room.`, { playerId });
   rooms.set(code, room);
@@ -455,6 +505,7 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
     reconnectDeadlineMs: now + RECONNECT_WINDOW_MS,
     ready: false,
     lastReactionAt: 0,
+    lastChatAt: 0,
   });
   appendActivity(room, 'lobby', `${sanitizeName(playerName, `Player ${playerId.slice(1)}`)} joined the lobby.`, { playerId });
   commitMutation(room);
@@ -590,7 +641,9 @@ export function applyRoomAction(
   }
   const legal = getLegalActions(game, playerId);
   const normalizedAction = JSON.stringify(normalizeActionForComparison(action));
-  const isLegal = legal.some((entry) => JSON.stringify(normalizeActionForComparison(entry.action)) === normalizedAction);
+  const isLegal = action.type === 'pay_request'
+    ? legal.some((entry) => entry.action.type === 'pay_request')
+    : legal.some((entry) => JSON.stringify(normalizeActionForComparison(entry.action)) === normalizedAction);
   if (!isLegal) {
     throw new Error('illegal_action');
   }
@@ -779,12 +832,80 @@ export function sendRoomReaction(
   return room;
 }
 
+export function sendRoomChat(
+  room: MultiplayerRoom,
+  playerId: PlayerId,
+  sessionToken: string,
+  text: string,
+  expectedRevision?: number,
+): MultiplayerRoom {
+  ensureExpectedRevision(room, expectedRevision);
+  const player = requireSession(room, playerId, sessionToken);
+  assertReconnectWindowOpen(player);
+  requireConnectedPlayer(player);
+  touchPlayer(player);
+  const now = nowMs();
+  const raw = text.trim();
+  if (!raw) {
+    throw new Error('chat_empty');
+  }
+  if (raw.length > MAX_CHAT_MESSAGE_LENGTH) {
+    throw new Error('chat_too_long');
+  }
+  if (now - player.lastChatAt < CHAT_COOLDOWN_MS) {
+    throw new Error('chat_rate_limited');
+  }
+
+  player.lastChatAt = now;
+  delete room.typingByPlayerId[player.id];
+  room.chatMessages = [
+    ...room.chatMessages,
+    {
+      id: room.nextChatId,
+      createdAt: now,
+      playerId: player.id,
+      playerName: player.name,
+      text: sanitizeChatText(text),
+    },
+  ].slice(-MAX_CHAT_MESSAGES);
+  room.nextChatId += 1;
+  commitMutation(room);
+  return room;
+}
+
+export function setRoomTyping(
+  room: MultiplayerRoom,
+  playerId: PlayerId,
+  sessionToken: string,
+  typing: boolean,
+  expectedRevision?: number,
+): MultiplayerRoom {
+  ensureExpectedRevision(room, expectedRevision);
+  const player = requireSession(room, playerId, sessionToken);
+  assertReconnectWindowOpen(player);
+  requireConnectedPlayer(player);
+  touchPlayer(player);
+  pruneExpiredTyping(room);
+
+  if (!typing) {
+    if (!room.typingByPlayerId[player.id]) return room;
+    delete room.typingByPlayerId[player.id];
+    commitMutation(room);
+    return room;
+  }
+
+  room.typingByPlayerId[player.id] = nowMs() + TYPING_TTL_MS;
+  commitMutation(room);
+  return room;
+}
+
 export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken: string): MultiplayerRoomView {
   const viewer = requireSession(room, viewerId, sessionToken);
   assertReconnectWindowOpen(viewer);
   touchPlayer(viewer);
   updateStatusFromGame(room);
   bumpUpdatedAt(room);
+  pruneExpiredTyping(room);
   const started = Boolean(room.game);
   const promptPlayerId = room.game ? getNextPrompt(room.game).playerId : undefined;
   const legalActions = room.game && viewer.connected && !room.paused ? getLegalActions(room.game, viewerId) : [];
@@ -812,12 +933,15 @@ export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken
     reconnectDeadlineMs,
     serverTime,
     activityFeed: room.activityFeed,
+    chatMessages: room.chatMessages,
+    typingPlayerIds: Object.keys(room.typingByPlayerId),
     lastEventId: room.revision,
   };
 }
 
 export function pruneInactiveRooms(rooms: Map<string, MultiplayerRoom>, now = nowMs()): void {
   for (const [code, room] of rooms) {
+    pruneExpiredTyping(room, now);
     for (const player of room.players) {
       if (!player.connected) continue;
       if (now - player.lastSeenAt <= STALE_CONNECTION_MS) continue;

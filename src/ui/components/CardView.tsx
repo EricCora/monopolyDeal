@@ -79,6 +79,9 @@ export function CardView({
             </span>
           ) : null}
         </span>
+        <span className={`card-role-pill role-${model.roleTagClass}`} aria-label="Card type">
+          {model.roleTag}
+        </span>
         <span className="card-title" title={model.title}>{model.title}</span>
         {shouldShowSubtitle ? <span className="card-subtitle" title={model.subtitle}>{model.subtitle}</span> : null}
         {model.colorLabel ? <span className="card-color-label">{model.colorLabel}</span> : null}
