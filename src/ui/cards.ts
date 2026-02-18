@@ -21,6 +21,8 @@ export interface CardVisualModel {
   title: string;
   subtitle: string;
   valueBadge: string;
+  roleTag: string;
+  roleTagClass: 'money' | 'property' | 'wild' | 'action' | 'rent_action' | 'building';
   cardRole: 'money' | 'property' | 'wild' | 'action' | 'building';
   colorLabel?: string;
   rentSteps?: RentStep[];
@@ -84,6 +86,17 @@ function actionBadgeFromCard(card: CardDefinition): string | undefined {
 function actionIconFromCard(card: CardDefinition): string | undefined {
   if (!card.actionKind) return undefined;
   return ACTION_ICON_BY_KIND[card.actionKind] ?? undefined;
+}
+
+function roleTagFromCard(card: CardDefinition): Pick<CardVisualModel, 'roleTag' | 'roleTagClass'> {
+  if (card.kind === 'money') return { roleTag: 'Money', roleTagClass: 'money' };
+  if (card.kind === 'property') return { roleTag: 'Property', roleTagClass: 'property' };
+  if (card.kind === 'wild') return { roleTag: 'Wild', roleTagClass: 'wild' };
+  if (card.kind === 'building') return { roleTag: 'Building', roleTagClass: 'building' };
+  if (card.actionKind === 'rent' || card.actionKind === 'rent_wild') {
+    return { roleTag: 'Rent Action', roleTagClass: 'rent_action' };
+  }
+  return { roleTag: 'Action', roleTagClass: 'action' };
 }
 
 function motifClassFromCard(card: CardDefinition): string | undefined {
@@ -181,12 +194,15 @@ export function getCardVisualModel(cardId: string): CardVisualModel {
   const theme = themeFromCard(card);
   const setSize = card.kind === 'property' ? getSetSize(card.color!) : undefined;
   const rentScale = card.kind === 'property' ? getRentScale(card.color!) : undefined;
+  const roleTag = roleTagFromCard(card);
 
   return {
     cardId,
     title: titleFromCard(card),
     subtitle: subtitleFromCard(card),
     valueBadge: `$${card.moneyValue ?? card.value}`,
+    roleTag: roleTag.roleTag,
+    roleTagClass: roleTag.roleTagClass,
     cardRole: card.kind,
     colorLabel: colorLabelFromCard(card),
     rentSteps: rentStepsFromScale(rentScale),

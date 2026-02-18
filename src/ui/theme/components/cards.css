@@ -202,6 +202,56 @@
   flex: 0 0 auto;
 }
 
+.card-role-pill {
+  align-self: flex-start;
+  border-radius: 999px;
+  padding: 0.03rem 0.36rem;
+  font-size: calc(var(--card-subtitle-size) * 0.92);
+  line-height: 1.2;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border: 1px solid rgba(39, 58, 74, 0.24);
+  color: #0f2f42;
+  background: rgba(223, 238, 249, 0.9);
+}
+
+.card-role-pill.role-property {
+  color: #5b3417;
+  background: rgba(250, 229, 193, 0.92);
+  border-color: rgba(153, 100, 44, 0.35);
+}
+
+.card-role-pill.role-rent_action {
+  color: #114233;
+  background: rgba(187, 235, 221, 0.92);
+  border-color: rgba(40, 129, 101, 0.44);
+}
+
+.card-role-pill.role-action {
+  color: #1e3f62;
+  background: rgba(194, 221, 245, 0.92);
+  border-color: rgba(61, 100, 135, 0.42);
+}
+
+.card-role-pill.role-money {
+  color: #17553e;
+  background: rgba(186, 231, 211, 0.94);
+  border-color: rgba(35, 128, 89, 0.45);
+}
+
+.card-role-pill.role-wild {
+  color: #5d4f14;
+  background: rgba(250, 235, 169, 0.92);
+  border-color: rgba(167, 146, 47, 0.45);
+}
+
+.card-role-pill.role-building {
+  color: #4d2b5f;
+  background: rgba(224, 197, 240, 0.92);
+  border-color: rgba(121, 79, 145, 0.45);
+}
+
 .card-title {
   font-weight: 800;
   font-size: var(--card-title-size);
