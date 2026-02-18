@@ -547,9 +547,7 @@ function App() {
         ? `Discard ${discardOverLimitCount} card${discardOverLimitCount === 1 ? '' : 's'} to end turn.`
         : 'Discard step complete. You can pass turn.';
     }
-    if (prompt.kind === 'payment') return 'Payment is required before any other action.';
-    if (prompt.kind === 'response') return 'Respond to Just Say No chain.';
-    if (prompt.kind === 'selection') return 'Resolve the pending card effect.';
+    if (prompt.kind === 'payment' || prompt.kind === 'response' || prompt.kind === 'selection') return prompt.text;
     if (prompt.kind === 'draw') return 'Draw to start the turn.';
     if (mainPhaseExhausted) return '3/3 plays used. Pass turn or use non-play actions.';
     return 'Play cards from hand or pass turn.';
@@ -623,9 +621,9 @@ function App() {
         ? `Discard ${multiplayerDiscardOverLimitCount} card${multiplayerDiscardOverLimitCount === 1 ? '' : 's'} to end turn.`
         : 'Discard step complete. You can pass turn.';
     }
-    if (multiplayerPrompt.kind === 'payment') return 'Payment is required before any other action.';
-    if (multiplayerPrompt.kind === 'response') return 'Respond to Just Say No chain.';
-    if (multiplayerPrompt.kind === 'selection') return 'Resolve the pending card effect.';
+    if (multiplayerPrompt.kind === 'payment' || multiplayerPrompt.kind === 'response' || multiplayerPrompt.kind === 'selection') {
+      return multiplayerPrompt.text;
+    }
     if (multiplayerPrompt.kind === 'draw') return 'Draw to start the turn.';
     if (multiplayerMainPhaseExhausted) return '3/3 plays used. Pass turn or use non-play actions.';
     return 'Play cards from hand or pass turn.';

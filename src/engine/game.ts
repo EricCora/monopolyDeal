@@ -854,7 +854,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     }
 
     state.pending = null;
-    pushEvent(events, 'payment', `${payer.name} paid ${collector.name} $${Math.min(total, req.amount)} (${req.reason}).`);
+    pushEvent(events, 'pay', `${payer.name} paid ${collector.name} $${Math.min(total, req.amount)} (${req.reason}).`);
     continuePaymentChain(state, req, events);
   }
 
@@ -948,6 +948,10 @@ export function isGameOver(state: GameState): { done: boolean; winnerId?: Player
   return winner ? { done: true, winnerId: winner.id } : { done: false };
 }
 
+function playerName(state: GameState, playerId: PlayerId, fallback: string): string {
+  return getPlayer(state, playerId)?.name ?? fallback;
+}
+
 export function getNextPrompt(state: GameState): TurnPrompt {
   const currentPlayer = getCurrentPlayer(state);
   if (requiresEndTurnDiscard(state, currentPlayer)) {
@@ -960,26 +964,60 @@ export function getNextPrompt(state: GameState): TurnPrompt {
 
   if (state.pending?.kind === 'counter') {
     const pendingPlayer = getPlayer(state, state.pending.payload.awaitingPlayerId);
+    const sourceName = playerName(state, state.pending.payload.sourcePlayerId, 'Player');
+    const actionCardName = cardLabel(state.pending.payload.actionCardId);
     return {
       playerId: pendingPlayer?.id ?? currentPlayer.id,
-      text: `${pendingPlayer?.name ?? 'Player'}: respond with Just Say No or resolve.`,
+      text: `${pendingPlayer?.name ?? 'Player'}: respond to ${sourceName}'s ${actionCardName} with Just Say No or resolve.`,
       kind: 'response',
     };
   }
 
   if (state.pending?.kind === 'payment') {
     const pendingPlayer = getPlayer(state, state.pending.payload.targetPlayerId);
+    const sourceName = playerName(state, state.pending.payload.sourcePlayerId, 'Player');
     return {
       playerId: pendingPlayer?.id ?? currentPlayer.id,
-      text: `${pendingPlayer?.name ?? 'Player'}: choose payment cards totaling $${state.pending.payload.amount}.`,
+      text: `${pendingPlayer?.name ?? 'Player'}: pay ${sourceName} $${state.pending.payload.amount} for ${state.pending.payload.reason}.`,
       kind: 'payment',
     };
   }
 
-  if (state.pending) {
+  if (state.pending?.kind === 'rent') {
+    const sourceName = playerName(state, state.pending.payload.sourcePlayerId, 'Player');
     return {
-      playerId: currentPlayer.id,
-      text: `${currentPlayer.name}: resolve the pending card effect.`,
+      playerId: state.pending.payload.sourcePlayerId,
+      text: `${sourceName}: choose who pays $${state.pending.payload.amount} rent for ${colorLabel(state.pending.payload.color)}.`,
+      kind: 'selection',
+    };
+  }
+
+  if (state.pending?.kind === 'sly_deal') {
+    const sourceName = playerName(state, state.pending.payload.sourcePlayerId, 'Player');
+    const targetName = playerName(state, state.pending.payload.targetPlayerId, 'target');
+    return {
+      playerId: state.pending.payload.sourcePlayerId,
+      text: `${sourceName}: choose a property card to steal from ${targetName}.`,
+      kind: 'selection',
+    };
+  }
+
+  if (state.pending?.kind === 'forced_deal') {
+    const sourceName = playerName(state, state.pending.payload.sourcePlayerId, 'Player');
+    const targetName = playerName(state, state.pending.payload.targetPlayerId, 'target');
+    return {
+      playerId: state.pending.payload.sourcePlayerId,
+      text: `${sourceName}: choose one of your properties, then a property from ${targetName} to swap.`,
+      kind: 'selection',
+    };
+  }
+
+  if (state.pending?.kind === 'deal_breaker') {
+    const sourceName = playerName(state, state.pending.payload.sourcePlayerId, 'Player');
+    const targetName = playerName(state, state.pending.payload.targetPlayerId, 'target');
+    return {
+      playerId: state.pending.payload.sourcePlayerId,
+      text: `${sourceName}: choose a complete set to steal from ${targetName}.`,
       kind: 'selection',
     };
   }

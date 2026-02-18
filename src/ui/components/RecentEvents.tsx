@@ -40,7 +40,7 @@ function formatEventType(type: string): string {
 function eventMeta(type: string): Pick<DecoratedEvent, 'filter' | 'tone' | 'icon' | 'label'> {
   if (type === 'turn_passed') return { filter: 'turn', tone: 'turn', icon: 'TRN', label: 'Turn End' };
   if (type === 'draw') return { filter: 'action', tone: 'action', icon: 'DRW', label: 'Draw' };
-  if (type === 'bank' || type === 'pay') return { filter: 'money', tone: 'money', icon: '$', label: 'Money' };
+  if (type === 'bank' || type === 'pay' || type === 'payment') return { filter: 'money', tone: 'money', icon: '$', label: 'Money' };
   if (type === 'property' || type === 'wild_move') return { filter: 'property', tone: 'property', icon: 'PRP', label: 'Property' };
   if (type === 'action' || type === 'rent_target' || type === 'counter') return { filter: 'action', tone: 'action', icon: 'ACT', label: 'Action' };
   return { filter: 'action', tone: 'neutral', icon: 'LOG', label: formatEventType(type) };
@@ -81,7 +81,7 @@ function groupEvents(events: DecoratedEvent[]): EventGroup[] {
 }
 
 function collapseActionChains(events: DecoratedEvent[]): DecoratedEvent[] {
-  const chainTypes = new Set(['action', 'counter', 'rent_target', 'pay']);
+  const chainTypes = new Set(['action', 'counter', 'rent_target', 'pay', 'payment']);
   const collapsed: DecoratedEvent[] = [];
 
   for (const event of events) {

@@ -89,7 +89,7 @@ function rankPlayers(state: GameState): RankedPlayer[] {
 }
 
 function finalSwingMessage(events: GameEvent[]): string {
-  const impactful = new Set(['deal_breaker', 'forced_deal', 'sly_deal', 'rent_target', 'pay', 'counter', 'action', 'property']);
+  const impactful = new Set(['deal_breaker', 'forced_deal', 'sly_deal', 'rent_target', 'pay', 'payment', 'counter', 'action', 'property']);
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
     if (impactful.has(event.type)) {
