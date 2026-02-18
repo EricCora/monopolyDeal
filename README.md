@@ -191,6 +191,17 @@ Optional multiplayer behavior flags:
 - `VITE_MULTIPLAYER_REACTIONS_ENABLED` (`true` by default) to enable quick reactions.
 - `MULTIPLAYER_PUSH_ENABLED` (`true` by default) to enable server event stream endpoint.
 - `MULTIPLAYER_REACTIONS_ENABLED` (`true` by default) to enable server reaction endpoint.
+- `MULTIPLAYER_ALLOWED_ORIGINS` (optional, comma-separated origins) to enforce server origin allowlist for hosted play.
+- `MULTIPLAYER_RATE_LIMIT_ENABLED` (`true` by default) to enable multiplayer API request throttling.
+- `MULTIPLAYER_RATE_LIMIT_WINDOW_MS` (`60000` by default) to set the rate-limit window.
+- `MULTIPLAYER_RATE_LIMIT_MAX_REQUESTS` (`300` by default) to set allowed requests per client IP per window.
+- `MULTIPLAYER_RATE_LIMIT_MAX_CLIENTS` (`10000` by default) to cap in-memory tracked rate-limit clients.
+
+Hosted reliability notes:
+
+- Push stream disconnects now auto-retry with backoff while polling stays active.
+- Returning to a sleeping/backgrounded tab triggers an immediate room refresh/reconnect attempt.
+- Multiplayer health (`/api/multiplayer/health`) now reports push/reaction flags plus active CORS/rate-limit mode.
 
 For local multiplayer development, the backend service is required.
 Use the one-command startup:

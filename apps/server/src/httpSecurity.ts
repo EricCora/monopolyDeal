@@ -1,8 +1,13 @@
-import type { IncomingMessage } from 'node:http';
-
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 300;
 const DEFAULT_RATE_LIMIT_MAX_CLIENTS = 10_000;
+
+interface RequestHeadersShape {
+  headers: Record<string, string | string[] | undefined>;
+  socket: {
+    remoteAddress?: string | null;
+  };
+}
 
 export interface CorsPolicy {
   allowAnyOrigin: boolean;
@@ -77,7 +82,7 @@ export function buildCorsHeaders(originHeader: string | undefined, policy: CorsP
 }
 
 function sanitizePositiveInteger(value: number | undefined, fallback: number): number {
-  if (!Number.isFinite(value)) return fallback;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
   return Math.max(1, Math.floor(value));
 }
 
@@ -180,7 +185,7 @@ export function createRateLimiter(rawConfig: Partial<RateLimitConfig>): RateLimi
   };
 }
 
-export function extractClientIp(req: Pick<IncomingMessage, 'headers' | 'socket'>): string {
+export function extractClientIp(req: RequestHeadersShape): string {
   const forwarded = req.headers['x-forwarded-for'];
   if (typeof forwarded === 'string') {
     const firstHop = forwarded.split(',')[0]?.trim();
@@ -194,6 +199,6 @@ export function extractClientIp(req: Pick<IncomingMessage, 'headers' | 'socket'>
   return req.socket.remoteAddress ?? 'unknown';
 }
 
-export function createRateLimitKey(req: Pick<IncomingMessage, 'headers' | 'socket'>): string {
+export function createRateLimitKey(req: RequestHeadersShape): string {
   return extractClientIp(req);
 }

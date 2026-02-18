@@ -5,6 +5,13 @@ Branch: `codex/deep-research-improvements`
 ## What Landed
 
 - Flagship multiplayer follow-through:
+- Online-hosted reliability hardening:
+- Server CORS is now configurable via `MULTIPLAYER_ALLOWED_ORIGINS` (allowlist mode) while preserving wildcard fallback for local/dev defaults.
+- Multiplayer API now includes per-client request throttling (`MULTIPLAYER_RATE_LIMIT_*` env controls) with `rate_limited` responses and `Retry-After`.
+- Health endpoint now reports hosted runtime posture (`corsMode`, `allowedOriginCount`, and rate-limit settings).
+- Client now auto-recovers dropped push streams with backoff retries while polling remains active.
+- Client now performs wake-up refresh/reconnect on tab focus/visibility/online transitions.
+- Growth telemetry now records hosted failures for `rate_limited` and `origin_not_allowed` responses.
 - Invite-link onboarding with canonical deep-link route (`/join/:roomCode`) and lobby `Copy Invite Link`.
 - Hybrid push transport: server event stream endpoint + client push subscription with polling fallback.
 - Social lobby/game upgrades: per-player ready state, quick preset reactions, and bounded activity feed.

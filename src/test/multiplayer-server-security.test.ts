@@ -1,4 +1,3 @@
-import type { IncomingMessage } from 'node:http';
 import { describe, expect, it } from 'vitest';
 import {
   buildCorsHeaders,
@@ -13,15 +12,13 @@ function mockRequest(
   origin?: string,
   forwardedFor?: string,
   remoteAddress = '203.0.113.10',
-): Pick<IncomingMessage, 'headers' | 'socket'> {
-  const headers: IncomingMessage['headers'] = {};
+): { headers: Record<string, string | string[] | undefined>; socket: { remoteAddress: string } } {
+  const headers: Record<string, string | string[] | undefined> = {};
   if (origin) headers.origin = origin;
   if (forwardedFor) headers['x-forwarded-for'] = forwardedFor;
   return {
     headers,
-    socket: {
-      remoteAddress,
-    } as IncomingMessage['socket'],
+    socket: { remoteAddress },
   };
 }
 

@@ -28,17 +28,21 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Hosted multiplayer client API wrappers (`src/network/multiplayerClient.ts`) for room create/join/reconnect/start/state/action/leave plus pause/resume/undo/reset-turn/checkpoint flows.
   - Adds lobby-ready (`/ready`) and quick-reaction (`/reaction`) helpers.
   - Adds live room event subscription (`/events`) with polling fallback behavior.
+  - Error mapping now includes hosted deployment failures (`rate_limited`, `origin_not_allowed`) for user-visible recovery guidance.
   - In local dev, Vite proxies `/api/multiplayer` to `http://localhost:8787` so LAN clients can use same-origin API calls from the UI host URL.
   - Legacy LAN wrappers remain for development fallback.
 - `apps/server/`
   - Multiplayer API server scaffold with room lifecycle, reconnect windows, host migration, revision-guarded mutations, turn snapshots, checkpoints, and best-effort snapshot persistence.
   - Adds server push event stream endpoint (`GET /api/multiplayer/rooms/:roomCode/events`) for hybrid push updates.
+  - Adds configurable hosted hardening controls:
+  - `MULTIPLAYER_ALLOWED_ORIGINS` for optional origin allowlisting.
+  - `MULTIPLAYER_RATE_LIMIT_ENABLED`, `MULTIPLAYER_RATE_LIMIT_WINDOW_MS`, `MULTIPLAYER_RATE_LIMIT_MAX_REQUESTS`, `MULTIPLAYER_RATE_LIMIT_MAX_CLIENTS`.
   - Room state now includes player-ready state and bounded activity feed entries.
   - Recommended two-device startup command: `npm run dev:lan:all` (LAN UI + multiplayer server).
 - `src/ui/` + `src/App.tsx`
   - `App.tsx` owns state/actions and passes typed props to screen containers.
   - `src/app/useFeedback.ts` encapsulates sound/haptic emission.
-  - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, live-push subscription + polling fallback, reconnect lifecycle, and host/player controls (pause/undo/checkpoints/ready/reactions) plus `Exit Match` (retain reconnect session) vs `Forget Room` (clear session).
+  - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, live-push subscription + polling fallback, push auto-retry backoff, wake-up refresh/reconnect lifecycle, and host/player controls (pause/undo/checkpoints/ready/reactions) plus `Exit Match` (retain reconnect session) vs `Forget Room` (clear session).
   - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition.
   - `src/ui/screens/SavedGamesScreen.tsx` manages manual save slots (load/save-over/rename/delete).
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
