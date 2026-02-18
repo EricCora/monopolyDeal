@@ -280,6 +280,13 @@ export function canCardBePlacedInColor(card: CardDefinition, color: PropertyColo
   return false;
 }
 
+export function canCardBeBanked(card: CardDefinition): boolean {
+  return card.kind === 'money'
+    || card.kind === 'action'
+    || card.kind === 'building'
+    || card.kind === 'wild';
+}
+
 function hasPlayableRentCard(player: PlayerState, excludedCardId?: string): boolean {
   for (const handCardId of player.hand) {
     if (handCardId === excludedCardId) continue;

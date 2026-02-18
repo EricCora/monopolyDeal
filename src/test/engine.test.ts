@@ -52,6 +52,36 @@ describe('engine basics', () => {
     expect(fourth.error?.code).toBe('illegal_play_limit');
   });
 
+  it('rejects banking regular property cards', () => {
+    const state = mkState();
+    state.players[0].hand = ['brown_1#p1'];
+
+    const result = applyAction(state, {
+      type: 'play_to_bank',
+      playerId: 'p1',
+      cardId: 'brown_1#p1',
+    });
+
+    expect(result.error?.code).toBe('invalid_action');
+    expect(result.state.players[0].hand).toContain('brown_1#p1');
+    expect(result.state.players[0].bank).toHaveLength(0);
+  });
+
+  it('allows banking wild cards', () => {
+    const state = mkState();
+    state.players[0].hand = ['wild_red_yellow#w1'];
+
+    const result = applyAction(state, {
+      type: 'play_to_bank',
+      playerId: 'p1',
+      cardId: 'wild_red_yellow#w1',
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.state.players[0].bank).toContain('wild_red_yellow#w1');
+    expect(result.state.players[0].hand).toHaveLength(0);
+  });
+
   it('applies custom max plays per turn ruleset', () => {
     const state = createGame({
       seed: 50,
@@ -699,6 +729,82 @@ describe('engine basics', () => {
     expect(result.error?.code).toBe('invalid_action');
     expect(result.state.pending?.kind).toBe('payment');
     expect(result.state.players[1].bank).toEqual(['money_1#owned']);
+  });
+
+  it('requires full payment amount when payer can cover the debt', () => {
+    const state = mkState();
+    state.pending = {
+      kind: 'payment',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        amount: 3,
+        reason: 'Debt Collector',
+        actionCardId: 'debt_collector#d1',
+      },
+    };
+    state.players[1].bank = ['money_1#p2a', 'money_2#p2b'];
+
+    const result = applyAction(state, {
+      type: 'pay_request',
+      playerId: 'p2',
+      cards: ['money_1#p2a'],
+    });
+
+    expect(result.error?.code).toBe('invalid_action');
+    expect(result.state.pending?.kind).toBe('payment');
+    expect(result.state.players[1].bank).toEqual(['money_1#p2a', 'money_2#p2b']);
+  });
+
+  it('allows shortfall payment when payer cannot fully cover debt', () => {
+    const state = mkState();
+    state.pending = {
+      kind: 'payment',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        amount: 6,
+        reason: 'Debt Collector',
+        actionCardId: 'debt_collector#d1',
+      },
+    };
+    state.players[1].bank = ['money_2#p2a'];
+    state.players[1].properties.brown = [{ cardId: 'brown_1#p2b', assignedColor: 'brown' }];
+
+    const partial = applyAction(state, {
+      type: 'pay_request',
+      playerId: 'p2',
+      cards: ['money_2#p2a'],
+    });
+    expect(partial.error?.code).toBe('invalid_action');
+    expect(partial.state.pending?.kind).toBe('payment');
+
+    const full = applyAction(state, {
+      type: 'pay_request',
+      playerId: 'p2',
+      cards: ['money_2#p2a', 'brown_1#p2b'],
+    });
+    expect(full.error).toBeUndefined();
+    expect(full.state.pending).toBeNull();
+  });
+
+  it('draws five cards when starting draw phase with an empty hand', () => {
+    const state = createGame({
+      seed: 97,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.currentPlayerIndex = 0;
+    state.turn.phase = 'draw';
+    state.players[0].hand = [];
+
+    const result = applyAction(state, { type: 'draw_cards', playerId: 'p1' });
+
+    expect(result.error).toBeUndefined();
+    expect(result.state.players[0].hand).toHaveLength(5);
+    expect(result.state.turn.phase).toBe('action');
   });
 
   it('restores both property groups when forced deal destination is invalid', () => {

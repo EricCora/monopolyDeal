@@ -18,6 +18,7 @@ import {
   MAX_HAND_AT_END_TURN,
   PROPERTY_COLORS,
   addToProperty,
+  canCardBeBanked,
   canCardBePlacedInColor,
   canPlayDoubleRent,
   cardLabel,
@@ -309,7 +310,7 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
     for (const cardId of player.hand) {
       const card = getCardDefinition(cardId);
 
-      const moneyPlayable = card.kind === 'money' || card.kind === 'action' || card.kind === 'building' || card.kind === 'wild';
+      const moneyPlayable = canCardBeBanked(card);
       if (moneyPlayable) {
         actions.push({
           label: `Bank ${card.name}`,
@@ -560,6 +561,10 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     if (state.turn.phase !== 'action') return setErr(error('invalid_phase', 'Cannot play now.'));
     if (state.turn.playsUsed >= ruleset(state).maxPlaysPerTurn) {
       return setErr(error('illegal_play_limit', `Already used ${ruleset(state).maxPlaysPerTurn} plays this turn.`));
+    }
+    const card = getCardDefinition(action.cardId);
+    if (!canCardBeBanked(card)) {
+      return setErr(error('invalid_action', 'Only money, action, building, and wild cards can be banked.'));
     }
     if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
     player.bank.push(action.cardId);
@@ -833,9 +838,16 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
       }
     }
 
-    let total = 0;
+    const total = [...selected].reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0);
+    const payableTotal = totalPayableValue(payer);
+    if (payableTotal >= req.amount && total < req.amount) {
+      return setErr(error('invalid_action', `Payment must total at least $${req.amount}.`));
+    }
+    if (payableTotal < req.amount && total < payableTotal) {
+      return setErr(error('invalid_action', 'Player must pay all available cards when total funds are insufficient.'));
+    }
+
     for (const cardId of selected) {
-      total += cardMoneyValue(cardId);
       const bankIdx = payer.bank.indexOf(cardId);
       if (bankIdx >= 0) {
         payer.bank.splice(bankIdx, 1);

@@ -590,7 +590,9 @@ export function applyRoomAction(
   }
   const legal = getLegalActions(game, playerId);
   const normalizedAction = JSON.stringify(normalizeActionForComparison(action));
-  const isLegal = legal.some((entry) => JSON.stringify(normalizeActionForComparison(entry.action)) === normalizedAction);
+  const isLegal = action.type === 'pay_request'
+    ? legal.some((entry) => entry.action.type === 'pay_request')
+    : legal.some((entry) => JSON.stringify(normalizeActionForComparison(entry.action)) === normalizedAction);
   if (!isLegal) {
     throw new Error('illegal_action');
   }
