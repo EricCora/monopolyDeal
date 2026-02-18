@@ -24,8 +24,12 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Home hero with animated card-back atmosphere and stronger CTA emphasis
 - Post-game celebration refresh with trophy treatment and richer confetti pulse
 - Guided turn rail with draw/play/end-step progress and clearer required-action cues
+- Explicit pending-action messaging (rent, debt, counter chains, and steals) shown directly in the active UI, not just the event log
+- In-panel "money requested" banners so payment requests are obvious for the affected player
 - Risky action confirmation dialog for high-impact targeted/rent plays
 - Payment assistant auto-select for pending payment flows
+- Payment validation hardening for manual debt selection (must satisfy amount when possible; shortfall only when total assets are insufficient)
+- Official banking split enforced: regular property cards cannot be banked; money/action/building cards and wild property cards can be banked
 - In-game rules reference drawer with property set/rent lookup and pending-flow help
 - Stats filters (player/winner/date range) and settings data controls for clearing local stats/history
 - Growth telemetry counters (starts/completions/rematches/share conversion/LAN activity/coach usage + multiplayer funnel/push health) surfaced in Stats & History
@@ -38,6 +42,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Lobby host can start a match directly from an available checkpoint when lineup is compatible
 - Lobby ready-check state and quick preset reactions
 - Multiplayer activity feed (joins/reconnects/host changes/ready/reactions/checkpoints)
+- Multiplayer chat dock (bottom-left pill) with unread badge, typing indicators, mention highlighting (`@name`), and aria-log message semantics
 - Flagship lobby presentation refresh with structured roster table, clearer status pills, and stronger action hierarchy
 - Hybrid live updates: server push notifications with polling fallback
 - Multiplayer `Exit Match` (keeps reconnect session) and `Forget Room` (permanent disconnect) actions
@@ -45,6 +50,8 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - In-match per-player connection pills and richer lobby disconnect timing labels
 - Pending deal interactions (`Sly Deal`, `Forced Deal`, `Deal Breaker`) support card-click selection flows
 - Rent action cards now show compact rent summaries; compact rent ladders have improved readability
+- Card type ribbons improve visual distinction between rent action cards and property cards
+- Post-game recap now highlights winning move, momentum shift, and standout cards
 - Experimental feature flags for AI opponents, AI coach hints, replay timeline, daily challenges, achievements, and custom rules
 - Auto-save + resume via `localStorage`
 
@@ -174,7 +181,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Host controls: `Pause/Resume`, `Save Checkpoint`, `Load Checkpoint`, `Delete Checkpoint`.
 - Lobby host controls include `Start Match` and `Start From Checkpoint` (when checkpoint data exists).
 - Lobby includes `Copy Room Code` and `Copy Invite Link` actions.
-- Lobby includes player-ready status and quick reaction controls.
+- Lobby includes player-ready status, quick reaction controls, and room chat.
 - Player session controls: `Exit Match` (retain reconnect) and `Forget Room` (clear session).
 - Active-turn controls: `Undo Last Play`, `Reset Turn Plays` (when snapshot history exists).
 - Multiplayer state mutations are revision-guarded to prevent stale updates.

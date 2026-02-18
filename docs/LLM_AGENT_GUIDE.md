@@ -27,6 +27,7 @@ Purpose: give coding agents enough context to make correct, low-regression chang
 - `src/network/`
   - Hosted multiplayer client API wrappers (`src/network/multiplayerClient.ts`) for room create/join/reconnect/start/state/action/leave plus pause/resume/undo/reset-turn/checkpoint flows.
   - Adds lobby-ready (`/ready`) and quick-reaction (`/reaction`) helpers.
+  - Adds multiplayer chat (`/chat`) and typing heartbeat (`/typing`) helpers with user-facing error mappings (`chat_rate_limited`, `chat_too_long`, `chat_empty`).
   - Adds live room event subscription (`/events`) with polling fallback behavior.
   - In local dev, Vite proxies `/api/multiplayer` to `http://localhost:8787` so LAN clients can use same-origin API calls from the UI host URL.
   - Legacy LAN wrappers remain for development fallback.
@@ -34,17 +35,20 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Multiplayer API server scaffold with room lifecycle, reconnect windows, host migration, revision-guarded mutations, turn snapshots, checkpoints, and best-effort snapshot persistence.
   - Adds server push event stream endpoint (`GET /api/multiplayer/rooms/:roomCode/events`) for hybrid push updates.
   - Room state now includes player-ready state and bounded activity feed entries.
+  - Room state now includes bounded chat history and typing indicators with TTL cleanup; legacy room snapshots are normalized with default chat fields.
   - Recommended two-device startup command: `npm run dev:lan:all` (LAN UI + multiplayer server).
 - `src/ui/` + `src/App.tsx`
   - `App.tsx` owns state/actions and passes typed props to screen containers.
   - `src/app/useFeedback.ts` encapsulates sound/haptic emission.
-  - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, live-push subscription + polling fallback, reconnect lifecycle, and host/player controls (pause/undo/checkpoints/ready/reactions) plus `Exit Match` (retain reconnect session) vs `Forget Room` (clear session).
+  - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, live-push subscription + polling fallback, reconnect lifecycle, and host/player controls (pause/undo/checkpoints/ready/reactions/chat/typing) plus `Exit Match` (retain reconnect session) vs `Forget Room` (clear session).
   - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition.
   - `src/ui/screens/SavedGamesScreen.tsx` manages manual save slots (load/save-over/rename/delete).
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
   - `src/ui/components/ActionConfirmDialog.tsx` handles risky-action confirmation flow.
+  - `src/ui/components/MultiplayerChatDock.tsx` provides the bottom-left multiplayer chat pill/panel, unread badge, mention highlight, typing line, and aria-log stream.
   - `src/ui/components/RulesDrawer.tsx` provides in-game rules/set/rent quick reference.
   - Selection pending flows now support property-card click interactions for deal actions; keep action-button fallback intact.
+  - Game table panels include explicit request-state banners (payment/selection/response) so required actions are visible without opening the event log.
   - `src/ui/theme/` contains tokenized CSS split by base/components/screens.
   - `GameShell` applies root table style classes (`table-style-classic-green`, `table-style-neon-arcade`) to drive felt/theme variants.
   - `SettingsScreen` now uses compact grouped cards, custom switch UI, and a collapsed-by-default Experimental accordion.
@@ -83,9 +87,11 @@ Do not model multiple simultaneous pending effects.
 - Turn play budget is capped at 3 plays.
 - Passing turn with >7 cards is invalid.
 - Win is 3 complete sets.
+- Banking follows official split: regular property cards cannot be banked; money/action/building cards and wild property cards can.
 - `just_say_no` uses counter chain flow (`pending.kind === 'counter'`) before resolving/canceling an effect.
 - Multi-target payment (`It's My Birthday`) runs a target chain via `remainingTargetPlayerIds`.
 - Buildings (`house`, `hotel`) are treated as non-movable for property steal/swap flows.
+- Payment selection must satisfy requested amount when payer can cover; if payer cannot cover, all available bank/property cards must be paid.
 
 ## Change Playbooks
 
@@ -192,10 +198,11 @@ When card rendering, responsive layout, or modal/prompt orchestration changes:
 - Growth telemetry uses `monopolyDeal.growthMetrics.v1` and is surfaced in `StatsDashboard`.
 - Multiplayer growth telemetry now includes funnel + push health counters; keep additive compatibility for v1 payload readers.
 - Room push dedupe depends on `lastEventId`/`revision`; avoid duplicating refresh storms when touching event subscription logic.
+- Multiplayer chat unread/typing state is maintained in `App.tsx`; keep best-effort typing behavior non-blocking.
 - Card rendering/fit is split between `src/ui/components/CardView.tsx`, `src/ui/components/HandFan.tsx`, and `src/ui/theme/components/cards.css`.
 - Card visual metadata now includes optional action SVG icon paths; keep text badge fallback visible for resilience.
 - Draw-phase prompt intentionally uses rail hand layout for readability; non-draw prompts still use auto-fit.
-- Rent/double-rent/counter interactions are edge-case heavy.
+- Rent/double-rent/counter interactions and manual `pay_request` validation are edge-case heavy.
 
 ## Milestone Gate Checklist
 
