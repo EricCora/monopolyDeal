@@ -41,6 +41,7 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - `App.tsx` owns state/actions and passes typed props to screen containers.
   - `src/app/useFeedback.ts` encapsulates sound/haptic emission.
   - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, live-push subscription + polling fallback, reconnect lifecycle, and host/player controls (pause/undo/checkpoints/ready/reactions/chat/typing) plus `Exit Match` (retain reconnect session) vs `Forget Room` (clear session).
+  - Stale reconnect terminal states (`room_not_found`, `reconnect_expired`) now auto-clear persisted session and expose explicit recovery notice state for UI.
   - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition.
   - `src/ui/screens/SavedGamesScreen.tsx` manages manual save slots (load/save-over/rename/delete).
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
@@ -75,6 +76,14 @@ Purpose: give coding agents enough context to make correct, low-regression chang
 - `deal_breaker`
 
 Do not model multiple simultaneous pending effects.
+
+### Event details metadata
+
+`GameEvent.details` is additive and optional:
+- Draw details: `{ kind: 'draw', playerId, count, reason }`
+- Property steal details: `{ kind: 'property_steal', sourcePlayerId, targetPlayerId, cardIds, mode }`
+
+UI layers (steal banners/highlights, draw animation) should prefer `details` and only fall back to text parsing when necessary.
 
 ### Card identity
 
@@ -199,6 +208,9 @@ When card rendering, responsive layout, or modal/prompt orchestration changes:
 - Multiplayer growth telemetry now includes funnel + push health counters; keep additive compatibility for v1 payload readers.
 - Room push dedupe depends on `lastEventId`/`revision`; avoid duplicating refresh storms when touching event subscription logic.
 - Multiplayer chat unread/typing state is maintained in `App.tsx`; keep best-effort typing behavior non-blocking.
+- Multiplayer stale-session recovery UI is split between `useMultiplayerRoom` and `MultiplayerScreen`; avoid reintroducing `session && !roomView` infinite loading loops.
+- In-table social signaling now uses chat-dock reaction tray + transient reaction bursts; avoid restoring tiny fixed reaction rows.
+- Steal visibility and draw animation are driven by `GameEvent.details`; preserve additive compatibility for older histories with no `details`.
 - Card rendering/fit is split between `src/ui/components/CardView.tsx`, `src/ui/components/HandFan.tsx`, and `src/ui/theme/components/cards.css`.
 - Card visual metadata now includes optional action SVG icon paths; keep text badge fallback visible for resilience.
 - Draw-phase prompt intentionally uses rail hand layout for readability; non-draw prompts still use auto-fit.

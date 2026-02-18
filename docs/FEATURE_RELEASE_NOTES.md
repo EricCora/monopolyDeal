@@ -6,6 +6,40 @@ Branch: `codex/deep-research-improvements`
 
 Branch: `codex/gameplay-clarity-chat-polish`
 
+## Update: Multiplayer Recovery + Reaction UX + Steal/Draw Feedback
+
+Branch: `codex/gameplay-clarity-chat-polish`
+
+### What landed
+
+- Fixed stale-session resume dead-end:
+  - Auto-clears stale multiplayer sessions when reconnect fails with `room_not_found` or `reconnect_expired`.
+  - Preserves room code in the join field for fast rejoin.
+  - Replaces infinite "Syncing Room..." with explicit recovery cards/notices.
+- Upgraded reaction UX (UNO-style direction while keeping wire compatibility):
+  - Removed tiny inline reaction rows from table/lobby.
+  - Added quick emoji reaction tray inside chat dock, still mapped to `nice|wow|gg|oops`.
+  - Added short-lived per-player reaction burst badges on lobby roster and in-match player panels.
+  - Reaction entries remain in activity feed but are visually de-emphasized.
+- Added structured gameplay event metadata:
+  - `GameEvent.details` now supports draw and property-steal details.
+  - Draw events include `playerId`, `count`, and `reason` (`turn_draw`, `pass_go`, `effect`).
+  - Steal events include source/target ids, mode (`sly_deal`, `forced_deal`, `deal_breaker`), and affected `cardIds`.
+- Steal clarity pass:
+  - Added prominent in-table steal banner ("who stole what from whom").
+  - Added temporary source/target player glows and stolen-card/lane highlights.
+  - Added polite live-region status messaging for accessibility.
+- Draw feedback pass:
+  - Added visual deck representation on draw pile.
+  - Added deck-to-hand ghost-card animation triggered by draw event metadata.
+  - Animation is disabled when reduced motion/reduced effects is enabled.
+
+### Verification run for this update
+
+- `npm run test`
+- `npm run build`
+- `npm run lint` (passes; pre-existing React Compiler/TanStack warning remains in `StatsDashboard`)
+
 ### What landed
 
 Gameplay clarity and correctness:

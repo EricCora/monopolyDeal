@@ -43,6 +43,8 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Lobby ready-check state and quick preset reactions
 - Multiplayer activity feed (joins/reconnects/host changes/ready/reactions/checkpoints)
 - Multiplayer chat dock (bottom-left pill) with unread badge, typing indicators, mention highlighting (`@name`), and aria-log message semantics
+- Multiplayer reconnect recovery UX that auto-clears stale sessions and avoids endless syncing states
+- UNO-style quick reactions via chat tray with transient per-player reaction bursts on lobby/table surfaces
 - Flagship lobby presentation refresh with structured roster table, clearer status pills, and stronger action hierarchy
 - Hybrid live updates: server push notifications with polling fallback
 - Multiplayer `Exit Match` (keeps reconnect session) and `Forget Room` (permanent disconnect) actions
@@ -51,6 +53,8 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Pending deal interactions (`Sly Deal`, `Forced Deal`, `Deal Breaker`) support card-click selection flows
 - Rent action cards now show compact rent summaries; compact rent ladders have improved readability
 - Card type ribbons improve visual distinction between rent action cards and property cards
+- Property steal outcomes are now surfaced with an in-table alert banner and temporary source/target/card highlights
+- Draw actions now animate from deck to hand (respects reduced-motion/reduced-effects settings)
 - Post-game recap now highlights winning move, momentum shift, and standout cards
 - Experimental feature flags for AI opponents, AI coach hints, replay timeline, daily challenges, achievements, and custom rules
 - Auto-save + resume via `localStorage`
@@ -181,7 +185,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Host controls: `Pause/Resume`, `Save Checkpoint`, `Load Checkpoint`, `Delete Checkpoint`.
 - Lobby host controls include `Start Match` and `Start From Checkpoint` (when checkpoint data exists).
 - Lobby includes `Copy Room Code` and `Copy Invite Link` actions.
-- Lobby includes player-ready status, quick reaction controls, and room chat.
+- Lobby includes player-ready status, room chat, and chat-tray quick reactions.
 - Player session controls: `Exit Match` (retain reconnect) and `Forget Room` (clear session).
 - Active-turn controls: `Undo Last Play`, `Reset Turn Plays` (when snapshot history exists).
 - Multiplayer state mutations are revision-guarded to prevent stale updates.
