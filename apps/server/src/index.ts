@@ -27,6 +27,7 @@ import {
 import { loadSnapshots, saveSnapshots } from './persistence/snapshots.ts';
 import type { Action, PlayerId } from '../../../src/engine/index.ts';
 import type { MultiplayerReaction, MultiplayerRoomEventEnvelope } from '../../../packages/shared/multiplayer.ts';
+import { isNonEmptyTrimmedString } from './validation.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const MULTIPLAYER_PUSH_ENABLED = process.env.MULTIPLAYER_PUSH_ENABLED !== 'false';
@@ -399,7 +400,7 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'chat') {
-      if (typeof payload.text !== 'string' || payload.text.trim().length === 0) {
+      if (!isNonEmptyTrimmedString(payload.text)) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
