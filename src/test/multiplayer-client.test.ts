@@ -56,4 +56,12 @@ describe('multiplayerErrorMessage', () => {
   it('maps room started to reconnect guidance', () => {
     expect(multiplayerErrorMessage('room_started')).toMatch(/reconnect/i);
   });
+
+  it('maps rate limiting to wait guidance', () => {
+    expect(multiplayerErrorMessage('rate_limited')).toMatch(/wait/i);
+  });
+
+  it('maps origin policy failures to access guidance', () => {
+    expect(multiplayerErrorMessage('origin_not_allowed')).toMatch(/not allowed/i);
+  });
 });

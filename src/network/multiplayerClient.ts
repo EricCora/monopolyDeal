@@ -72,8 +72,10 @@ export function multiplayerErrorMessage(code: string): string {
   if (code === 'checkpoint_not_found') return 'Checkpoint not found. Refresh the room and try again.';
   if (code === 'checkpoint_player_mismatch') return 'Checkpoint players do not match the current lobby lineup.';
   if (code === 'reaction_rate_limited') return 'Reaction sent too quickly. Please wait a moment.';
+  if (code === 'rate_limited') return 'Too many multiplayer requests right now. Please wait a moment and try again.';
   if (code === 'reactions_disabled') return 'Reactions are disabled for this room.';
   if (code === 'push_disabled') return 'Live room updates are disabled for this server.';
+  if (code === 'origin_not_allowed') return 'This app origin is not allowed to access the multiplayer server.';
   if (code === 'network_unavailable' || code === 'request_failed') return 'Couldn\'t connect right now. Retrying...';
   return 'Could not complete multiplayer request. Please try again.';
 }

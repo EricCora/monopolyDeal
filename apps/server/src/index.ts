@@ -25,11 +25,25 @@ import {
 import { loadSnapshots, saveSnapshots } from './persistence/snapshots.ts';
 import type { Action, PlayerId } from '../../../src/engine/index.ts';
 import type { MultiplayerReaction, MultiplayerRoomEventEnvelope } from '../../../packages/shared/multiplayer.ts';
+import {
+  buildCorsHeaders,
+  createCorsPolicy,
+  createRateLimiter,
+  createRateLimitKey,
+  isOriginAllowed,
+} from './httpSecurity.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const MULTIPLAYER_PUSH_ENABLED = process.env.MULTIPLAYER_PUSH_ENABLED !== 'false';
 const MULTIPLAYER_REACTIONS_ENABLED = process.env.MULTIPLAYER_REACTIONS_ENABLED !== 'false';
 const SSE_HEARTBEAT_MS = 25_000;
+const corsPolicy = createCorsPolicy(process.env.MULTIPLAYER_ALLOWED_ORIGINS);
+const rateLimiter = createRateLimiter({
+  enabled: process.env.MULTIPLAYER_RATE_LIMIT_ENABLED !== 'false',
+  windowMs: Number(process.env.MULTIPLAYER_RATE_LIMIT_WINDOW_MS ?? 60_000),
+  maxRequests: Number(process.env.MULTIPLAYER_RATE_LIMIT_MAX_REQUESTS ?? 300),
+  maxTrackedClients: Number(process.env.MULTIPLAYER_RATE_LIMIT_MAX_CLIENTS ?? 10_000),
+});
 
 const rooms = new Map<string, MultiplayerRoom>();
 
@@ -48,12 +62,14 @@ function writeJson(
   res: { writeHead: (code: number, headers: Record<string, string>) => void; end: (body: string) => void },
   code: number,
   payload: unknown,
+  requestOrigin?: string,
+  extraHeaders?: Record<string, string>,
 ): void {
+  const corsHeaders = buildCorsHeaders(requestOrigin, corsPolicy);
   res.writeHead(code, {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    ...corsHeaders,
+    ...extraHeaders,
   });
   res.end(JSON.stringify(payload));
 }
@@ -122,6 +138,7 @@ function openEventStream(
   playerId: string,
   sessionToken: string,
   lastEventId: number,
+  requestOrigin?: string,
 ): void {
   // Validate session and keep reconnect window fresh.
   roomView(room, playerId as PlayerId, sessionToken);
@@ -131,7 +148,7 @@ function openEventStream(
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
-    'Access-Control-Allow-Origin': '*',
+    ...buildCorsHeaders(requestOrigin, corsPolicy),
     'X-Accel-Buffering': 'no',
   });
   res.flushHeaders?.();
@@ -172,25 +189,49 @@ setInterval(() => {
 
 createServer(async (req, res) => {
   if (!req.url || !req.method) {
-    writeJson(res, 400, { error: 'bad_request' });
-    return;
-  }
-
-  if (req.method === 'OPTIONS') {
-    writeJson(res, 200, { ok: true });
+    const requestOrigin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+    writeJson(res, 400, { error: 'bad_request' }, requestOrigin);
     return;
   }
 
   const parsed = parse(req.url, true);
   const path = parsed.pathname ?? '';
+  const requestOrigin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+  const writeResponseJson = (code: number, payload: unknown, extraHeaders?: Record<string, string>) => {
+    writeJson(res, code, payload, requestOrigin, extraHeaders);
+  };
+
+  if (path.startsWith('/api/multiplayer') && !isOriginAllowed(requestOrigin, corsPolicy)) {
+    writeResponseJson(403, { error: 'origin_not_allowed' });
+    return;
+  }
+
+  if (req.method === 'OPTIONS') {
+    writeResponseJson(200, { ok: true });
+    return;
+  }
+
+  if (path.startsWith('/api/multiplayer') && path !== '/api/multiplayer/health') {
+    const rateLimit = rateLimiter.allow(createRateLimitKey(req));
+    if (!rateLimit.allowed) {
+      writeResponseJson(429, { error: 'rate_limited' }, { 'Retry-After': String(rateLimit.retryAfterSec) });
+      return;
+    }
+  }
+
   pruneInactiveRooms(rooms);
 
   try {
     if (req.method === 'GET' && path === '/api/multiplayer/health') {
-      writeJson(res, 200, {
+      writeResponseJson(200, {
         ok: true,
         pushEnabled: MULTIPLAYER_PUSH_ENABLED,
         reactionsEnabled: MULTIPLAYER_REACTIONS_ENABLED,
+        corsMode: corsPolicy.allowAnyOrigin ? 'wildcard' : 'allowlist',
+        allowedOriginCount: corsPolicy.allowedOrigins.length,
+        rateLimitEnabled: rateLimiter.config.enabled,
+        rateLimitWindowMs: rateLimiter.config.windowMs,
+        rateLimitMaxRequests: rateLimiter.config.maxRequests,
       });
       return;
     }
@@ -200,7 +241,7 @@ createServer(async (req, res) => {
       const payload = JSON.parse(raw || '{}') as { playerName?: string };
       const created = createRoom(rooms, payload.playerName ?? 'Host');
       snapshotAll();
-      writeJson(res, 200, created.session);
+      writeResponseJson(200, created.session);
       return;
     }
 
@@ -208,7 +249,7 @@ createServer(async (req, res) => {
       /^\/api\/multiplayer\/rooms\/([^/]+)(?:\/(join|reconnect|start|action|leave|state|pause|resume|undo|reset-turn|checkpoints|events|ready|reaction))?(?:\/(save|load|delete))?$/,
     );
     if (!match) {
-      writeJson(res, 404, { error: 'not_found' });
+      writeResponseJson(404, { error: 'not_found' });
       return;
     }
 
@@ -217,7 +258,7 @@ createServer(async (req, res) => {
     const checkpointOperation = match[3] ?? null;
     const room = rooms.get(roomCode);
     if (!room) {
-      writeJson(res, 404, { error: 'room_not_found' });
+      writeResponseJson(404, { error: 'room_not_found' });
       return;
     }
 
@@ -225,12 +266,12 @@ createServer(async (req, res) => {
       const playerId = String(parsed.query.playerId ?? '');
       const sessionToken = String(parsed.query.sessionToken ?? '');
       if (!playerId || !sessionToken) {
-        writeJson(res, 400, { error: 'invalid_payload' });
+        writeResponseJson(400, { error: 'invalid_payload' });
         return;
       }
       const view = roomView(room, playerId as PlayerId, sessionToken);
       snapshotAll();
-      writeJson(res, 200, view);
+      writeResponseJson(200, view);
       return;
     }
 
@@ -238,33 +279,33 @@ createServer(async (req, res) => {
       const playerId = String(parsed.query.playerId ?? '');
       const sessionToken = String(parsed.query.sessionToken ?? '');
       if (!playerId || !sessionToken) {
-        writeJson(res, 400, { error: 'invalid_payload' });
+        writeResponseJson(400, { error: 'invalid_payload' });
         return;
       }
       const checkpoints = listRoomCheckpoints(room, playerId as PlayerId, sessionToken);
       snapshotAll();
-      writeJson(res, 200, { checkpoints });
+      writeResponseJson(200, { checkpoints });
       return;
     }
 
     if (req.method === 'GET' && operation === 'events') {
       if (!MULTIPLAYER_PUSH_ENABLED) {
-        writeJson(res, 400, { error: 'push_disabled' });
+        writeResponseJson(400, { error: 'push_disabled' });
         return;
       }
       const playerId = String(parsed.query.playerId ?? '');
       const sessionToken = String(parsed.query.sessionToken ?? '');
       const lastEventId = Number(parsed.query.lastEventId ?? 0);
       if (!playerId || !sessionToken) {
-        writeJson(res, 400, { error: 'invalid_payload' });
+        writeResponseJson(400, { error: 'invalid_payload' });
         return;
       }
-      openEventStream(req, res, room, playerId, sessionToken, Number.isFinite(lastEventId) ? lastEventId : 0);
+      openEventStream(req, res, room, playerId, sessionToken, Number.isFinite(lastEventId) ? lastEventId : 0, requestOrigin);
       return;
     }
 
     if (req.method !== 'POST') {
-      writeJson(res, 405, { error: 'method_not_allowed' });
+      writeResponseJson(405, { error: 'method_not_allowed' });
       return;
     }
 
@@ -286,12 +327,12 @@ createServer(async (req, res) => {
       const session = joinRoom(room, payload.playerName ?? 'Player');
       snapshotAll();
       broadcastRoomEvent(room, 'join');
-      writeJson(res, 200, session);
+      writeResponseJson(200, session);
       return;
     }
 
     if (!payload.playerId || !payload.sessionToken) {
-      writeJson(res, 400, { error: 'invalid_payload' });
+      writeResponseJson(400, { error: 'invalid_payload' });
       return;
     }
 
@@ -301,7 +342,7 @@ createServer(async (req, res) => {
       const session = reconnectRoom(room, playerId, payload.sessionToken, payload.expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'reconnect');
-      writeJson(res, 200, session);
+      writeResponseJson(200, session);
       return;
     }
 
@@ -309,7 +350,7 @@ createServer(async (req, res) => {
       startRoom(room, playerId, payload.sessionToken, payload.seed, payload.expectedRevision, payload.checkpointId);
       snapshotAll();
       broadcastRoomEvent(room, payload.checkpointId ? 'start_from_checkpoint' : 'start');
-      writeJson(res, 200, { ok: true });
+      writeResponseJson(200, { ok: true });
       return;
     }
 
@@ -317,7 +358,7 @@ createServer(async (req, res) => {
       leaveRoom(room, playerId, payload.sessionToken, payload.expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'leave');
-      writeJson(res, 200, { ok: true });
+      writeResponseJson(200, { ok: true });
       return;
     }
 
@@ -325,7 +366,7 @@ createServer(async (req, res) => {
       pauseRoom(room, playerId, payload.sessionToken, payload.expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'pause');
-      writeJson(res, 200, { ok: true });
+      writeResponseJson(200, { ok: true });
       return;
     }
 
@@ -333,7 +374,7 @@ createServer(async (req, res) => {
       resumeRoom(room, playerId, payload.sessionToken, payload.expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'resume');
-      writeJson(res, 200, { ok: true });
+      writeResponseJson(200, { ok: true });
       return;
     }
 
@@ -341,7 +382,7 @@ createServer(async (req, res) => {
       undoRoomAction(room, playerId, payload.sessionToken, payload.expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'undo');
-      writeJson(res, 200, { ok: true });
+      writeResponseJson(200, { ok: true });
       return;
     }
 
@@ -349,91 +390,91 @@ createServer(async (req, res) => {
       resetTurnRoomActions(room, playerId, payload.sessionToken, payload.expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'reset_turn');
-      writeJson(res, 200, { ok: true });
+      writeResponseJson(200, { ok: true });
       return;
     }
 
     if (operation === 'action') {
       if (!payload.action) {
-        writeJson(res, 400, { error: 'invalid_payload' });
+        writeResponseJson(400, { error: 'invalid_payload' });
         return;
       }
       applyRoomAction(room, playerId, payload.sessionToken, payload.action, payload.expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'action');
-      writeJson(res, 200, { ok: true });
+      writeResponseJson(200, { ok: true });
       return;
     }
 
     if (operation === 'ready') {
       if (typeof payload.ready !== 'boolean') {
-        writeJson(res, 400, { error: 'invalid_payload' });
+        writeResponseJson(400, { error: 'invalid_payload' });
         return;
       }
       setRoomReady(room, playerId, payload.sessionToken, payload.ready, payload.expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'ready_changed');
-      writeJson(res, 200, { ok: true });
+      writeResponseJson(200, { ok: true });
       return;
     }
 
     if (operation === 'reaction') {
       if (!MULTIPLAYER_REACTIONS_ENABLED) {
-        writeJson(res, 400, { error: 'reactions_disabled' });
+        writeResponseJson(400, { error: 'reactions_disabled' });
         return;
       }
       const reaction = payload.reaction;
       if (!reaction || !ROOM_REACTION_OPTIONS.includes(reaction)) {
-        writeJson(res, 400, { error: 'invalid_payload' });
+        writeResponseJson(400, { error: 'invalid_payload' });
         return;
       }
       sendRoomReaction(room, playerId, payload.sessionToken, reaction, payload.expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'reaction');
-      writeJson(res, 200, { ok: true });
+      writeResponseJson(200, { ok: true });
       return;
     }
 
     if (operation === 'checkpoints' && checkpointOperation === 'save') {
       if (!payload.name) {
-        writeJson(res, 400, { error: 'invalid_payload' });
+        writeResponseJson(400, { error: 'invalid_payload' });
         return;
       }
       const checkpoint = saveRoomCheckpoint(room, playerId, payload.sessionToken, payload.name, payload.expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'checkpoint_saved');
-      writeJson(res, 200, { checkpoint });
+      writeResponseJson(200, { checkpoint });
       return;
     }
 
     if (operation === 'checkpoints' && checkpointOperation === 'load') {
       if (!payload.checkpointId) {
-        writeJson(res, 400, { error: 'invalid_payload' });
+        writeResponseJson(400, { error: 'invalid_payload' });
         return;
       }
       loadRoomCheckpoint(room, playerId, payload.sessionToken, payload.checkpointId, payload.expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'checkpoint_loaded');
-      writeJson(res, 200, { ok: true });
+      writeResponseJson(200, { ok: true });
       return;
     }
 
     if (operation === 'checkpoints' && checkpointOperation === 'delete') {
       if (!payload.checkpointId) {
-        writeJson(res, 400, { error: 'invalid_payload' });
+        writeResponseJson(400, { error: 'invalid_payload' });
         return;
       }
       deleteRoomCheckpoint(room, playerId, payload.sessionToken, payload.checkpointId, payload.expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'checkpoint_deleted');
-      writeJson(res, 200, { ok: true });
+      writeResponseJson(200, { ok: true });
       return;
     }
 
-    writeJson(res, 404, { error: 'not_found' });
+    writeResponseJson(404, { error: 'not_found' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'server_error';
-    writeJson(res, 400, { error: message });
+    writeResponseJson(400, { error: message });
   }
 }).listen(PORT, () => {
   console.log(`Multiplayer server listening on http://0.0.0.0:${PORT}`);
