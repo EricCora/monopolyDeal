@@ -31,6 +31,7 @@ import type {
   MultiplayerSession,
 } from '../network/multiplayerTypes';
 import type { GrowthMetricEvent } from '../stats';
+import { computePushRetryDelayMs } from './multiplayerResilience';
 
 interface UseMultiplayerRoomOptions {
   enabled: boolean;
@@ -119,17 +120,46 @@ export function useMultiplayerRoom({
   const pushRefreshInFlightRef = useRef(false);
   const pushRefreshQueuedRef = useRef(false);
   const pushFallbackMetricSentRef = useRef(false);
+  const pushReconnectAttemptRef = useRef(0);
+  const pushReconnectTimerRef = useRef<number | null>(null);
+  const wakeRefreshInFlightRef = useRef(false);
+  const [pushReconnectNonce, setPushReconnectNonce] = useState(0);
 
   const expectedRevision = roomView?.revision;
 
+  const clearPushReconnectTimer = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (pushReconnectTimerRef.current === null) return;
+    window.clearTimeout(pushReconnectTimerRef.current);
+    pushReconnectTimerRef.current = null;
+  }, []);
+
+  const resetPushReconnectBackoff = useCallback(() => {
+    clearPushReconnectTimer();
+    pushReconnectAttemptRef.current = 0;
+  }, [clearPushReconnectTimer]);
+
+  const schedulePushReconnect = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (pushReconnectTimerRef.current !== null) return;
+    pushReconnectAttemptRef.current += 1;
+    const delayMs = computePushRetryDelayMs(pushReconnectAttemptRef.current);
+    pushReconnectTimerRef.current = window.setTimeout(() => {
+      pushReconnectTimerRef.current = null;
+      setPushReconnectNonce((value) => value + 1);
+    }, delayMs);
+  }, []);
+
   const clearSession = useCallback(() => {
+    resetPushReconnectBackoff();
     setSession(null);
     setRoomView(null);
     setHostChangeNotice(null);
     lastHostPlayerIdRef.current = null;
     lastEventIdRef.current = 0;
+    setPushReconnectNonce(0);
     saveStoredSession(null);
-  }, []);
+  }, [resetPushReconnectBackoff]);
 
   const refreshRoom = useCallback(async (activeSession?: MultiplayerSession | null): Promise<MultiplayerRoomView | null> => {
     const current = activeSession ?? session;
@@ -564,11 +594,13 @@ export function useMultiplayerRoom({
 
   useEffect(() => {
     if (!enabled || !session || !pushEnabled) {
+      resetPushReconnectBackoff();
+      pushFallbackMetricSentRef.current = false;
       setPushState(pushEnabled ? 'connecting' : 'disabled');
       return;
     }
 
-    pushFallbackMetricSentRef.current = false;
+    clearPushReconnectTimer();
     setPushState('connecting');
     let cancelled = false;
     let subscription: { close: () => void } | null = null;
@@ -579,6 +611,8 @@ export function useMultiplayerRoom({
         {
           onOpen: () => {
             if (cancelled) return;
+            resetPushReconnectBackoff();
+            pushFallbackMetricSentRef.current = false;
             setPushState('connected');
             onMetricEvent?.('multiplayer_push_connected');
           },
@@ -596,6 +630,7 @@ export function useMultiplayerRoom({
               onMetricEvent?.('multiplayer_push_fallback');
               pushFallbackMetricSentRef.current = true;
             }
+            schedulePushReconnect();
           },
         },
         apiBase,
@@ -605,9 +640,11 @@ export function useMultiplayerRoom({
       if (cancelled) return;
       const code = pushError instanceof Error ? pushError.message : 'push_not_supported';
       if (code === 'push_not_supported') {
+        resetPushReconnectBackoff();
         setPushState('unsupported');
       } else {
         setPushState('fallback');
+        schedulePushReconnect();
       }
       if (!pushFallbackMetricSentRef.current) {
         onMetricEvent?.('multiplayer_push_fallback');
@@ -619,7 +656,68 @@ export function useMultiplayerRoom({
       cancelled = true;
       subscription?.close();
     };
-  }, [apiBase, enabled, onMetricEvent, pushEnabled, refreshFromPush, session]);
+  }, [
+    apiBase,
+    clearPushReconnectTimer,
+    enabled,
+    onMetricEvent,
+    pushEnabled,
+    pushReconnectNonce,
+    refreshFromPush,
+    resetPushReconnectBackoff,
+    schedulePushReconnect,
+    session,
+  ]);
+
+  useEffect(() => {
+    if (!enabled || !session || typeof window === 'undefined') return;
+    const refreshAfterWake = () => {
+      if (wakeRefreshInFlightRef.current) return;
+      if (document.visibilityState === 'hidden') return;
+      wakeRefreshInFlightRef.current = true;
+      refreshRoom()
+        .catch(async () => {
+          setConnectionState('reconnecting');
+          const recovered = await reconnectSession(session);
+          if (!recovered) {
+            setConnectionState('disconnected');
+          }
+        })
+        .finally(() => {
+          wakeRefreshInFlightRef.current = false;
+        });
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshAfterWake();
+      }
+    };
+    const onFocus = () => {
+      refreshAfterWake();
+    };
+    const onOnline = () => {
+      setConnectionState('reconnecting');
+      refreshAfterWake();
+    };
+    const onOffline = () => {
+      setConnectionState('disconnected');
+      if (pushEnabled) {
+        setPushState((current) => (current === 'unsupported' || current === 'disabled' ? current : 'fallback'));
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, [enabled, pushEnabled, reconnectSession, refreshRoom, session]);
 
   useEffect(() => {
     if (!enabled || !session) return;
@@ -649,6 +747,10 @@ export function useMultiplayerRoom({
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [apiBase, enabled, session]);
+
+  useEffect(() => () => {
+    clearPushReconnectTimer();
+  }, [clearPushReconnectTimer]);
 
   const isHost = useMemo(() => {
     if (!roomView || !session) return false;

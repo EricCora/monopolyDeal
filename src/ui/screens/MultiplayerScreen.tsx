@@ -52,7 +52,7 @@ function connectionLabel(state: MultiplayerConnectionState): string {
 function pushLabel(state: MultiplayerPushState): string {
   if (state === 'connected') return 'Live updates active';
   if (state === 'connecting') return 'Connecting live updates';
-  if (state === 'fallback') return 'Live updates unavailable, using polling';
+  if (state === 'fallback') return 'Live updates recovering, polling active';
   if (state === 'unsupported') return 'Live updates unsupported on this browser';
   return 'Live updates disabled';
 }
