@@ -68,6 +68,7 @@ import {
 import type { ActionVariantView } from './ui/components/PlayChooser';
 import { GameShell } from './ui/layout/GameShell';
 import { ActionConfirmDialog } from './ui/components/ActionConfirmDialog';
+import { MultiplayerChatDock } from './ui/components/MultiplayerChatDock';
 import { RulesDrawer } from './ui/components/RulesDrawer';
 import { GameTableScreen } from './ui/screens/GameTableScreen';
 import { HomeScreen } from './ui/screens/HomeScreen';
@@ -265,6 +266,8 @@ function App() {
   const [shareStatus, setShareStatus] = useState<ShareStatus>(null);
   const [riskyActionConfirmation, setRiskyActionConfirmation] = useState<RiskyActionConfirmation | null>(null);
   const [showRulesDrawer, setShowRulesDrawer] = useState(false);
+  const [multiplayerChatOpen, setMultiplayerChatOpen] = useState(false);
+  const [multiplayerChatUnread, setMultiplayerChatUnread] = useState(0);
   const [turnSnapshots, setTurnSnapshots] = useState<GameState[]>([]);
   const [uiPreferences, setUiPreferences] = useState<UiPreferencesV1>(() => loadUiPreferences());
   const [devSeedStatus, setDevSeedStatus] = useState<DevSeedStatus>(null);
@@ -274,6 +277,8 @@ function App() {
   const botTurnSignatureRef = useRef<string | null>(null);
   const coachHintMetricRef = useRef<string | null>(null);
   const multiplayerFinishedMetricRef = useRef<string | null>(null);
+  const multiplayerChatLastSeenRef = useRef(0);
+  const multiplayerTypingSentRef = useRef(false);
   const deepLinkHandledRef = useRef(false);
 
   useEffect(() => {
@@ -383,6 +388,8 @@ function App() {
     runAction: runMultiplayerAction,
     setReady: setMultiplayerReadyState,
     sendReaction: sendMultiplayerReactionAction,
+    sendChatMessage: sendMultiplayerChatMessageAction,
+    setTyping: setMultiplayerTypingIndicator,
     pauseMatch: pauseMultiplayerMatch,
     resumeMatch: resumeMultiplayerMatch,
     undoLastAction: undoMultiplayerAction,
@@ -412,6 +419,14 @@ function App() {
     setScreen('multiplayer');
     recordGrowthMetric('multiplayer_deep_link_opened');
   }, [recordGrowthMetric, setMultiplayerError, setMultiplayerJoinCode]);
+
+  useEffect(() => {
+    if (screen === 'multiplayer') return;
+    setMultiplayerChatOpen(false);
+    setMultiplayerChatUnread(0);
+    multiplayerChatLastSeenRef.current = 0;
+    multiplayerTypingSentRef.current = false;
+  }, [screen]);
 
   useEffect(() => {
     if (!game || !prompt) {
@@ -648,6 +663,37 @@ function App() {
       {},
     );
   }, [multiplayerRoomView]);
+  const multiplayerTypingNames = useMemo(() => {
+    if (!multiplayerRoomView) return [] as string[];
+    const nameById = new Map(multiplayerRoomView.players.map((player) => [player.id, player.name]));
+    return multiplayerRoomView.typingPlayerIds
+      .filter((playerId) => playerId !== multiplayerRoomView.yourPlayerId)
+      .map((playerId) => nameById.get(playerId))
+      .filter((name): name is string => Boolean(name));
+  }, [multiplayerRoomView]);
+
+  useEffect(() => {
+    if (screen !== 'multiplayer' || !multiplayerRoomView) return;
+    const chatMessages = multiplayerRoomView.chatMessages ?? [];
+    if (chatMessages.length === 0) return;
+    const latestId = chatMessages[chatMessages.length - 1]?.id ?? 0;
+    if (latestId <= multiplayerChatLastSeenRef.current) return;
+
+    if (multiplayerChatOpen) {
+      multiplayerChatLastSeenRef.current = latestId;
+      setMultiplayerChatUnread(0);
+      return;
+    }
+
+    const unseenFromOthers = chatMessages.filter((message) => (
+      message.id > multiplayerChatLastSeenRef.current
+      && message.playerId !== multiplayerRoomView.yourPlayerId
+    )).length;
+    if (unseenFromOthers > 0) {
+      setMultiplayerChatUnread((count) => count + unseenFromOthers);
+    }
+    multiplayerChatLastSeenRef.current = latestId;
+  }, [multiplayerChatOpen, multiplayerRoomView, screen]);
   const multiplayerPendingPayment = multiplayerGame?.pending?.kind === 'payment' ? multiplayerGame.pending.payload : null;
   const multiplayerPendingPaymentPlayer = useMemo(() => {
     if (!multiplayerGame || !multiplayerPendingPayment) return null;
@@ -1421,6 +1467,13 @@ function App() {
     return item.previewText ?? financialDetail;
   };
 
+  const handleMultiplayerTypingChange = useCallback((typing: boolean) => {
+    if (!multiplayerSession) return;
+    if (multiplayerTypingSentRef.current === typing) return;
+    multiplayerTypingSentRef.current = typing;
+    void setMultiplayerTypingIndicator(typing);
+  }, [multiplayerSession, setMultiplayerTypingIndicator]);
+
   const syncSetupPlayerNames = useCallback(
     (names: string[], controllers?: PlayerController[], difficulties?: BotDifficulty[], customRules?: GameConfig['ruleset']) => {
     setSetup((prev) => {
@@ -1932,6 +1985,34 @@ function App() {
             runAction(riskyActionConfirmation.action);
           }}
           onCancel={() => setRiskyActionConfirmation(null)}
+        />
+      ) : null}
+
+      {screen === 'multiplayer' && multiplayerRoomView && multiplayerSession ? (
+        <MultiplayerChatDock
+          messages={multiplayerRoomView.chatMessages}
+          typingNames={multiplayerTypingNames}
+          yourPlayerId={multiplayerRoomView.yourPlayerId}
+          yourName={multiplayerSession.playerName}
+          isOpen={multiplayerChatOpen}
+          unreadCount={multiplayerChatUnread}
+          disabled={multiplayerLoading || multiplayerCheckpointLoading}
+          onToggle={() => {
+            setMultiplayerChatOpen((open) => {
+              const nextOpen = !open;
+              if (nextOpen) {
+                setMultiplayerChatUnread(0);
+                const latestId = multiplayerRoomView.chatMessages[multiplayerRoomView.chatMessages.length - 1]?.id ?? 0;
+                multiplayerChatLastSeenRef.current = latestId;
+              }
+              return nextOpen;
+            });
+          }}
+          onSendMessage={(text) => {
+            void sendMultiplayerChatMessageAction(text);
+            multiplayerTypingSentRef.current = false;
+          }}
+          onTypingChange={handleMultiplayerTypingChange}
         />
       ) : null}
 

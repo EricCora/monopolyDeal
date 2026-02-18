@@ -16,7 +16,9 @@ import {
   resetMultiplayerRoomTurn,
   resumeMultiplayerRoom,
   saveMultiplayerCheckpoint,
+  sendMultiplayerChatMessage,
   sendMultiplayerReaction,
+  setMultiplayerTyping,
   setMultiplayerReady,
   startMultiplayerRoom,
   subscribeMultiplayerRoomEvents,
@@ -142,6 +144,8 @@ export function useMultiplayerRoom({
         ready: Boolean(player.ready),
       })),
       activityFeed: Array.isArray(loaded.activityFeed) ? loaded.activityFeed : [],
+      chatMessages: Array.isArray(loaded.chatMessages) ? loaded.chatMessages : [],
+      typingPlayerIds: Array.isArray(loaded.typingPlayerIds) ? loaded.typingPlayerIds : [],
       lastEventId: Number.isFinite(loaded.lastEventId) ? loaded.lastEventId : loaded.revision,
     };
 
@@ -373,6 +377,29 @@ export function useMultiplayerRoom({
       setError(multiplayerErrorMessage(code));
     }
   }, [apiBase, expectedRevision, reactionsEnabled, refreshRoom, session]);
+
+  const sendChatMessage = useCallback(async (text: string) => {
+    const current = session;
+    if (!current) return;
+    setError(null);
+    try {
+      await sendMultiplayerChatMessage(current, text, apiBase, expectedRevision);
+      await refreshRoom(current);
+    } catch (chatError) {
+      const code = chatError instanceof Error ? chatError.message : 'request_failed';
+      setError(multiplayerErrorMessage(code));
+    }
+  }, [apiBase, expectedRevision, refreshRoom, session]);
+
+  const setTyping = useCallback(async (typing: boolean) => {
+    const current = session;
+    if (!current) return;
+    try {
+      await setMultiplayerTyping(current, typing, apiBase, expectedRevision);
+    } catch {
+      // Typing indicators are best-effort and should not interrupt gameplay.
+    }
+  }, [apiBase, expectedRevision, session]);
 
   const pauseMatch = useCallback(async () => {
     const current = session;
@@ -681,6 +708,8 @@ export function useMultiplayerRoom({
     runAction,
     setReady,
     sendReaction,
+    sendChatMessage,
+    setTyping,
     pauseMatch,
     resumeMatch,
     undoLastAction,

@@ -482,6 +482,127 @@
   margin: 0.5rem 0 0;
 }
 
+.multiplayer-chat-dock {
+  position: fixed;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: calc(var(--z-shield) - 2);
+  display: grid;
+  gap: 0.45rem;
+  width: min(360px, calc(100vw - 2rem));
+}
+
+.chat-pill {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  border: 1px solid #7f9b61;
+  background: rgba(21, 42, 26, 0.95);
+  color: #e5f3de;
+  font-weight: 700;
+  padding: 0.42rem 0.8rem;
+  box-shadow: 0 8px 14px rgba(2, 10, 7, 0.34);
+}
+
+.chat-pill-unread {
+  min-width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: #e08a4d;
+  color: #1d1713;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.chat-panel {
+  border-color: #6d8d62;
+  background: linear-gradient(180deg, rgba(14, 28, 18, 0.96), rgba(10, 20, 14, 0.96));
+  box-shadow: 0 16px 32px rgba(2, 8, 6, 0.45);
+}
+
+.chat-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+
+.chat-panel-head h3 {
+  margin: 0;
+}
+
+.chat-message-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.36rem;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.chat-message {
+  border-radius: 9px;
+  border: 1px solid rgba(129, 157, 126, 0.28);
+  background: rgba(20, 42, 25, 0.72);
+  padding: 0.36rem 0.42rem;
+}
+
+.chat-message.is-own {
+  border-color: rgba(99, 152, 201, 0.45);
+  background: rgba(20, 43, 66, 0.66);
+}
+
+.chat-message.is-mention {
+  border-color: rgba(233, 184, 109, 0.62);
+  background: rgba(84, 58, 23, 0.58);
+}
+
+.chat-message-meta {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 0.77rem;
+  color: #cfe2c9;
+}
+
+.chat-message-text {
+  margin: 0.18rem 0 0;
+  font-size: 0.9rem;
+  color: #f0f7eb;
+  overflow-wrap: anywhere;
+}
+
+.chat-message-empty {
+  margin: 0;
+  color: #c7d8c2;
+  font-size: 0.88rem;
+}
+
+.chat-typing {
+  min-height: 1.1rem;
+  margin: 0.32rem 0 0.38rem;
+  color: #b4d0ad;
+  font-size: 0.82rem;
+}
+
+.chat-compose {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem;
+}
+
+.chat-compose input {
+  min-width: 0;
+}
+
 @keyframes player-focus-pulse {
   0% {
     transform: translateY(2px) scale(0.996);
@@ -510,5 +631,12 @@
 
   .players-grid {
     grid-template-columns: 1fr;
+  }
+
+  .multiplayer-chat-dock {
+    left: 0.65rem;
+    right: 0.65rem;
+    width: auto;
+    bottom: 0.65rem;
   }
 }
