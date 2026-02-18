@@ -2,7 +2,7 @@ import type { Action, GameState, LegalAction, PlayerId } from '../../src/engine'
 
 export type MultiplayerRoomStatus = 'lobby' | 'active' | 'finished';
 export type MultiplayerReaction = 'nice' | 'wow' | 'gg' | 'oops';
-export type MultiplayerActivityKind = 'lobby' | 'connection' | 'host' | 'ready' | 'reaction' | 'match' | 'checkpoint' | 'system';
+export type MultiplayerActivityKind = 'lobby' | 'connection' | 'host' | 'ready' | 'reaction' | 'chat' | 'match' | 'checkpoint' | 'system';
 
 export interface MultiplayerPlayerSummary {
   id: PlayerId;
@@ -26,6 +26,14 @@ export interface MultiplayerActivityFeedItem {
   reaction?: MultiplayerReaction;
 }
 
+export interface MultiplayerChatMessage {
+  id: number;
+  createdAt: number;
+  playerId: PlayerId;
+  playerName: string;
+  text: string;
+}
+
 export interface MultiplayerRoomView {
   roomCode: string;
   status: MultiplayerRoomStatus;
@@ -46,6 +54,8 @@ export interface MultiplayerRoomView {
   reconnectDeadlineMs: number;
   serverTime: number;
   activityFeed: MultiplayerActivityFeedItem[];
+  chatMessages: MultiplayerChatMessage[];
+  typingPlayerIds: PlayerId[];
   lastEventId: number;
 }
 
@@ -105,6 +115,14 @@ export interface SetReadyRequest extends ReconnectRoomRequest {
 
 export interface SendReactionRequest extends ReconnectRoomRequest {
   reaction: MultiplayerReaction;
+}
+
+export interface SendChatMessageRequest extends ReconnectRoomRequest {
+  text: string;
+}
+
+export interface SetTypingRequest extends ReconnectRoomRequest {
+  typing: boolean;
 }
 
 export interface MultiplayerRoomEventEnvelope {

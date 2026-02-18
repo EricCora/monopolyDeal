@@ -5,12 +5,15 @@ import {
   joinRoom,
   leaveRoom,
   loadRoomCheckpoint,
+  normalizeRoomForRuntime,
   pauseRoom,
   pruneInactiveRooms,
   reconnectRoom,
   resetTurnRoomActions,
   resumeRoom,
+  sendRoomChat,
   sendRoomReaction,
+  setRoomTyping,
   setRoomReady,
   roomView,
   saveRoomCheckpoint,
@@ -221,6 +224,61 @@ describe('multiplayer room service lifecycle', () => {
     expect(room.activityFeed[0]?.reaction).toBe('gg');
 
     expect(() => sendRoomReaction(room, session.playerId, session.sessionToken, 'wow')).toThrowError('reaction_rate_limited');
+  });
+
+  it('stores chat messages and returns them in room view', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    joinRoom(room, 'Player 2');
+
+    sendRoomChat(room, session.playerId, session.sessionToken, 'Hello table');
+
+    const view = roomView(room, session.playerId, session.sessionToken);
+    expect(view.chatMessages).toHaveLength(1);
+    expect(view.chatMessages[0]?.text).toBe('Hello table');
+    expect(view.chatMessages[0]?.playerId).toBe(session.playerId);
+  });
+
+  it('enforces chat rate limits and max message length', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    joinRoom(room, 'Player 2');
+
+    sendRoomChat(room, session.playerId, session.sessionToken, 'first');
+    expect(() => sendRoomChat(room, session.playerId, session.sessionToken, 'second')).toThrowError('chat_rate_limited');
+    expect(() => sendRoomChat(room, session.playerId, session.sessionToken, 'x'.repeat(281))).toThrowError('chat_too_long');
+  });
+
+  it('tracks typing players and expires stale typing indicators', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    joinRoom(room, 'Player 2');
+
+    setRoomTyping(room, session.playerId, session.sessionToken, true);
+    let view = roomView(room, session.playerId, session.sessionToken);
+    expect(view.typingPlayerIds).toContain(session.playerId);
+
+    room.typingByPlayerId[session.playerId] = Date.now() - 1;
+    view = roomView(room, session.playerId, session.sessionToken);
+    expect(view.typingPlayerIds).not.toContain(session.playerId);
+  });
+
+  it('normalizes legacy rooms that are missing chat and typing fields', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room } = createRoom(rooms, 'Host');
+    const legacy = {
+      ...structuredClone(room),
+      chatMessages: undefined,
+      nextChatId: undefined,
+      typingByPlayerId: undefined,
+      players: room.players.map((player) => ({ ...player, lastChatAt: undefined })),
+    } as unknown as MultiplayerRoom;
+
+    const normalized = normalizeRoomForRuntime(legacy);
+    expect(normalized.chatMessages).toEqual([]);
+    expect(normalized.nextChatId).toBe(1);
+    expect(normalized.typingByPlayerId).toEqual({});
+    expect(normalized.players.every((player) => Number.isFinite(player.lastChatAt))).toBe(true);
   });
 
   it('starts a lobby match from a compatible checkpoint when requested', () => {

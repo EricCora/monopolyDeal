@@ -15,7 +15,9 @@ import {
   roomView,
   ROOM_REACTION_OPTIONS,
   saveRoomCheckpoint,
+  sendRoomChat,
   sendRoomReaction,
+  setRoomTyping,
   setRoomReady,
   startRoom,
   resumeRoom,
@@ -205,7 +207,7 @@ createServer(async (req, res) => {
     }
 
     const match = path.match(
-      /^\/api\/multiplayer\/rooms\/([^/]+)(?:\/(join|reconnect|start|action|leave|state|pause|resume|undo|reset-turn|checkpoints|events|ready|reaction))?(?:\/(save|load|delete))?$/,
+      /^\/api\/multiplayer\/rooms\/([^/]+)(?:\/(join|reconnect|start|action|leave|state|pause|resume|undo|reset-turn|checkpoints|events|ready|reaction|chat|typing))?(?:\/(save|load|delete))?$/,
     );
     if (!match) {
       writeJson(res, 404, { error: 'not_found' });
@@ -280,6 +282,8 @@ createServer(async (req, res) => {
       expectedRevision?: number;
       ready?: boolean;
       reaction?: MultiplayerReaction;
+      text?: string;
+      typing?: boolean;
     };
 
     if (operation === 'join') {
@@ -390,6 +394,30 @@ createServer(async (req, res) => {
       sendRoomReaction(room, playerId, payload.sessionToken, reaction, payload.expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'reaction');
+      writeJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (operation === 'chat') {
+      if (!payload.text) {
+        writeJson(res, 400, { error: 'invalid_payload' });
+        return;
+      }
+      sendRoomChat(room, playerId, payload.sessionToken, payload.text, payload.expectedRevision);
+      snapshotAll();
+      broadcastRoomEvent(room, 'chat');
+      writeJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (operation === 'typing') {
+      if (typeof payload.typing !== 'boolean') {
+        writeJson(res, 400, { error: 'invalid_payload' });
+        return;
+      }
+      setRoomTyping(room, playerId, payload.sessionToken, payload.typing, payload.expectedRevision);
+      snapshotAll();
+      broadcastRoomEvent(room, 'typing');
       writeJson(res, 200, { ok: true });
       return;
     }
