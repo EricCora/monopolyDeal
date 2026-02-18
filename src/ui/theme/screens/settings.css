@@ -1,48 +1,174 @@
 .settings-screen {
   background:
-    radial-gradient(circle at 80% 8%, rgba(86, 174, 222, 0.18), transparent 36%),
-    radial-gradient(circle at 12% 88%, rgba(125, 223, 176, 0.14), transparent 42%),
-    linear-gradient(160deg, rgba(11, 24, 37, 0.95), rgba(8, 19, 30, 0.92));
+    radial-gradient(circle at 82% 6%, rgba(255, 88, 130, 0.26), transparent 34%),
+    radial-gradient(circle at 8% 88%, rgba(71, 215, 255, 0.24), transparent 40%),
+    linear-gradient(160deg, rgba(18, 26, 47, 0.95), rgba(10, 16, 30, 0.94));
 }
 
 .settings-subtitle {
   margin: 0.34rem 0 0.7rem;
 }
 
+.settings-top-actions {
+  margin-top: 0.5rem;
+}
+
+.settings-bottom-actions {
+  margin-top: 0.9rem;
+}
+
 .settings-section {
-  border: 1px solid #36556f;
+  border: 1px solid rgba(109, 100, 179, 0.7);
   border-radius: var(--radius-md);
-  background: rgba(8, 24, 37, 0.9);
-  padding: 0.8rem;
-  margin-top: 0.7rem;
+  background: linear-gradient(165deg, rgba(32, 28, 64, 0.92), rgba(17, 16, 36, 0.94));
+  padding: 0.9rem;
+  margin-top: 0.75rem;
+  box-shadow: 0 12px 24px rgba(7, 6, 19, 0.38);
+}
+
+.settings-section:focus-within {
+  border-color: rgba(130, 198, 255, 0.82);
+  box-shadow: 0 0 0 1px rgba(130, 198, 255, 0.52), 0 12px 24px rgba(7, 6, 19, 0.4);
 }
 
 .settings-section h3 {
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.settings-grid-experimental {
+  margin-top: 0.7rem;
+}
+
+.settings-select-grid {
+  margin-top: 0.55rem;
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
 
 .settings-field {
-  margin: 0.55rem 0;
+  margin: 0;
 }
 
-.settings-toggle {
+.settings-field span {
+  font-size: 0.84rem;
+  color: #d8cff5;
+}
+
+.settings-field select {
+  border-color: rgba(125, 112, 204, 0.66);
+  background: rgba(24, 20, 52, 0.88);
+}
+
+.settings-toggle-card {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.7rem;
+  gap: 0.75rem;
+  margin: 0;
+  border: 1px solid rgba(108, 95, 170, 0.62);
+  border-radius: 12px;
+  padding: 0.48rem 0.62rem;
+  background: rgba(30, 26, 58, 0.78);
 }
 
-.settings-toggle input[type='checkbox'] {
-  width: 1rem;
-  height: 1rem;
-  min-height: unset;
+.settings-toggle-label {
+  color: #ebe5ff;
+  line-height: 1.25;
+}
+
+.settings-switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.settings-switch-ui {
+  position: relative;
+  width: 52px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(146, 137, 206, 0.66);
+  background: linear-gradient(145deg, rgba(59, 50, 102, 0.92), rgba(41, 36, 77, 0.94));
+  transition: background var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
+}
+
+.settings-switch-thumb {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f4f8ff, #d4dcf4);
+  box-shadow: 0 2px 8px rgba(3, 3, 8, 0.3);
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+
+.settings-switch-input:checked + .settings-switch-ui {
+  border-color: rgba(89, 236, 250, 0.85);
+  background: linear-gradient(145deg, rgba(39, 134, 182, 0.88), rgba(27, 92, 151, 0.9));
+}
+
+.settings-switch-input:checked + .settings-switch-ui .settings-switch-thumb {
+  transform: translateX(24px);
+}
+
+.settings-toggle-card:has(.settings-switch-input:focus-visible) {
+  outline: 2px solid rgba(121, 215, 255, 0.94);
+  outline-offset: 2px;
+}
+
+.settings-accordion-button {
+  width: 100%;
+  justify-content: space-between;
+  background: linear-gradient(140deg, #3a2d6d, #2a2152);
+  border-color: rgba(129, 195, 255, 0.58);
+}
+
+.settings-danger-zone {
+  border-color: rgba(171, 79, 103, 0.74);
+  background: linear-gradient(165deg, rgba(57, 26, 41, 0.9), rgba(34, 17, 27, 0.92));
+}
+
+.settings-danger-action {
+  border-color: rgba(255, 149, 173, 0.7);
+  background: linear-gradient(140deg, #a2324f, #7a223a);
 }
 
 .settings-status {
-  margin: 0.5rem 0 0;
-  padding: 0.45rem 0.55rem;
+  margin: 0.6rem 0 0;
+  padding: 0.5rem 0.58rem;
   border-radius: 8px;
-  border: 1px solid #3e6d66;
-  background: rgba(18, 56, 50, 0.45);
-  color: #bdeed9;
+  border: 1px solid rgba(124, 204, 189, 0.72);
+  background: rgba(37, 88, 87, 0.4);
+  color: #c6f5eb;
+}
+
+@media (max-width: 700px) {
+  .settings-screen {
+    padding: 0.9rem;
+  }
+
+  .settings-section {
+    padding: 0.75rem;
+  }
+
+  .settings-grid,
+  .settings-select-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-toggle-card {
+    padding: 0.45rem 0.56rem;
+  }
 }

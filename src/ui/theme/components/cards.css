@@ -35,6 +35,10 @@
   color: #1f2b34;
   overflow: hidden;
   min-width: 0;
+  transition:
+    transform var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard),
+    filter var(--motion-fast) var(--ease-standard);
 }
 
 .card-view.card-variant-premium {
@@ -79,6 +83,7 @@
 }
 
 .card-face {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.16rem;
@@ -87,6 +92,19 @@
   padding: var(--card-pad);
   background: linear-gradient(165deg, #fff, #f4f1e8);
   border-top: var(--card-accent-height) solid var(--card-accent);
+}
+
+.card-face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.42;
+  background:
+    radial-gradient(circle at 14% 14%, rgba(255, 255, 255, 0.18), transparent 36%),
+    repeating-linear-gradient(35deg, rgba(0, 0, 0, 0.02) 0 2px, rgba(255, 255, 255, 0.03) 2px 4px);
+  mix-blend-mode: multiply;
+  pointer-events: none;
 }
 
 .theme-wild .card-face,
@@ -140,6 +158,8 @@
 }
 
 .card-face > span {
+  position: relative;
+  z-index: 1;
   min-width: 0;
 }
 
@@ -162,6 +182,9 @@
 }
 
 .card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
   border-radius: 6px;
   padding: 0.04rem 0.28rem;
   font-size: calc(var(--card-subtitle-size) * 0.95);
@@ -171,6 +194,12 @@
   background: rgba(188, 220, 243, 0.8);
   border: 1px solid rgba(63, 111, 145, 0.35);
   text-transform: uppercase;
+}
+
+.card-badge-icon {
+  width: 0.68rem;
+  height: 0.68rem;
+  flex: 0 0 auto;
 }
 
 .card-title {
@@ -254,6 +283,15 @@
   padding: 0.08rem 0.1rem;
 }
 
+.card-rent-count,
+.card-rent-value {
+  color: inherit;
+}
+
+.card-rent-value {
+  font-weight: 700;
+}
+
 .card-rent-step.is-fullset {
   border-color: #1e7a5f;
   background: #d9f4e9;
@@ -289,7 +327,8 @@
 }
 
 .card-rent.is-compact .card-rent-step {
-  font-size: 0.5rem;
+  font-size: 0.56rem;
+  line-height: 1.12;
   border-radius: 4px;
   padding: 0.07rem 0.1rem;
   border-color: rgba(72, 103, 127, 0.55);
@@ -338,7 +377,9 @@
 }
 
 .card-back {
-  background: radial-gradient(circle at 25% 25%, #7dc0ea 0%, #2e5f94 48%, #1f3a5e 100%);
+  background:
+    repeating-linear-gradient(45deg, rgba(250, 255, 255, 0.08) 0 6px, rgba(0, 0, 0, 0.08) 6px 12px),
+    radial-gradient(circle at 25% 25%, #7dc0ea 0%, #2e5f94 48%, #1f3a5e 100%);
   border: 1px solid #1a3251;
   color: #eef8ff;
   display: grid;
@@ -347,8 +388,9 @@
 
 .card-back-mark {
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   font-size: 0.95rem;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
 }
 
 .card-view.is-playable {
@@ -363,9 +405,15 @@
   cursor: pointer;
 }
 
+.card-view.is-interactive:hover:not(:disabled) {
+  transform: translateY(-4px) scale(1.01);
+  filter: saturate(1.08);
+}
+
 .card-view.is-selected {
   transform: translateY(-8px);
   box-shadow: 0 0 0 2px rgba(215, 155, 47, 0.45), 0 14px 20px rgba(0, 0, 0, 0.2);
+  animation: card-play-pop var(--motion-entry) var(--ease-emphasis);
 }
 
 .card-view:focus-visible {
@@ -455,14 +503,44 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 0.35rem;
+  background: rgba(0, 0, 0, 0.15);
 }
 
 .property-lane {
-  border: 1px solid #e5dbc8;
+  border: 1px solid #a5b395;
   border-radius: 10px;
-  background: #fbf8f2;
+  background: rgba(248, 252, 241, 0.88);
   padding: 0.45rem;
   margin-top: 0.45rem;
+}
+
+.motif-action .card-face::before,
+.motif-money .card-face::before,
+.motif-wild .card-face::before,
+.motif-brown .card-face::before,
+.motif-light-blue .card-face::before,
+.motif-pink .card-face::before,
+.motif-orange .card-face::before,
+.motif-red .card-face::before,
+.motif-yellow .card-face::before,
+.motif-green .card-face::before,
+.motif-dark-blue .card-face::before,
+.motif-railroad .card-face::before,
+.motif-utility .card-face::before {
+  content: '';
+  position: absolute;
+  right: -10px;
+  bottom: -12px;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(23, 39, 54, 0.14);
+  background: rgba(255, 255, 255, 0.2);
+  z-index: 0;
+  pointer-events: none;
 }
 
 .property-lane p {
@@ -481,6 +559,28 @@
 @media (max-width: 980px) {
   .hand-fan {
     min-height: 190px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-view {
+    transition: none;
+  }
+
+  .card-view.is-selected {
+    animation: none;
+  }
+}
+
+@keyframes card-play-pop {
+  0% {
+    transform: translateY(-4px) scale(0.98);
+  }
+  55% {
+    transform: translateY(-10px) scale(1.02);
+  }
+  100% {
+    transform: translateY(-8px) scale(1);
   }
 }
 

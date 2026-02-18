@@ -1,4 +1,15 @@
 import { formatPropertyColor, getCardDefinition, getRentScale, getSetSize, type CardDefinition, type PropertyColor } from '../cards/catalog';
+import dealBreakerIcon from './assets/icons/deal_breaker.svg';
+import debtCollectorIcon from './assets/icons/debt_collector.svg';
+import doubleRentIcon from './assets/icons/double_rent.svg';
+import forcedDealIcon from './assets/icons/forced_deal.svg';
+import hotelIcon from './assets/icons/hotel.svg';
+import houseIcon from './assets/icons/house.svg';
+import birthdayIcon from './assets/icons/its_my_birthday.svg';
+import justSayNoIcon from './assets/icons/just_say_no.svg';
+import passGoIcon from './assets/icons/pass_go.svg';
+import rentIcon from './assets/icons/rent.svg';
+import slyDealIcon from './assets/icons/sly_deal.svg';
 
 export interface RentStep {
   setCount: number;
@@ -16,11 +27,28 @@ export interface CardVisualModel {
   rentActionLines?: string[];
   setSize?: number;
   actionBadge?: string;
+  actionIcon?: string;
+  motifClass?: string;
   kindClass: 'money' | 'property' | 'wild' | 'action' | 'building';
   themeClass: string;
   accent: string;
   splitAccent?: string;
 }
+
+const ACTION_ICON_BY_KIND = {
+  pass_go: passGoIcon,
+  rent: rentIcon,
+  rent_wild: rentIcon,
+  double_rent: doubleRentIcon,
+  debt_collector: debtCollectorIcon,
+  its_my_birthday: birthdayIcon,
+  sly_deal: slyDealIcon,
+  forced_deal: forcedDealIcon,
+  deal_breaker: dealBreakerIcon,
+  just_say_no: justSayNoIcon,
+  house: houseIcon,
+  hotel: hotelIcon,
+} as const;
 
 function normalizeColor(color: PropertyColor): string {
   return color.replace('_', '-');
@@ -50,6 +78,19 @@ function actionBadgeFromCard(card: CardDefinition): string | undefined {
   if (card.kind === 'building' && card.actionKind) {
     return card.actionKind.replace('_', ' ').replace(/\b\w/g, (value) => value.toUpperCase());
   }
+  return undefined;
+}
+
+function actionIconFromCard(card: CardDefinition): string | undefined {
+  if (!card.actionKind) return undefined;
+  return ACTION_ICON_BY_KIND[card.actionKind] ?? undefined;
+}
+
+function motifClassFromCard(card: CardDefinition): string | undefined {
+  if (card.kind === 'property' && card.color) return `motif-${normalizeColor(card.color)}`;
+  if (card.kind === 'action' || card.kind === 'building') return 'motif-action';
+  if (card.kind === 'wild') return 'motif-wild';
+  if (card.kind === 'money') return 'motif-money';
   return undefined;
 }
 
@@ -152,6 +193,8 @@ export function getCardVisualModel(cardId: string): CardVisualModel {
     rentActionLines: rentActionLinesFromCard(card),
     setSize,
     actionBadge: actionBadgeFromCard(card),
+    actionIcon: actionIconFromCard(card),
+    motifClass: motifClassFromCard(card),
     kindClass: card.kind,
     themeClass: theme.themeClass,
     accent: theme.accent,

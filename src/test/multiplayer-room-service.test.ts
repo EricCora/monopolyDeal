@@ -10,6 +10,8 @@ import {
   reconnectRoom,
   resetTurnRoomActions,
   resumeRoom,
+  sendRoomReaction,
+  setRoomReady,
   roomView,
   saveRoomCheckpoint,
   startRoom,
@@ -192,6 +194,33 @@ describe('multiplayer room service lifecycle', () => {
 
     reconnectRoom(room, session.playerId, session.sessionToken);
     expect(room.hostPlayerId).toBe(session.playerId);
+    expect(room.activityFeed.some((entry) => /now host/i.test(entry.message))).toBe(true);
+  });
+
+  it('updates player ready state in lobby and exposes it in room view', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+
+    setRoomReady(room, playerTwo.playerId, playerTwo.sessionToken, true);
+
+    const view = roomView(room, session.playerId, session.sessionToken);
+    const readyPlayer = view.players.find((player) => player.id === playerTwo.playerId);
+    expect(readyPlayer?.ready).toBe(true);
+    expect(view.activityFeed.some((entry) => /is ready/i.test(entry.message))).toBe(true);
+  });
+
+  it('records reactions and enforces reaction cooldown', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+
+    sendRoomReaction(room, session.playerId, session.sessionToken, 'gg');
+    expect(room.activityFeed[0]?.kind).toBe('reaction');
+    expect(room.activityFeed[0]?.reaction).toBe('gg');
+
+    expect(() => sendRoomReaction(room, session.playerId, session.sessionToken, 'wow')).toThrowError('reaction_rate_limited');
   });
 
   it('starts a lobby match from a compatible checkpoint when requested', () => {

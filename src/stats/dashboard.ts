@@ -201,6 +201,17 @@ export function buildStatsDashboardModel(
     lan_room_hosted: 0,
     lan_room_joined: 0,
     coach_hint_viewed: 0,
+    multiplayer_host_started: 0,
+    multiplayer_join_success: 0,
+    multiplayer_join_failed: 0,
+    multiplayer_invite_copied: 0,
+    multiplayer_deep_link_opened: 0,
+    multiplayer_reconnect_success: 0,
+    multiplayer_reconnect_failed: 0,
+    multiplayer_match_completed: 0,
+    multiplayer_push_connected: 0,
+    multiplayer_push_disconnected: 0,
+    multiplayer_push_fallback: 0,
   };
 
   const matchTrends = matchRows
@@ -262,6 +273,17 @@ export function buildStatsDashboardModel(
       { event: 'Coach hints viewed', count: growthEvents.coach_hint_viewed },
       { event: 'Multiplayer hosts', count: growthEvents.lan_room_hosted },
       { event: 'Multiplayer joins', count: growthEvents.lan_room_joined },
+      { event: 'Multiplayer host starts', count: growthEvents.multiplayer_host_started },
+      { event: 'Multiplayer join successes', count: growthEvents.multiplayer_join_success },
+      { event: 'Multiplayer join failures', count: growthEvents.multiplayer_join_failed },
+      { event: 'Invite links copied', count: growthEvents.multiplayer_invite_copied },
+      { event: 'Deep links opened', count: growthEvents.multiplayer_deep_link_opened },
+      { event: 'Reconnect successes', count: growthEvents.multiplayer_reconnect_success },
+      { event: 'Reconnect failures', count: growthEvents.multiplayer_reconnect_failed },
+      { event: 'Multiplayer match completions', count: growthEvents.multiplayer_match_completed },
+      { event: 'Push connected', count: growthEvents.multiplayer_push_connected },
+      { event: 'Push disconnected', count: growthEvents.multiplayer_push_disconnected },
+      { event: 'Push fallback', count: growthEvents.multiplayer_push_fallback },
     ],
   };
 }

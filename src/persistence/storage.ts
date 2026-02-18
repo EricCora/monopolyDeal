@@ -35,6 +35,7 @@ export interface UiPreferencesV1 {
   version: 1;
   reducedEffects: boolean;
   tableDensity: 'cozy' | 'compact';
+  tableStyle: 'classic_green' | 'neon_arcade';
   textScale: 'normal' | 'large';
   confirmRiskyActions: boolean;
   showRulesDrawerHints: boolean;
@@ -51,6 +52,8 @@ export interface UiPreferencesV1 {
     customRules: boolean;
     enhancedEventLog: boolean;
     contextualActionPreviews: boolean;
+    multiplayerPushEnabled: boolean;
+    multiplayerReactionsEnabled: boolean;
   };
   devModeEnabled: boolean;
   gamePaused: boolean;
@@ -312,6 +315,17 @@ function defaultGrowthMetrics(): GrowthMetricsV1 {
       lan_room_hosted: 0,
       lan_room_joined: 0,
       coach_hint_viewed: 0,
+      multiplayer_host_started: 0,
+      multiplayer_join_success: 0,
+      multiplayer_join_failed: 0,
+      multiplayer_invite_copied: 0,
+      multiplayer_deep_link_opened: 0,
+      multiplayer_reconnect_success: 0,
+      multiplayer_reconnect_failed: 0,
+      multiplayer_match_completed: 0,
+      multiplayer_push_connected: 0,
+      multiplayer_push_disconnected: 0,
+      multiplayer_push_fallback: 0,
     },
   };
 }
@@ -340,6 +354,17 @@ export function loadGrowthMetrics(): GrowthMetricsV1 {
         lan_room_hosted: parseMetricCount(parsed.events?.lan_room_hosted),
         lan_room_joined: parseMetricCount(parsed.events?.lan_room_joined),
         coach_hint_viewed: parseMetricCount(parsed.events?.coach_hint_viewed),
+        multiplayer_host_started: parseMetricCount(parsed.events?.multiplayer_host_started),
+        multiplayer_join_success: parseMetricCount(parsed.events?.multiplayer_join_success),
+        multiplayer_join_failed: parseMetricCount(parsed.events?.multiplayer_join_failed),
+        multiplayer_invite_copied: parseMetricCount(parsed.events?.multiplayer_invite_copied),
+        multiplayer_deep_link_opened: parseMetricCount(parsed.events?.multiplayer_deep_link_opened),
+        multiplayer_reconnect_success: parseMetricCount(parsed.events?.multiplayer_reconnect_success),
+        multiplayer_reconnect_failed: parseMetricCount(parsed.events?.multiplayer_reconnect_failed),
+        multiplayer_match_completed: parseMetricCount(parsed.events?.multiplayer_match_completed),
+        multiplayer_push_connected: parseMetricCount(parsed.events?.multiplayer_push_connected),
+        multiplayer_push_disconnected: parseMetricCount(parsed.events?.multiplayer_push_disconnected),
+        multiplayer_push_fallback: parseMetricCount(parsed.events?.multiplayer_push_fallback),
       },
     };
   } catch {
@@ -369,6 +394,7 @@ function defaultUiPreferences(): UiPreferencesV1 {
     version: 1,
     reducedEffects: false,
     tableDensity: 'cozy',
+    tableStyle: 'classic_green',
     textScale: 'normal',
     confirmRiskyActions: true,
     showRulesDrawerHints: true,
@@ -385,6 +411,8 @@ function defaultUiPreferences(): UiPreferencesV1 {
       customRules: false,
       enhancedEventLog: false,
       contextualActionPreviews: false,
+      multiplayerPushEnabled: true,
+      multiplayerReactionsEnabled: true,
     },
     devModeEnabled: false,
     gamePaused: false,
@@ -399,12 +427,14 @@ export function loadUiPreferences(): UiPreferencesV1 {
     const parsed = JSON.parse(raw) as Partial<UiPreferencesV1>;
     if (parsed.version !== 1) return defaultUiPreferences();
     const density = parsed.tableDensity === 'compact' ? 'compact' : 'cozy';
+    const tableStyle = parsed.tableStyle === 'neon_arcade' ? 'neon_arcade' : 'classic_green';
     const textScale = parsed.textScale === 'large' ? 'large' : 'normal';
     const experimentalParsed = parsed.experimental;
     return {
       version: 1,
       reducedEffects: Boolean(parsed.reducedEffects),
       tableDensity: density,
+      tableStyle,
       textScale,
       confirmRiskyActions: parsed.confirmRiskyActions !== false,
       showRulesDrawerHints: parsed.showRulesDrawerHints !== false,
@@ -421,6 +451,8 @@ export function loadUiPreferences(): UiPreferencesV1 {
         customRules: Boolean(experimentalParsed?.customRules),
         enhancedEventLog: Boolean(experimentalParsed?.enhancedEventLog),
         contextualActionPreviews: Boolean(experimentalParsed?.contextualActionPreviews),
+        multiplayerPushEnabled: experimentalParsed?.multiplayerPushEnabled !== false,
+        multiplayerReactionsEnabled: experimentalParsed?.multiplayerReactionsEnabled !== false,
       },
       devModeEnabled: Boolean(parsed.devModeEnabled),
       gamePaused: Boolean(parsed.gamePaused),

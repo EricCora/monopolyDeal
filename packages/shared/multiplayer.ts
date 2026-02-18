@@ -1,6 +1,8 @@
 import type { Action, GameState, LegalAction, PlayerId } from '../../src/engine';
 
 export type MultiplayerRoomStatus = 'lobby' | 'active' | 'finished';
+export type MultiplayerReaction = 'nice' | 'wow' | 'gg' | 'oops';
+export type MultiplayerActivityKind = 'lobby' | 'connection' | 'host' | 'ready' | 'reaction' | 'match' | 'checkpoint' | 'system';
 
 export interface MultiplayerPlayerSummary {
   id: PlayerId;
@@ -12,6 +14,16 @@ export interface MultiplayerPlayerSummary {
   lastSeenAt: number;
   reconnectDeadlineMs: number;
   isHost: boolean;
+  ready: boolean;
+}
+
+export interface MultiplayerActivityFeedItem {
+  id: number;
+  createdAt: number;
+  kind: MultiplayerActivityKind;
+  message: string;
+  playerId?: PlayerId;
+  reaction?: MultiplayerReaction;
 }
 
 export interface MultiplayerRoomView {
@@ -33,6 +45,8 @@ export interface MultiplayerRoomView {
   canStart: boolean;
   reconnectDeadlineMs: number;
   serverTime: number;
+  activityFeed: MultiplayerActivityFeedItem[];
+  lastEventId: number;
 }
 
 export interface MultiplayerCheckpointSummary {
@@ -83,4 +97,20 @@ export interface LoadCheckpointRequest extends ReconnectRoomRequest {
 
 export interface DeleteCheckpointRequest extends ReconnectRoomRequest {
   checkpointId: string;
+}
+
+export interface SetReadyRequest extends ReconnectRoomRequest {
+  ready: boolean;
+}
+
+export interface SendReactionRequest extends ReconnectRoomRequest {
+  reaction: MultiplayerReaction;
+}
+
+export interface MultiplayerRoomEventEnvelope {
+  roomCode: string;
+  revision: number;
+  reason: string;
+  serverTime: number;
+  eventId: number;
 }

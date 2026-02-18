@@ -1,21 +1,28 @@
 :root {
-  --surface-0: #071018;
-  --surface-1: #0f1c2a;
-  --surface-2: #16283a;
-  --surface-3: #1d3448;
-  --surface-panel: rgba(12, 26, 38, 0.9);
+  /* Base flagship palette (classic felt baseline) */
+  --surface-0: #0d160f;
+  --surface-1: #152219;
+  --surface-2: #1e3124;
+  --surface-3: #294036;
+  --surface-panel: rgba(15, 28, 19, 0.9);
   --surface-card: linear-gradient(160deg, #f7f5ef, #eae7db);
-  --line-strong: #4f6f8d;
-  --line-soft: #2a445d;
-  --text-main: #f1f6ff;
-  --text-muted: #a9c0d8;
-  --text-subtle: #8098b0;
-  --text-dark: #182430;
-  --accent: #4cc2b3;
-  --accent-strong: #2ea293;
-  --accent-alt: #f3c35b;
-  --danger: #e67878;
-  --success: #71d79d;
+  --line-strong: #68805c;
+  --line-soft: #3a533f;
+  --text-main: #f2f7ef;
+  --text-muted: #c6d4c2;
+  --text-subtle: #96aa94;
+  --text-dark: #18241c;
+  --accent: #cb4a3a;
+  --accent-strong: #a93226;
+  --accent-alt: #efc45a;
+  --danger: #e37d6d;
+  --success: #76ca8f;
+  --table-felt-base: radial-gradient(circle at 12% 12%, rgba(126, 187, 112, 0.2), transparent 30%), linear-gradient(180deg, #12321c, #0e2516);
+  --table-felt-pattern: linear-gradient(30deg, rgba(255, 255, 255, 0.05) 0 8%, transparent 8% 50%, rgba(0, 0, 0, 0.08) 50% 58%, transparent 58% 100%);
+  --table-felt-glow: radial-gradient(circle at 50% 22%, rgba(255, 219, 144, 0.2), transparent 46%);
+  --table-felt-border: rgba(112, 150, 96, 0.72);
+  --table-seat-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -10px 16px rgba(0, 0, 0, 0.28);
+  --table-seat-highlight: rgba(243, 196, 90, 0.16);
 
   --radius-sm: 10px;
   --radius-md: 14px;
@@ -23,9 +30,9 @@
   --radius-pill: 999px;
 
   --shadow-xs: 0 1px 4px rgba(0, 0, 0, 0.18);
-  --shadow-sm: 0 8px 16px rgba(3, 9, 16, 0.35);
-  --shadow-md: 0 14px 28px rgba(2, 6, 13, 0.46);
-  --shadow-glow: 0 0 0 1px rgba(76, 194, 179, 0.45), 0 0 28px rgba(76, 194, 179, 0.2);
+  --shadow-sm: 0 8px 16px rgba(3, 10, 5, 0.36);
+  --shadow-md: 0 14px 28px rgba(2, 8, 4, 0.46);
+  --shadow-glow: 0 0 0 1px rgba(239, 196, 90, 0.45), 0 0 28px rgba(239, 196, 90, 0.22);
 
   --space-1: 0.3rem;
   --space-2: 0.5rem;
@@ -35,13 +42,17 @@
   --space-6: 1.6rem;
   --space-7: 2rem;
 
-  --font-display: 'Rajdhani', 'Trebuchet MS', 'Avenir Next', sans-serif;
-  --font-body: 'Inter', 'Segoe UI', 'Avenir Next', sans-serif;
+  --font-display: 'Bebas Neue', 'Oswald', 'Avenir Next Condensed', 'Trebuchet MS', sans-serif;
+  --font-body: 'Nunito Sans', 'Avenir Next', 'Trebuchet MS', sans-serif;
 
+  --motion-micro: 100ms;
+  --motion-entry: 220ms;
+  --motion-emphasis: 360ms;
   --motion-fast: 140ms;
   --motion-base: 220ms;
   --motion-slow: 320ms;
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
 
   --z-chooser: 60;
   --z-shield: 50;

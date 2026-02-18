@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { MultiplayerRoom } from '../gameService.ts';
+import { normalizeRoomForRuntime, type MultiplayerRoom } from '../gameService.ts';
 
 const SNAPSHOT_PATH = resolve(process.cwd(), 'apps/server/.multiplayer-room-snapshots.json');
 
@@ -11,13 +11,13 @@ export function loadSnapshots(): MultiplayerRoom[] {
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((room): room is Partial<MultiplayerRoom> & { code: string } => typeof room?.code === 'string')
-      .map((room) => ({
+      .map((room) => normalizeRoomForRuntime({
         ...room,
         paused: Boolean(room.paused),
         revision: Number.isFinite(room.revision) ? Number(room.revision) : 0,
         turnSnapshots: Array.isArray(room.turnSnapshots) ? room.turnSnapshots : [],
         checkpoints: Array.isArray(room.checkpoints) ? room.checkpoints : [],
-      })) as MultiplayerRoom[];
+      } as MultiplayerRoom));
   } catch {
     return [];
   }

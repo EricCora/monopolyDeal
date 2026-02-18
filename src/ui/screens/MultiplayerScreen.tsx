@@ -1,4 +1,10 @@
-import type { MultiplayerConnectionState, MultiplayerRoomView, MultiplayerSession } from '../../network/multiplayerTypes';
+import type {
+  MultiplayerConnectionState,
+  MultiplayerPushState,
+  MultiplayerReaction,
+  MultiplayerRoomView,
+  MultiplayerSession,
+} from '../../network/multiplayerTypes';
 
 interface MultiplayerScreenProps {
   playerName: string;
@@ -11,17 +17,29 @@ interface MultiplayerScreenProps {
   isLocalDevApi: boolean;
   error: string | null;
   connectionState: MultiplayerConnectionState;
+  pushState: MultiplayerPushState;
   isHost: boolean;
+  reactionsEnabled: boolean;
   onPlayerNameChange: (value: string) => void;
   onJoinCodeChange: (value: string) => void;
   onHostRoom: () => void;
   onJoinRoom: () => void;
   onStartMatch: (checkpointId?: string) => void;
   onRunAction: (index: number) => void;
+  onSetReady: (ready: boolean) => void;
+  onSendReaction: (reaction: MultiplayerReaction) => void;
+  onCopyInviteLink: () => void;
   onRefresh: () => void;
   onLeaveRoom: () => void;
   onBack: () => void;
 }
+
+const REACTIONS: Array<{ id: MultiplayerReaction; label: string }> = [
+  { id: 'nice', label: 'Nice' },
+  { id: 'wow', label: 'Wow' },
+  { id: 'gg', label: 'GG' },
+  { id: 'oops', label: 'Oops' },
+];
 
 function connectionLabel(state: MultiplayerConnectionState): string {
   if (state === 'connected') return 'Connected';
@@ -29,6 +47,29 @@ function connectionLabel(state: MultiplayerConnectionState): string {
   if (state === 'reconnecting') return 'Reconnecting';
   if (state === 'disconnected') return 'Disconnected';
   return 'Idle';
+}
+
+function pushLabel(state: MultiplayerPushState): string {
+  if (state === 'connected') return 'Live updates active';
+  if (state === 'connecting') return 'Connecting live updates';
+  if (state === 'fallback') return 'Live updates unavailable, using polling';
+  if (state === 'unsupported') return 'Live updates unsupported on this browser';
+  return 'Live updates disabled';
+}
+
+function connectionTone(state: MultiplayerConnectionState): 'is-positive' | 'is-neutral' | 'is-warning' | 'is-danger' {
+  if (state === 'connected') return 'is-positive';
+  if (state === 'connecting') return 'is-neutral';
+  if (state === 'reconnecting') return 'is-warning';
+  if (state === 'disconnected') return 'is-danger';
+  return 'is-neutral';
+}
+
+function pushTone(state: MultiplayerPushState): 'is-positive' | 'is-neutral' | 'is-warning' {
+  if (state === 'connected') return 'is-positive';
+  if (state === 'connecting') return 'is-neutral';
+  if (state === 'fallback' || state === 'unsupported') return 'is-warning';
+  return 'is-neutral';
 }
 
 function deadlineLabel(deadlineMs: number): string {
@@ -59,13 +100,18 @@ export function MultiplayerScreen({
   isLocalDevApi,
   error,
   connectionState,
+  pushState,
   isHost,
+  reactionsEnabled,
   onPlayerNameChange,
   onJoinCodeChange,
   onHostRoom,
   onJoinRoom,
   onStartMatch,
   onRunAction,
+  onSetReady,
+  onSendReaction,
+  onCopyInviteLink,
   onRefresh,
   onLeaveRoom,
   onBack,
@@ -74,6 +120,15 @@ export function MultiplayerScreen({
     if (!session) return;
     if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
     void navigator.clipboard.writeText(session.roomCode);
+  };
+
+  const copyInviteLink = () => {
+    if (!session) return;
+    if (typeof window === 'undefined') return;
+    const inviteLink = `${window.location.origin}/join/${session.roomCode}`;
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
+    void navigator.clipboard.writeText(inviteLink);
+    onCopyInviteLink();
   };
 
   const startFromCheckpoint = () => {
@@ -92,13 +147,17 @@ export function MultiplayerScreen({
     onStartMatch(roomView.checkpointSlots[index].id);
   };
 
+  const you = session && roomView
+    ? roomView.players.find((player) => player.id === session.playerId) ?? null
+    : null;
+
   return (
-    <section className="panel setup-screen card-enter">
+    <section className="panel setup-screen multiplayer-screen card-enter">
       <h2>Multiplayer</h2>
       <p className="setup-subtitle">
         {isLocalDevApi
           ? 'Local testing uses a local multiplayer service.'
-          : 'Create or join with a private room code.'}
+          : 'Create or join with a private room code or invite link.'}
       </p>
 
       {healthOk === false ? (
@@ -111,40 +170,60 @@ export function MultiplayerScreen({
       {import.meta.env.DEV ? <p className="setup-subtitle">Multiplayer API: {apiBase}</p> : null}
 
       {!session ? (
-        <>
-          <label>
-            Your Name
-            <input value={playerName} onChange={(event) => onPlayerNameChange(event.target.value)} />
-          </label>
-          <div className="actions">
-            <button type="button" onClick={onHostRoom} disabled={loading}>
-              Host Multiplayer Game
-            </button>
-          </div>
+        <div className="multiplayer-entry-grid">
+          <section className="multiplayer-entry-card" aria-label="Host room">
+            <h3>Host Room</h3>
+            <p>Create a private table and share the invite link with your group.</p>
+            <label>
+              Your Name
+              <input value={playerName} onChange={(event) => onPlayerNameChange(event.target.value)} />
+            </label>
+            <div className="actions multiplayer-primary-actions">
+              <button type="button" className="cta-primary" onClick={onHostRoom} disabled={loading}>
+                Host Multiplayer Game
+              </button>
+            </div>
+          </section>
 
-          <label>
-            Join Code
-            <input
-              value={joinCode}
-              onChange={(event) => onJoinCodeChange(event.target.value)}
-              placeholder="Enter room code"
-            />
-          </label>
-          <div className="actions">
-            <button type="button" onClick={onJoinRoom} disabled={loading || joinCode.trim().length < 4}>
-              Join Multiplayer Game
-            </button>
-          </div>
-        </>
+          <section className="multiplayer-entry-card" aria-label="Join room">
+            <h3>Join Room</h3>
+            <p>Use a room code or invite URL to jump straight into the lobby.</p>
+            <label>
+              Join Code
+              <input
+                value={joinCode}
+                onChange={(event) => onJoinCodeChange(event.target.value)}
+                placeholder="Enter room code"
+              />
+            </label>
+            <div className="actions multiplayer-primary-actions">
+              <button type="button" onClick={onJoinRoom} disabled={loading || joinCode.trim().length < 4}>
+                Join Multiplayer Game
+              </button>
+            </div>
+          </section>
+        </div>
       ) : (
-        <>
-          <section className="settings-section" aria-label="Room session">
-            <h3>Room {session.roomCode}</h3>
-            <p>Status: {connectionLabel(connectionState)}</p>
-            <p>Rejoin window: {deadlineLabel(session.reconnectDeadlineMs)}</p>
-            <div className="actions">
+        <div className="multiplayer-room-shell">
+          <section className="multiplayer-room-hero" aria-label="Room session">
+            <div className="multiplayer-room-heading">
+              <h3>Room {session.roomCode}</h3>
+              <div className="multiplayer-status-strip" aria-label="Room connection status">
+                <span className={`multiplayer-status-pill ${connectionTone(connectionState)}`}>
+                  {connectionLabel(connectionState)}
+                </span>
+                <span className={`multiplayer-status-pill ${pushTone(pushState)}`}>
+                  {pushLabel(pushState)}
+                </span>
+              </div>
+            </div>
+            <p className="multiplayer-room-rejoin">Rejoin window: {deadlineLabel(session.reconnectDeadlineMs)}</p>
+            <div className="actions multiplayer-room-actions">
               <button type="button" onClick={copyRoomCode} disabled={loading}>
                 Copy Room Code
+              </button>
+              <button type="button" className="cta-primary" onClick={copyInviteLink} disabled={loading}>
+                Copy Invite Link
               </button>
               <button type="button" onClick={onRefresh} disabled={loading}>
                 Refresh
@@ -166,25 +245,78 @@ export function MultiplayerScreen({
           </section>
 
           {roomView ? (
-            <section className="settings-section" aria-label="Room state">
-              <h3>{roomView.started ? 'Match Live' : 'Lobby'}</h3>
-              <p>
-                {roomView.winnerId
-                  ? `Winner: ${roomView.winnerId}`
-                  : roomView.promptPlayerId
-                    ? `Turn: ${roomView.promptPlayerId}`
-                    : 'Waiting for players.'}
-              </p>
-              <ul>
-                {roomView.players.map((player) => (
-                  <li key={player.id}>
-                    {player.name}
-                    {player.isHost ? ' (Host)' : ''} | {playerConnectionLabel(player.connected, player.lastSeenAt)} | hand {player.handCount} | bank {player.bankCount} | sets {player.completeSets}
-                  </li>
-                ))}
-              </ul>
+            <section className="multiplayer-lobby-shell" aria-label="Room state">
+              <header className="multiplayer-lobby-header">
+                <h3>{roomView.started ? 'Match Live' : 'Lobby'}</h3>
+                <p className="multiplayer-lobby-status">
+                  {roomView.winnerId
+                    ? `Winner: ${roomView.winnerId}`
+                    : roomView.promptPlayerId
+                      ? `Turn: ${roomView.promptPlayerId}`
+                      : 'Waiting for players.'}
+                </p>
+              </header>
+              {!roomView.started && you ? (
+                <div className="actions multiplayer-ready-actions">
+                  <button type="button" className="cta-primary" onClick={() => onSetReady(!you.ready)} disabled={loading}>
+                    {you.ready ? 'Mark Not Ready' : 'Mark Ready'}
+                  </button>
+                </div>
+              ) : null}
+
+              {reactionsEnabled ? (
+                <div className="actions multiplayer-reaction-actions" aria-label="Quick reactions">
+                  {REACTIONS.map((reaction) => (
+                    <button
+                      key={reaction.id}
+                      type="button"
+                      onClick={() => onSendReaction(reaction.id)}
+                      disabled={loading}
+                    >
+                      {reaction.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="multiplayer-roster-wrap">
+                <table className="multiplayer-roster-table">
+                  <caption className="sr-only">Room roster</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Player</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Hand</th>
+                      <th scope="col">Bank</th>
+                      <th scope="col">Sets</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {roomView.players.map((player) => (
+                      <tr key={player.id} className={player.id === session.playerId ? 'is-self' : undefined}>
+                        <td className="multiplayer-player-cell">
+                          <span className="multiplayer-player-name">{player.name}</span>
+                          <span className="multiplayer-player-tags">
+                            {player.id === session.playerId ? <span className="multiplayer-player-tag is-self">You</span> : null}
+                            {player.isHost ? <span className="multiplayer-player-tag">Host</span> : null}
+                            {player.ready ? <span className="multiplayer-player-tag is-ready">Ready</span> : null}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`multiplayer-connection-chip ${player.connected ? 'is-online' : 'is-offline'}`}>
+                            {playerConnectionLabel(player.connected, player.lastSeenAt)}
+                          </span>
+                        </td>
+                        <td>{player.handCount}</td>
+                        <td>{player.bankCount}</td>
+                        <td>{player.completeSets}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               {roomView.legalActions.length > 0 ? (
-                <div className="actions">
+                <div className="actions multiplayer-lobby-legal-actions">
                   {roomView.legalActions.map((item, index) => (
                     <button key={`multiplayer-action-${index}`} type="button" onClick={() => onRunAction(index)} disabled={loading}>
                       {item.label}
@@ -192,11 +324,38 @@ export function MultiplayerScreen({
                   ))}
                 </div>
               ) : (
-                <p>Waiting for your turn or for the host to start.</p>
+                <p className="multiplayer-lobby-waiting">Waiting for your turn or for the host to start.</p>
               )}
+
+              {roomView.activityFeed.length > 0 ? (
+                <section className="multiplayer-activity-panel" aria-label="Recent room activity">
+                  <h4>Recent Activity</h4>
+                  <ul className="multiplayer-activity-feed">
+                    {roomView.activityFeed.slice(0, 8).map((item) => (
+                      <li key={item.id}>{item.message}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
             </section>
-          ) : null}
-        </>
+          ) : (
+            <section className="multiplayer-lobby-shell is-loading" aria-label="Loading room state">
+              <header className="multiplayer-lobby-header">
+                <h3>Syncing Room...</h3>
+                <p className="multiplayer-lobby-status">Fetching latest players and state.</p>
+              </header>
+              <div className="multiplayer-skeleton-row" />
+              <div className="multiplayer-skeleton-row" />
+              <div className="multiplayer-skeleton-row is-wide" />
+              <div className="multiplayer-skeleton-grid">
+                <div className="multiplayer-skeleton-cell" />
+                <div className="multiplayer-skeleton-cell" />
+                <div className="multiplayer-skeleton-cell" />
+                <div className="multiplayer-skeleton-cell" />
+              </div>
+            </section>
+          )}
+        </div>
       )}
 
       {error ? <p className="error">{error}</p> : null}

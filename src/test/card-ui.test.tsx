@@ -24,6 +24,15 @@ describe('Card UI', () => {
     expect(screen.getByLabelText(/rent ladder/i)).toBeInTheDocument();
     expect(screen.getByText(/^rent$/i)).toBeInTheDocument();
     expect(screen.getByText('$2')).toBeInTheDocument();
+    expect(document.querySelector('.card-badge-icon')).toBeInTheDocument();
+  });
+
+  it('maps action icon metadata with fallback-safe behavior', () => {
+    const actionModel = getCardVisualModel('debt_collector#1');
+    const moneyModel = getCardVisualModel('money_5#1');
+
+    expect(actionModel.actionIcon).toBeDefined();
+    expect(moneyModel.actionIcon).toBeUndefined();
   });
 
   it('uses dedicated rent card themes instead of generic action blue', () => {
@@ -96,9 +105,12 @@ describe('Card UI', () => {
   it('highlights the full-set rent step for property cards', () => {
     const { container } = render(<CardView cardId="railroad_1#1" />);
     const fullSetSteps = container.querySelectorAll('.card-rent-step.is-fullset');
+    const rentValues = container.querySelectorAll('.card-rent-value');
 
     expect(fullSetSteps.length).toBe(1);
     expect(fullSetSteps[0]?.textContent).toContain('$4');
+    expect(rentValues.length).toBeGreaterThan(0);
+    expect(Array.from(rentValues).some((node) => node.textContent === '$4')).toBe(true);
   });
 
   it('uses auto fit mode for fan/rail hand layout based on available width', async () => {

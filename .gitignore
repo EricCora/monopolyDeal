@@ -25,3 +25,4 @@ coverage
 *.sw?
 apps/server/.lan-room-snapshots.json
 apps/server/.multiplayer-room-snapshots.json
+.cursor/

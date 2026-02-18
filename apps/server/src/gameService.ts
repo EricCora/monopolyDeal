@@ -11,8 +11,10 @@ import {
   type PlayerId,
 } from '../../../src/engine/index.ts';
 import type {
+  MultiplayerActivityFeedItem,
   MultiplayerCheckpointSummary,
   MultiplayerPlayerSummary,
+  MultiplayerReaction,
   MultiplayerRoomView,
   MultiplayerRoomStatus,
   RoomSessionResponse,
@@ -21,6 +23,9 @@ import type {
 const RECONNECT_WINDOW_MS = 5 * 60 * 1000;
 const STALE_CONNECTION_MS = 12_000;
 const MAX_CHECKPOINTS = 5;
+const MAX_ACTIVITY_FEED = 24;
+const REACTION_COOLDOWN_MS = 1_500;
+export const ROOM_REACTION_OPTIONS: MultiplayerReaction[] = ['nice', 'wow', 'gg', 'oops'];
 
 type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
 
@@ -31,6 +36,8 @@ interface RoomParticipant {
   connected: boolean;
   lastSeenAt: number;
   reconnectDeadlineMs: number;
+  ready: boolean;
+  lastReactionAt: number;
 }
 
 interface RoomCheckpoint {
@@ -39,6 +46,8 @@ interface RoomCheckpoint {
   savedAt: number;
   game: GameState;
 }
+
+type RoomActivityEntry = MultiplayerActivityFeedItem;
 
 export interface MultiplayerRoom {
   code: string;
@@ -54,6 +63,22 @@ export interface MultiplayerRoom {
   revision: number;
   turnSnapshots: GameState[];
   checkpoints: RoomCheckpoint[];
+  activityFeed: RoomActivityEntry[];
+  nextActivityId: number;
+}
+
+export function normalizeRoomForRuntime(room: MultiplayerRoom): MultiplayerRoom {
+  room.activityFeed = Array.isArray(room.activityFeed) ? room.activityFeed : [];
+  room.nextActivityId = Number.isFinite(room.nextActivityId)
+    ? Math.max(Number(room.nextActivityId), room.activityFeed.length + 1)
+    : (room.activityFeed.length + 1);
+  const players = Array.isArray(room.players) ? room.players : [];
+  room.players = players.map((player) => ({
+    ...player,
+    ready: Boolean(player.ready),
+    lastReactionAt: Number.isFinite(player.lastReactionAt) ? Number(player.lastReactionAt) : 0,
+  }));
+  return room;
 }
 
 function nowMs(): number {
@@ -88,6 +113,35 @@ function sanitizeName(name: string, fallback: string): string {
 function sanitizeCheckpointName(name: string): string {
   const trimmed = name.trim();
   return trimmed.length > 0 ? trimmed.slice(0, 48) : 'Checkpoint';
+}
+
+function reactionLabel(reaction: MultiplayerReaction): string {
+  if (reaction === 'nice') return 'Nice play';
+  if (reaction === 'wow') return 'Wow';
+  if (reaction === 'gg') return 'GG';
+  return 'Oops';
+}
+
+function appendActivity(
+  room: MultiplayerRoom,
+  kind: RoomActivityEntry['kind'],
+  message: string,
+  options?: { playerId?: PlayerId; reaction?: MultiplayerReaction },
+): void {
+  const entry: RoomActivityEntry = {
+    id: room.nextActivityId,
+    createdAt: nowMs(),
+    kind,
+    message,
+    playerId: options?.playerId,
+    reaction: options?.reaction,
+  };
+  room.nextActivityId += 1;
+  room.activityFeed = [entry, ...room.activityFeed].slice(0, MAX_ACTIVITY_FEED);
+}
+
+function playerDisplayName(room: MultiplayerRoom, playerId: PlayerId): string {
+  return findPlayer(room, playerId)?.name ?? playerId;
 }
 
 function touchPlayer(player: RoomParticipant): void {
@@ -128,28 +182,41 @@ function ensureExpectedRevision(room: MultiplayerRoom, expectedRevision?: number
   }
 }
 
-function migrateHost(room: MultiplayerRoom): void {
+function migrateHost(room: MultiplayerRoom): { previousHostId: PlayerId; nextHostId: PlayerId } | null {
+  const previousHostId = room.hostPlayerId;
   const currentHost = findPlayer(room, room.hostPlayerId);
-  if (currentHost?.connected) return;
+  if (currentHost?.connected) return null;
 
   const connectedCandidate = room.players.find((player) => player.connected);
   if (connectedCandidate) {
     room.hostPlayerId = connectedCandidate.id;
-    return;
+    return room.hostPlayerId === previousHostId ? null : { previousHostId, nextHostId: room.hostPlayerId };
   }
 
   const fallback = room.players[0];
   if (fallback) {
     room.hostPlayerId = fallback.id;
+    return room.hostPlayerId === previousHostId ? null : { previousHostId, nextHostId: room.hostPlayerId };
   }
+  return null;
 }
 
 function markDisconnected(room: MultiplayerRoom, player: RoomParticipant): void {
+  if (!player.connected) return;
   const now = nowMs();
   player.connected = false;
   player.lastSeenAt = now;
   player.reconnectDeadlineMs = now + RECONNECT_WINDOW_MS;
-  migrateHost(room);
+  appendActivity(room, 'connection', `${player.name} disconnected.`, { playerId: player.id });
+  const migrated = migrateHost(room);
+  if (migrated) {
+    appendActivity(
+      room,
+      'host',
+      `${playerDisplayName(room, migrated.nextHostId)} is now host.`,
+      { playerId: migrated.nextHostId },
+    );
+  }
   bumpUpdatedAt(room);
 }
 
@@ -165,6 +232,7 @@ function roomPlayerSummary(room: MultiplayerRoom): MultiplayerPlayerSummary[] {
       lastSeenAt: entry.lastSeenAt,
       reconnectDeadlineMs: entry.reconnectDeadlineMs,
       isHost: entry.id === room.hostPlayerId,
+      ready: entry.ready,
     }));
   }
 
@@ -180,6 +248,7 @@ function roomPlayerSummary(room: MultiplayerRoom): MultiplayerPlayerSummary[] {
       lastSeenAt: entry?.lastSeenAt ?? room.updatedAt,
       reconnectDeadlineMs: entry?.reconnectDeadlineMs ?? room.updatedAt,
       isHost: player.id === room.hostPlayerId,
+      ready: Boolean(entry?.ready),
     };
   });
 }
@@ -211,13 +280,20 @@ function connectedLobbyPlayers(room: MultiplayerRoom): RoomParticipant[] {
 
 function reclaimExpiredLobbyParticipants(room: MultiplayerRoom, now = nowMs()): void {
   if (room.status !== 'lobby') return;
+  const expired = room.players.filter((player) => !player.connected && player.reconnectDeadlineMs <= now);
   const nextPlayers = room.players.filter((player) => player.connected || player.reconnectDeadlineMs > now);
   if (nextPlayers.length === room.players.length) return;
+  expired.forEach((player) => {
+    appendActivity(room, 'connection', `${player.name} left the lobby.`, { playerId: player.id });
+  });
   room.players = nextPlayers;
   if (room.players.length === 0) {
     room.hostPlayerId = 'p1';
   } else {
-    migrateHost(room);
+    const migrated = migrateHost(room);
+    if (migrated) {
+      appendActivity(room, 'host', `${playerDisplayName(room, migrated.nextHostId)} is now host.`, { playerId: migrated.nextHostId });
+    }
   }
   bumpUpdatedAt(room);
 }
@@ -335,13 +411,18 @@ export function createRoom(
       connected: true,
       lastSeenAt: createdAt,
       reconnectDeadlineMs: createdAt + RECONNECT_WINDOW_MS,
+      ready: false,
+      lastReactionAt: 0,
     }],
     game: null,
     paused: false,
     revision: 0,
     turnSnapshots: [],
     checkpoints: [],
+    activityFeed: [],
+    nextActivityId: 1,
   };
+  appendActivity(room, 'lobby', `${room.players[0].name} created the room.`, { playerId });
   rooms.set(code, room);
   return {
     room,
@@ -372,7 +453,10 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
     connected: true,
     lastSeenAt: now,
     reconnectDeadlineMs: now + RECONNECT_WINDOW_MS,
+    ready: false,
+    lastReactionAt: 0,
   });
+  appendActivity(room, 'lobby', `${sanitizeName(playerName, `Player ${playerId.slice(1)}`)} joined the lobby.`, { playerId });
   commitMutation(room);
   return {
     roomCode: room.code,
@@ -387,9 +471,17 @@ export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, session
   const now = nowMs();
   ensureExpectedRevision(room, expectedRevision);
   assertReconnectWindowOpen(player, now);
+  const wasConnected = player.connected;
+  const previousHostId = room.hostPlayerId;
   touchPlayer(player);
+  if (!wasConnected) {
+    appendActivity(room, 'connection', `${player.name} reconnected.`, { playerId: player.id });
+  }
   if (player.id === room.originalHostPlayerId && room.hostPlayerId !== player.id) {
     room.hostPlayerId = player.id;
+    appendActivity(room, 'host', `${player.name} is now host.`, { playerId: player.id });
+  } else if (previousHostId !== room.hostPlayerId) {
+    appendActivity(room, 'host', `${playerDisplayName(room, room.hostPlayerId)} is now host.`, { playerId: room.hostPlayerId });
   }
   commitMutation(room);
   return {
@@ -445,6 +537,10 @@ export function startRoom(
   room.paused = false;
   room.pausedByPlayerId = undefined;
   room.turnSnapshots = [];
+  room.players.forEach((entry) => {
+    entry.ready = false;
+  });
+  appendActivity(room, 'match', checkpointId ? 'Match started from checkpoint.' : 'Match started.');
   updateStatusFromGame(room);
   commitMutation(room);
   return room;
@@ -458,6 +554,7 @@ export function pauseRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToke
   requireGame(room);
   room.paused = true;
   room.pausedByPlayerId = playerId;
+  appendActivity(room, 'match', `${player.name} paused the match.`, { playerId });
   commitMutation(room);
   return room;
 }
@@ -470,6 +567,7 @@ export function resumeRoom(room: MultiplayerRoom, playerId: PlayerId, sessionTok
   requireGame(room);
   room.paused = false;
   room.pausedByPlayerId = undefined;
+  appendActivity(room, 'match', `${player.name} resumed the match.`, { playerId });
   commitMutation(room);
   return room;
 }
@@ -510,6 +608,9 @@ export function applyRoomAction(
   const nextPromptPlayerId = getNextPrompt(result.state).playerId;
   if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId)) {
     room.turnSnapshots = [];
+  }
+  if (isGameOver(result.state).done) {
+    appendActivity(room, 'match', 'Match completed.');
   }
   updateStatusFromGame(room);
   commitMutation(room);
@@ -591,6 +692,7 @@ export function saveRoomCheckpoint(
     game: structuredClone(game),
   };
   room.checkpoints.push(checkpoint);
+  appendActivity(room, 'checkpoint', `${player.name} saved checkpoint "${checkpoint.name}".`, { playerId });
   commitMutation(room);
   return checkpointSummary(checkpoint);
 }
@@ -612,6 +714,7 @@ export function loadRoomCheckpoint(
   room.turnSnapshots = [];
   room.paused = false;
   room.pausedByPlayerId = undefined;
+  appendActivity(room, 'checkpoint', `${player.name} loaded checkpoint "${checkpoint.name}".`, { playerId });
   updateStatusFromGame(room);
   commitMutation(room);
   return room;
@@ -630,7 +733,50 @@ export function deleteRoomCheckpoint(
   requireHost(room, playerId);
   const existing = findCheckpoint(room, checkpointId);
   room.checkpoints = room.checkpoints.filter((entry) => entry.id !== existing.id);
+  appendActivity(room, 'checkpoint', `${player.name} deleted checkpoint "${existing.name}".`, { playerId });
   commitMutation(room);
+}
+
+export function setRoomReady(
+  room: MultiplayerRoom,
+  playerId: PlayerId,
+  sessionToken: string,
+  ready: boolean,
+  expectedRevision?: number,
+): MultiplayerRoom {
+  ensureExpectedRevision(room, expectedRevision);
+  if (room.status !== 'lobby' || room.game) {
+    throw new Error('room_started');
+  }
+  const player = requireSession(room, playerId, sessionToken);
+  assertReconnectWindowOpen(player);
+  touchPlayer(player);
+  if (player.ready === ready) return room;
+  player.ready = ready;
+  appendActivity(room, 'ready', ready ? `${player.name} is ready.` : `${player.name} is not ready.`, { playerId });
+  commitMutation(room);
+  return room;
+}
+
+export function sendRoomReaction(
+  room: MultiplayerRoom,
+  playerId: PlayerId,
+  sessionToken: string,
+  reaction: MultiplayerReaction,
+  expectedRevision?: number,
+): MultiplayerRoom {
+  ensureExpectedRevision(room, expectedRevision);
+  const player = requireSession(room, playerId, sessionToken);
+  assertReconnectWindowOpen(player);
+  requireConnectedPlayer(player);
+  const now = nowMs();
+  if (now - player.lastReactionAt < REACTION_COOLDOWN_MS) {
+    throw new Error('reaction_rate_limited');
+  }
+  player.lastReactionAt = now;
+  appendActivity(room, 'reaction', `${player.name}: ${reactionLabel(reaction)}`, { playerId, reaction });
+  commitMutation(room);
+  return room;
 }
 
 export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken: string): MultiplayerRoomView {
@@ -665,6 +811,8 @@ export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken
     canStart: room.status === 'lobby' && room.hostPlayerId === viewerId && connectedLobbyPlayers(room).length >= 2,
     reconnectDeadlineMs,
     serverTime,
+    activityFeed: room.activityFeed,
+    lastEventId: room.revision,
   };
 }
 

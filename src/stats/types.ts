@@ -57,7 +57,18 @@ export type GrowthMetricEvent =
   | 'rematch_started'
   | 'lan_room_hosted'
   | 'lan_room_joined'
-  | 'coach_hint_viewed';
+  | 'coach_hint_viewed'
+  | 'multiplayer_host_started'
+  | 'multiplayer_join_success'
+  | 'multiplayer_join_failed'
+  | 'multiplayer_invite_copied'
+  | 'multiplayer_deep_link_opened'
+  | 'multiplayer_reconnect_success'
+  | 'multiplayer_reconnect_failed'
+  | 'multiplayer_match_completed'
+  | 'multiplayer_push_connected'
+  | 'multiplayer_push_disconnected'
+  | 'multiplayer_push_fallback';
 
 export interface GrowthMetricsV1 {
   version: 1;
@@ -72,5 +83,16 @@ export interface GrowthMetricsV1 {
     lan_room_hosted: number;
     lan_room_joined: number;
     coach_hint_viewed: number;
+    multiplayer_host_started: number;
+    multiplayer_join_success: number;
+    multiplayer_join_failed: number;
+    multiplayer_invite_copied: number;
+    multiplayer_deep_link_opened: number;
+    multiplayer_reconnect_success: number;
+    multiplayer_reconnect_failed: number;
+    multiplayer_match_completed: number;
+    multiplayer_push_connected: number;
+    multiplayer_push_disconnected: number;
+    multiplayer_push_fallback: number;
   };
 }
