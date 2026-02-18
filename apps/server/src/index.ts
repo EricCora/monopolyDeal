@@ -399,7 +399,7 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'chat') {
-      if (!payload.text) {
+      if (typeof payload.text !== 'string' || payload.text.trim().length === 0) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }

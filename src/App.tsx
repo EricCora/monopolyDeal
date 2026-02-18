@@ -423,13 +423,22 @@ function App() {
     recordGrowthMetric('multiplayer_deep_link_opened');
   }, [recordGrowthMetric, setMultiplayerError, setMultiplayerJoinCode]);
 
+  const multiplayerChatSessionKey = `${multiplayerSession?.roomCode ?? ''}:${multiplayerSession?.playerId ?? ''}`;
+
   useEffect(() => {
+    if (screen === 'multiplayer' && multiplayerChatSessionKey.length > 1) {
+      setMultiplayerChatOpen(false);
+      setMultiplayerChatUnread(0);
+      multiplayerChatLastSeenRef.current = 0;
+      multiplayerTypingSentRef.current = false;
+      return;
+    }
     if (screen === 'multiplayer') return;
     setMultiplayerChatOpen(false);
     setMultiplayerChatUnread(0);
     multiplayerChatLastSeenRef.current = 0;
     multiplayerTypingSentRef.current = false;
-  }, [screen]);
+  }, [multiplayerChatSessionKey, screen]);
 
   useEffect(() => {
     if (!game || !prompt) {
