@@ -544,6 +544,10 @@
   top: 0;
 }
 
+.hand-zone {
+  position: relative;
+}
+
 .zone-bank,
 .zone-properties {
   margin-top: 0.35rem;

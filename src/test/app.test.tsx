@@ -1155,16 +1155,47 @@ describe('App', () => {
   });
 
   it('renders the rich game table when multiplayer match is active', async () => {
+    const now = Date.now();
     const multiplayerState = {
       ...structuredClone(baseState),
       players: [
         {
           ...baseState.players[0],
+          name: 'Host',
           hand: ['money_1#a1'],
+          properties: {
+            ...baseState.players[0].properties,
+            brown: [{ cardId: 'brown_1#b3', assignedColor: 'brown' }],
+          },
         },
         {
           ...baseState.players[1],
+          name: 'Guest',
           hand: ['__hidden__'],
+          properties: {
+            ...baseState.players[1].properties,
+            brown: [],
+          },
+        },
+      ],
+      history: [
+        {
+          timestamp: now - 120,
+          type: 'draw',
+          message: 'Host drew 2 cards.',
+          details: { kind: 'draw', playerId: 'p1', count: 2, reason: 'turn_draw' },
+        },
+        {
+          timestamp: now - 80,
+          type: 'sly_deal',
+          message: 'Host took Brown from Guest.',
+          details: {
+            kind: 'property_steal',
+            sourcePlayerId: 'p1',
+            targetPlayerId: 'p2',
+            cardIds: ['brown_1#b3'],
+            mode: 'sly_deal',
+          },
         },
       ],
     };
@@ -1228,6 +1259,12 @@ describe('App', () => {
             canStart: false,
             reconnectDeadlineMs: Date.now() + 30_000,
             serverTime: Date.now(),
+            activityFeed: [
+              { id: 99, createdAt: now, kind: 'reaction', message: 'Guest: Wow', playerId: 'p2', reaction: 'wow' },
+            ],
+            chatMessages: [],
+            typingPlayerIds: [],
+            lastEventId: 3,
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
@@ -1244,6 +1281,14 @@ describe('App', () => {
     expect(screen.getByText(/connection: connected/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /exit match/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /forget room/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^nice$/i })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/guest sent a reaction/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/played sly deal on guest/i)).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(document.querySelector('.draw-ghost-card')).toBeInTheDocument();
+    });
     fireEvent.click(screen.getByRole('button', { name: /show advanced legal actions/i }));
     expect(screen.getByRole('button', { name: /hide advanced legal actions/i })).toBeInTheDocument();
     expect(document.querySelector('.debug-action-list li')?.textContent).toMatch(/pass turn/i);

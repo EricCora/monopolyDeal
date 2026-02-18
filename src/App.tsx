@@ -376,10 +376,13 @@ function App() {
     loading: multiplayerLoading,
     checkpointLoading: multiplayerCheckpointLoading,
     error: multiplayerError,
+    errorCode: multiplayerErrorCode,
+    recoveryNotice: multiplayerRecoveryNotice,
     connectionState: multiplayerConnectionState,
     pushState: multiplayerPushState,
     hostChangeNotice: multiplayerHostChangeNotice,
     clearHostChangeNotice: clearMultiplayerHostChangeNotice,
+    clearRecoveryNotice: clearMultiplayerRecoveryNotice,
     isHost: multiplayerIsHost,
     healthOk: multiplayerHealthOk,
     hostRoom: hostMultiplayerRoom,
@@ -1675,6 +1678,7 @@ function App() {
           game={game}
           prompt={prompt}
           isPaused={isPaused}
+          reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
           legalActions={legalActions}
           contextualActions={contextualActions}
           revealedPlayerId={revealedPlayerId}
@@ -1738,6 +1742,7 @@ function App() {
           game={multiplayerGame}
           prompt={multiplayerPrompt}
           isPaused={multiplayerRoomView.paused}
+          reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
           pauseReasonText={
             multiplayerRoomView.pausedByPlayerId
               ? `Gameplay is paused by ${multiplayerGame.players.find((player) => player.id === multiplayerRoomView.pausedByPlayerId)?.name ?? multiplayerRoomView.pausedByPlayerId}.`
@@ -1751,10 +1756,6 @@ function App() {
           activityFeed={multiplayerRoomView.activityFeed}
           hostChangeNotice={multiplayerHostChangeNotice}
           onDismissHostChangeNotice={clearMultiplayerHostChangeNotice}
-          reactionsEnabled={multiplayerReactionsEnabled}
-          onSendReaction={(reaction) => {
-            void sendMultiplayerReactionAction(reaction);
-          }}
           checkpointLoading={multiplayerCheckpointLoading}
           legalActions={multiplayerLegalActions}
           contextualActions={multiplayerContextualActions}
@@ -1859,10 +1860,11 @@ function App() {
           apiBase={multiplayerApiBase}
           isLocalDevApi={multiplayerIsLocalDevApi}
           error={multiplayerError}
+          errorCode={multiplayerErrorCode}
+          recoveryNotice={multiplayerRecoveryNotice}
           connectionState={multiplayerConnectionState}
           pushState={multiplayerPushState}
           isHost={multiplayerIsHost}
-          reactionsEnabled={multiplayerReactionsEnabled}
           onPlayerNameChange={setMultiplayerPlayerName}
           onJoinCodeChange={setMultiplayerJoinCode}
           onHostRoom={onHostMultiplayerRoom}
@@ -1872,14 +1874,12 @@ function App() {
           onSetReady={(ready) => {
             void setMultiplayerReadyState(ready);
           }}
-          onSendReaction={(reaction) => {
-            void sendMultiplayerReactionAction(reaction);
-          }}
           onCopyInviteLink={() => {
             recordGrowthMetric('multiplayer_invite_copied');
           }}
           onRefresh={refreshMultiplayerRoom}
           onLeaveRoom={leaveMultiplayerRoom}
+          onClearRecoveryNotice={clearMultiplayerRecoveryNotice}
           onBack={() => setScreen('home')}
         />
       ) : null}
@@ -1997,6 +1997,7 @@ function App() {
           isOpen={multiplayerChatOpen}
           unreadCount={multiplayerChatUnread}
           disabled={multiplayerLoading || multiplayerCheckpointLoading}
+          reactionsEnabled={multiplayerReactionsEnabled}
           onToggle={() => {
             setMultiplayerChatOpen((open) => {
               const nextOpen = !open;
@@ -2011,6 +2012,9 @@ function App() {
           onSendMessage={(text) => {
             void sendMultiplayerChatMessageAction(text);
             multiplayerTypingSentRef.current = false;
+          }}
+          onSendReaction={(reaction) => {
+            void sendMultiplayerReactionAction(reaction);
           }}
           onTypingChange={handleMultiplayerTypingChange}
         />

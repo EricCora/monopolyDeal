@@ -531,7 +531,12 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     const drawn = drawCards(state, player, drawAmount);
     state.turn.phase = 'action';
     state.turn.endingTurn = false;
-    pushEvent(events, 'draw', `${player.name} drew ${drawn.length} cards.`);
+    pushEvent(events, 'draw', `${player.name} drew ${drawn.length} cards.`, {
+      kind: 'draw',
+      playerId: player.id,
+      count: drawn.length,
+      reason: 'turn_draw',
+    });
   }
 
   if (action.type === 'pass_turn') {
@@ -684,7 +689,12 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
 
       if (actionKind === 'pass_go') {
         const drawn = drawCards(state, player, 2);
-        pushEvent(events, 'action', `${player.name} played Pass Go and drew ${drawn.length}.`);
+        pushEvent(events, 'action', `${player.name} played Pass Go and drew ${drawn.length}.`, {
+          kind: 'draw',
+          playerId: player.id,
+          count: drawn.length,
+          reason: 'pass_go',
+        });
       }
 
       if (actionKind === 'double_rent') {
@@ -888,7 +898,13 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
 
     addToProperty(source, action.cardId, action.destinationColor);
     state.pending = null;
-    pushEvent(events, 'sly_deal', `${source.name} took ${cardLabel(action.cardId)} from ${target.name}.`);
+    pushEvent(events, 'sly_deal', `${source.name} took ${cardLabel(action.cardId)} from ${target.name}.`, {
+      kind: 'property_steal',
+      sourcePlayerId: source.id,
+      targetPlayerId: target.id,
+      cardIds: [action.cardId],
+      mode: 'sly_deal',
+    });
   }
 
   if (action.type === 'forced_deal_pick') {
@@ -920,7 +936,13 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     addToProperty(target, give.cardId, targetDestColor);
 
     state.pending = null;
-    pushEvent(events, 'forced_deal', `${source.name} swapped ${cardLabel(action.giveCardId)} for ${cardLabel(action.takeCardId)}.`);
+    pushEvent(events, 'forced_deal', `${source.name} swapped ${cardLabel(action.giveCardId)} for ${cardLabel(action.takeCardId)}.`, {
+      kind: 'property_steal',
+      sourcePlayerId: source.id,
+      targetPlayerId: target.id,
+      cardIds: [action.giveCardId, action.takeCardId],
+      mode: 'forced_deal',
+    });
   }
 
   if (action.type === 'deal_breaker_pick') {
@@ -941,7 +963,13 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     }
 
     state.pending = null;
-    pushEvent(events, 'deal_breaker', `${source.name} stole ${target.name}'s ${action.color} set.`);
+    pushEvent(events, 'deal_breaker', `${source.name} stole ${target.name}'s ${action.color} set.`, {
+      kind: 'property_steal',
+      sourcePlayerId: source.id,
+      targetPlayerId: target.id,
+      cardIds: cards.map((entry) => entry.cardId),
+      mode: 'deal_breaker',
+    });
   }
 
   checkWinner(state);

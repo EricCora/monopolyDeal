@@ -1,8 +1,10 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatPropertyColor, getCardDisplayName, type PropertyColor } from '../../cards/catalog';
 import {
   getSetCompletionCount,
   isGameOver,
   type Action,
+  type GameEvent,
   type GameState,
   type LegalAction,
   type PaymentRequest,
@@ -14,7 +16,7 @@ import { PlayChooser, type ActionVariantView } from '../components/PlayChooser';
 import { RecentEvents } from '../components/RecentEvents';
 import { ActionRail } from '../layout/ActionRail';
 import { TopBar } from '../layout/TopBar';
-import type { MultiplayerActivityFeedItem, MultiplayerConnectionState, MultiplayerReaction } from '../../network/multiplayerTypes';
+import type { MultiplayerActivityFeedItem, MultiplayerConnectionState } from '../../network/multiplayerTypes';
 
 interface CardActionVariant extends ActionVariantView {
   action: Action;
@@ -49,8 +51,7 @@ interface GameTableScreenProps {
   activityFeed?: MultiplayerActivityFeedItem[];
   hostChangeNotice?: string | null;
   onDismissHostChangeNotice?: () => void;
-  reactionsEnabled?: boolean;
-  onSendReaction?: (reaction: MultiplayerReaction) => void;
+  reducedMotion?: boolean;
   checkpointLoading?: boolean;
   legalActions: LegalAction[];
   contextualActions: LegalAction[];
@@ -184,12 +185,73 @@ function renderHiddenHand(cardCount: number) {
   );
 }
 
-const REACTIONS: Array<{ id: MultiplayerReaction; label: string }> = [
-  { id: 'nice', label: 'Nice' },
-  { id: 'wow', label: 'Wow' },
-  { id: 'gg', label: 'GG' },
-  { id: 'oops', label: 'Oops' },
-];
+interface TableStealAlert {
+  key: string;
+  mode: 'sly_deal' | 'forced_deal' | 'deal_breaker';
+  sourcePlayerId: string;
+  targetPlayerId: string;
+  sourceName: string;
+  targetName: string;
+  cardIds: string[];
+}
+
+interface DrawGhostCard {
+  id: string;
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  delayMs: number;
+}
+
+function reactionEmoji(reaction: string | undefined): string {
+  if (reaction === 'nice') return '👏';
+  if (reaction === 'wow') return '😮';
+  if (reaction === 'gg') return '🏁';
+  if (reaction === 'oops') return '😅';
+  return '💬';
+}
+
+function stealModeLabel(mode: TableStealAlert['mode']): string {
+  if (mode === 'sly_deal') return 'Sly Deal';
+  if (mode === 'forced_deal') return 'Forced Deal';
+  return 'Deal Breaker';
+}
+
+function stealEventKey(event: GameEvent): string | null {
+  const details = event.details;
+  if (!details || details.kind !== 'property_steal') return null;
+  return `${event.timestamp}:${details.mode}:${details.cardIds.join('|')}`;
+}
+
+function drawEventKey(event: GameEvent): string | null {
+  const details = event.details;
+  if (!details || details.kind !== 'draw') return null;
+  return `${event.timestamp}:${details.playerId}:${details.reason}:${details.count}`;
+}
+
+function resolveStealAlert(game: GameState, clockNow: number): TableStealAlert | null {
+  for (let index = game.history.length - 1; index >= 0; index -= 1) {
+    const event = game.history[index];
+    const details = event.details;
+    if (!details || details.kind !== 'property_steal') continue;
+    if (clockNow - event.timestamp > 3_200) return null;
+    const key = stealEventKey(event);
+    if (!key) return null;
+    const sourceName = game.players.find((entry) => entry.id === details.sourcePlayerId)?.name ?? details.sourcePlayerId;
+    const targetName = game.players.find((entry) => entry.id === details.targetPlayerId)?.name ?? details.targetPlayerId;
+    return {
+      key,
+      mode: details.mode,
+      sourcePlayerId: details.sourcePlayerId,
+      targetPlayerId: details.targetPlayerId,
+      sourceName,
+      targetName,
+      cardIds: [...details.cardIds],
+    };
+  }
+  return null;
+}
 
 export function GameTableScreen({
   mode = 'local',
@@ -205,8 +267,7 @@ export function GameTableScreen({
   activityFeed = [],
   hostChangeNotice = null,
   onDismissHostChangeNotice,
-  reactionsEnabled = false,
-  onSendReaction,
+  reducedMotion = false,
   checkpointLoading = false,
   legalActions,
   contextualActions,
@@ -256,9 +317,70 @@ export function GameTableScreen({
 }: GameTableScreenProps) {
   const over = isGameOver(game);
   const isMultiplayer = mode === 'multiplayer';
+  const drawPileDeckRef = useRef<HTMLDivElement | null>(null);
+  const visibleHandZoneByPlayerIdRef = useRef<Record<string, HTMLDivElement | null>>({});
+  const handledDrawEventKeyRef = useRef<string | null>(null);
+  const [clockNow, setClockNow] = useState(() => Date.now());
+  const [drawGhostCards, setDrawGhostCards] = useState<DrawGhostCard[]>([]);
+  const stealAlert = resolveStealAlert(game, clockNow);
   const winnerName = over.done && over.winnerId
     ? game.players.find((player) => player.id === over.winnerId)?.name ?? over.winnerId
     : null;
+  const stealHighlightCardIds = new Set(stealAlert?.cardIds ?? []);
+  const recentReactionsByPlayerId = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!isMultiplayer) return map;
+    activityFeed
+      .filter((item) => item.kind === 'reaction' && item.playerId && clockNow - item.createdAt <= 2_400)
+      .sort((left, right) => right.createdAt - left.createdAt)
+      .forEach((item) => {
+        if (!item.playerId || map.has(item.playerId)) return;
+        map.set(item.playerId, reactionEmoji(item.reaction));
+      });
+    return map;
+  }, [activityFeed, clockNow, isMultiplayer]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(Date.now()), 450);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    for (let index = game.history.length - 1; index >= 0; index -= 1) {
+      const event = game.history[index];
+      const details = event.details;
+      if (!details || details.kind !== 'draw') continue;
+      const nextKey = drawEventKey(event);
+      if (!nextKey || nextKey === handledDrawEventKeyRef.current) return;
+      handledDrawEventKeyRef.current = nextKey;
+      if (reducedMotion || details.count <= 0) return;
+      if (revealedPlayerId !== details.playerId) return;
+      const sourceElement = drawPileDeckRef.current;
+      const destinationElement = visibleHandZoneByPlayerIdRef.current[details.playerId];
+      if (!sourceElement || !destinationElement) return;
+
+      const sourceRect = sourceElement.getBoundingClientRect();
+      const destinationRect = destinationElement.getBoundingClientRect();
+      const sourceCenterX = sourceRect.left + sourceRect.width / 2;
+      const sourceCenterY = sourceRect.top + sourceRect.height / 2;
+      const destinationCenterX = destinationRect.left + destinationRect.width / 2;
+      const destinationCenterY = destinationRect.top + destinationRect.height / 2;
+      const ghosts = Array.from({ length: Math.min(3, details.count) }, (_, ghostIndex) => ({
+        id: `${nextKey}:${ghostIndex}`,
+        x: sourceCenterX - 34 + ghostIndex * 4,
+        y: sourceCenterY - 46 - ghostIndex * 2,
+        dx: destinationCenterX - sourceCenterX + ghostIndex * 12,
+        dy: destinationCenterY - sourceCenterY - ghostIndex * 8,
+        delayMs: ghostIndex * 75,
+      }));
+      setDrawGhostCards(ghosts);
+      const clearTimer = window.setTimeout(() => {
+        setDrawGhostCards((existing) => existing.filter((item) => !ghosts.some((ghost) => ghost.id === item.id)));
+      }, 960);
+      return () => window.clearTimeout(clearTimer);
+    }
+    return undefined;
+  }, [game.history, reducedMotion, revealedPlayerId]);
 
   const saveCheckpointInteractive = () => {
     if (!onSaveCheckpoint || !isMultiplayerHost || isPaused) return;
@@ -377,32 +499,40 @@ export function GameTableScreen({
             </section>
           ) : null}
 
-          {isMultiplayer && (reactionsEnabled || activityFeed.length > 0) ? (
+          {isMultiplayer && activityFeed.length > 0 ? (
             <section className="panel multiplayer-social-panel" aria-label="Multiplayer social">
-              {reactionsEnabled && onSendReaction ? (
-                <div className="actions multiplayer-reaction-actions">
-                  {REACTIONS.map((reaction) => (
-                    <button key={`reaction-${reaction.id}`} type="button" onClick={() => onSendReaction(reaction.id)} disabled={isPaused}>
-                      {reaction.label}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              {activityFeed.length > 0 ? (
-                <ul className="multiplayer-activity-feed">
-                  {activityFeed.slice(0, 6).map((entry) => (
-                    <li key={entry.id}>{entry.message}</li>
-                  ))}
-                </ul>
-              ) : null}
+              <ul className="multiplayer-activity-feed">
+                {activityFeed.slice(0, 6).map((entry) => (
+                  <li key={entry.id} className={entry.kind === 'reaction' ? 'is-reaction' : undefined}>
+                    {entry.kind === 'reaction' ? <span className="multiplayer-activity-emoji">{reactionEmoji(entry.reaction)}</span> : null}
+                    <span>{entry.message}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {stealAlert ? (
+            <section className="table-steal-banner card-enter" role="status" aria-live="polite" aria-label="Property steal update">
+              <p className="table-steal-banner-title">
+                {stealAlert.sourceName} played {stealModeLabel(stealAlert.mode)} on {stealAlert.targetName}
+              </p>
+              <p className="table-steal-banner-detail">
+                Moved cards: {stealAlert.cardIds.slice(0, 3).map(getCardDisplayName).join(', ')}
+                {stealAlert.cardIds.length > 3 ? ` +${stealAlert.cardIds.length - 3} more` : ''}
+              </p>
             </section>
           ) : null}
 
           <section className="table-surface" aria-label="Table surface">
             <div className="table-pile-row" aria-label="Card piles">
-              <article className="table-pile-card">
+              <article className="table-pile-card draw-pile-card">
                 <h4>Draw Pile</h4>
                 <p>{game.drawPile.length} cards</p>
+                <div ref={drawPileDeckRef} className="table-draw-deck" aria-hidden="true">
+                  <span className="table-draw-card table-draw-card-bottom" />
+                  <span className="table-draw-card table-draw-card-top" />
+                </div>
               </article>
               <article className="table-pile-card">
                 <h4>Discard Pile</h4>
@@ -433,7 +563,10 @@ export function GameTableScreen({
               const propertyColors = (Object.keys(player.properties) as PropertyColor[]).filter((color) => player.properties[color].length > 0);
 
               return (
-                <article className={`player ${isCurrent ? 'active' : ''} ${isPaymentPayer ? 'is-payment-requested' : ''}`} key={player.id}>
+                <article
+                  className={`player ${isCurrent ? 'active' : ''} ${isPaymentPayer ? 'is-payment-requested' : ''} ${stealAlert?.sourcePlayerId === player.id ? 'is-steal-source' : ''} ${stealAlert?.targetPlayerId === player.id ? 'is-steal-target' : ''}`}
+                  key={player.id}
+                >
                   <header>
                     <h3>{player.name}</h3>
                     <p>{getSetCompletionCount(player)} complete sets</p>
@@ -441,6 +574,11 @@ export function GameTableScreen({
                       <p className={`connection-pill ${playerConnectionById[player.id]?.connected ? 'is-online' : 'is-offline'}`}>
                         {playerConnectionById[player.id]?.connected ? 'Online' : 'Disconnected'}
                       </p>
+                    ) : null}
+                    {recentReactionsByPlayerId.get(player.id) ? (
+                      <span className="player-reaction-burst" aria-label={`${player.name} sent a reaction`}>
+                        {recentReactionsByPlayerId.get(player.id)}
+                      </span>
                     ) : null}
                   </header>
 
@@ -525,22 +663,29 @@ export function GameTableScreen({
 
                   <section>
                     <strong>Hand</strong>
-                    {canSeeHand ? (
-                      player.hand.length > 0 ? (
-                        <HandFan
-                          cards={player.hand}
-                          playableCardIds={playableCardIds}
-                          selectedCardId={selectedCardId}
-                          onCardClick={onCardClick}
-                          interactive={handInteractive}
-                          fitMode={handFitMode}
-                        />
+                    <div
+                      className="hand-zone"
+                      ref={(node) => {
+                        visibleHandZoneByPlayerIdRef.current[player.id] = node;
+                      }}
+                    >
+                      {canSeeHand ? (
+                        player.hand.length > 0 ? (
+                          <HandFan
+                            cards={player.hand}
+                            playableCardIds={playableCardIds}
+                            selectedCardId={selectedCardId}
+                            onCardClick={onCardClick}
+                            interactive={handInteractive}
+                            fitMode={handFitMode}
+                          />
+                        ) : (
+                          <p>Empty</p>
+                        )
                       ) : (
-                        <p>Empty</p>
-                      )
-                    ) : (
-                      renderHiddenHand(player.hand.length)
-                    )}
+                        renderHiddenHand(player.hand.length)
+                      )}
+                    </div>
                   </section>
 
                   <section>
@@ -569,30 +714,37 @@ export function GameTableScreen({
                     <div className="zone-properties">
                       {propertyColors.length > 0 ? (
                         propertyColors.map((color) => (
-                          <div className="property-lane" key={`${player.id}-${color}`}>
+                          <div
+                            className={`property-lane ${player.properties[color].some((entry) => stealHighlightCardIds.has(entry.cardId)) ? 'is-steal-lane' : ''}`}
+                            key={`${player.id}-${color}`}
+                          >
                             <p>
                               <span>{colorLabel(color)}:</span>
                             </p>
                             <div className="property-cards">
                               {player.properties[color].map((entry) => (
-                                <CardView
+                                <div
                                   key={`${player.id}-${color}-${entry.cardId}`}
-                                  cardId={entry.cardId}
-                                  size="sm"
-                                  interactive={paymentSelectionEnabled || selectionCardPickingEnabled}
-                                  playable={paymentSelectionEnabled || selectionCardPickingEnabled}
-                                  selected={selectedPaymentCards.includes(entry.cardId) || selectedSelectionCardId === entry.cardId}
-                                  onClick={() => {
-                                    if (paymentSelectionEnabled) {
-                                      onPaymentCardToggle(entry.cardId);
-                                      return;
-                                    }
-                                    if (selectionCardPickingEnabled) {
-                                      onPropertySelectionClick(player.id, color, entry.cardId);
-                                    }
-                                  }}
-                                  annotation={entry.assignedColor !== color ? `as ${colorLabel(entry.assignedColor)}` : undefined}
-                                />
+                                  className={`property-card-wrap ${stealHighlightCardIds.has(entry.cardId) ? 'is-stolen-card' : ''}`}
+                                >
+                                  <CardView
+                                    cardId={entry.cardId}
+                                    size="sm"
+                                    interactive={paymentSelectionEnabled || selectionCardPickingEnabled}
+                                    playable={paymentSelectionEnabled || selectionCardPickingEnabled}
+                                    selected={selectedPaymentCards.includes(entry.cardId) || selectedSelectionCardId === entry.cardId}
+                                    onClick={() => {
+                                      if (paymentSelectionEnabled) {
+                                        onPaymentCardToggle(entry.cardId);
+                                        return;
+                                      }
+                                      if (selectionCardPickingEnabled) {
+                                        onPropertySelectionClick(player.id, color, entry.cardId);
+                                      }
+                                    }}
+                                    annotation={entry.assignedColor !== color ? `as ${colorLabel(entry.assignedColor)}` : undefined}
+                                  />
+                                </div>
                               ))}
                             </div>
                           </div>
@@ -606,6 +758,23 @@ export function GameTableScreen({
               );
               })}
             </div>
+            {drawGhostCards.length > 0 ? (
+              <div className="draw-animation-layer" aria-hidden="true">
+                {drawGhostCards.map((ghost) => (
+                  <div
+                    key={ghost.id}
+                    className="draw-ghost-card"
+                    style={{
+                      left: `${ghost.x}px`,
+                      top: `${ghost.y}px`,
+                      ['--draw-dx' as string]: `${ghost.dx}px`,
+                      ['--draw-dy' as string]: `${ghost.dy}px`,
+                      ['--draw-delay' as string]: `${ghost.delayMs}ms`,
+                    }}
+                  />
+                ))}
+              </div>
+            ) : null}
           </section>
 
           <RecentEvents events={game.history} enhancedGrouping={enhancedEventLog} />

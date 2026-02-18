@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { MultiplayerChatMessage } from '../../network/multiplayerTypes';
+import type { MultiplayerChatMessage, MultiplayerReaction } from '../../network/multiplayerTypes';
 
 interface MultiplayerChatDockProps {
   messages: MultiplayerChatMessage[];
@@ -9,10 +9,19 @@ interface MultiplayerChatDockProps {
   isOpen: boolean;
   unreadCount: number;
   disabled?: boolean;
+  reactionsEnabled?: boolean;
   onToggle: () => void;
   onSendMessage: (text: string) => void;
+  onSendReaction?: (reaction: MultiplayerReaction) => void;
   onTypingChange: (typing: boolean) => void;
 }
+
+const QUICK_REACTIONS: Array<{ id: MultiplayerReaction; emoji: string; label: string }> = [
+  { id: 'nice', emoji: '👏', label: 'Nice' },
+  { id: 'wow', emoji: '😮', label: 'Wow' },
+  { id: 'gg', emoji: '🏁', label: 'GG' },
+  { id: 'oops', emoji: '😅', label: 'Oops' },
+];
 
 function isMentioned(message: string, yourName: string): boolean {
   const normalized = yourName.trim().toLowerCase();
@@ -28,8 +37,10 @@ export function MultiplayerChatDock({
   isOpen,
   unreadCount,
   disabled = false,
+  reactionsEnabled = false,
   onToggle,
   onSendMessage,
+  onSendReaction,
   onTypingChange,
 }: MultiplayerChatDockProps) {
   const [draft, setDraft] = useState('');
@@ -52,6 +63,24 @@ export function MultiplayerChatDock({
             <h3>Room Chat</h3>
             <button type="button" onClick={onToggle}>Close</button>
           </header>
+
+          {reactionsEnabled && onSendReaction ? (
+            <div className="chat-reaction-tray" aria-label="Quick reactions">
+              {QUICK_REACTIONS.map((reaction) => (
+                <button
+                  key={reaction.id}
+                  type="button"
+                  className="chat-reaction-chip"
+                  disabled={disabled}
+                  onClick={() => onSendReaction(reaction.id)}
+                  aria-label={`Send ${reaction.label} reaction`}
+                >
+                  <span aria-hidden="true">{reaction.emoji}</span>
+                  <span>{reaction.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <ul className="chat-message-list" role="log" aria-live="polite" aria-relevant="additions text">
             {orderedMessages.length > 0 ? (

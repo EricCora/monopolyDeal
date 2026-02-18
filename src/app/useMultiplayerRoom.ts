@@ -42,6 +42,13 @@ interface UseMultiplayerRoomOptions {
   onMetricEvent?: (event: GrowthMetricEvent) => void;
 }
 
+export type MultiplayerRecoveryReason = 'room_not_found' | 'reconnect_expired';
+
+export interface MultiplayerRecoveryNotice {
+  roomCode: string;
+  reason: MultiplayerRecoveryReason;
+}
+
 const SESSION_KEY = 'monopolyDeal.multiplayerSession.v1';
 
 function sanitizeName(input: string): string {
@@ -94,6 +101,10 @@ function isLocalApiBase(apiBase: string): boolean {
   }
 }
 
+function isStaleSessionCode(code: string): code is MultiplayerRecoveryReason {
+  return code === 'room_not_found' || code === 'reconnect_expired';
+}
+
 export function useMultiplayerRoom({
   enabled,
   pollIntervalMs = 2_000,
@@ -111,6 +122,8 @@ export function useMultiplayerRoom({
   const [pushState, setPushState] = useState<MultiplayerPushState>(pushEnabled ? 'connecting' : 'disabled');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [recoveryNotice, setRecoveryNotice] = useState<MultiplayerRecoveryNotice | null>(null);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   const reconnectAttemptRef = useRef(0);
   const autoReconnectAttemptedRef = useRef(false);
@@ -124,6 +137,16 @@ export function useMultiplayerRoom({
 
   const expectedRevision = roomView?.revision;
 
+  const clearError = useCallback(() => {
+    setError(null);
+    setErrorCode(null);
+  }, []);
+
+  const setErrorFromCode = useCallback((code: string) => {
+    setErrorCode(code);
+    setError(multiplayerErrorMessage(code));
+  }, []);
+
   const clearSession = useCallback(() => {
     setSession(null);
     setRoomView(null);
@@ -133,10 +156,34 @@ export function useMultiplayerRoom({
     saveStoredSession(null);
   }, []);
 
+  const recoverStaleSession = useCallback((reason: MultiplayerRecoveryReason, staleSession?: MultiplayerSession | null) => {
+    const roomCode = staleSession?.roomCode ?? '';
+    clearSession();
+    clearError();
+    setConnectionState('idle');
+    if (roomCode) {
+      setJoinCode(roomCode);
+      setRecoveryNotice({ roomCode, reason });
+    } else {
+      setRecoveryNotice(null);
+    }
+  }, [clearError, clearSession]);
+
   const refreshRoom = useCallback(async (activeSession?: MultiplayerSession | null): Promise<MultiplayerRoomView | null> => {
     const current = activeSession ?? session;
     if (!current) return null;
-    const loaded = await loadMultiplayerRoomState(current, apiBase);
+    let loaded: MultiplayerRoomView;
+    try {
+      loaded = await loadMultiplayerRoomState(current, apiBase);
+    } catch (refreshError) {
+      const code = refreshError instanceof Error ? refreshError.message : 'request_failed';
+      setErrorFromCode(code);
+      if (isStaleSessionCode(code)) {
+        recoverStaleSession(code, current);
+        return null;
+      }
+      throw refreshError;
+    }
     const next: MultiplayerRoomView = {
       ...loaded,
       players: loaded.players.map((player) => ({
@@ -158,7 +205,8 @@ export function useMultiplayerRoom({
 
     setRoomView(next);
     setConnectionState('connected');
-    setError(null);
+    clearError();
+    setRecoveryNotice(null);
     const nextSession: MultiplayerSession = {
       ...current,
       reconnectDeadlineMs: next.reconnectDeadlineMs,
@@ -166,7 +214,7 @@ export function useMultiplayerRoom({
     setSession(nextSession);
     saveStoredSession(nextSession);
     return next;
-  }, [apiBase, session]);
+  }, [apiBase, clearError, recoverStaleSession, session, setErrorFromCode]);
 
   const refreshFromPush = useCallback(() => {
     if (pushRefreshInFlightRef.current) {
@@ -204,20 +252,24 @@ export function useMultiplayerRoom({
       saveStoredSession(nextSession);
       await refreshRoom(nextSession);
       setConnectionState('connected');
+      setRecoveryNotice(null);
       onMetricEvent?.('multiplayer_reconnect_success');
       return true;
     } catch (reconnectError) {
       const code = reconnectError instanceof Error ? reconnectError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
+      if (isStaleSessionCode(code)) {
+        recoverStaleSession(code, current);
+      }
       onMetricEvent?.('multiplayer_reconnect_failed');
       return false;
     }
-  }, [apiBase, expectedRevision, onMetricEvent, refreshRoom, session]);
+  }, [apiBase, expectedRevision, onMetricEvent, recoverStaleSession, refreshRoom, session, setErrorFromCode]);
 
   const hostRoom = useCallback(async (): Promise<boolean> => {
     setLoading(true);
     setConnectionState('connecting');
-    setError(null);
+    clearError();
     try {
       const nextName = sanitizeName(playerName);
       const created = await createMultiplayerRoom(nextName, apiBase);
@@ -233,24 +285,25 @@ export function useMultiplayerRoom({
       setJoinCode(created.roomCode);
       setSession(nextSession);
       saveStoredSession(nextSession);
+      setRecoveryNotice(null);
       await refreshRoom(nextSession);
       onMetricEvent?.('multiplayer_host_started');
       onMetricEvent?.('lan_room_hosted');
       return true;
     } catch (hostError) {
       const code = hostError instanceof Error ? hostError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
       setConnectionState('disconnected');
       return false;
     } finally {
       setLoading(false);
     }
-  }, [apiBase, onMetricEvent, playerName, refreshRoom]);
+  }, [apiBase, clearError, onMetricEvent, playerName, refreshRoom, setErrorFromCode]);
 
   const joinRoom = useCallback(async (): Promise<boolean> => {
     setLoading(true);
     setConnectionState('connecting');
-    setError(null);
+    clearError();
     try {
       const nextName = sanitizeName(playerName);
       const roomCode = sanitizeRoomCode(joinCode);
@@ -267,20 +320,21 @@ export function useMultiplayerRoom({
       setJoinCode(joined.roomCode);
       setSession(nextSession);
       saveStoredSession(nextSession);
+      setRecoveryNotice(null);
       await refreshRoom(nextSession);
       onMetricEvent?.('multiplayer_join_success');
       onMetricEvent?.('lan_room_joined');
       return true;
     } catch (joinError) {
       const code = joinError instanceof Error ? joinError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
       setConnectionState('disconnected');
       onMetricEvent?.('multiplayer_join_failed');
       return false;
     } finally {
       setLoading(false);
     }
-  }, [apiBase, joinCode, onMetricEvent, playerName, refreshRoom]);
+  }, [apiBase, clearError, joinCode, onMetricEvent, playerName, refreshRoom, setErrorFromCode]);
 
   const leaveRoomInternal = useCallback(async (forgetSession: boolean) => {
     const current = session;
@@ -298,14 +352,15 @@ export function useMultiplayerRoom({
     } finally {
       if (forgetSession) {
         clearSession();
+        setRecoveryNotice(null);
       } else {
         setRoomView(null);
       }
       setConnectionState('idle');
-      setError(null);
+      clearError();
       setLoading(false);
     }
-  }, [apiBase, clearSession, expectedRevision, session]);
+  }, [apiBase, clearError, clearSession, expectedRevision, session]);
 
   const exitRoom = useCallback(async () => {
     await leaveRoomInternal(false);
@@ -319,17 +374,17 @@ export function useMultiplayerRoom({
     const current = session;
     if (!current) return;
     setLoading(true);
-    setError(null);
+    clearError();
     try {
       await startMultiplayerRoom(current, apiBase, expectedRevision, checkpointId);
       await refreshRoom(current);
     } catch (startError) {
       const code = startError instanceof Error ? startError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
     } finally {
       setLoading(false);
     }
-  }, [apiBase, expectedRevision, refreshRoom, session]);
+  }, [apiBase, clearError, expectedRevision, refreshRoom, session, setErrorFromCode]);
 
   const runAction = useCallback(async (index: number) => {
     const current = session;
@@ -337,59 +392,59 @@ export function useMultiplayerRoom({
     const selected = roomView.legalActions[index];
     if (!selected) return;
     setLoading(true);
-    setError(null);
+    clearError();
     try {
       await applyMultiplayerAction(current, selected.action, apiBase, expectedRevision);
       await refreshRoom(current);
     } catch (actionError) {
       const code = actionError instanceof Error ? actionError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
     } finally {
       setLoading(false);
     }
-  }, [apiBase, expectedRevision, refreshRoom, roomView, session]);
+  }, [apiBase, clearError, expectedRevision, refreshRoom, roomView, session, setErrorFromCode]);
 
   const setReady = useCallback(async (ready: boolean) => {
     const current = session;
     if (!current) return;
     setLoading(true);
-    setError(null);
+    clearError();
     try {
       await setMultiplayerReady(current, ready, apiBase, expectedRevision);
       await refreshRoom(current);
     } catch (readyError) {
       const code = readyError instanceof Error ? readyError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
     } finally {
       setLoading(false);
     }
-  }, [apiBase, expectedRevision, refreshRoom, session]);
+  }, [apiBase, clearError, expectedRevision, refreshRoom, session, setErrorFromCode]);
 
   const sendReaction = useCallback(async (reaction: MultiplayerReaction) => {
     const current = session;
     if (!current || !reactionsEnabled) return;
-    setError(null);
+    clearError();
     try {
       await sendMultiplayerReaction(current, reaction, apiBase, expectedRevision);
       await refreshRoom(current);
     } catch (reactionError) {
       const code = reactionError instanceof Error ? reactionError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
     }
-  }, [apiBase, expectedRevision, reactionsEnabled, refreshRoom, session]);
+  }, [apiBase, clearError, expectedRevision, reactionsEnabled, refreshRoom, session, setErrorFromCode]);
 
   const sendChatMessage = useCallback(async (text: string) => {
     const current = session;
     if (!current) return;
-    setError(null);
+    clearError();
     try {
       await sendMultiplayerChatMessage(current, text, apiBase, expectedRevision);
       await refreshRoom(current);
     } catch (chatError) {
       const code = chatError instanceof Error ? chatError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
     }
-  }, [apiBase, expectedRevision, refreshRoom, session]);
+  }, [apiBase, clearError, expectedRevision, refreshRoom, session, setErrorFromCode]);
 
   const setTyping = useCallback(async (typing: boolean) => {
     const current = session;
@@ -405,13 +460,13 @@ export function useMultiplayerRoom({
     const current = session;
     if (!current) return;
     setLoading(true);
-    setError(null);
+    clearError();
     try {
       await pauseMultiplayerRoom(current, apiBase, expectedRevision);
       await refreshRoom(current);
     } catch (pauseError) {
       const code = pauseError instanceof Error ? pauseError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
       if (code === 'revision_conflict') {
         await refreshRoom(current).catch(() => {
           // leave the existing error for UI.
@@ -420,19 +475,19 @@ export function useMultiplayerRoom({
     } finally {
       setLoading(false);
     }
-  }, [apiBase, expectedRevision, refreshRoom, session]);
+  }, [apiBase, clearError, expectedRevision, refreshRoom, session, setErrorFromCode]);
 
   const resumeMatch = useCallback(async () => {
     const current = session;
     if (!current) return;
     setLoading(true);
-    setError(null);
+    clearError();
     try {
       await resumeMultiplayerRoom(current, apiBase, expectedRevision);
       await refreshRoom(current);
     } catch (resumeError) {
       const code = resumeError instanceof Error ? resumeError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
       if (code === 'revision_conflict') {
         await refreshRoom(current).catch(() => {
           // leave the existing error for UI.
@@ -441,19 +496,19 @@ export function useMultiplayerRoom({
     } finally {
       setLoading(false);
     }
-  }, [apiBase, expectedRevision, refreshRoom, session]);
+  }, [apiBase, clearError, expectedRevision, refreshRoom, session, setErrorFromCode]);
 
   const undoLastAction = useCallback(async () => {
     const current = session;
     if (!current) return;
     setLoading(true);
-    setError(null);
+    clearError();
     try {
       await undoMultiplayerRoomAction(current, apiBase, expectedRevision);
       await refreshRoom(current);
     } catch (undoError) {
       const code = undoError instanceof Error ? undoError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
       if (code === 'revision_conflict') {
         await refreshRoom(current).catch(() => {
           // leave the existing error for UI.
@@ -462,19 +517,19 @@ export function useMultiplayerRoom({
     } finally {
       setLoading(false);
     }
-  }, [apiBase, expectedRevision, refreshRoom, session]);
+  }, [apiBase, clearError, expectedRevision, refreshRoom, session, setErrorFromCode]);
 
   const resetTurn = useCallback(async () => {
     const current = session;
     if (!current) return;
     setLoading(true);
-    setError(null);
+    clearError();
     try {
       await resetMultiplayerRoomTurn(current, apiBase, expectedRevision);
       await refreshRoom(current);
     } catch (resetError) {
       const code = resetError instanceof Error ? resetError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
       if (code === 'revision_conflict') {
         await refreshRoom(current).catch(() => {
           // leave the existing error for UI.
@@ -483,19 +538,19 @@ export function useMultiplayerRoom({
     } finally {
       setLoading(false);
     }
-  }, [apiBase, expectedRevision, refreshRoom, session]);
+  }, [apiBase, clearError, expectedRevision, refreshRoom, session, setErrorFromCode]);
 
   const saveCheckpoint = useCallback(async (name: string) => {
     const current = session;
     if (!current) return;
     setCheckpointLoading(true);
-    setError(null);
+    clearError();
     try {
       await saveMultiplayerCheckpoint(current, name, apiBase, expectedRevision);
       await refreshRoom(current);
     } catch (saveError) {
       const code = saveError instanceof Error ? saveError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
       if (code === 'revision_conflict') {
         await refreshRoom(current).catch(() => {
           // leave the existing error for UI.
@@ -504,19 +559,19 @@ export function useMultiplayerRoom({
     } finally {
       setCheckpointLoading(false);
     }
-  }, [apiBase, expectedRevision, refreshRoom, session]);
+  }, [apiBase, clearError, expectedRevision, refreshRoom, session, setErrorFromCode]);
 
   const loadCheckpoint = useCallback(async (checkpointId: string) => {
     const current = session;
     if (!current) return;
     setCheckpointLoading(true);
-    setError(null);
+    clearError();
     try {
       await loadMultiplayerCheckpoint(current, checkpointId, apiBase, expectedRevision);
       await refreshRoom(current);
     } catch (loadError) {
       const code = loadError instanceof Error ? loadError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
       if (code === 'revision_conflict') {
         await refreshRoom(current).catch(() => {
           // leave the existing error for UI.
@@ -525,19 +580,19 @@ export function useMultiplayerRoom({
     } finally {
       setCheckpointLoading(false);
     }
-  }, [apiBase, expectedRevision, refreshRoom, session]);
+  }, [apiBase, clearError, expectedRevision, refreshRoom, session, setErrorFromCode]);
 
   const deleteCheckpoint = useCallback(async (checkpointId: string) => {
     const current = session;
     if (!current) return;
     setCheckpointLoading(true);
-    setError(null);
+    clearError();
     try {
       await deleteMultiplayerCheckpoint(current, checkpointId, apiBase, expectedRevision);
       await refreshRoom(current);
     } catch (deleteError) {
       const code = deleteError instanceof Error ? deleteError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
       if (code === 'revision_conflict') {
         await refreshRoom(current).catch(() => {
           // leave the existing error for UI.
@@ -546,7 +601,7 @@ export function useMultiplayerRoom({
     } finally {
       setCheckpointLoading(false);
     }
-  }, [apiBase, expectedRevision, refreshRoom, session]);
+  }, [apiBase, clearError, expectedRevision, refreshRoom, session, setErrorFromCode]);
 
   const refreshCheckpoints = useCallback(async (): Promise<MultiplayerCheckpointSummary[]> => {
     const current = session;
@@ -555,10 +610,10 @@ export function useMultiplayerRoom({
       return await listMultiplayerCheckpoints(current, apiBase);
     } catch (listError) {
       const code = listError instanceof Error ? listError.message : 'request_failed';
-      setError(multiplayerErrorMessage(code));
+      setErrorFromCode(code);
       return [];
     }
-  }, [apiBase, session]);
+  }, [apiBase, session, setErrorFromCode]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -696,6 +751,8 @@ export function useMultiplayerRoom({
     loading,
     checkpointLoading,
     error,
+    errorCode,
+    recoveryNotice,
     connectionState,
     pushState,
     reactionsEnabled,
@@ -723,6 +780,13 @@ export function useMultiplayerRoom({
     refreshRoom: () => refreshRoom(),
     reconnectSession: () => reconnectSession(),
     clearSession,
-    setError,
+    clearRecoveryNotice: () => {
+      setRecoveryNotice(null);
+      clearError();
+    },
+    setError: (nextError: string | null) => {
+      setError(nextError);
+      if (nextError == null) setErrorCode(null);
+    },
   };
 }

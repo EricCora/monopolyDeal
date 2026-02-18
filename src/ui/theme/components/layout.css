@@ -257,12 +257,41 @@
   box-shadow: 0 0 0 1px rgba(216, 162, 99, 0.32), var(--table-seat-shadow), var(--shadow-sm);
 }
 
+.player.is-steal-source,
+.player.is-steal-target {
+  border-color: #d5a85c;
+  box-shadow: 0 0 0 1px rgba(223, 179, 101, 0.46), 0 0 24px rgba(223, 179, 101, 0.24), var(--table-seat-shadow), var(--shadow-sm);
+}
+
+.player.is-steal-target {
+  border-color: #d27b6c;
+  box-shadow: 0 0 0 1px rgba(210, 123, 108, 0.42), 0 0 24px rgba(210, 123, 108, 0.25), var(--table-seat-shadow), var(--shadow-sm);
+}
+
 .player > section {
   margin-top: 0.7rem;
 }
 
 .player header p {
   margin: 0.2rem 0 0;
+}
+
+.player-reaction-burst {
+  position: absolute;
+  top: 0.58rem;
+  right: 0.58rem;
+  min-width: 2.2rem;
+  height: 2.2rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 210, 133, 0.58);
+  background: radial-gradient(circle at 30% 28%, rgba(255, 248, 225, 0.95), rgba(243, 188, 94, 0.92));
+  color: #322107;
+  font-size: 1.15rem;
+  box-shadow: 0 8px 18px rgba(10, 7, 3, 0.32);
+  pointer-events: none;
+  animation: reaction-burst-fade 2.1s ease-out forwards;
 }
 
 .connection-pill {
@@ -292,22 +321,71 @@
   background: linear-gradient(180deg, rgba(18, 35, 22, 0.92), rgba(12, 25, 16, 0.92));
 }
 
-.multiplayer-reaction-actions {
-  margin-bottom: 0.4rem;
-}
-
 .multiplayer-activity-feed {
   margin: 0;
-  padding-left: 1.1rem;
+  padding: 0;
+  list-style: none;
   display: grid;
-  gap: 0.22rem;
+  gap: 0.3rem;
   max-height: 180px;
   overflow: auto;
 }
 
 .multiplayer-activity-feed li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   color: #dbe9d7;
   font-size: 0.9rem;
+}
+
+.multiplayer-activity-feed li.is-reaction {
+  color: #f6e2b2;
+  opacity: 0.84;
+}
+
+.multiplayer-activity-emoji {
+  min-width: 1.15rem;
+  display: inline-grid;
+  place-items: center;
+}
+
+.table-steal-banner {
+  border: 1px solid #e2a062;
+  background: linear-gradient(140deg, rgba(120, 47, 29, 0.82), rgba(53, 27, 17, 0.86));
+  border-radius: 12px;
+  box-shadow: 0 12px 22px rgba(10, 5, 4, 0.34);
+}
+
+.table-steal-banner-title {
+  margin: 0;
+  font-weight: 700;
+  color: #ffe9d2;
+}
+
+.table-steal-banner-detail {
+  margin: 0.22rem 0 0;
+  color: #ffdbb4;
+  font-size: 0.9rem;
+}
+
+.property-lane.is-steal-lane {
+  border-color: #dfa45f;
+  box-shadow: 0 0 0 1px rgba(223, 164, 95, 0.42), inset 0 0 0 1px rgba(255, 245, 225, 0.3);
+}
+
+.property-card-wrap {
+  position: relative;
+}
+
+.property-card-wrap.is-stolen-card::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 10px;
+  border: 2px solid rgba(223, 167, 82, 0.94);
+  box-shadow: 0 0 0 3px rgba(223, 167, 82, 0.2);
+  pointer-events: none;
 }
 
 .debug-actions {
@@ -536,6 +614,31 @@
   margin: 0;
 }
 
+.chat-reaction-tray {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-bottom: 0.46rem;
+}
+
+.chat-reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 184, 96, 0.54);
+  background: linear-gradient(145deg, rgba(63, 92, 52, 0.92), rgba(32, 53, 29, 0.94));
+  color: #eef6e5;
+  font-size: 0.84rem;
+  padding: 0.32rem 0.56rem;
+}
+
+.chat-reaction-chip:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(4, 12, 6, 0.3);
+}
+
 .chat-message-list {
   margin: 0;
   padding: 0;
@@ -614,6 +717,25 @@
   }
 }
 
+@keyframes reaction-burst-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.72);
+  }
+  14% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  74% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.88);
+  }
+}
+
 @media (max-width: 1120px) {
   .game-table-grid {
     grid-template-columns: 1fr;
@@ -638,5 +760,13 @@
     right: 0.65rem;
     width: auto;
     bottom: 0.65rem;
+  }
+
+  .chat-reaction-tray {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .chat-reaction-chip span:last-child {
+    display: none;
   }
 }

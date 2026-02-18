@@ -805,6 +805,115 @@ describe('engine basics', () => {
     expect(result.error).toBeUndefined();
     expect(result.state.players[0].hand).toHaveLength(5);
     expect(result.state.turn.phase).toBe('action');
+    expect(result.events[0]?.details).toMatchObject({
+      kind: 'draw',
+      playerId: 'p1',
+      count: 5,
+      reason: 'turn_draw',
+    });
+  });
+
+  it('emits draw details when pass go is played', () => {
+    const state = mkState();
+    state.players[0].hand = ['pass_go#pg1'];
+
+    const result = applyAction(state, {
+      type: 'play_action',
+      playerId: 'p1',
+      cardId: 'pass_go#pg1',
+    });
+
+    const drawEvent = result.events.find((event) => event.details?.kind === 'draw');
+    expect(drawEvent?.details).toMatchObject({
+      kind: 'draw',
+      playerId: 'p1',
+      count: 2,
+      reason: 'pass_go',
+    });
+  });
+
+  it('emits property steal details for sly deal, forced deal, and deal breaker resolutions', () => {
+    const slyState = mkState();
+    slyState.pending = {
+      kind: 'sly_deal',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        actionCardId: 'sly_deal#sd1',
+      },
+    };
+    slyState.players[1].properties.brown = [{ cardId: 'brown_1#b1', assignedColor: 'brown' }];
+    const slyResult = applyAction(slyState, {
+      type: 'sly_deal_pick',
+      playerId: 'p1',
+      cardId: 'brown_1#b1',
+      sourceColor: 'brown',
+      destinationColor: 'brown',
+    });
+    expect(slyResult.events[0]?.details).toMatchObject({
+      kind: 'property_steal',
+      mode: 'sly_deal',
+      sourcePlayerId: 'p1',
+      targetPlayerId: 'p2',
+      cardIds: ['brown_1#b1'],
+    });
+
+    const forcedState = mkState();
+    forcedState.pending = {
+      kind: 'forced_deal',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        actionCardId: 'forced_deal#fd1',
+      },
+    };
+    forcedState.players[0].properties.utility = [{ cardId: 'utility_1#u1', assignedColor: 'utility' }];
+    forcedState.players[1].properties.brown = [{ cardId: 'brown_1#b1', assignedColor: 'brown' }];
+    const forcedResult = applyAction(forcedState, {
+      type: 'forced_deal_pick',
+      playerId: 'p1',
+      giveCardId: 'utility_1#u1',
+      giveColor: 'utility',
+      takeCardId: 'brown_1#b1',
+      takeColor: 'brown',
+      destinationColor: 'brown',
+    });
+    expect(forcedResult.events[0]?.details).toMatchObject({
+      kind: 'property_steal',
+      mode: 'forced_deal',
+      sourcePlayerId: 'p1',
+      targetPlayerId: 'p2',
+      cardIds: ['utility_1#u1', 'brown_1#b1'],
+    });
+
+    const dealBreakerState = mkState();
+    dealBreakerState.pending = {
+      kind: 'deal_breaker',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        actionCardId: 'deal_breaker#db1',
+      },
+    };
+    dealBreakerState.players[1].properties.brown = [
+      { cardId: 'brown_1#b1', assignedColor: 'brown' },
+      { cardId: 'brown_1#b2', assignedColor: 'brown' },
+    ];
+    const dealBreakerResult = applyAction(dealBreakerState, {
+      type: 'deal_breaker_pick',
+      playerId: 'p1',
+      color: 'brown',
+    });
+    expect(dealBreakerResult.events[0]?.details).toMatchObject({
+      kind: 'property_steal',
+      mode: 'deal_breaker',
+      sourcePlayerId: 'p1',
+      targetPlayerId: 'p2',
+    });
+    expect(dealBreakerResult.events[0]?.details?.kind).toBe('property_steal');
+    if (dealBreakerResult.events[0]?.details?.kind === 'property_steal') {
+      expect(dealBreakerResult.events[0].details.cardIds).toEqual(expect.arrayContaining(['brown_1#b1', 'brown_1#b2']));
+    }
   });
 
   it('restores both property groups when forced deal destination is invalid', () => {

@@ -69,4 +69,27 @@ describe('MultiplayerChatDock', () => {
     expect(onSendMessage).toHaveBeenCalledWith('Hello all');
     expect(onTypingChange).toHaveBeenCalledWith(false);
   });
+
+  it('renders quick reaction tray and sends mapped reactions', () => {
+    const onSendReaction = vi.fn();
+
+    render(
+      <MultiplayerChatDock
+        messages={[]}
+        typingNames={[]}
+        yourPlayerId="p1"
+        yourName="Host"
+        isOpen={true}
+        unreadCount={0}
+        reactionsEnabled={true}
+        onToggle={() => undefined}
+        onSendMessage={() => undefined}
+        onSendReaction={onSendReaction}
+        onTypingChange={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /send wow reaction/i }));
+    expect(onSendReaction).toHaveBeenCalledWith('wow');
+  });
 });

@@ -53,7 +53,25 @@ export interface GameEvent {
   timestamp: number;
   type: string;
   message: string;
+  details?: GameEventDetails;
 }
+
+export interface PropertyStealEventDetails {
+  kind: 'property_steal';
+  sourcePlayerId: PlayerId;
+  targetPlayerId: PlayerId;
+  cardIds: string[];
+  mode: 'sly_deal' | 'forced_deal' | 'deal_breaker';
+}
+
+export interface DrawEventDetails {
+  kind: 'draw';
+  playerId: PlayerId;
+  count: number;
+  reason: 'turn_draw' | 'pass_go' | 'effect';
+}
+
+export type GameEventDetails = PropertyStealEventDetails | DrawEventDetails;
 
 export interface PaymentRequest {
   sourcePlayerId: PlayerId;
