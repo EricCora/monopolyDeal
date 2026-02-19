@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { networkInterfaces } from 'node:os';
 import { parse } from 'node:url';
 import {
   applyRoomAction,
@@ -46,6 +47,24 @@ type EventStreamClient = {
 };
 
 const roomEventStreams = new Map<string, Set<EventStreamClient>>();
+
+function listLanOrigins(uiPort: number): string[] {
+  const nets = networkInterfaces();
+  const origins = new Set<string>();
+  for (const entries of Object.values(nets)) {
+    if (!entries) continue;
+    for (const entry of entries) {
+      if (!entry || entry.family !== 'IPv4' || entry.internal) continue;
+      const address = entry.address;
+      if (address.startsWith('10.')
+        || address.startsWith('192.168.')
+        || /^172\.(1[6-9]|2\d|3[0-1])\./.test(address)) {
+        origins.add(`http://${address}:${uiPort}`);
+      }
+    }
+  }
+  return Array.from(origins);
+}
 
 function writeJson(
   res: { writeHead: (code: number, headers: Record<string, string>) => void; end: (body: string) => void },
@@ -195,6 +214,13 @@ createServer(async (req, res) => {
         pushEnabled: MULTIPLAYER_PUSH_ENABLED,
         reactionsEnabled: MULTIPLAYER_REACTIONS_ENABLED,
       });
+      return;
+    }
+
+    if (req.method === 'GET' && path === '/api/multiplayer/dev/lan-origins') {
+      const requestedPort = Number(parsed.query.uiPort ?? 5173);
+      const uiPort = Number.isFinite(requestedPort) && requestedPort > 0 ? Math.floor(requestedPort) : 5173;
+      writeJson(res, 200, { origins: listLanOrigins(uiPort) });
       return;
     }
 

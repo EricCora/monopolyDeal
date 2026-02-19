@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MultiplayerScreen } from '../ui/screens/MultiplayerScreen';
 
 type MultiplayerScreenProps = ComponentProps<typeof MultiplayerScreen>;
@@ -37,7 +37,80 @@ function makeProps(overrides: Partial<MultiplayerScreenProps> = {}): Multiplayer
   };
 }
 
+function makeSession() {
+  return {
+    version: 1 as const,
+    roomCode: 'HRCWM',
+    playerId: 'p1' as const,
+    sessionToken: 'token',
+    playerName: 'Host',
+    reconnectDeadlineMs: Date.now() + 30_000,
+  };
+}
+
+function makeLobbyView() {
+  const now = Date.now();
+  return {
+    roomCode: 'HRCWM',
+    status: 'lobby' as const,
+    started: false,
+    hostPlayerId: 'p1' as const,
+    yourPlayerId: 'p1' as const,
+    players: [
+      {
+        id: 'p1' as const,
+        name: 'Host',
+        handCount: 0,
+        bankCount: 0,
+        completeSets: 0,
+        connected: true,
+        lastSeenAt: now,
+        reconnectDeadlineMs: now + 30_000,
+        isHost: true,
+        ready: false,
+      },
+    ],
+    promptPlayerId: undefined,
+    legalActions: [],
+    gameState: undefined,
+    winnerId: undefined,
+    paused: false,
+    pausedByPlayerId: undefined,
+    revision: 1,
+    turnSnapshotCount: 0,
+    checkpointSlots: [],
+    canStart: false,
+    reconnectDeadlineMs: now + 30_000,
+    serverTime: now,
+    activityFeed: [],
+    chatMessages: [],
+    typingPlayerIds: [],
+    lastEventId: 1,
+  };
+}
+
 describe('MultiplayerScreen', () => {
+  beforeEach(() => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ origins: ['http://192.168.86.243:5173'] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      writable: true,
+      value: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
   it('shows a stale-session recovery card instead of endless syncing when room is gone', () => {
     render(
       <MultiplayerScreen
@@ -92,5 +165,103 @@ describe('MultiplayerScreen', () => {
     );
 
     expect(screen.getByText(/syncing room/i)).toBeInTheDocument();
+  });
+
+  it('shows a copy notice when room code is copied', async () => {
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          session: makeSession(),
+          roomView: makeLobbyView(),
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /copy room code/i }));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('HRCWM');
+    });
+    expect(screen.getByText(/room code copied/i)).toBeInTheDocument();
+  });
+
+  it('shows a copy notice when invite link is copied', async () => {
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          session: makeSession(),
+          roomView: makeLobbyView(),
+        })}
+      />,
+    );
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalled();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /copy invite link/i }));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('http://192.168.86.243:5173/join/HRCWM');
+    });
+    expect(screen.getByText(/invite link copied/i)).toBeInTheDocument();
+  });
+
+  it('falls back to room code notice when LAN invite origin resolution fails', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify({ origins: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          session: makeSession(),
+          roomView: makeLobbyView(),
+        })}
+      />,
+    );
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalled();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /copy invite link/i }));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('HRCWM');
+    });
+    expect(screen.getByText(/room code copied instead/i)).toBeInTheDocument();
+  });
+
+  it('auto-dismisses copy notices after the timeout', async () => {
+    vi.useFakeTimers();
+
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          session: makeSession(),
+          roomView: makeLobbyView(),
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /copy room code/i }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByText(/room code copied/i)).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(2_250);
+    });
+
+    expect(screen.queryByText(/room code copied/i)).not.toBeInTheDocument();
   });
 });

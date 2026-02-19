@@ -16,6 +16,15 @@ function isLocalHostname(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
 }
 
+function isPrivateIpv4(hostname: string): boolean {
+  const match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!match) return false;
+  const a = Number(match[1]);
+  const b = Number(match[2]);
+  if (Number.isNaN(a) || Number.isNaN(b)) return false;
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+}
+
 export interface ResolveMultiplayerApiBaseOptions {
   envUrl?: string | null;
   hostname?: string | null;
@@ -25,6 +34,10 @@ export interface ResolveMultiplayerApiBaseOptions {
 export interface MultiplayerFeatureFlags {
   multiplayerPushEnabled: boolean;
   multiplayerReactionsEnabled: boolean;
+}
+
+export interface MultiplayerLanOriginsResponse {
+  origins: string[];
 }
 
 export const MULTIPLAYER_REACTION_OPTIONS: MultiplayerReaction[] = ['nice', 'wow', 'gg', 'oops'];
@@ -55,6 +68,10 @@ export function getMultiplayerApiBase(): string {
     hostname: typeof window !== 'undefined' ? window.location?.hostname : undefined,
     origin: typeof window !== 'undefined' ? window.location?.origin : undefined,
   });
+}
+
+export function isLanResolvableHost(hostname: string): boolean {
+  return !isLocalHostname(hostname) && (isPrivateIpv4(hostname) || hostname.endsWith('.local'));
 }
 
 export function multiplayerErrorMessage(code: string): string {
@@ -105,6 +122,21 @@ async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise
 export async function checkMultiplayerHealth(apiBase = getMultiplayerApiBase()): Promise<boolean> {
   const payload = await request<{ ok: true }>(`${apiBase}/api/multiplayer/health`);
   return payload.ok === true;
+}
+
+export async function listMultiplayerLanOrigins(
+  apiBase = getMultiplayerApiBase(),
+  uiPort?: number,
+): Promise<string[]> {
+  const params = new URLSearchParams();
+  if (typeof uiPort === 'number' && Number.isFinite(uiPort) && uiPort > 0) {
+    params.set('uiPort', String(Math.floor(uiPort)));
+  }
+  const suffix = params.toString();
+  const payload = await request<MultiplayerLanOriginsResponse>(
+    `${apiBase}/api/multiplayer/dev/lan-origins${suffix ? `?${suffix}` : ''}`,
+  );
+  return Array.isArray(payload.origins) ? payload.origins.filter((origin) => typeof origin === 'string') : [];
 }
 
 export async function createMultiplayerRoom(

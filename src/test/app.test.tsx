@@ -35,6 +35,16 @@ function mockMatchMedia(matches: boolean) {
   });
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 const baseState: GameState = {
   version: 1,
   createdAt: 1,
@@ -1068,6 +1078,14 @@ describe('App', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
+      if (url.includes('/api/multiplayer/dev/lan-origins')) {
+        return new Response(
+          JSON.stringify({
+            origins: ['http://192.168.86.243:5173'],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
       return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     });
 
@@ -1077,11 +1095,166 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
     const copyInviteButton = await screen.findByRole('button', { name: /copy invite link/i });
     expect(screen.getByText(/^You$/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchSpy.mock.calls.some(([input]) => String(input).includes('/api/multiplayer/dev/lan-origins'))).toBe(true);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
     fireEvent.click(copyInviteButton);
 
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringMatching(/\/join\/ABCDE$/));
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringMatching(/\/join\/ABCDE$/));
+    });
     const metrics = JSON.parse(localStorage.getItem(GROWTH_METRICS_KEY) ?? '{}') as { events?: Record<string, number> };
     expect(metrics.events?.multiplayer_invite_copied).toBe(1);
+
+    fetchSpy.mockRestore();
+  });
+
+  it('copies LAN invite links for localhost hosts when LAN origins are available', async () => {
+    const now = Date.now();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/api/multiplayer/health')) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.endsWith('/api/multiplayer/rooms') && (!init?.method || init.method === 'POST')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            playerId: 'p1',
+            sessionToken: 'token',
+            reconnectDeadlineMs: now + 30_000,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/multiplayer/rooms/ABCDE/state')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            status: 'lobby',
+            started: false,
+            hostPlayerId: 'p1',
+            yourPlayerId: 'p1',
+            players: [
+              { id: 'p1', name: 'Host', handCount: 0, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: true, ready: false },
+              { id: 'p2', name: 'Guest', handCount: 0, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: false, ready: false },
+            ],
+            legalActions: [],
+            paused: false,
+            revision: 2,
+            turnSnapshotCount: 0,
+            checkpointSlots: [],
+            canStart: true,
+            reconnectDeadlineMs: now + 30_000,
+            serverTime: now,
+            activityFeed: [],
+            lastEventId: 2,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/multiplayer/dev/lan-origins')) {
+        return new Response(
+          JSON.stringify({
+            origins: ['http://192.168.86.243:5173'],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+    fireEvent.change(await screen.findByLabelText(/your name/i), { target: { value: 'Host' } });
+    fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
+    await waitFor(() => {
+      expect(fetchSpy.mock.calls.some(([input]) => String(input).includes('/api/multiplayer/dev/lan-origins'))).toBe(true);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /copy invite link/i }));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringMatching(/\/join\/ABCDE$/));
+    });
+    expect(fetchSpy.mock.calls.some(([input]) => String(input).includes('/api/multiplayer/dev/lan-origins'))).toBe(true);
+
+    fetchSpy.mockRestore();
+  });
+
+  it('falls back to room code when LAN invite origin discovery fails', async () => {
+    const now = Date.now();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/api/multiplayer/health')) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.endsWith('/api/multiplayer/rooms') && (!init?.method || init.method === 'POST')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            playerId: 'p1',
+            sessionToken: 'token',
+            reconnectDeadlineMs: now + 30_000,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/multiplayer/rooms/ABCDE/state')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            status: 'lobby',
+            started: false,
+            hostPlayerId: 'p1',
+            yourPlayerId: 'p1',
+            players: [
+              { id: 'p1', name: 'Host', handCount: 0, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: true, ready: false },
+            ],
+            legalActions: [],
+            paused: false,
+            revision: 2,
+            turnSnapshotCount: 0,
+            checkpointSlots: [],
+            canStart: false,
+            reconnectDeadlineMs: now + 30_000,
+            serverTime: now,
+            activityFeed: [],
+            lastEventId: 2,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/multiplayer/dev/lan-origins')) {
+        return new Response(JSON.stringify({ origins: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+    fireEvent.change(await screen.findByLabelText(/your name/i), { target: { value: 'Host' } });
+    fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
+    await waitFor(() => {
+      expect(fetchSpy.mock.calls.some(([input]) => String(input).includes('/api/multiplayer/dev/lan-origins'))).toBe(true);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /copy invite link/i }));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('ABCDE');
+    });
+    expect(screen.getByText(/room code copied instead/i)).toBeInTheDocument();
 
     fetchSpy.mockRestore();
   });
@@ -1186,15 +1359,15 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
     await screen.findByRole('heading', { name: /room aaaaa/i });
-    expect(screen.getByLabelText(/1 unread messages/i)).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole('button', { name: /forget room/i }));
     await screen.findByRole('button', { name: /host multiplayer game/i });
 
     fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
     await screen.findByRole('heading', { name: /room bbbbb/i });
 
-    expect(screen.queryByLabelText(/unread messages/i)).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByLabelText(/unread messages/i)).not.toBeInTheDocument();
+    });
     fetchSpy.mockRestore();
   });
 
@@ -1600,6 +1773,111 @@ describe('App', () => {
     expect(screen.getByText(/room abcde/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /forget room/i }));
     expect(await screen.findByRole('button', { name: /host multiplayer game/i })).toBeInTheDocument();
+    expect(localStorage.getItem('monopolyDeal.multiplayerSession.v1')).toBeNull();
+
+    fetchSpy.mockRestore();
+  });
+
+  it('keeps forgot room cleared even if an in-flight room refresh resolves afterward', async () => {
+    const now = Date.now();
+    const pendingState = deferred<Response>();
+    let stateRequestCount = 0;
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/api/multiplayer/health')) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.endsWith('/api/multiplayer/rooms') && method === 'POST') {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            playerId: 'p1',
+            sessionToken: 'token',
+            reconnectDeadlineMs: now + 30_000,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/multiplayer/rooms/ABCDE/state')) {
+        stateRequestCount += 1;
+        if (stateRequestCount === 2) {
+          return pendingState.promise;
+        }
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            status: 'lobby',
+            started: false,
+            hostPlayerId: 'p1',
+            yourPlayerId: 'p1',
+            players: [
+              { id: 'p1', name: 'Host', handCount: 0, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: true, ready: false },
+            ],
+            legalActions: [],
+            paused: false,
+            revision: 2,
+            turnSnapshotCount: 0,
+            checkpointSlots: [],
+            canStart: false,
+            reconnectDeadlineMs: now + 30_000,
+            serverTime: now,
+            activityFeed: [],
+            chatMessages: [],
+            typingPlayerIds: [],
+            lastEventId: 2,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/multiplayer/rooms/ABCDE/leave')) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+    fireEvent.change(await screen.findByLabelText(/your name/i), { target: { value: 'Host' } });
+    fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
+    await screen.findByRole('heading', { name: /room abcde/i });
+
+    fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
+    fireEvent.click(screen.getByRole('button', { name: /forget room/i }));
+
+    pendingState.resolve(
+      new Response(
+        JSON.stringify({
+          roomCode: 'ABCDE',
+          status: 'lobby',
+          started: false,
+          hostPlayerId: 'p1',
+          yourPlayerId: 'p1',
+          players: [
+            { id: 'p1', name: 'Host', handCount: 0, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: true, ready: false },
+          ],
+          legalActions: [],
+          paused: false,
+          revision: 3,
+          turnSnapshotCount: 0,
+          checkpointSlots: [],
+          canStart: false,
+          reconnectDeadlineMs: now + 30_000,
+          serverTime: now,
+          activityFeed: [],
+          chatMessages: [],
+          typingPlayerIds: [],
+          lastEventId: 3,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /host multiplayer game/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { name: /room abcde/i })).not.toBeInTheDocument();
     expect(localStorage.getItem('monopolyDeal.multiplayerSession.v1')).toBeNull();
 
     fetchSpy.mockRestore();

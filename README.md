@@ -50,6 +50,8 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Multiplayer `Exit Match` (keeps reconnect session) and `Forget Room` (permanent disconnect) actions
 - Multiplayer undo/reset-turn controls for the active player with server-authoritative snapshots
 - In-match per-player connection pills and richer lobby disconnect timing labels
+- Lobby leave behavior now frees seats immediately to prevent ghost rows and false `room_full` outcomes
+- Copy actions now use consistent temporary feedback (`Room code copied.`, `Invite link copied.`) that auto-clears
 - Pending deal interactions (`Sly Deal`, `Forced Deal`, `Deal Breaker`) support card-click selection flows
 - Rent action cards now show compact rent summaries; compact rent ladders have improved readability
 - Card type ribbons improve visual distinction between rent action cards and property cards
@@ -93,7 +95,8 @@ Open the local URL shown by Vite (usually `http://localhost:5173`).
 - `npm run dev` - start local dev server
 - `npm run dev:all` - start UI + multiplayer server for same-machine local development
 - `npm run dev:lan` - start Vite on LAN (`0.0.0.0:5173`) for cross-device testing
-- `npm run dev:lan:all` - start LAN UI + multiplayer server together for two-device local play
+- `npm run dev:lan:all` - start LAN UI + multiplayer server together, auto-clearing stale local dev listeners on ports `5173`/`8787`
+- `npm run dev:lan:all:raw` - original concurrent LAN start without auto-cleanup
 - `npm run lan` - alias for `npm run dev:lan:all`
 - `npm run dev:multiplayer-server` - start the Node multiplayer API for local backend development
 - `npm run build` - type-check and build production assets
@@ -185,11 +188,14 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Host controls: `Pause/Resume`, `Save Checkpoint`, `Load Checkpoint`, `Delete Checkpoint`.
 - Lobby host controls include `Start Match` and `Start From Checkpoint` (when checkpoint data exists).
 - Lobby includes `Copy Room Code` and `Copy Invite Link` actions.
+- `Copy Invite Link` resolves a LAN-shareable URL when hosting from `localhost`; if LAN origin discovery fails, room code is copied instead.
+- Both copy actions show a short-lived in-UI notice and auto-dismiss after a moment.
 - Lobby includes player-ready status, room chat, and chat-tray quick reactions.
 - Player session controls: `Exit Match` (retain reconnect) and `Forget Room` (clear session).
 - Active-turn controls: `Undo Last Play`, `Reset Turn Plays` (when snapshot history exists).
 - Multiplayer state mutations are revision-guarded to prevent stale updates.
 - Multiplayer activity feed and host-change notices are surfaced in lobby/in-match UI.
+- Lobby disconnect policy: leaving in `lobby` removes your seat immediately; reconnect windows remain for `active`/`finished` matches only.
 
 ## Multiplayer Deployment Notes
 
@@ -209,6 +215,10 @@ Use the one-command startup:
 1. Two-device LAN host flow: `npm run dev:lan:all`
 2. Share the Vite `Network` URL (example: `http://192.168.1.123:5173`) with Player 2.
 3. Player 2 opens that URL, goes to `Multiplayer`, enters name + room code, and joins.
+
+Notes:
+- `dev:lan:all` now attempts to stop stale local Node/Vite/tsx listeners on `5173` and `8787` before boot.
+- If either port is held by a non-dev process, startup aborts with a targeted message instead of silently failing.
 
 For same-machine development, you can still run:
 

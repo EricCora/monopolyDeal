@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
+import { isLanResolvableHost, listMultiplayerLanOrigins } from '../../network/multiplayerClient';
 import type {
   MultiplayerConnectionState,
   MultiplayerPushState,
   MultiplayerRoomView,
   MultiplayerSession,
 } from '../../network/multiplayerTypes';
+
+const COPY_NOTICE_TIMEOUT_MS = 2_200;
 
 interface MultiplayerScreenProps {
   playerName: string;
@@ -98,6 +101,37 @@ function recoveryReasonText(reason: 'room_not_found' | 'reconnect_expired'): str
   return 'That room no longer exists on the server.';
 }
 
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall through to legacy copy path.
+    }
+  }
+  if (typeof document === 'undefined') return false;
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch {
+    copied = false;
+  } finally {
+    document.body.removeChild(textarea);
+  }
+  return copied;
+}
+
 export function MultiplayerScreen({
   playerName,
   joinCode,
@@ -127,25 +161,89 @@ export function MultiplayerScreen({
   onBack,
 }: MultiplayerScreenProps) {
   const [now, setNow] = useState(() => Date.now());
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const [resolvedInviteLink, setResolvedInviteLink] = useState<string | null>(null);
+  const [inviteFallbackNotice, setInviteFallbackNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 450);
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!copyNotice) return;
+    const timer = window.setTimeout(() => {
+      setCopyNotice(null);
+    }, COPY_NOTICE_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [copyNotice]);
+
   const copyRoomCode = () => {
     if (!session) return;
-    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
-    void navigator.clipboard.writeText(session.roomCode);
+    void copyTextToClipboard(session.roomCode)
+      .then((copied) => {
+        setCopyNotice(copied ? 'Room code copied.' : 'Room code copy failed.');
+      });
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!session || typeof window === 'undefined') {
+      setResolvedInviteLink(null);
+      setInviteFallbackNotice(null);
+      return;
+    }
+
+    const currentUrl = new URL(window.location.origin);
+    const fallbackInviteLink = `${window.location.origin}/join/${session.roomCode}`;
+    setResolvedInviteLink(fallbackInviteLink);
+    setInviteFallbackNotice(null);
+
+    const currentPort = Number(currentUrl.port || (currentUrl.protocol === 'https:' ? 443 : 80));
+    const isLocalhost = currentUrl.hostname === 'localhost' || currentUrl.hostname === '127.0.0.1' || currentUrl.hostname === '::1';
+    if (!isLocalhost) return;
+
+    listMultiplayerLanOrigins(apiBase, currentPort)
+      .then((lanOrigins) => {
+        if (cancelled) return;
+        if (lanOrigins.length > 0) {
+          setResolvedInviteLink(`${lanOrigins[0]}/join/${session.roomCode}`);
+          return;
+        }
+        setInviteFallbackNotice('LAN invite unavailable. Room code copied instead.');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setInviteFallbackNotice('Could not resolve LAN invite. Room code copied instead.');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBase, session]);
 
   const copyInviteLink = () => {
     if (!session) return;
     if (typeof window === 'undefined') return;
-    const inviteLink = `${window.location.origin}/join/${session.roomCode}`;
-    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
-    void navigator.clipboard.writeText(inviteLink);
-    onCopyInviteLink();
+    const currentHostname = new URL(window.location.origin).hostname;
+    const inviteLink = resolvedInviteLink ?? `${window.location.origin}/join/${session.roomCode}`;
+    const hasShareableInvite = isLanResolvableHost(currentHostname) || !inviteLink.includes('localhost');
+    if (!hasShareableInvite && inviteFallbackNotice) {
+      void copyTextToClipboard(session.roomCode).then((copied) => {
+        setCopyNotice(copied ? inviteFallbackNotice : 'Invite link copy failed. Room code copy failed.');
+      });
+      return;
+    }
+    void copyTextToClipboard(inviteLink).then((inviteCopied) => {
+      if (inviteCopied) {
+        onCopyInviteLink();
+        setCopyNotice('Invite link copied.');
+        return;
+      }
+      void copyTextToClipboard(session.roomCode).then((codeCopied) => {
+        setCopyNotice(codeCopied ? 'Invite link copy failed. Room code copied instead.' : 'Invite link copy failed.');
+      });
+    });
   };
 
   const startFromCheckpoint = () => {
@@ -298,6 +396,7 @@ export function MultiplayerScreen({
                 </button>
               ) : null}
             </div>
+            {copyNotice ? <p className="setup-subtitle" aria-live="polite">{copyNotice}</p> : null}
           </section>
 
           {roomView ? (
