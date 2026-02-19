@@ -127,6 +127,7 @@ export function useMultiplayerRoom({
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   const reconnectAttemptRef = useRef(0);
   const autoReconnectAttemptedRef = useRef(false);
+  const sessionOperationVersionRef = useRef(0);
   const [checkpointLoading, setCheckpointLoading] = useState(false);
   const [hostChangeNotice, setHostChangeNotice] = useState<string | null>(null);
   const lastHostPlayerIdRef = useRef<string | null>(null);
@@ -147,14 +148,20 @@ export function useMultiplayerRoom({
     setError(multiplayerErrorMessage(code));
   }, []);
 
+  const nextSessionOperationVersion = useCallback(() => {
+    sessionOperationVersionRef.current += 1;
+    return sessionOperationVersionRef.current;
+  }, []);
+
   const clearSession = useCallback(() => {
+    nextSessionOperationVersion();
     setSession(null);
     setRoomView(null);
     setHostChangeNotice(null);
     lastHostPlayerIdRef.current = null;
     lastEventIdRef.current = 0;
     saveStoredSession(null);
-  }, []);
+  }, [nextSessionOperationVersion]);
 
   const recoverStaleSession = useCallback((reason: MultiplayerRecoveryReason, staleSession?: MultiplayerSession | null) => {
     const roomCode = staleSession?.roomCode ?? '';
@@ -172,6 +179,7 @@ export function useMultiplayerRoom({
   const refreshRoom = useCallback(async (activeSession?: MultiplayerSession | null): Promise<MultiplayerRoomView | null> => {
     const current = activeSession ?? session;
     if (!current) return null;
+    const operationVersion = sessionOperationVersionRef.current;
     let loaded: MultiplayerRoomView;
     try {
       loaded = await loadMultiplayerRoomState(current, apiBase);
@@ -184,6 +192,7 @@ export function useMultiplayerRoom({
       }
       throw refreshError;
     }
+    if (operationVersion !== sessionOperationVersionRef.current) return null;
     const next: MultiplayerRoomView = {
       ...loaded,
       players: loaded.players.map((player) => ({
@@ -238,8 +247,10 @@ export function useMultiplayerRoom({
   const reconnectSession = useCallback(async (activeSession?: MultiplayerSession | null): Promise<boolean> => {
     const current = activeSession ?? session;
     if (!current) return false;
+    const operationVersion = sessionOperationVersionRef.current;
     try {
       const reconnected = await reconnectMultiplayerRoom(current, apiBase, expectedRevision);
+      if (operationVersion !== sessionOperationVersionRef.current) return false;
       const nextSession: MultiplayerSession = {
         version: 1,
         roomCode: reconnected.roomCode,
@@ -251,6 +262,7 @@ export function useMultiplayerRoom({
       setSession(nextSession);
       saveStoredSession(nextSession);
       await refreshRoom(nextSession);
+      if (operationVersion !== sessionOperationVersionRef.current) return false;
       setConnectionState('connected');
       setRecoveryNotice(null);
       onMetricEvent?.('multiplayer_reconnect_success');
@@ -345,11 +357,16 @@ export function useMultiplayerRoom({
       return;
     }
     setLoading(true);
+    const operationVersion = forgetSession ? nextSessionOperationVersion() : sessionOperationVersionRef.current;
     try {
       await leaveMultiplayerRoom(current, apiBase, false, expectedRevision);
     } catch {
       // Best-effort leave; local cleanup still proceeds.
     } finally {
+      if (operationVersion !== sessionOperationVersionRef.current) {
+        setLoading(false);
+        return;
+      }
       if (forgetSession) {
         clearSession();
         setRecoveryNotice(null);
@@ -360,7 +377,7 @@ export function useMultiplayerRoom({
       clearError();
       setLoading(false);
     }
-  }, [apiBase, clearError, clearSession, expectedRevision, session]);
+  }, [apiBase, clearError, clearSession, expectedRevision, nextSessionOperationVersion, session]);
 
   const exitRoom = useCallback(async () => {
     await leaveRoomInternal(false);

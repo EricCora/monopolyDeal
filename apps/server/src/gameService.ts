@@ -323,15 +323,14 @@ function connectedLobbyPlayers(room: MultiplayerRoom): RoomParticipant[] {
   return room.players.filter((player) => player.connected);
 }
 
-function reclaimExpiredLobbyParticipants(room: MultiplayerRoom, now = nowMs()): void {
-  if (room.status !== 'lobby') return;
-  const expired = room.players.filter((player) => !player.connected && player.reconnectDeadlineMs <= now);
-  const nextPlayers = room.players.filter((player) => player.connected || player.reconnectDeadlineMs > now);
-  if (nextPlayers.length === room.players.length) return;
-  expired.forEach((player) => {
-    delete room.typingByPlayerId[player.id];
-    appendActivity(room, 'connection', `${player.name} left the lobby.`, { playerId: player.id });
-  });
+function removeLobbyParticipant(room: MultiplayerRoom, playerId: PlayerId): boolean {
+  if (room.status !== 'lobby') return false;
+  const player = findPlayer(room, playerId);
+  if (!player) return false;
+  const nextPlayers = room.players.filter((entry) => entry.id !== playerId);
+  if (nextPlayers.length === room.players.length) return false;
+  delete room.typingByPlayerId[player.id];
+  appendActivity(room, 'connection', `${player.name} left the lobby.`, { playerId: player.id });
   room.players = nextPlayers;
   if (room.players.length === 0) {
     room.hostPlayerId = 'p1';
@@ -342,6 +341,23 @@ function reclaimExpiredLobbyParticipants(room: MultiplayerRoom, now = nowMs()): 
     }
   }
   bumpUpdatedAt(room);
+  return true;
+}
+
+function reclaimDisconnectedLobbyParticipants(
+  room: MultiplayerRoom,
+  now = nowMs(),
+  reclaimMode: 'expired' | 'all' = 'expired',
+): void {
+  if (room.status !== 'lobby') return;
+  const disconnected = room.players.filter((player) => !player.connected);
+  const reclaimable = reclaimMode === 'all'
+    ? disconnected
+    : disconnected.filter((player) => player.reconnectDeadlineMs <= now);
+  if (reclaimable.length === 0) return;
+  reclaimable.forEach((player) => {
+    removeLobbyParticipant(room, player.id);
+  });
 }
 
 function nextAvailableLobbyPlayerId(room: MultiplayerRoom): PlayerId {
@@ -489,7 +505,7 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
   if (room.status !== 'lobby' || room.game) {
     throw new Error('room_started');
   }
-  reclaimExpiredLobbyParticipants(room);
+  reclaimDisconnectedLobbyParticipants(room, nowMs(), 'all');
   if (room.players.length >= 4) {
     throw new Error('room_full');
   }
@@ -546,6 +562,12 @@ export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, session
 export function leaveRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, expectedRevision?: number): void {
   void expectedRevision;
   const player = requireSession(room, playerId, sessionToken);
+  if (room.status === 'lobby') {
+    if (removeLobbyParticipant(room, player.id)) {
+      incrementRevision(room);
+    }
+    return;
+  }
   markDisconnected(room, player);
   incrementRevision(room);
 }
@@ -902,7 +924,11 @@ export function setRoomTyping(
 export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken: string): MultiplayerRoomView {
   const viewer = requireSession(room, viewerId, sessionToken);
   assertReconnectWindowOpen(viewer);
-  touchPlayer(viewer);
+  if (viewer.connected) {
+    touchPlayer(viewer);
+  } else {
+    viewer.lastSeenAt = nowMs();
+  }
   updateStatusFromGame(room);
   bumpUpdatedAt(room);
   pruneExpiredTyping(room);
@@ -942,13 +968,18 @@ export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken
 export function pruneInactiveRooms(rooms: Map<string, MultiplayerRoom>, now = nowMs()): void {
   for (const [code, room] of rooms) {
     pruneExpiredTyping(room, now);
-    for (const player of room.players) {
-      if (!player.connected) continue;
-      if (now - player.lastSeenAt <= STALE_CONNECTION_MS) continue;
-      markDisconnected(room, player);
+    const staleConnectedPlayers = room.players.filter((player) => (
+      player.connected && now - player.lastSeenAt > STALE_CONNECTION_MS
+    ));
+    for (const player of staleConnectedPlayers) {
+      if (room.status === 'lobby') {
+        removeLobbyParticipant(room, player.id);
+      } else {
+        markDisconnected(room, player);
+      }
       incrementRevision(room);
     }
-    reclaimExpiredLobbyParticipants(room, now);
+    reclaimDisconnectedLobbyParticipants(room, now, room.status === 'lobby' ? 'all' : 'expired');
 
     const inactiveForMs = now - room.updatedAt;
     const ttl = room.status === 'lobby' ? 30 * 60 * 1000 : room.status === 'finished' ? 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;

@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { multiplayerErrorMessage, resolveMultiplayerApiBase } from '../network/multiplayerClient';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  isLanResolvableHost,
+  listMultiplayerLanOrigins,
+  multiplayerErrorMessage,
+  resolveMultiplayerApiBase,
+} from '../network/multiplayerClient';
 
 describe('resolveMultiplayerApiBase', () => {
   it('prefers env url over host/origin', () => {
@@ -55,5 +60,34 @@ describe('multiplayerErrorMessage', () => {
 
   it('maps room started to reconnect guidance', () => {
     expect(multiplayerErrorMessage('room_started')).toMatch(/reconnect/i);
+  });
+});
+
+describe('isLanResolvableHost', () => {
+  it('returns false for localhost aliases', () => {
+    expect(isLanResolvableHost('localhost')).toBe(false);
+    expect(isLanResolvableHost('127.0.0.1')).toBe(false);
+  });
+
+  it('returns true for private LAN IPs and .local hosts', () => {
+    expect(isLanResolvableHost('192.168.1.20')).toBe(true);
+    expect(isLanResolvableHost('10.0.0.25')).toBe(true);
+    expect(isLanResolvableHost('eric-macbook.local')).toBe(true);
+  });
+});
+
+describe('listMultiplayerLanOrigins', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns LAN origins from dev endpoint', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ origins: ['http://192.168.86.243:5173'] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    await expect(listMultiplayerLanOrigins('http://localhost:8787', 5173)).resolves.toEqual(['http://192.168.86.243:5173']);
   });
 });

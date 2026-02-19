@@ -29,19 +29,26 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Adds lobby-ready (`/ready`) and quick-reaction (`/reaction`) helpers.
   - Adds multiplayer chat (`/chat`) and typing heartbeat (`/typing`) helpers with user-facing error mappings (`chat_rate_limited`, `chat_too_long`, `chat_empty`).
   - Adds live room event subscription (`/events`) with polling fallback behavior.
+  - Adds LAN invite-origin discovery helper (`/api/multiplayer/dev/lan-origins`) used to copy shareable links when host is on localhost.
   - In local dev, Vite proxies `/api/multiplayer` to `http://localhost:8787` so LAN clients can use same-origin API calls from the UI host URL.
   - Legacy LAN wrappers remain for development fallback.
 - `apps/server/`
   - Multiplayer API server scaffold with room lifecycle, reconnect windows, host migration, revision-guarded mutations, turn snapshots, checkpoints, and best-effort snapshot persistence.
   - Adds server push event stream endpoint (`GET /api/multiplayer/rooms/:roomCode/events`) for hybrid push updates.
+  - Adds dev LAN origin endpoint (`GET /api/multiplayer/dev/lan-origins?uiPort=...`) for invite-link generation.
   - Room state now includes player-ready state and bounded activity feed entries.
   - Room state now includes bounded chat history and typing indicators with TTL cleanup; legacy room snapshots are normalized with default chat fields.
-  - Recommended two-device startup command: `npm run dev:lan:all` (LAN UI + multiplayer server).
+  - `roomView` preserves disconnected state; reconnect now requires explicit `/reconnect`.
+  - Lobby lifecycle policy: disconnected seats are not reserved in `lobby` (leave/stale heartbeat removes participant immediately).
+  - Active/finished lifecycle policy: reconnect windows still reserve player seats until expiry.
+  - Recommended two-device startup command: `npm run dev:lan:all` (LAN UI + multiplayer server with stale port cleanup for `5173`/`8787`).
 - `src/ui/` + `src/App.tsx`
   - `App.tsx` owns state/actions and passes typed props to screen containers.
   - `src/app/useFeedback.ts` encapsulates sound/haptic emission.
   - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, live-push subscription + polling fallback, reconnect lifecycle, and host/player controls (pause/undo/checkpoints/ready/reactions/chat/typing) plus `Exit Match` (retain reconnect session) vs `Forget Room` (clear session).
+  - `Forget Room` uses operation-version invalidation so stale in-flight refresh/reconnect responses cannot silently restore cleared sessions.
   - Stale reconnect terminal states (`room_not_found`, `reconnect_expired`) now auto-clear persisted session and expose explicit recovery notice state for UI.
+  - Multiplayer lobby copy affordances (`Copy Room Code`, `Copy Invite Link`) now share a temporary, auto-dismissing status notice for consistent UX.
   - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition.
   - `src/ui/screens/SavedGamesScreen.tsx` manages manual save slots (load/save-over/rename/delete).
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.

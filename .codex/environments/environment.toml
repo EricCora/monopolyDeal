@@ -13,4 +13,4 @@ command = "cd /Users/Eric/Desktop/monopolyDeal && npm run dev -- --open"
 [[actions]]
 name = "Multiplayer"
 icon = "tool"
-command = "npm run dev:lan:all"
+command = "npm run dev:lan:all -- --open"

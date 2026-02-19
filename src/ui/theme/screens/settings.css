@@ -130,7 +130,10 @@
 
 .settings-accordion-button {
   width: 100%;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 0.55rem;
   background: linear-gradient(140deg, #3a2d6d, #2a2152);
   border-color: rgba(129, 195, 255, 0.58);
 }

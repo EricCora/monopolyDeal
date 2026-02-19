@@ -77,7 +77,7 @@ describe('multiplayer room service lifecycle', () => {
     expect(new Set(room.players.map((player) => player.id)).size).toBe(4);
   });
 
-  it('still rejects joins when disconnected seats are inside reconnect grace window', () => {
+  it('reclaims disconnected lobby seats even when reconnect grace has not expired', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room } = createRoom(rooms, 'Host');
     const [playerTwo] = fillLobby(room);
@@ -85,13 +85,85 @@ describe('multiplayer room service lifecycle', () => {
     disconnected.connected = false;
     disconnected.reconnectDeadlineMs = Date.now() + 60_000;
 
-    expect(() => joinRoom(room, 'Replacement')).toThrowError('room_full');
+    const replacement = joinRoom(room, 'Replacement');
+    expect(replacement.playerId).toBe(playerTwo.playerId);
+    expect(room.players).toHaveLength(4);
+  });
+
+  it('removes lobby participants immediately when they leave', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+
+    leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+
+    expect(room.players.some((entry) => entry.id === playerTwo.playerId)).toBe(false);
+    expect(room.players).toHaveLength(1);
+  });
+
+  it('allows repeated lobby leave and rejoin cycles without false room_full', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room } = createRoom(rooms, 'Host');
+
+    for (let index = 0; index < 12; index += 1) {
+      const guest = joinRoom(room, `Guest ${index}`);
+      leaveRoom(room, guest.playerId, guest.sessionToken);
+      expect(room.players.filter((entry) => entry.id !== 'p1')).toHaveLength(0);
+    }
+
+    expect(() => joinRoom(room, 'A')).not.toThrow();
+    expect(() => joinRoom(room, 'B')).not.toThrow();
+    expect(() => joinRoom(room, 'C')).not.toThrow();
+    expect(() => joinRoom(room, 'Overflow')).toThrowError('room_full');
+  });
+
+  it('reclaims disconnected legacy lobby entries before room-full checks', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room } = createRoom(rooms, 'Host');
+    const [playerTwo, playerThree] = fillLobby(room);
+    findParticipant(room, playerTwo.playerId).connected = false;
+    findParticipant(room, playerThree.playerId).connected = false;
+
+    expect(() => joinRoom(room, 'Replacement 1')).not.toThrow();
+    expect(() => joinRoom(room, 'Replacement 2')).not.toThrow();
+    expect(room.players).toHaveLength(4);
+    expect(room.players.every((entry) => entry.connected)).toBe(true);
+  });
+
+  it('removes stale lobby heartbeat participants instead of reserving disconnected seats', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    const staleNow = Date.now();
+    const staleParticipant = findParticipant(room, playerTwo.playerId);
+    staleParticipant.lastSeenAt = staleNow - 13_000;
+
+    pruneInactiveRooms(rooms, staleNow);
+
+    expect(room.players.some((entry) => entry.id === playerTwo.playerId)).toBe(false);
+    expect(() => joinRoom(room, 'Replacement')).not.toThrow();
+  });
+
+  it('keeps active-match disconnect seats reserved and allows explicit reconnect', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+
+    leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+    const disconnected = findParticipant(room, playerTwo.playerId);
+    expect(disconnected.connected).toBe(false);
+    expect(room.players.some((entry) => entry.id === playerTwo.playerId)).toBe(true);
+
+    reconnectRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+    expect(findParticipant(room, playerTwo.playerId).connected).toBe(true);
   });
 
   it('rejects room state access after reconnect window expiration', () => {
     const rooms = new Map<string, MultiplayerRoom>();
-    const { room } = createRoom(rooms, 'Host');
+    const { room, session } = createRoom(rooms, 'Host');
     const playerTwo = joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
     leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
     const disconnected = findParticipant(room, playerTwo.playerId);
     disconnected.reconnectDeadlineMs = Date.now() - 1;
@@ -100,10 +172,11 @@ describe('multiplayer room service lifecycle', () => {
     expect(disconnected.connected).toBe(false);
   });
 
-  it('allows room state access for disconnected players within reconnect grace window', () => {
+  it('keeps disconnected players disconnected when they poll room state within reconnect grace window', () => {
     const rooms = new Map<string, MultiplayerRoom>();
-    const { room } = createRoom(rooms, 'Host');
+    const { room, session } = createRoom(rooms, 'Host');
     const playerTwo = joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
     leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
     const disconnected = findParticipant(room, playerTwo.playerId);
     disconnected.reconnectDeadlineMs = Date.now() + 60_000;
@@ -111,7 +184,9 @@ describe('multiplayer room service lifecycle', () => {
     const view = roomView(room, playerTwo.playerId, playerTwo.sessionToken);
 
     expect(view.yourPlayerId).toBe(playerTwo.playerId);
-    expect(disconnected.connected).toBe(true);
+    expect(disconnected.connected).toBe(false);
+    const playerSummary = view.players.find((player) => player.id === playerTwo.playerId);
+    expect(playerSummary?.connected).toBe(false);
   });
 
   it('enforces host-only pause and resume', () => {
