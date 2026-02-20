@@ -37,6 +37,12 @@ interface PendingRequestBanner {
   tone: 'payment' | 'selection' | 'response';
 }
 
+interface TablePriorityNotice {
+  title: string;
+  detail: string;
+  tone: 'required' | 'warning' | 'info' | 'positive';
+}
+
 interface GameTableScreenProps {
   mode?: 'local' | 'multiplayer';
   game: GameState;
@@ -230,6 +236,42 @@ function drawEventKey(event: GameEvent): string | null {
   return `${event.timestamp}:${details.playerId}:${details.reason}:${details.count}`;
 }
 
+function promptKindLabel(kind: TurnPrompt['kind']): string {
+  if (kind === 'draw') return 'Draw Step';
+  if (kind === 'main') return 'Main Step';
+  if (kind === 'response') return 'Response Step';
+  if (kind === 'payment') return 'Payment Step';
+  if (kind === 'selection') return 'Selection Step';
+  return 'Discard Step';
+}
+
+function pendingKindLabel(pending: GameState['pending']): string {
+  if (!pending) return 'None';
+  if (pending.kind === 'counter') return 'Counter';
+  if (pending.kind === 'payment') return 'Payment';
+  if (pending.kind === 'rent') return 'Rent Target';
+  if (pending.kind === 'sly_deal') return 'Sly Deal';
+  if (pending.kind === 'forced_deal') return 'Forced Deal';
+  return 'Deal Breaker';
+}
+
+function eventTypeLabel(type: string): string {
+  return type
+    .split('_')
+    .map((chunk) => `${chunk.slice(0, 1).toUpperCase()}${chunk.slice(1)}`)
+    .join(' ');
+}
+
+function eventAgeLabel(timestamp: number, clockNow: number): string {
+  const ageSeconds = Math.max(0, Math.floor((clockNow - timestamp) / 1000));
+  if (ageSeconds < 3) return 'Just now';
+  if (ageSeconds < 60) return `${ageSeconds}s ago`;
+  const minutes = Math.floor(ageSeconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
+}
+
 function resolveStealAlert(game: GameState, clockNow: number): TableStealAlert | null {
   for (let index = game.history.length - 1; index >= 0; index -= 1) {
     const event = game.history[index];
@@ -322,8 +364,27 @@ export function GameTableScreen({
   const handledDrawEventKeyRef = useRef<string | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const [drawGhostCards, setDrawGhostCards] = useState<DrawGhostCard[]>([]);
+  const [narrowLayout, setNarrowLayout] = useState(() => (
+    typeof window !== 'undefined' ? window.innerWidth <= 980 : false
+  ));
+  const [insightsExpanded, setInsightsExpanded] = useState(() => (
+    typeof window !== 'undefined' ? window.innerWidth > 980 : true
+  ));
+  const [timelineExpanded, setTimelineExpanded] = useState(() => (
+    typeof window !== 'undefined' ? window.innerWidth > 760 : true
+  ));
   const stealAlert = resolveStealAlert(game, clockNow);
   const latestEvent = game.history.length > 0 ? game.history[game.history.length - 1] : null;
+  const hasInsightsPanels = Boolean(
+    coachHint
+      || latestEvent
+      || stealAlert
+      || (isMultiplayer && activityFeed.length > 0),
+  );
+  const activePlayer = game.players.find((player) => player.id === prompt.playerId) ?? game.players[game.currentPlayerIndex];
+  const activePlayerName = activePlayer?.name ?? prompt.playerId;
+  const playsRemaining = Math.max(0, 3 - game.turn.playsUsed);
+  const pendingLabel = pendingKindLabel(game.pending);
   const winnerName = over.done && over.winnerId
     ? game.players.find((player) => player.id === over.winnerId)?.name ?? over.winnerId
     : null;
@@ -382,10 +443,104 @@ export function GameTableScreen({
     });
     return colors;
   }, [legalActions, prompt.kind, selectionPendingKind]);
+  const turnPriorityNotice = useMemo<TablePriorityNotice | null>(() => {
+    if (isPaused) {
+      return {
+        title: 'Match Paused',
+        detail: pauseReasonText ?? 'Gameplay is paused. Resume when ready.',
+        tone: 'warning',
+      };
+    }
+    if (over.done) {
+      return {
+        title: winnerName ? `${winnerName} won the match` : 'Match Complete',
+        detail: 'Review the final board state or return home to start a new game.',
+        tone: 'positive',
+      };
+    }
+    if (prompt.kind === 'payment' && pendingPayment) {
+      const targetName = game.players.find((player) => player.id === pendingPayment.targetPlayerId)?.name ?? 'Target player';
+      return {
+        title: `${targetName} owes $${pendingPayment.amount}`,
+        detail: `Resolve payment for ${pendingPayment.reason} before the turn can continue.`,
+        tone: 'required',
+      };
+    }
+    if (prompt.kind === 'response') {
+      return {
+        title: 'Counter Response Pending',
+        detail: 'A Just Say No decision is blocking this turn. Resolve the response to continue.',
+        tone: 'required',
+      };
+    }
+    if (prompt.kind === 'selection') {
+      return {
+        title: 'Target Selection Required',
+        detail: 'Pick one of the highlighted targets to resolve the current action.',
+        tone: 'required',
+      };
+    }
+    if (prompt.kind === 'discard') {
+      const discardNeeded = Math.max(discardOverLimitCount, 0);
+      return {
+        title: 'Discard Required',
+        detail: `Discard ${discardNeeded} card${discardNeeded === 1 ? '' : 's'} before ending the turn.`,
+        tone: 'required',
+      };
+    }
+    if (prompt.kind === 'draw') {
+      return {
+        title: 'Draw Step',
+        detail: `${activePlayerName} must draw before taking other actions.`,
+        tone: 'info',
+      };
+    }
+    if (mainPhaseExhausted) {
+      return {
+        title: 'Play Limit Reached',
+        detail: '3/3 plays used. Pass turn or use non-play options.',
+        tone: 'warning',
+      };
+    }
+    return {
+      title: 'Main Step Active',
+      detail: `${activePlayerName} can make ${playsRemaining} more ${playsRemaining === 1 ? 'play' : 'plays'} this turn.`,
+      tone: 'info',
+    };
+  }, [
+    activePlayerName,
+    discardOverLimitCount,
+    game.players,
+    isPaused,
+    mainPhaseExhausted,
+    over.done,
+    pauseReasonText,
+    pendingPayment,
+    playsRemaining,
+    prompt.kind,
+    winnerName,
+  ]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(Date.now()), 450);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onResize = () => {
+      const nextIsNarrow = window.innerWidth <= 980;
+      setNarrowLayout(nextIsNarrow);
+      if (!nextIsNarrow) {
+        setInsightsExpanded(true);
+      }
+      if (window.innerWidth > 760) {
+        setTimelineExpanded(true);
+      }
+    };
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   useEffect(() => {
@@ -475,30 +630,36 @@ export function GameTableScreen({
           </>
         )}
         actions={(
-          <>
-            <button onClick={onNavigateHome}>Home</button>
+          <div className="table-top-actions">
+            <div className="table-top-group">
+              <p className="table-top-group-label">Navigation</p>
+              <button onClick={onNavigateHome}>Home</button>
+              {!isMultiplayer ? <button onClick={onOpenSavedGames}>Save Game</button> : null}
+              <button onClick={onOpenRules}>Rules Reference</button>
+              <button onClick={onOpenSettings}>Settings</button>
+            </div>
             {isMultiplayer ? (
-              <>
+              <div className="table-top-group">
+                <p className="table-top-group-label">Room</p>
                 <button onClick={onRefreshMultiplayer} disabled={isPaused || checkpointLoading}>Refresh</button>
                 <button onClick={onExitMultiplayer} disabled={checkpointLoading}>Exit Match</button>
                 <button onClick={onForgetMultiplayer} disabled={checkpointLoading}>Forget Room</button>
-                {isMultiplayerHost ? (
+              </div>
+            ) : null}
+            {(isMultiplayer ? isMultiplayerHost : true) ? (
+              <div className="table-top-group">
+                <p className="table-top-group-label">Flow</p>
+                <button onClick={onPauseToggle}>{isPaused ? 'Resume' : 'Pause'}</button>
+                {isMultiplayer && isMultiplayerHost ? (
                   <>
                     <button onClick={saveCheckpointInteractive} disabled={checkpointLoading || isPaused}>Save Checkpoint</button>
                     <button onClick={loadCheckpointInteractive} disabled={checkpointLoading || isPaused || checkpointSlots.length === 0}>Load Checkpoint</button>
                     <button onClick={deleteCheckpointInteractive} disabled={checkpointLoading || checkpointSlots.length === 0}>Delete Checkpoint</button>
                   </>
                 ) : null}
-              </>
-            ) : (
-              <button onClick={onOpenSavedGames}>Save Game</button>
-            )}
-            <button onClick={onOpenRules}>Rules Reference</button>
-            <button onClick={onOpenSettings}>Settings</button>
-            {(isMultiplayer ? isMultiplayerHost : true) ? (
-              <button onClick={onPauseToggle}>{isPaused ? 'Resume' : 'Pause'}</button>
+              </div>
             ) : null}
-          </>
+          </div>
         )}
       />
 
@@ -529,52 +690,60 @@ export function GameTableScreen({
         />
 
         <div className="game-table-main">
-          {coachHint ? (
-            <section className="panel inline-action-panel" aria-label="AI coach hint">
-              <h3>{coachHint.title}</h3>
-              <p className="inline-prompt-text">
-                <strong>Recommended:</strong> {coachHint.topActionLabel}
-              </p>
-              <p className="inline-prompt-text">{coachHint.summary}</p>
-              {coachHint.alternatives.length > 0 ? (
-                <p className="inline-prompt-text">Alternatives: {coachHint.alternatives.join(' | ')}</p>
+          <section className="table-command-strip panel card-enter" aria-label="Turn command strip">
+            <div className="table-command-grid">
+              <article className="table-command-chip">
+                <p className="table-command-label">Active Player</p>
+                <p className="table-command-value">{activePlayerName}</p>
+              </article>
+              <article className="table-command-chip">
+                <p className="table-command-label">Step</p>
+                <p className="table-command-value">{promptKindLabel(prompt.kind)}</p>
+              </article>
+              <article className="table-command-chip">
+                <p className="table-command-label">Pressure</p>
+                <p className="table-command-value">
+                  {prompt.kind === 'discard'
+                    ? `${Math.max(discardOverLimitCount, 0)} discard needed`
+                    : `${playsRemaining} plays left`}
+                </p>
+              </article>
+              <article className="table-command-chip">
+                <p className="table-command-label">Pending</p>
+                <p className="table-command-value">{pendingLabel}</p>
+              </article>
+            </div>
+            <div className="table-command-actions">
+              <button
+                type="button"
+                className="table-command-toggle"
+                aria-expanded={timelineExpanded}
+                onClick={() => setTimelineExpanded((open) => !open)}
+              >
+                {timelineExpanded ? 'Hide Timeline' : 'Show Timeline'}
+              </button>
+              {hasInsightsPanels ? (
+                <button
+                  type="button"
+                  className="table-command-toggle"
+                  aria-expanded={insightsExpanded}
+                  onClick={() => setInsightsExpanded((open) => !open)}
+                >
+                  {insightsExpanded ? 'Hide Insights' : 'Show Insights'}
+                </button>
               ) : null}
+            </div>
+          </section>
+          {turnPriorityNotice ? (
+            <section className={`table-priority-banner tone-${turnPriorityNotice.tone}`} role="status" aria-live="polite">
+              <p className="table-priority-title">{turnPriorityNotice.title}</p>
+              <p className="table-priority-detail">{turnPriorityNotice.detail}</p>
             </section>
           ) : null}
 
-          {isMultiplayer && activityFeed.length > 0 ? (
-            <section className="panel multiplayer-social-panel" aria-label="Multiplayer social">
-              <ul className="multiplayer-activity-feed">
-                {activityFeed.slice(0, 6).map((entry) => (
-                  <li key={entry.id} className={entry.kind === 'reaction' ? 'is-reaction' : undefined}>
-                    {entry.kind === 'reaction' ? <span className="multiplayer-activity-emoji">{reactionEmoji(entry.reaction)}</span> : null}
-                    <span>{entry.message}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {latestEvent ? (
-            <section className="panel last-action-panel" aria-label="Last action">
-              <h4>Last Action</h4>
-              <p>{latestEvent.message}</p>
-            </section>
-          ) : null}
-
-          {stealAlert ? (
-            <section className="table-steal-banner card-enter" role="status" aria-live="polite" aria-label="Property steal update">
-              <p className="table-steal-banner-title">
-                {stealAlert.sourceName} played {stealModeLabel(stealAlert.mode)} on {stealAlert.targetName}
-              </p>
-              <p className="table-steal-banner-detail">
-                Moved cards: {stealAlert.cardIds.slice(0, 3).map(getCardDisplayName).join(', ')}
-                {stealAlert.cardIds.length > 3 ? ` +${stealAlert.cardIds.length - 3} more` : ''}
-              </p>
-            </section>
-          ) : null}
-
-          <section className="table-surface" aria-label="Table surface">
+          <div className="table-main-layout">
+            <div className="table-play-column">
+              <section className="table-surface" aria-label="Table surface">
             <div className="table-pile-row" aria-label="Card piles">
               <article className="table-pile-card draw-pile-card">
                 <h4>Draw Pile</h4>
@@ -611,6 +780,19 @@ export function GameTableScreen({
                   )
                 : [];
               const propertyColors = (Object.keys(player.properties) as PropertyColor[]).filter((color) => player.properties[color].length > 0);
+              const playerStatusTags: string[] = [];
+              if (isPromptPlayer && !over.done && !isPaused) playerStatusTags.push('Acting');
+              if (isCurrent) playerStatusTags.push('Turn Seat');
+              if (isPaymentPayer) playerStatusTags.push('Payment Requested');
+              if (selectionCardPickingEnabled) {
+                const hasSelectionTarget = propertyColors.some((color) => (
+                  selectionPendingKind === 'deal_breaker'
+                    ? selectionTargetColors.has(color)
+                    : player.properties[color].some((entry) => selectionTargetCardIds.has(entry.cardId))
+                ));
+                if (hasSelectionTarget) playerStatusTags.push('Valid Target');
+              }
+              if (isMultiplayer && !playerConnectionById[player.id]?.connected) playerStatusTags.push('Disconnected');
 
               return (
                 <article
@@ -620,6 +802,13 @@ export function GameTableScreen({
                   <header>
                     <h3>{player.name}</h3>
                     <p>{getSetCompletionCount(player)} complete sets</p>
+                    {playerStatusTags.length > 0 ? (
+                      <ul className="player-status-tags" aria-label={`${player.name} status`}>
+                        {playerStatusTags.map((tag) => (
+                          <li key={`${player.id}-${tag}`} className="player-status-tag">{tag}</li>
+                        ))}
+                      </ul>
+                    ) : null}
                     {isMultiplayer ? (
                       <p className={`connection-pill ${playerConnectionById[player.id]?.connected ? 'is-online' : 'is-offline'}`}>
                         {playerConnectionById[player.id]?.connected ? 'Online' : 'Disconnected'}
@@ -758,7 +947,10 @@ export function GameTableScreen({
                   </section>
 
                   <section>
-                    <strong>Bank</strong>
+                    <strong>
+                      Bank
+                      {paymentSelectionEnabled ? <span className="zone-hint">Tap cards to pay</span> : null}
+                    </strong>
                     <div className="zone-bank">
                       {player.bank.length > 0 ? (
                         player.bank.map((cardId) => (
@@ -779,54 +971,64 @@ export function GameTableScreen({
                   </section>
 
                   <section>
-                    <strong>Properties</strong>
+                    <strong>
+                      Properties
+                      {paymentSelectionEnabled ? <span className="zone-hint">Tap cards to pay</span> : null}
+                      {selectionCardPickingEnabled ? <span className="zone-hint">Tap highlighted cards</span> : null}
+                    </strong>
                     <div className="zone-properties">
                       {propertyColors.length > 0 ? (
-                        propertyColors.map((color) => (
-                          <div
-                            className={`property-lane ${player.properties[color].some((entry) => stealHighlightCardIds.has(entry.cardId)) ? 'is-steal-lane' : ''} ${selectionCardPickingEnabled && selectionPendingKind === 'deal_breaker' && selectionTargetColors.has(color) ? 'is-selection-target' : ''}`}
-                            key={`${player.id}-${color}`}
-                          >
-                            <p>
-                              <span>{colorLabel(color)}:</span>
-                            </p>
-                            <div className="property-cards">
-                              {player.properties[color].map((entry) => (
-                                (() => {
+                        propertyColors.map((color) => {
+                          const laneHasSelectionTarget = selectionCardPickingEnabled && (
+                            selectionPendingKind === 'deal_breaker'
+                              ? selectionTargetColors.has(color)
+                              : player.properties[color].some((entry) => selectionTargetCardIds.has(entry.cardId))
+                          );
+                          return (
+                            <div
+                              className={`property-lane ${player.properties[color].some((entry) => stealHighlightCardIds.has(entry.cardId)) ? 'is-steal-lane' : ''} ${laneHasSelectionTarget ? 'is-selection-target' : ''}`}
+                              key={`${player.id}-${color}`}
+                            >
+                              <p>
+                                <span>{colorLabel(color)}:</span>
+                                {laneHasSelectionTarget ? <span className="property-lane-chip">Valid target</span> : null}
+                              </p>
+                              <div className="property-cards">
+                                {player.properties[color].map((entry) => {
                                   const selectionCardPlayable = selectionCardPickingEnabled && (
                                     selectionPendingKind === 'deal_breaker'
                                       ? selectionTargetColors.has(color)
                                       : selectionTargetCardIds.has(entry.cardId)
                                   );
                                   return (
-                                <div
-                                  key={`${player.id}-${color}-${entry.cardId}`}
-                                  className={`property-card-wrap ${stealHighlightCardIds.has(entry.cardId) ? 'is-stolen-card' : ''} ${selectionCardPlayable ? 'is-selection-target' : ''}`}
-                                >
-                                  <CardView
-                                    cardId={entry.cardId}
-                                    size="sm"
-                                    interactive={paymentSelectionEnabled || selectionCardPlayable}
-                                    playable={paymentSelectionEnabled || selectionCardPlayable}
-                                    selected={selectedPaymentCards.includes(entry.cardId) || selectedSelectionCardId === entry.cardId}
-                                    onClick={() => {
-                                      if (paymentSelectionEnabled) {
-                                        onPaymentCardToggle(entry.cardId);
-                                        return;
-                                      }
-                                      if (selectionCardPlayable) {
-                                        onPropertySelectionClick(player.id, color, entry.cardId);
-                                      }
-                                    }}
-                                    annotation={entry.assignedColor !== color ? `as ${colorLabel(entry.assignedColor)}` : undefined}
-                                  />
-                                </div>
+                                    <div
+                                      key={`${player.id}-${color}-${entry.cardId}`}
+                                      className={`property-card-wrap ${stealHighlightCardIds.has(entry.cardId) ? 'is-stolen-card' : ''} ${selectionCardPlayable ? 'is-selection-target' : ''}`}
+                                    >
+                                      <CardView
+                                        cardId={entry.cardId}
+                                        size="sm"
+                                        interactive={paymentSelectionEnabled || selectionCardPlayable}
+                                        playable={paymentSelectionEnabled || selectionCardPlayable}
+                                        selected={selectedPaymentCards.includes(entry.cardId) || selectedSelectionCardId === entry.cardId}
+                                        onClick={() => {
+                                          if (paymentSelectionEnabled) {
+                                            onPaymentCardToggle(entry.cardId);
+                                            return;
+                                          }
+                                          if (selectionCardPlayable) {
+                                            onPropertySelectionClick(player.id, color, entry.cardId);
+                                          }
+                                        }}
+                                        annotation={entry.assignedColor !== color ? `as ${colorLabel(entry.assignedColor)}` : undefined}
+                                      />
+                                    </div>
                                   );
-                                })()
-                              ))}
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       ) : (
                         <p>Empty</p>
                       )}
@@ -853,9 +1055,72 @@ export function GameTableScreen({
                 ))}
               </div>
             ) : null}
-          </section>
+              </section>
 
-          <RecentEvents events={game.history} enhancedGrouping={enhancedEventLog} />
+              {timelineExpanded ? (
+                <RecentEvents events={game.history} enhancedGrouping={enhancedEventLog} />
+              ) : (
+                <section className="panel timeline-collapsed-panel" aria-label="Event timeline hidden">
+                  <h3>Event Timeline Hidden</h3>
+                  <p>Expand timeline to inspect the full turn-by-turn event history.</p>
+                </section>
+              )}
+            </div>
+
+            {hasInsightsPanels ? (
+              <aside
+                className={`table-insights-stack ${insightsExpanded ? 'is-open' : 'is-collapsed'} ${narrowLayout ? 'is-narrow' : ''}`}
+                aria-label="Table insights"
+              >
+                {coachHint ? (
+                  <section className="panel inline-action-panel" aria-label="AI coach hint">
+                    <h3>{coachHint.title}</h3>
+                    <p className="inline-prompt-text">
+                      <strong>Recommended:</strong> {coachHint.topActionLabel}
+                    </p>
+                    <p className="inline-prompt-text">{coachHint.summary}</p>
+                    {coachHint.alternatives.length > 0 ? (
+                      <p className="inline-prompt-text">Alternatives: {coachHint.alternatives.join(' | ')}</p>
+                    ) : null}
+                  </section>
+                ) : null}
+
+                {latestEvent ? (
+                  <section className="panel last-action-panel" aria-label="Last action">
+                    <h4>Last Action</h4>
+                    <p className="last-action-meta">{eventTypeLabel(latestEvent.type)} | {eventAgeLabel(latestEvent.timestamp, clockNow)}</p>
+                    <p>{latestEvent.message}</p>
+                  </section>
+                ) : null}
+
+                {stealAlert ? (
+                  <section className="table-steal-banner card-enter" role="status" aria-live="polite" aria-label="Property steal update">
+                    <p className="table-steal-banner-title">
+                      {stealAlert.sourceName} played {stealModeLabel(stealAlert.mode)} on {stealAlert.targetName}
+                    </p>
+                    <p className="table-steal-banner-detail">
+                      Moved cards: {stealAlert.cardIds.slice(0, 3).map(getCardDisplayName).join(', ')}
+                      {stealAlert.cardIds.length > 3 ? ` +${stealAlert.cardIds.length - 3} more` : ''}
+                    </p>
+                  </section>
+                ) : null}
+
+                {isMultiplayer && activityFeed.length > 0 ? (
+                  <section className="panel multiplayer-social-panel" aria-label="Multiplayer social">
+                    <h4>Social Pulse</h4>
+                    <ul className="multiplayer-activity-feed">
+                      {activityFeed.slice(0, 6).map((entry) => (
+                        <li key={entry.id} className={entry.kind === 'reaction' ? 'is-reaction' : undefined}>
+                          {entry.kind === 'reaction' ? <span className="multiplayer-activity-emoji">{reactionEmoji(entry.reaction)}</span> : null}
+                          <span>{entry.message}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
+              </aside>
+            ) : null}
+          </div>
         </div>
       </div>
 

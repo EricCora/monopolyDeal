@@ -249,7 +249,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
 
     expect(screen.getByText(/required: resolve this step/i)).toBeInTheDocument();
-    expect(screen.getByText(/payment requested/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/payment requested/i).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: /\$2 card/i }));
     fireEvent.click(screen.getByRole('button', { name: /confirm payment/i }));
 

@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MultiplayerScreen } from '../ui/screens/MultiplayerScreen';
 
@@ -86,6 +86,73 @@ function makeLobbyView() {
     chatMessages: [],
     typingPlayerIds: [],
     lastEventId: 1,
+  };
+}
+
+function makeLobbyViewWithActivity() {
+  const now = Date.now();
+  const base = makeLobbyView();
+  return {
+    ...base,
+    activityFeed: [
+      {
+        id: 1,
+        createdAt: now,
+        kind: 'lobby' as const,
+        message: 'Host created room.',
+      },
+    ],
+  };
+}
+
+function makeLobbyViewWithTurnState() {
+  const now = Date.now();
+  const base = makeLobbyView();
+  return {
+    ...base,
+    promptPlayerId: 'p2',
+    legalActions: [
+      {
+        label: 'Pass Turn',
+        action: {
+          type: 'pass_turn' as const,
+          playerId: 'p1',
+        },
+      },
+    ],
+    checkpointSlots: [
+      {
+        id: 'cp_1',
+        name: 'Turn 4',
+        savedAt: now - 20_000,
+      },
+    ],
+    players: [
+      {
+        id: 'p1' as const,
+        name: 'Host',
+        handCount: 2,
+        bankCount: 1,
+        completeSets: 0,
+        connected: true,
+        lastSeenAt: now,
+        reconnectDeadlineMs: now + 30_000,
+        isHost: true,
+        ready: true,
+      },
+      {
+        id: 'p2' as const,
+        name: 'Guest',
+        handCount: 1,
+        bankCount: 0,
+        completeSets: 0,
+        connected: false,
+        lastSeenAt: now - 9_000,
+        reconnectDeadlineMs: now + 25_000,
+        isHost: false,
+        ready: false,
+      },
+    ],
   };
 }
 
@@ -265,5 +332,42 @@ describe('MultiplayerScreen', () => {
     });
 
     expect(screen.queryByText(/room code copied/i)).not.toBeInTheDocument();
+  });
+
+  it('allows collapsing and expanding recent activity in lobby', async () => {
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          session: makeSession(),
+          roomView: makeLobbyViewWithActivity(),
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/host created room/i)).toBeInTheDocument();
+    const toggle = screen.getByRole('button', { name: /hide/i });
+    fireEvent.click(toggle);
+
+    expect(screen.queryByText(/host created room/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/expand activity to review recent room events/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /show/i }));
+    expect(screen.getByText(/host created room/i)).toBeInTheDocument();
+  });
+
+  it('shows lobby snapshot and current-turn tagging', () => {
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          session: makeSession(),
+          roomView: makeLobbyViewWithTurnState(),
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/turn: guest/i)).toBeInTheDocument();
+    const snapshot = screen.getByLabelText(/lobby snapshot/i);
+    expect(within(snapshot).getByText('2')).toBeInTheDocument();
+    expect(within(snapshot).getAllByText('1/2').length).toBeGreaterThan(0);
+    expect(screen.getByText('Turn', { selector: '.multiplayer-player-tag' })).toBeInTheDocument();
   });
 });

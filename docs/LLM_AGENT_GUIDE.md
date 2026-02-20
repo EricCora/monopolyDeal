@@ -59,6 +59,8 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - `src/ui/components/RulesDrawer.tsx` provides in-game rules/set/rent quick reference.
   - Selection pending flows now support property-card click interactions for deal actions; keep action-button fallback intact.
   - Game table panels include explicit request-state banners (payment/selection/response) so required actions are visible without opening the event log.
+  - `GameTableScreen` now exposes a command-strip (active player, step, turn pressure, pending state), a priority turn banner, and collapsible timeline/insight panels to reduce clutter on narrow layouts.
+  - `MultiplayerScreen` room controls are grouped by task area (invite/session/host), recent activity is user-collapsible, and the lobby includes snapshot cards plus current-turn tagging.
   - `src/ui/theme/` contains tokenized CSS split by base/components/screens.
   - `GameShell` applies root table style classes (`table-style-classic-green`, `table-style-neon-arcade`) to drive felt/theme variants.
   - `SettingsScreen` now uses compact grouped cards, custom switch UI, and a collapsed-by-default Experimental accordion.

@@ -24,6 +24,8 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Home hero with animated card-back atmosphere and stronger CTA emphasis
 - Post-game celebration refresh with trophy treatment and richer confetti pulse
 - Guided turn rail with draw/play/end-step progress and clearer required-action cues
+- New command-strip table header with active-player/step/pressure/pending status, plus one-tap timeline and insight toggles
+- Priority turn banner and player-state chips that keep mandatory flows (payment/response/selection/discard) visible at a glance
 - Explicit pending-action messaging (rent, debt, counter chains, and steals) shown directly in the active UI, not just the event log
 - Pending selection flows now highlight valid property targets directly on the table to reduce trial clicks
 - In-panel "money requested" banners so payment requests are obvious for the affected player
@@ -44,6 +46,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Lobby host can start a match directly from an available checkpoint when lineup is compatible
 - Lobby ready-check state and quick preset reactions
 - Multiplayer activity feed (joins/reconnects/host changes/ready/reactions/checkpoints)
+- Collapsible multiplayer activity panels, grouped room/host controls, and lobby snapshot cards with turn tagging for lower clutter on mobile layouts
 - Multiplayer chat dock (bottom-left pill) with unread badge, typing indicators, mention highlighting (`@name`), and aria-log message semantics
 - Multiplayer reconnect recovery UX that auto-clears stale sessions and avoids endless syncing states
 - UNO-style quick reactions via chat tray with transient per-player reaction bursts on lobby/table surfaces

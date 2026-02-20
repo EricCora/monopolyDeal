@@ -167,10 +167,28 @@ export function MultiplayerScreen({
     lanOrigin: string | null;
     fallbackNotice: string | null;
   } | null>(null);
+  const [narrowLayout, setNarrowLayout] = useState(() => (
+    typeof window !== 'undefined' ? window.innerWidth <= 860 : false
+  ));
+  const [activityExpanded, setActivityExpanded] = useState(() => (
+    typeof window !== 'undefined' ? window.innerWidth > 860 : false
+  ));
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 450);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onResize = () => {
+      const isNarrow = window.innerWidth <= 860;
+      setNarrowLayout(isNarrow);
+      if (!isNarrow) setActivityExpanded(true);
+    };
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   useEffect(() => {
@@ -336,6 +354,23 @@ export function MultiplayerScreen({
       });
     return map;
   }, [now, roomView]);
+  const lobbySnapshot = useMemo(() => {
+    if (!roomView) return null;
+    const totalPlayers = roomView.players.length;
+    const connectedPlayers = roomView.players.filter((player) => player.connected).length;
+    const readyPlayers = roomView.players.filter((player) => player.ready).length;
+    return {
+      totalPlayers,
+      connectedPlayers,
+      readyPlayers,
+      checkpointCount: roomView.checkpointSlots.length,
+      legalActionCount: roomView.legalActions.length,
+    };
+  }, [roomView]);
+  const promptPlayerName = useMemo(() => {
+    if (!roomView || !roomView.promptPlayerId) return null;
+    return roomView.players.find((player) => player.id === roomView.promptPlayerId)?.name ?? roomView.promptPlayerId;
+  }, [roomView]);
 
   return (
     <section className="panel setup-screen multiplayer-screen card-enter">
@@ -423,28 +458,43 @@ export function MultiplayerScreen({
               </div>
             </div>
             <p className="multiplayer-room-rejoin">Rejoin window: {deadlineLabel(session.reconnectDeadlineMs)}</p>
-            <div className="actions multiplayer-room-actions">
-              <button type="button" onClick={copyRoomCode} disabled={loading}>
-                Copy Room Code
-              </button>
-              <button type="button" className="cta-primary" onClick={copyInviteLink} disabled={loading}>
-                Copy Invite Link
-              </button>
-              <button type="button" onClick={onRefresh} disabled={loading}>
-                Refresh
-              </button>
-              <button type="button" onClick={onLeaveRoom} disabled={loading}>
-                Forget Room
-              </button>
+            <div className="multiplayer-room-actions-grid">
+              <div className="multiplayer-room-action-group">
+                <p className="multiplayer-room-action-label">Invite</p>
+                <div className="actions multiplayer-room-actions">
+                  <button type="button" onClick={copyRoomCode} disabled={loading}>
+                    Copy Room Code
+                  </button>
+                  <button type="button" className="cta-primary" onClick={copyInviteLink} disabled={loading}>
+                    Copy Invite Link
+                  </button>
+                </div>
+              </div>
+              <div className="multiplayer-room-action-group">
+                <p className="multiplayer-room-action-label">Room Session</p>
+                <div className="actions multiplayer-room-actions">
+                  <button type="button" onClick={onRefresh} disabled={loading}>
+                    Refresh
+                  </button>
+                  <button type="button" onClick={onLeaveRoom} disabled={loading}>
+                    Forget Room
+                  </button>
+                </div>
+              </div>
               {roomView && roomView.canStart && isHost ? (
-                <button type="button" onClick={() => onStartMatch()} disabled={loading}>
-                  Start Match
-                </button>
-              ) : null}
-              {roomView && roomView.canStart && isHost && roomView.checkpointSlots.length > 0 ? (
-                <button type="button" onClick={startFromCheckpoint} disabled={loading}>
-                  Start From Checkpoint
-                </button>
+                <div className="multiplayer-room-action-group">
+                  <p className="multiplayer-room-action-label">Host Match</p>
+                  <div className="actions multiplayer-room-actions">
+                    <button type="button" onClick={() => onStartMatch()} disabled={loading}>
+                      Start Match
+                    </button>
+                    {roomView.checkpointSlots.length > 0 ? (
+                      <button type="button" onClick={startFromCheckpoint} disabled={loading}>
+                        Start From Checkpoint
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
               ) : null}
             </div>
             {copyNotice ? <p className="setup-subtitle" aria-live="polite">{copyNotice}</p> : null}
@@ -457,8 +507,8 @@ export function MultiplayerScreen({
                 <p className="multiplayer-lobby-status">
                   {roomView.winnerId
                     ? `Winner: ${roomView.winnerId}`
-                    : roomView.promptPlayerId
-                      ? `Turn: ${roomView.promptPlayerId}`
+                    : promptPlayerName
+                      ? `Turn: ${promptPlayerName}`
                       : 'Waiting for players.'}
                 </p>
               </header>
@@ -468,6 +518,30 @@ export function MultiplayerScreen({
                     {you.ready ? 'Mark Not Ready' : 'Mark Ready'}
                   </button>
                 </div>
+              ) : null}
+              {lobbySnapshot ? (
+                <section className="multiplayer-lobby-snapshot" aria-label="Lobby snapshot">
+                  <article className="multiplayer-lobby-snapshot-item">
+                    <p className="multiplayer-lobby-snapshot-label">Players</p>
+                    <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.totalPlayers}</p>
+                  </article>
+                  <article className="multiplayer-lobby-snapshot-item">
+                    <p className="multiplayer-lobby-snapshot-label">Ready</p>
+                    <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.readyPlayers}/{lobbySnapshot.totalPlayers}</p>
+                  </article>
+                  <article className="multiplayer-lobby-snapshot-item">
+                    <p className="multiplayer-lobby-snapshot-label">Connected</p>
+                    <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.connectedPlayers}/{lobbySnapshot.totalPlayers}</p>
+                  </article>
+                  <article className="multiplayer-lobby-snapshot-item">
+                    <p className="multiplayer-lobby-snapshot-label">Checkpoints</p>
+                    <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.checkpointCount}</p>
+                  </article>
+                  <article className="multiplayer-lobby-snapshot-item">
+                    <p className="multiplayer-lobby-snapshot-label">Your Actions</p>
+                    <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.legalActionCount}</p>
+                  </article>
+                </section>
               ) : null}
 
               <div className="multiplayer-roster-wrap">
@@ -484,13 +558,20 @@ export function MultiplayerScreen({
                   </thead>
                   <tbody>
                     {roomView.players.map((player) => (
-                      <tr key={player.id} className={player.id === session.playerId ? 'is-self' : undefined}>
+                      <tr
+                        key={player.id}
+                        className={[
+                          player.id === session.playerId ? 'is-self' : '',
+                          roomView.promptPlayerId === player.id ? 'is-turn' : '',
+                        ].filter(Boolean).join(' ') || undefined}
+                      >
                         <td className="multiplayer-player-cell">
                           <span className="multiplayer-player-name">{player.name}</span>
                           <span className="multiplayer-player-tags">
                             {player.id === session.playerId ? <span className="multiplayer-player-tag is-self">You</span> : null}
                             {player.isHost ? <span className="multiplayer-player-tag">Host</span> : null}
                             {player.ready ? <span className="multiplayer-player-tag is-ready">Ready</span> : null}
+                            {roomView.promptPlayerId === player.id ? <span className="multiplayer-player-tag is-turn">Turn</span> : null}
                           </span>
                           {recentReactionsByPlayerId.get(player.id) ? (
                             <span className="multiplayer-reaction-burst" aria-label={`${player.name} sent a reaction`}>
@@ -525,15 +606,31 @@ export function MultiplayerScreen({
 
               {roomView.activityFeed.length > 0 ? (
                 <section className="multiplayer-activity-panel" aria-label="Recent room activity">
-                  <h4>Recent Activity</h4>
-                  <ul className="multiplayer-activity-feed">
-                    {roomView.activityFeed.slice(0, 8).map((item) => (
-                      <li key={item.id} className={item.kind === 'reaction' ? 'is-reaction' : undefined}>
-                        {item.kind === 'reaction' ? <span className="multiplayer-activity-emoji">{reactionEmoji(item.reaction)}</span> : null}
-                        <span>{item.message}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="multiplayer-activity-head">
+                    <h4>Recent Activity</h4>
+                    <button
+                      type="button"
+                      className="multiplayer-activity-toggle"
+                      aria-expanded={activityExpanded}
+                      onClick={() => setActivityExpanded((open) => !open)}
+                    >
+                      {activityExpanded ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  {activityExpanded ? (
+                    <ul className="multiplayer-activity-feed">
+                      {roomView.activityFeed.slice(0, 8).map((item) => (
+                        <li key={item.id} className={item.kind === 'reaction' ? 'is-reaction' : undefined}>
+                          {item.kind === 'reaction' ? <span className="multiplayer-activity-emoji">{reactionEmoji(item.reaction)}</span> : null}
+                          <span>{item.message}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="multiplayer-lobby-waiting">
+                      {narrowLayout ? 'Activity collapsed to keep controls in focus.' : 'Expand activity to review recent room events.'}
+                    </p>
+                  )}
                 </section>
               ) : null}
             </section>
