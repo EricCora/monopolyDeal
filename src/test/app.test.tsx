@@ -296,6 +296,60 @@ describe('App', () => {
     });
   });
 
+  it('allows confirming shortfall payment with no payable assets', () => {
+    const paymentState: GameState = {
+      ...structuredClone(baseState),
+      currentPlayerIndex: 0,
+      players: [
+        structuredClone(baseState.players[0]),
+        {
+          ...structuredClone(baseState.players[1]),
+          bank: [],
+          properties: {
+            brown: [],
+            light_blue: [],
+            pink: [],
+            orange: [],
+            red: [],
+            yellow: [],
+            green: [],
+            dark_blue: [],
+            railroad: [],
+            utility: [],
+          },
+        },
+      ],
+      pending: {
+        kind: 'payment',
+        payload: {
+          sourcePlayerId: 'p1',
+          targetPlayerId: 'p2',
+          amount: 5,
+          reason: 'Debt Collector',
+          actionCardId: 'debt_collector#1',
+        },
+      },
+    };
+    mockedCreateGame.mockImplementationOnce(() => paymentState);
+    mockedGetNextPrompt.mockImplementation(() => ({ playerId: 'p2', text: 'Beta: pay $5 for Debt Collector.', kind: 'payment' }));
+    mockedGetLegalActions.mockImplementation(() => []);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+
+    expect(screen.getByText(/no payable cards available/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /confirm shortfall payment/i }));
+
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'pay_request',
+      playerId: 'p2',
+      cards: [],
+    });
+  });
+
   it('ignores hand clicks for unplayable cards after 3 plays are used', () => {
     const lockedState: GameState = {
       ...structuredClone(baseState),

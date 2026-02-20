@@ -18,6 +18,7 @@ This tracker supersedes the prior deep-research execution tracker and follows:
   - Regression coverage for server validation guards (`src/test/server-validation.test.ts`).
   - Push/poll reconnect-desync matrix tests for hook orchestration (`src/test/use-multiplayer-room.test.tsx`).
   - Mobile/touch layout guardrail tests for responsive contracts (`src/test/mobile-touch-contracts.test.ts`).
+  - Payment UX and turn-unblock fix: zero-asset debt/payment shortfalls can now be confirmed without card selection (`src/App.tsx`, `src/ui/screens/GameTableScreen.tsx`).
 - Remaining:
   - Optional real-device manual pass for mobile/touch ergonomics using `docs/ux/UX_IMPROVEMENTS_BACKLOG.md`.
 

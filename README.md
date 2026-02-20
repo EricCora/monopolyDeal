@@ -30,6 +30,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Risky action confirmation dialog for high-impact targeted/rent plays
 - Payment assistant auto-select for pending payment flows
 - Payment validation hardening for manual debt selection (must satisfy amount when possible; shortfall only when total assets are insufficient)
+- Zero-asset debt/payment requests can be confirmed as a valid $0 shortfall so turns never get stuck
 - Official banking split enforced: regular property cards cannot be banked; money/action/building cards and wild property cards can be banked
 - In-game rules reference drawer with property set/rent lookup and pending-flow help
 - Stats filters (player/winner/date range) and settings data controls for clearing local stats/history

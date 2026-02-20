@@ -110,6 +110,7 @@ UI layers (steal banners/highlights, draw animation) should prefer `details` and
 - Multi-target payment (`It's My Birthday`) runs a target chain via `remainingTargetPlayerIds`.
 - Buildings (`house`, `hotel`) are treated as non-movable for property steal/swap flows.
 - Payment selection must satisfy requested amount when payer can cover; if payer cannot cover, all available bank/property cards must be paid.
+- If payer has no payable bank/property cards, an empty `pay_request.cards` submission is valid and resolves as a shortfall.
 
 ## Change Playbooks
 

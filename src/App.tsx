@@ -727,9 +727,9 @@ function App() {
     [multiplayerPendingPaymentCardIds],
   );
   const multiplayerPaymentCanSubmit = multiplayerPendingPayment
-    ? selectedPaymentCards.length > 0
-      && (multiplayerSelectedPaymentTotal >= multiplayerPendingPayment.amount
-        || multiplayerTotalPayableValue < multiplayerPendingPayment.amount)
+    ? multiplayerTotalPayableValue < multiplayerPendingPayment.amount
+      ? multiplayerSelectedPaymentTotal >= multiplayerTotalPayableValue
+      : selectedPaymentCards.length > 0 && multiplayerSelectedPaymentTotal >= multiplayerPendingPayment.amount
     : false;
   const multiplayerCoachHint = useMemo(() => {
     if (!multiplayerGame || !multiplayerPrompt || !multiplayerRoomView) return null;
@@ -836,7 +836,9 @@ function App() {
     [pendingPaymentCardIds],
   );
   const paymentCanSubmit = pendingPayment
-    ? selectedPaymentCards.length > 0 && (selectedPaymentTotal >= pendingPayment.amount || totalPayableValue < pendingPayment.amount)
+    ? totalPayableValue < pendingPayment.amount
+      ? selectedPaymentTotal >= totalPayableValue
+      : selectedPaymentCards.length > 0 && selectedPaymentTotal >= pendingPayment.amount
     : false;
 
   const openSettings = useCallback((backScreen: SettingsBackScreen) => {

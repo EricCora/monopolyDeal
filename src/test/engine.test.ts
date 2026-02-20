@@ -788,6 +788,42 @@ describe('engine basics', () => {
     expect(full.state.pending).toBeNull();
   });
 
+  it('allows resolving payment with zero cards when payer has no payable assets', () => {
+    const state = mkState();
+    state.pending = {
+      kind: 'payment',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        amount: 5,
+        reason: 'Debt Collector',
+        actionCardId: 'debt_collector#d1',
+      },
+    };
+    state.players[1].bank = [];
+    state.players[1].properties = {
+      brown: [],
+      light_blue: [],
+      pink: [],
+      orange: [],
+      red: [],
+      yellow: [],
+      green: [],
+      dark_blue: [],
+      railroad: [],
+      utility: [],
+    };
+
+    const result = applyAction(state, {
+      type: 'pay_request',
+      playerId: 'p2',
+      cards: [],
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.state.pending).toBeNull();
+  });
+
   it('draws five cards when starting draw phase with an empty hand', () => {
     const state = createGame({
       seed: 97,

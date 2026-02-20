@@ -655,33 +655,49 @@ export function GameTableScreen({
 
                       {isPaymentPayer && pendingPayment ? (
                         <div className="payment-panel">
-                          <p>
-                            <strong>{player.name}</strong> owes <strong>${pendingPayment.amount}</strong> for{' '}
-                            <strong>{pendingPayment.reason}</strong>.
-                          </p>
-                          <p>
-                            Selected total: <strong>${selectedPaymentTotal}</strong> of ${pendingPayment.amount}
-                            {totalPayableValue < pendingPayment.amount ? ' (not enough assets available)' : ''}
-                          </p>
-                          {selectedPaymentTotal > pendingPayment.amount ? (
-                            <p className="payment-selected">Overpay: ${selectedPaymentTotal - pendingPayment.amount}</p>
-                          ) : null}
-                          {selectedPaymentTotal < pendingPayment.amount && totalPayableValue < pendingPayment.amount ? (
-                            <p className="payment-selected">
-                              Shortfall accepted: payer only has ${totalPayableValue} total available.
-                            </p>
-                          ) : null}
-                          {selectedPaymentCards.length > 0 ? (
-                            <p className="payment-selected">Selected: {selectedPaymentCards.map(getCardDisplayName).join(', ')}</p>
-                          ) : (
-                            <p className="payment-selected">Click cards in {player.name}&apos;s bank/properties to pay.</p>
-                          )}
-                          <button type="button" onClick={onAutoSelectPayment} disabled={isPaused}>
-                            Auto-select Payment
-                          </button>
-                          <button type="button" onClick={onSubmitSelectedPayment} disabled={!paymentCanSubmit || isPaused}>
-                            Confirm Payment
-                          </button>
+                          {(() => {
+                            const isShortfall = totalPayableValue < pendingPayment.amount;
+                            const remainingOwed = Math.max(pendingPayment.amount - selectedPaymentTotal, 0);
+                            return (
+                              <>
+                                <p>
+                                  <strong>{player.name}</strong> owes <strong>${pendingPayment.amount}</strong> for{' '}
+                                  <strong>{pendingPayment.reason}</strong>.
+                                </p>
+                                <p>
+                                  Selected total: <strong>${selectedPaymentTotal}</strong> of ${pendingPayment.amount}
+                                  {isShortfall ? ' (not enough assets available)' : ''}
+                                </p>
+                                <p>
+                                  Remaining owed: <strong>${remainingOwed}</strong>
+                                  {isShortfall ? ` (max payable now: $${totalPayableValue})` : ''}
+                                </p>
+                                {selectedPaymentTotal > pendingPayment.amount ? (
+                                  <p className="payment-selected">Overpay: ${selectedPaymentTotal - pendingPayment.amount}</p>
+                                ) : null}
+                                {selectedPaymentTotal < pendingPayment.amount && isShortfall ? (
+                                  <p className="payment-selected">
+                                    Shortfall accepted: payer only has ${totalPayableValue} total available.
+                                  </p>
+                                ) : null}
+                                {totalPayableValue === 0 ? (
+                                  <p className="payment-selected">
+                                    No payable cards available. Confirm shortfall payment to continue.
+                                  </p>
+                                ) : selectedPaymentCards.length > 0 ? (
+                                  <p className="payment-selected">Selected: {selectedPaymentCards.map(getCardDisplayName).join(', ')}</p>
+                                ) : (
+                                  <p className="payment-selected">Click cards in {player.name}&apos;s bank/properties to pay.</p>
+                                )}
+                                <button type="button" onClick={onAutoSelectPayment} disabled={isPaused}>
+                                  Auto-select Payment
+                                </button>
+                                <button type="button" onClick={onSubmitSelectedPayment} disabled={!paymentCanSubmit || isPaused}>
+                                  {isShortfall ? 'Confirm Shortfall Payment' : 'Confirm Payment'}
+                                </button>
+                              </>
+                            );
+                          })()}
                         </div>
                       ) : null}
 
