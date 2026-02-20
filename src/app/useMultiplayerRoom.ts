@@ -135,6 +135,7 @@ export function useMultiplayerRoom({
   const pushRefreshInFlightRef = useRef(false);
   const pushRefreshQueuedRef = useRef(false);
   const pushFallbackMetricSentRef = useRef(false);
+  const reconnectInFlightRef = useRef<Promise<boolean> | null>(null);
 
   const expectedRevision = roomView?.revision;
 
@@ -277,6 +278,18 @@ export function useMultiplayerRoom({
       return false;
     }
   }, [apiBase, expectedRevision, onMetricEvent, recoverStaleSession, refreshRoom, session, setErrorFromCode]);
+
+  const reconnectSessionSingleFlight = useCallback((activeSession?: MultiplayerSession | null): Promise<boolean> => {
+    if (reconnectInFlightRef.current) {
+      return reconnectInFlightRef.current;
+    }
+    const run = reconnectSession(activeSession)
+      .finally(() => {
+        reconnectInFlightRef.current = null;
+      });
+    reconnectInFlightRef.current = run;
+    return run;
+  }, [reconnectSession]);
 
   const refreshOnRevisionConflict = useCallback(async (code: string, activeSession: MultiplayerSession) => {
     if (code !== 'revision_conflict') return;
@@ -667,10 +680,10 @@ export function useMultiplayerRoom({
     setJoinCode(stored.roomCode);
     setSession(stored);
     setConnectionState('reconnecting');
-    reconnectSession(stored).catch(() => {
+    reconnectSessionSingleFlight(stored).catch(() => {
       // reconnectSession sets error state.
     });
-  }, [enabled, reconnectSession]);
+  }, [enabled, reconnectSessionSingleFlight]);
 
   useEffect(() => {
     if (!enabled || !session || !pushEnabled) {
@@ -737,8 +750,9 @@ export function useMultiplayerRoom({
     const timer = window.setInterval(() => {
       refreshRoom().catch(async () => {
         setConnectionState('reconnecting');
+        if (reconnectInFlightRef.current) return;
         reconnectAttemptRef.current += 1;
-        const recovered = await reconnectSession();
+        const recovered = await reconnectSessionSingleFlight();
         if (!recovered) {
           if (reconnectAttemptRef.current > 4) {
             setConnectionState('disconnected');
@@ -749,7 +763,7 @@ export function useMultiplayerRoom({
       });
     }, effectivePollIntervalMs);
     return () => window.clearInterval(timer);
-  }, [enabled, pollIntervalMs, pushState, reconnectSession, refreshRoom, session]);
+  }, [enabled, pollIntervalMs, pushState, reconnectSessionSingleFlight, refreshRoom, session]);
 
   useEffect(() => {
     if (!enabled || !session) return;
@@ -806,7 +820,7 @@ export function useMultiplayerRoom({
     leaveRoom,
     exitRoom,
     refreshRoom: () => refreshRoom(),
-    reconnectSession: () => reconnectSession(),
+    reconnectSession: () => reconnectSessionSingleFlight(),
     clearSession,
     clearRecoveryNotice: () => {
       setRecoveryNotice(null);
