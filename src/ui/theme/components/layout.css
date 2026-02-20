@@ -181,6 +181,12 @@
   margin: 0.2rem 0 0.35rem;
 }
 
+.inline-target-hint {
+  margin: 0.14rem 0 0.45rem;
+  color: #d8e8c8;
+  font-size: 0.84rem;
+}
+
 .inline-discard-hint {
   margin: 0.2rem 0 0.35rem;
   padding: 0.35rem 0.5rem;
@@ -344,6 +350,23 @@
   opacity: 0.84;
 }
 
+.last-action-panel {
+  border-color: #6e8c66;
+  background: linear-gradient(150deg, rgba(20, 43, 26, 0.9), rgba(15, 31, 20, 0.88));
+}
+
+.last-action-panel h4 {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #d9ebcd;
+}
+
+.last-action-panel p {
+  margin: 0.24rem 0 0;
+  color: #f1f8ea;
+  font-size: 0.9rem;
+}
+
 .multiplayer-activity-emoji {
   min-width: 1.15rem;
   display: inline-grid;
@@ -374,6 +397,11 @@
   box-shadow: 0 0 0 1px rgba(223, 164, 95, 0.42), inset 0 0 0 1px rgba(255, 245, 225, 0.3);
 }
 
+.property-lane.is-selection-target {
+  border-color: #7fb088;
+  box-shadow: 0 0 0 1px rgba(127, 176, 136, 0.44), inset 0 0 0 1px rgba(227, 255, 231, 0.26);
+}
+
 .property-card-wrap {
   position: relative;
 }
@@ -385,6 +413,16 @@
   border-radius: 10px;
   border: 2px solid rgba(223, 167, 82, 0.94);
   box-shadow: 0 0 0 3px rgba(223, 167, 82, 0.2);
+  pointer-events: none;
+}
+
+.property-card-wrap.is-selection-target::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 9px;
+  border: 2px dashed rgba(120, 189, 123, 0.78);
+  box-shadow: 0 0 0 2px rgba(120, 189, 123, 0.2);
   pointer-events: none;
 }
 

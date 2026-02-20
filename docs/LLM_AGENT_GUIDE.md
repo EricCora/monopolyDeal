@@ -24,6 +24,8 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Retention helpers (`src/stats/retention.ts`) for achievements and daily challenge progression.
 - `src/ai/`
   - Heuristic and rollout decision helpers plus explainable coach hint generation.
+- `src/replay/`
+  - Deterministic replay normalization + fingerprint helper (`src/replay/serialize.ts`) used by replay tests and verification script.
 - `src/network/`
   - Hosted multiplayer client API wrappers (`src/network/multiplayerClient.ts`) for room create/join/reconnect/start/state/action/leave plus pause/resume/undo/reset-turn/checkpoint flows.
   - Adds lobby-ready (`/ready`) and quick-reaction (`/reaction`) helpers.
@@ -161,6 +163,15 @@ UI layers (steal banners/highlights, draw animation) should prefer `details` and
 - UI-only change:
   - Rendering + user interaction test
 
+## Replay Determinism Gate
+
+- Deterministic replay verifier: `scripts/replay_verify.mjs` (run via `npm run replay:verify`)
+- Determinism tests:
+  - `src/test/replay.test.ts`
+  - `src/test/determinism.test.ts`
+- Replay hash contract:
+  - fingerprint is computed from normalized replay state (timestamps stripped) in `src/replay/serialize.ts`
+
 ## Regression Prevention System
 
 Use this section when a change risks "silent behavior loss" during refactors.
@@ -191,7 +202,8 @@ Suggested contract anchors in this repo:
 1. `npm run test`
 2. `npm run build`
 3. `npm run lint` (or document pre-existing warnings)
-4. Docs sync:
+4. `npm run replay:verify` for engine/rules-flow changes
+5. Docs sync:
 - user-visible workflow changes reflected in `README.md`
 - agent-facing architecture/workflow changes reflected in this guide
 

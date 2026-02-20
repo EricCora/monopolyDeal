@@ -323,6 +323,7 @@ export function GameTableScreen({
   const [clockNow, setClockNow] = useState(() => Date.now());
   const [drawGhostCards, setDrawGhostCards] = useState<DrawGhostCard[]>([]);
   const stealAlert = resolveStealAlert(game, clockNow);
+  const latestEvent = game.history.length > 0 ? game.history[game.history.length - 1] : null;
   const winnerName = over.done && over.winnerId
     ? game.players.find((player) => player.id === over.winnerId)?.name ?? over.winnerId
     : null;
@@ -339,6 +340,48 @@ export function GameTableScreen({
       });
     return map;
   }, [activityFeed, clockNow, isMultiplayer]);
+  const selectionPendingKind = prompt.kind === 'selection' ? game.pending?.kind ?? null : null;
+  const selectionTargetCardIds = useMemo(() => {
+    const targets = new Set<string>();
+    if (prompt.kind !== 'selection') return targets;
+
+    if (selectionPendingKind === 'sly_deal') {
+      legalActions.forEach((item) => {
+        if (item.action.type === 'sly_deal_pick') {
+          targets.add(item.action.cardId);
+        }
+      });
+      return targets;
+    }
+
+    if (selectionPendingKind === 'forced_deal') {
+      legalActions.forEach((item) => {
+        if (item.action.type !== 'forced_deal_pick') return;
+        if (selectedSelectionCardId) {
+          if (item.action.giveCardId === selectedSelectionCardId) {
+            targets.add(item.action.takeCardId);
+          }
+          return;
+        }
+        targets.add(item.action.giveCardId);
+      });
+      return targets;
+    }
+
+    return targets;
+  }, [legalActions, prompt.kind, selectedSelectionCardId, selectionPendingKind]);
+  const selectionTargetColors = useMemo(() => {
+    const colors = new Set<PropertyColor>();
+    if (prompt.kind !== 'selection') return colors;
+    if (selectionPendingKind !== 'deal_breaker') return colors;
+
+    legalActions.forEach((item) => {
+      if (item.action.type === 'deal_breaker_pick') {
+        colors.add(item.action.color);
+      }
+    });
+    return colors;
+  }, [legalActions, prompt.kind, selectionPendingKind]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(Date.now()), 450);
@@ -512,6 +555,13 @@ export function GameTableScreen({
             </section>
           ) : null}
 
+          {latestEvent ? (
+            <section className="panel last-action-panel" aria-label="Last action">
+              <h4>Last Action</h4>
+              <p>{latestEvent.message}</p>
+            </section>
+          ) : null}
+
           {stealAlert ? (
             <section className="table-steal-banner card-enter" role="status" aria-live="polite" aria-label="Property steal update">
               <p className="table-steal-banner-title">
@@ -599,6 +649,9 @@ export function GameTableScreen({
                         </div>
                       ) : null}
                       <p className="inline-prompt-text">{prompt.text}</p>
+                      {selectionCardPickingEnabled ? (
+                        <p className="inline-target-hint">Valid selection targets are highlighted on the table.</p>
+                      ) : null}
 
                       {isPaymentPayer && pendingPayment ? (
                         <div className="payment-panel">
@@ -715,7 +768,7 @@ export function GameTableScreen({
                       {propertyColors.length > 0 ? (
                         propertyColors.map((color) => (
                           <div
-                            className={`property-lane ${player.properties[color].some((entry) => stealHighlightCardIds.has(entry.cardId)) ? 'is-steal-lane' : ''}`}
+                            className={`property-lane ${player.properties[color].some((entry) => stealHighlightCardIds.has(entry.cardId)) ? 'is-steal-lane' : ''} ${selectionCardPickingEnabled && selectionPendingKind === 'deal_breaker' && selectionTargetColors.has(color) ? 'is-selection-target' : ''}`}
                             key={`${player.id}-${color}`}
                           >
                             <p>
@@ -723,28 +776,37 @@ export function GameTableScreen({
                             </p>
                             <div className="property-cards">
                               {player.properties[color].map((entry) => (
+                                (() => {
+                                  const selectionCardPlayable = selectionCardPickingEnabled && (
+                                    selectionPendingKind === 'deal_breaker'
+                                      ? selectionTargetColors.has(color)
+                                      : selectionTargetCardIds.has(entry.cardId)
+                                  );
+                                  return (
                                 <div
                                   key={`${player.id}-${color}-${entry.cardId}`}
-                                  className={`property-card-wrap ${stealHighlightCardIds.has(entry.cardId) ? 'is-stolen-card' : ''}`}
+                                  className={`property-card-wrap ${stealHighlightCardIds.has(entry.cardId) ? 'is-stolen-card' : ''} ${selectionCardPlayable ? 'is-selection-target' : ''}`}
                                 >
                                   <CardView
                                     cardId={entry.cardId}
                                     size="sm"
-                                    interactive={paymentSelectionEnabled || selectionCardPickingEnabled}
-                                    playable={paymentSelectionEnabled || selectionCardPickingEnabled}
+                                    interactive={paymentSelectionEnabled || selectionCardPlayable}
+                                    playable={paymentSelectionEnabled || selectionCardPlayable}
                                     selected={selectedPaymentCards.includes(entry.cardId) || selectedSelectionCardId === entry.cardId}
                                     onClick={() => {
                                       if (paymentSelectionEnabled) {
                                         onPaymentCardToggle(entry.cardId);
                                         return;
                                       }
-                                      if (selectionCardPickingEnabled) {
+                                      if (selectionCardPlayable) {
                                         onPropertySelectionClick(player.id, color, entry.cardId);
                                       }
                                     }}
                                     annotation={entry.assignedColor !== color ? `as ${colorLabel(entry.assignedColor)}` : undefined}
                                   />
                                 </div>
+                                  );
+                                })()
                               ))}
                             </div>
                           </div>

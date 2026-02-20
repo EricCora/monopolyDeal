@@ -16,7 +16,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "tree": "node scripts/print_tree.mjs",
+    "quality": "node scripts/run_quality.mjs",
+    "e2e:smoke": "node scripts/run_e2e.mjs",
+    "replay:verify": "node scripts/replay_verify.mjs"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.3",

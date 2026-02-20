@@ -25,6 +25,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Post-game celebration refresh with trophy treatment and richer confetti pulse
 - Guided turn rail with draw/play/end-step progress and clearer required-action cues
 - Explicit pending-action messaging (rent, debt, counter chains, and steals) shown directly in the active UI, not just the event log
+- Pending selection flows now highlight valid property targets directly on the table to reduce trial clicks
 - In-panel "money requested" banners so payment requests are obvious for the affected player
 - Risky action confirmation dialog for high-impact targeted/rent plays
 - Payment assistant auto-select for pending payment flows
@@ -104,6 +105,10 @@ Open the local URL shown by Vite (usually `http://localhost:5173`).
 - `npm run lint` - run ESLint
 - `npm run test` - run tests once
 - `npm run test:watch` - run tests in watch mode
+- `npm run quality` - run lint + tests + build as one baseline gate
+- `npm run tree` - print a trimmed repo tree snapshot
+- `npm run e2e:smoke` - run Playwright/Cypress if configured; otherwise run smoke UI tests
+- `npm run replay:verify` - deterministic replay fingerprint verification (seed + command log)
 
 ## Settings
 
@@ -152,6 +157,8 @@ For AI coding agents working on this repository:
 - `docs/LLM_AGENT_GUIDE.md` - deeper architecture map, change playbooks, and test matrix
 - `docs/REFRACTOR_SAFETY_PLAYBOOK.md` - refactor safety workflow, behavior-contract templates, and regression gates
 - `docs/NEXT_CODEX_MULTIPLAYER.md` - next-session multiplayer simplification handoff instructions
+- `docs/BASELINE.md` - baseline commands, determinism path, and guardrail scripts
+- `docs/IMPLEMENTATION_TRACKER.md` - staged full-audit modernization tracker
 
 ## Engineering Quality Guardrails
 

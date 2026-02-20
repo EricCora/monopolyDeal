@@ -278,6 +278,13 @@ export function useMultiplayerRoom({
     }
   }, [apiBase, expectedRevision, onMetricEvent, recoverStaleSession, refreshRoom, session, setErrorFromCode]);
 
+  const refreshOnRevisionConflict = useCallback(async (code: string, activeSession: MultiplayerSession) => {
+    if (code !== 'revision_conflict') return;
+    await refreshRoom(activeSession).catch(() => {
+      // Keep original conflict message if refresh fails.
+    });
+  }, [refreshRoom]);
+
   const hostRoom = useCallback(async (): Promise<boolean> => {
     setLoading(true);
     setConnectionState('connecting');
@@ -363,18 +370,17 @@ export function useMultiplayerRoom({
     } catch {
       // Best-effort leave; local cleanup still proceeds.
     } finally {
-      if (operationVersion !== sessionOperationVersionRef.current) {
-        setLoading(false);
-        return;
+      const staleOperation = operationVersion !== sessionOperationVersionRef.current;
+      if (!staleOperation) {
+        if (forgetSession) {
+          clearSession();
+          setRecoveryNotice(null);
+        } else {
+          setRoomView(null);
+        }
+        setConnectionState('idle');
+        clearError();
       }
-      if (forgetSession) {
-        clearSession();
-        setRecoveryNotice(null);
-      } else {
-        setRoomView(null);
-      }
-      setConnectionState('idle');
-      clearError();
       setLoading(false);
     }
   }, [apiBase, clearError, clearSession, expectedRevision, nextSessionOperationVersion, session]);
@@ -398,10 +404,11 @@ export function useMultiplayerRoom({
     } catch (startError) {
       const code = startError instanceof Error ? startError.message : 'request_failed';
       setErrorFromCode(code);
+      await refreshOnRevisionConflict(code, current);
     } finally {
       setLoading(false);
     }
-  }, [apiBase, clearError, expectedRevision, refreshRoom, session, setErrorFromCode]);
+  }, [apiBase, clearError, expectedRevision, refreshOnRevisionConflict, refreshRoom, session, setErrorFromCode]);
 
   const runAction = useCallback(async (index: number) => {
     const current = session;
@@ -416,10 +423,11 @@ export function useMultiplayerRoom({
     } catch (actionError) {
       const code = actionError instanceof Error ? actionError.message : 'request_failed';
       setErrorFromCode(code);
+      await refreshOnRevisionConflict(code, current);
     } finally {
       setLoading(false);
     }
-  }, [apiBase, clearError, expectedRevision, refreshRoom, roomView, session, setErrorFromCode]);
+  }, [apiBase, clearError, expectedRevision, refreshOnRevisionConflict, refreshRoom, roomView, session, setErrorFromCode]);
 
   const setReady = useCallback(async (ready: boolean) => {
     const current = session;
@@ -432,10 +440,11 @@ export function useMultiplayerRoom({
     } catch (readyError) {
       const code = readyError instanceof Error ? readyError.message : 'request_failed';
       setErrorFromCode(code);
+      await refreshOnRevisionConflict(code, current);
     } finally {
       setLoading(false);
     }
-  }, [apiBase, clearError, expectedRevision, refreshRoom, session, setErrorFromCode]);
+  }, [apiBase, clearError, expectedRevision, refreshOnRevisionConflict, refreshRoom, session, setErrorFromCode]);
 
   const sendReaction = useCallback(async (reaction: MultiplayerReaction) => {
     const current = session;
@@ -447,8 +456,9 @@ export function useMultiplayerRoom({
     } catch (reactionError) {
       const code = reactionError instanceof Error ? reactionError.message : 'request_failed';
       setErrorFromCode(code);
+      await refreshOnRevisionConflict(code, current);
     }
-  }, [apiBase, clearError, expectedRevision, reactionsEnabled, refreshRoom, session, setErrorFromCode]);
+  }, [apiBase, clearError, expectedRevision, reactionsEnabled, refreshOnRevisionConflict, refreshRoom, session, setErrorFromCode]);
 
   const sendChatMessage = useCallback(async (text: string) => {
     const current = session;
@@ -460,8 +470,9 @@ export function useMultiplayerRoom({
     } catch (chatError) {
       const code = chatError instanceof Error ? chatError.message : 'request_failed';
       setErrorFromCode(code);
+      await refreshOnRevisionConflict(code, current);
     }
-  }, [apiBase, clearError, expectedRevision, refreshRoom, session, setErrorFromCode]);
+  }, [apiBase, clearError, expectedRevision, refreshOnRevisionConflict, refreshRoom, session, setErrorFromCode]);
 
   const setTyping = useCallback(async (typing: boolean) => {
     const current = session;

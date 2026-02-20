@@ -162,8 +162,11 @@ export function MultiplayerScreen({
 }: MultiplayerScreenProps) {
   const [now, setNow] = useState(() => Date.now());
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
-  const [resolvedInviteLink, setResolvedInviteLink] = useState<string | null>(null);
-  const [inviteFallbackNotice, setInviteFallbackNotice] = useState<string | null>(null);
+  const [inviteResolution, setInviteResolution] = useState<{
+    roomCode: string;
+    lanOrigin: string | null;
+    fallbackNotice: string | null;
+  } | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 450);
@@ -187,34 +190,38 @@ export function MultiplayerScreen({
   };
 
   useEffect(() => {
-    let cancelled = false;
-    if (!session || typeof window === 'undefined') {
-      setResolvedInviteLink(null);
-      setInviteFallbackNotice(null);
-      return;
-    }
+    if (!session || typeof window === 'undefined') return;
 
     const currentUrl = new URL(window.location.origin);
-    const fallbackInviteLink = `${window.location.origin}/join/${session.roomCode}`;
-    setResolvedInviteLink(fallbackInviteLink);
-    setInviteFallbackNotice(null);
-
     const currentPort = Number(currentUrl.port || (currentUrl.protocol === 'https:' ? 443 : 80));
     const isLocalhost = currentUrl.hostname === 'localhost' || currentUrl.hostname === '127.0.0.1' || currentUrl.hostname === '::1';
     if (!isLocalhost) return;
 
+    let cancelled = false;
     listMultiplayerLanOrigins(apiBase, currentPort)
       .then((lanOrigins) => {
         if (cancelled) return;
         if (lanOrigins.length > 0) {
-          setResolvedInviteLink(`${lanOrigins[0]}/join/${session.roomCode}`);
+          setInviteResolution({
+            roomCode: session.roomCode,
+            lanOrigin: lanOrigins[0],
+            fallbackNotice: null,
+          });
           return;
         }
-        setInviteFallbackNotice('LAN invite unavailable. Room code copied instead.');
+        setInviteResolution({
+          roomCode: session.roomCode,
+          lanOrigin: null,
+          fallbackNotice: 'LAN invite unavailable. Room code copied instead.',
+        });
       })
       .catch(() => {
         if (cancelled) return;
-        setInviteFallbackNotice('Could not resolve LAN invite. Room code copied instead.');
+        setInviteResolution({
+          roomCode: session.roomCode,
+          lanOrigin: null,
+          fallbackNotice: 'Could not resolve LAN invite. Room code copied instead.',
+        });
       });
 
     return () => {
@@ -222,28 +229,72 @@ export function MultiplayerScreen({
     };
   }, [apiBase, session]);
 
+  const activeInviteResolution = session && inviteResolution?.roomCode === session.roomCode
+    ? inviteResolution
+    : null;
+
   const copyInviteLink = () => {
     if (!session) return;
     if (typeof window === 'undefined') return;
-    const currentHostname = new URL(window.location.origin).hostname;
-    const inviteLink = resolvedInviteLink ?? `${window.location.origin}/join/${session.roomCode}`;
-    const hasShareableInvite = isLanResolvableHost(currentHostname) || !inviteLink.includes('localhost');
-    if (!hasShareableInvite && inviteFallbackNotice) {
-      void copyTextToClipboard(session.roomCode).then((copied) => {
-        setCopyNotice(copied ? inviteFallbackNotice : 'Invite link copy failed. Room code copy failed.');
-      });
-      return;
-    }
-    void copyTextToClipboard(inviteLink).then((inviteCopied) => {
+    const currentUrl = new URL(window.location.origin);
+    const fallbackInviteLink = `${window.location.origin}/join/${session.roomCode}`;
+    const currentHostname = currentUrl.hostname;
+    const currentPort = Number(currentUrl.port || (currentUrl.protocol === 'https:' ? 443 : 80));
+    const isLocalhost = currentHostname === 'localhost' || currentHostname === '127.0.0.1' || currentHostname === '::1';
+
+    const runCopy = async () => {
+      let resolvedInviteLink = activeInviteResolution?.lanOrigin
+        ? `${activeInviteResolution.lanOrigin}/join/${session.roomCode}`
+        : fallbackInviteLink;
+      let fallbackNotice = activeInviteResolution?.fallbackNotice ?? 'Room code copied instead.';
+      let hasShareableInvite = isLanResolvableHost(currentHostname) || !resolvedInviteLink.includes('localhost');
+
+      if (!hasShareableInvite && isLocalhost && !activeInviteResolution?.fallbackNotice && !activeInviteResolution?.lanOrigin) {
+        try {
+          const lanOrigins = await listMultiplayerLanOrigins(apiBase, currentPort);
+          if (lanOrigins.length > 0) {
+            resolvedInviteLink = `${lanOrigins[0]}/join/${session.roomCode}`;
+            hasShareableInvite = true;
+            setInviteResolution({
+              roomCode: session.roomCode,
+              lanOrigin: lanOrigins[0],
+              fallbackNotice: null,
+            });
+          } else {
+            fallbackNotice = 'LAN invite unavailable. Room code copied instead.';
+            setInviteResolution({
+              roomCode: session.roomCode,
+              lanOrigin: null,
+              fallbackNotice,
+            });
+          }
+        } catch {
+          fallbackNotice = 'Could not resolve LAN invite. Room code copied instead.';
+          setInviteResolution({
+            roomCode: session.roomCode,
+            lanOrigin: null,
+            fallbackNotice,
+          });
+        }
+      }
+
+      if (!hasShareableInvite) {
+        const copied = await copyTextToClipboard(session.roomCode);
+        setCopyNotice(copied ? fallbackNotice : 'Invite link copy failed. Room code copy failed.');
+        return;
+      }
+
+      const inviteCopied = await copyTextToClipboard(resolvedInviteLink);
       if (inviteCopied) {
         onCopyInviteLink();
         setCopyNotice('Invite link copied.');
         return;
       }
-      void copyTextToClipboard(session.roomCode).then((codeCopied) => {
-        setCopyNotice(codeCopied ? 'Invite link copy failed. Room code copied instead.' : 'Invite link copy failed.');
-      });
-    });
+      const codeCopied = await copyTextToClipboard(session.roomCode);
+      setCopyNotice(codeCopied ? 'Invite link copy failed. Room code copied instead.' : 'Invite link copy failed.');
+    };
+
+    void runCopy();
   };
 
   const startFromCheckpoint = () => {

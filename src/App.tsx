@@ -1236,7 +1236,12 @@ function App() {
       const decision = promptPlayerState.botDifficulty === 'hard'
         ? chooseMonteCarloAction(game, prompt.playerId, legalActions, { simulations: 18, depth: 11 })
         : chooseHeuristicAction(game, prompt.playerId, legalActions);
-      runAction(decision?.action ?? legalActions[0].action);
+      const selectedAction = decision?.action;
+      const nextAction = selectedAction
+        && legalActions.some((item) => actionsEqualForLegality(item.action, selectedAction))
+        ? selectedAction
+        : legalActions[0].action;
+      runAction(nextAction);
       botTurnSignatureRef.current = null;
     }, 480);
 
