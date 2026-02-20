@@ -212,7 +212,8 @@ export function getCardDisplayName(instanceId: string): string {
   if (card.kind === 'money') return `$${card.value} Money`;
   if (card.kind === 'property') return `${colorLabel(card.color!)} Property`;
   if (card.kind === 'wild') {
-    return `Wild ${card.colors?.map(colorLabel).join('/') ?? card.name}`;
+    if ((card.colors?.length ?? 0) > 4) return 'Wild Card';
+    return card.name;
   }
   return card.name;
 }

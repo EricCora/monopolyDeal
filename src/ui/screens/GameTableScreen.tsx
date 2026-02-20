@@ -132,7 +132,7 @@ function pendingRequestBanner(game: GameState, playerId: string): PendingRequest
     const sourceName = game.players.find((player) => player.id === pending.payload.sourcePlayerId)?.name ?? 'Another player';
     return {
       title: 'Counter Response Needed',
-      detail: `${sourceName} played ${getCardDisplayName(pending.payload.actionCardId)}. Decide whether to play Just Say No or resolve the action.`,
+      detail: `${sourceName} played ${getCardDisplayName(pending.payload.actionCardId)}. Choose your response to continue.`,
       tone: 'response',
     };
   }
@@ -364,6 +364,7 @@ export function GameTableScreen({
   const handledDrawEventKeyRef = useRef<string | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const [drawGhostCards, setDrawGhostCards] = useState<DrawGhostCard[]>([]);
+  const [discardBrowserOpen, setDiscardBrowserOpen] = useState(false);
   const [narrowLayout, setNarrowLayout] = useState(() => (
     typeof window !== 'undefined' ? window.innerWidth <= 980 : false
   ));
@@ -385,6 +386,8 @@ export function GameTableScreen({
   const activePlayerName = activePlayer?.name ?? prompt.playerId;
   const playsRemaining = Math.max(0, 3 - game.turn.playsUsed);
   const pendingLabel = pendingKindLabel(game.pending);
+  const discardPreviewCardIds = game.discardPile.slice(-3).reverse();
+  const discardBrowserCardIds = useMemo(() => [...game.discardPile].reverse(), [game.discardPile]);
   const winnerName = over.done && over.winnerId
     ? game.players.find((player) => player.id === over.winnerId)?.name ?? over.winnerId
     : null;
@@ -443,6 +446,38 @@ export function GameTableScreen({
     });
     return colors;
   }, [legalActions, prompt.kind, selectionPendingKind]);
+  const moveWildActionsByCard = useMemo(() => {
+    const map = new Map<string, LegalAction[]>();
+    if (prompt.kind !== 'main' || game.pending) return map;
+    legalActions.forEach((item) => {
+      if (item.action.type !== 'move_wild') return;
+      const existing = map.get(item.action.cardId) ?? [];
+      existing.push(item);
+      map.set(item.action.cardId, existing);
+    });
+    return map;
+  }, [game.pending, legalActions, prompt.kind]);
+  const moveWildSourceCardIds = useMemo(() => new Set(moveWildActionsByCard.keys()), [moveWildActionsByCard]);
+  const canDirectWildMove = !isPaused
+    && !over.done
+    && prompt.kind === 'main'
+    && !game.pending
+    && revealedPlayerId === prompt.playerId;
+  const [selectedMoveWildCardId, setSelectedMoveWildCardId] = useState<string | null>(null);
+  const activeMoveWildCardId = canDirectWildMove && selectedMoveWildCardId && moveWildSourceCardIds.has(selectedMoveWildCardId)
+    ? selectedMoveWildCardId
+    : null;
+  const moveWildDestinationColors = useMemo(() => {
+    const colors = new Set<PropertyColor>();
+    if (!activeMoveWildCardId) return colors;
+    const options = moveWildActionsByCard.get(activeMoveWildCardId) ?? [];
+    options.forEach((item) => {
+      if (item.action.type === 'move_wild') {
+        colors.add(item.action.toColor);
+      }
+    });
+    return colors;
+  }, [activeMoveWildCardId, moveWildActionsByCard]);
   const turnPriorityNotice = useMemo<TablePriorityNotice | null>(() => {
     if (isPaused) {
       return {
@@ -469,7 +504,7 @@ export function GameTableScreen({
     if (prompt.kind === 'response') {
       return {
         title: 'Counter Response Pending',
-        detail: 'A Just Say No decision is blocking this turn. Resolve the response to continue.',
+        detail: 'A counter response is blocking this turn. Resolve it to continue.',
         tone: 'required',
       };
     }
@@ -542,6 +577,12 @@ export function GameTableScreen({
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  useEffect(() => {
+    if (game.discardPile.length === 0 && discardBrowserOpen) {
+      setDiscardBrowserOpen(false);
+    }
+  }, [discardBrowserOpen, game.discardPile.length]);
 
   useEffect(() => {
     for (let index = game.history.length - 1; index >= 0; index -= 1) {
@@ -675,19 +716,74 @@ export function GameTableScreen({
       ) : null}
 
       <div className="game-table-grid">
-        <ActionRail
-          isMandatoryPrompt={isMandatoryPrompt}
-          turnStatusText={turnStatusText}
-          turnPhase={game.turn.phase}
-          promptKind={prompt.kind}
-          playsUsed={game.turn.playsUsed}
-          discardOverLimitCount={discardOverLimitCount}
-          showRulesHints={showRulesHints}
-          legalActions={legalActions}
-          isPaused={isPaused}
-          showDebugActions={showDebugActions}
-          onToggleDebugActions={onToggleDebugActions}
-        />
+        <div className="game-table-left-stack">
+          <ActionRail
+            isMandatoryPrompt={isMandatoryPrompt}
+            turnStatusText={turnStatusText}
+            turnPhase={game.turn.phase}
+            promptKind={prompt.kind}
+            playsUsed={game.turn.playsUsed}
+            discardOverLimitCount={discardOverLimitCount}
+            showRulesHints={showRulesHints}
+            legalActions={legalActions}
+            isPaused={isPaused}
+            showDebugActions={showDebugActions}
+            onToggleDebugActions={onToggleDebugActions}
+          />
+          {hasInsightsPanels && insightsExpanded ? (
+            <aside
+              className={`table-insights-stack ${narrowLayout ? 'is-narrow' : ''}`}
+              aria-label="Table insights"
+            >
+              {coachHint ? (
+                <section className="panel inline-action-panel" aria-label="AI coach hint">
+                  <h3>{coachHint.title}</h3>
+                  <p className="inline-prompt-text">
+                    <strong>Recommended:</strong> {coachHint.topActionLabel}
+                  </p>
+                  <p className="inline-prompt-text">{coachHint.summary}</p>
+                  {coachHint.alternatives.length > 0 ? (
+                    <p className="inline-prompt-text">Alternatives: {coachHint.alternatives.join(' | ')}</p>
+                  ) : null}
+                </section>
+              ) : null}
+
+              {latestEvent ? (
+                <section className="panel last-action-panel" aria-label="Last action">
+                  <h4>Last Action</h4>
+                  <p className="last-action-meta">{eventTypeLabel(latestEvent.type)} | {eventAgeLabel(latestEvent.timestamp, clockNow)}</p>
+                  <p>{latestEvent.message}</p>
+                </section>
+              ) : null}
+
+              {stealAlert ? (
+                <section className="table-steal-banner card-enter" role="status" aria-live="polite" aria-label="Property steal update">
+                  <p className="table-steal-banner-title">
+                    {stealAlert.sourceName} played {stealModeLabel(stealAlert.mode)} on {stealAlert.targetName}
+                  </p>
+                  <p className="table-steal-banner-detail">
+                    Moved cards: {stealAlert.cardIds.slice(0, 3).map(getCardDisplayName).join(', ')}
+                    {stealAlert.cardIds.length > 3 ? ` +${stealAlert.cardIds.length - 3} more` : ''}
+                  </p>
+                </section>
+              ) : null}
+
+              {isMultiplayer && activityFeed.length > 0 ? (
+                <section className="panel multiplayer-social-panel" aria-label="Multiplayer social">
+                  <h4>Social Pulse</h4>
+                  <ul className="multiplayer-activity-feed">
+                    {activityFeed.slice(0, 6).map((entry) => (
+                      <li key={entry.id} className={entry.kind === 'reaction' ? 'is-reaction' : undefined}>
+                        {entry.kind === 'reaction' ? <span className="multiplayer-activity-emoji">{reactionEmoji(entry.reaction)}</span> : null}
+                        <span>{entry.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+            </aside>
+          ) : null}
+        </div>
 
         <div className="game-table-main">
           <section className="table-command-strip panel card-enter" aria-label="Turn command strip">
@@ -753,9 +849,50 @@ export function GameTableScreen({
                   <span className="table-draw-card table-draw-card-top" />
                 </div>
               </article>
-              <article className="table-pile-card">
-                <h4>Discard Pile</h4>
-                <p>{game.discardPile.length} cards</p>
+              <article className={`table-pile-card discard-pile-card ${discardBrowserOpen ? 'is-expanded' : ''}`}>
+                <div className="table-pile-head">
+                  <div>
+                    <h4>Discard Pile</h4>
+                    <p>{game.discardPile.length} cards</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="table-pile-toggle"
+                    aria-expanded={discardBrowserOpen}
+                    onClick={() => setDiscardBrowserOpen((open) => !open)}
+                    disabled={game.discardPile.length === 0}
+                  >
+                    {discardBrowserOpen ? 'Hide Pile' : 'Browse Pile'}
+                  </button>
+                </div>
+                <div className="table-discard-preview" aria-label="Discard pile preview">
+                  {discardPreviewCardIds.length > 0 ? (
+                    discardPreviewCardIds.map((cardId, index) => (
+                      <div
+                        key={`discard-preview-${cardId}-${index}`}
+                        className={`table-discard-preview-card ${index === 0 ? 'is-top' : 'is-back'}`}
+                        style={{ ['--discard-index' as string]: String(index) }}
+                      >
+                        <CardView cardId={cardId} size="sm" faceUp={index === 0} />
+                      </div>
+                    ))
+                  ) : (
+                    <p className="table-discard-empty">No cards discarded yet.</p>
+                  )}
+                </div>
+                {discardBrowserOpen ? (
+                  <div className="table-discard-browser" aria-label="Discard pile browser">
+                    <p className="table-discard-browser-caption">Newest to oldest</p>
+                    <div className="table-discard-browser-scroll">
+                      {discardBrowserCardIds.map((cardId, index) => (
+                        <div key={`discard-browser-${cardId}-${index}`} className="table-discard-browser-item">
+                          <CardView cardId={cardId} size="sm" />
+                          <span className="table-discard-browser-index">#{index + 1}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </article>
             </div>
 
@@ -779,7 +916,24 @@ export function GameTableScreen({
                         : contextualActions
                   )
                 : [];
+              const orderedInlineActions = (
+                isPromptPlayer
+                && prompt.kind === 'main'
+                && (mainPhaseExhausted || playsRemaining <= 0)
+              )
+                ? [
+                    ...inlineActions.filter((item) => item.action.type === 'pass_turn'),
+                    ...inlineActions.filter((item) => item.action.type !== 'pass_turn'),
+                  ]
+                : inlineActions;
               const propertyColors = (Object.keys(player.properties) as PropertyColor[]).filter((color) => player.properties[color].length > 0);
+              const visiblePropertyColors = (Object.keys(player.properties) as PropertyColor[]).filter((color) => {
+                if (player.properties[color].length > 0) return true;
+                return canDirectWildMove
+                  && player.id === prompt.playerId
+                  && activeMoveWildCardId !== null
+                  && moveWildDestinationColors.has(color);
+              });
               const playerStatusTags: string[] = [];
               if (isPromptPlayer && !over.done && !isPaused) playerStatusTags.push('Acting');
               if (isCurrent) playerStatusTags.push('Turn Seat');
@@ -792,7 +946,6 @@ export function GameTableScreen({
                 ));
                 if (hasSelectionTarget) playerStatusTags.push('Valid Target');
               }
-              if (isMultiplayer && !playerConnectionById[player.id]?.connected) playerStatusTags.push('Disconnected');
 
               return (
                 <article
@@ -840,6 +993,13 @@ export function GameTableScreen({
                       <p className="inline-prompt-text">{prompt.text}</p>
                       {selectionCardPickingEnabled ? (
                         <p className="inline-target-hint">Valid selection targets are highlighted on the table.</p>
+                      ) : null}
+                      {canDirectWildMove && moveWildSourceCardIds.size > 0 ? (
+                        <p className="inline-target-hint">
+                          {activeMoveWildCardId
+                            ? 'Wild selected. Tap a highlighted property lane to move it.'
+                            : 'Tap a movable wild card, then tap a highlighted property lane to move it.'}
+                        </p>
                       ) : null}
 
                       {isPaymentPayer && pendingPayment ? (
@@ -891,7 +1051,7 @@ export function GameTableScreen({
                       ) : null}
 
                       <div className="actions action-list inline-actions">
-                        {inlineActions.map((item, index) => (
+                        {orderedInlineActions.map((item, index) => (
                           <button
                             key={`inline-${item.label}-${index}`}
                             onClick={() => onRunAction(item.action, item)}
@@ -901,7 +1061,7 @@ export function GameTableScreen({
                             {actionDetailText(item) ? <span className="action-detail">{actionDetailText(item)}</span> : null}
                           </button>
                         ))}
-                        {inlineActions.length === 0 && !pendingPayment ? (
+                        {orderedInlineActions.length === 0 && !pendingPayment ? (
                           <p>{prompt.kind === 'discard' ? 'Discard from your hand to continue.' : 'Play cards from your hand.'}</p>
                         ) : null}
                       </div>
@@ -975,42 +1135,73 @@ export function GameTableScreen({
                       Properties
                       {paymentSelectionEnabled ? <span className="zone-hint">Tap cards to pay</span> : null}
                       {selectionCardPickingEnabled ? <span className="zone-hint">Tap highlighted cards</span> : null}
+                      {canDirectWildMove && moveWildSourceCardIds.size > 0 ? <span className="zone-hint">Tap wild, then lane</span> : null}
                     </strong>
                     <div className="zone-properties">
-                      {propertyColors.length > 0 ? (
-                        propertyColors.map((color) => {
+                      {visiblePropertyColors.length > 0 ? (
+                        visiblePropertyColors.map((color) => {
                           const laneHasSelectionTarget = selectionCardPickingEnabled && (
                             selectionPendingKind === 'deal_breaker'
                               ? selectionTargetColors.has(color)
                               : player.properties[color].some((entry) => selectionTargetCardIds.has(entry.cardId))
                           );
+                          const laneIsMoveTarget = canDirectWildMove
+                            && player.id === prompt.playerId
+                            && activeMoveWildCardId !== null
+                            && moveWildDestinationColors.has(color);
+                          const laneHasMoveSource = activeMoveWildCardId !== null
+                            && player.properties[color].some((entry) => entry.cardId === activeMoveWildCardId);
                           return (
                             <div
-                              className={`property-lane ${player.properties[color].some((entry) => stealHighlightCardIds.has(entry.cardId)) ? 'is-steal-lane' : ''} ${laneHasSelectionTarget ? 'is-selection-target' : ''}`}
+                              className={`property-lane ${player.properties[color].some((entry) => stealHighlightCardIds.has(entry.cardId)) ? 'is-steal-lane' : ''} ${laneHasSelectionTarget ? 'is-selection-target' : ''} ${laneIsMoveTarget ? 'is-move-target' : ''} ${laneHasMoveSource ? 'is-move-source-lane' : ''}`}
                               key={`${player.id}-${color}`}
                             >
                               <p>
                                 <span>{colorLabel(color)}:</span>
                                 {laneHasSelectionTarget ? <span className="property-lane-chip">Valid target</span> : null}
+                                {laneIsMoveTarget ? (
+                                  <button
+                                    type="button"
+                                    className="property-lane-chip property-lane-chip-button"
+                                    onClick={() => {
+                                      if (!activeMoveWildCardId) return;
+                                      const match = (moveWildActionsByCard.get(activeMoveWildCardId) ?? []).find((item) => (
+                                        item.action.type === 'move_wild' && item.action.toColor === color
+                                      ));
+                                      if (!match) return;
+                                      onRunAction(match.action, match);
+                                      setSelectedMoveWildCardId(null);
+                                    }}
+                                  >
+                                    Move Here
+                                  </button>
+                                ) : null}
                               </p>
                               <div className="property-cards">
+                                {player.properties[color].length === 0 && laneIsMoveTarget ? (
+                                  <p className="property-lane-empty">Empty lane</p>
+                                ) : null}
                                 {player.properties[color].map((entry) => {
                                   const selectionCardPlayable = selectionCardPickingEnabled && (
                                     selectionPendingKind === 'deal_breaker'
                                       ? selectionTargetColors.has(color)
                                       : selectionTargetCardIds.has(entry.cardId)
                                   );
+                                  const moveWildSourcePlayable = canDirectWildMove
+                                    && player.id === prompt.playerId
+                                    && moveWildSourceCardIds.has(entry.cardId);
+                                  const moveWildSourceSelected = activeMoveWildCardId === entry.cardId;
                                   return (
                                     <div
                                       key={`${player.id}-${color}-${entry.cardId}`}
-                                      className={`property-card-wrap ${stealHighlightCardIds.has(entry.cardId) ? 'is-stolen-card' : ''} ${selectionCardPlayable ? 'is-selection-target' : ''}`}
+                                      className={`property-card-wrap ${stealHighlightCardIds.has(entry.cardId) ? 'is-stolen-card' : ''} ${selectionCardPlayable ? 'is-selection-target' : ''} ${moveWildSourceSelected ? 'is-move-source' : ''}`}
                                     >
                                       <CardView
                                         cardId={entry.cardId}
                                         size="sm"
-                                        interactive={paymentSelectionEnabled || selectionCardPlayable}
-                                        playable={paymentSelectionEnabled || selectionCardPlayable}
-                                        selected={selectedPaymentCards.includes(entry.cardId) || selectedSelectionCardId === entry.cardId}
+                                        interactive={paymentSelectionEnabled || selectionCardPlayable || moveWildSourcePlayable}
+                                        playable={paymentSelectionEnabled || selectionCardPlayable || moveWildSourcePlayable}
+                                        selected={selectedPaymentCards.includes(entry.cardId) || selectedSelectionCardId === entry.cardId || moveWildSourceSelected}
                                         onClick={() => {
                                           if (paymentSelectionEnabled) {
                                             onPaymentCardToggle(entry.cardId);
@@ -1018,6 +1209,10 @@ export function GameTableScreen({
                                           }
                                           if (selectionCardPlayable) {
                                             onPropertySelectionClick(player.id, color, entry.cardId);
+                                            return;
+                                          }
+                                          if (moveWildSourcePlayable) {
+                                            setSelectedMoveWildCardId((prev) => (prev === entry.cardId ? null : entry.cardId));
                                           }
                                         }}
                                         annotation={entry.assignedColor !== color ? `as ${colorLabel(entry.assignedColor)}` : undefined}
@@ -1067,59 +1262,6 @@ export function GameTableScreen({
               )}
             </div>
 
-            {hasInsightsPanels ? (
-              <aside
-                className={`table-insights-stack ${insightsExpanded ? 'is-open' : 'is-collapsed'} ${narrowLayout ? 'is-narrow' : ''}`}
-                aria-label="Table insights"
-              >
-                {coachHint ? (
-                  <section className="panel inline-action-panel" aria-label="AI coach hint">
-                    <h3>{coachHint.title}</h3>
-                    <p className="inline-prompt-text">
-                      <strong>Recommended:</strong> {coachHint.topActionLabel}
-                    </p>
-                    <p className="inline-prompt-text">{coachHint.summary}</p>
-                    {coachHint.alternatives.length > 0 ? (
-                      <p className="inline-prompt-text">Alternatives: {coachHint.alternatives.join(' | ')}</p>
-                    ) : null}
-                  </section>
-                ) : null}
-
-                {latestEvent ? (
-                  <section className="panel last-action-panel" aria-label="Last action">
-                    <h4>Last Action</h4>
-                    <p className="last-action-meta">{eventTypeLabel(latestEvent.type)} | {eventAgeLabel(latestEvent.timestamp, clockNow)}</p>
-                    <p>{latestEvent.message}</p>
-                  </section>
-                ) : null}
-
-                {stealAlert ? (
-                  <section className="table-steal-banner card-enter" role="status" aria-live="polite" aria-label="Property steal update">
-                    <p className="table-steal-banner-title">
-                      {stealAlert.sourceName} played {stealModeLabel(stealAlert.mode)} on {stealAlert.targetName}
-                    </p>
-                    <p className="table-steal-banner-detail">
-                      Moved cards: {stealAlert.cardIds.slice(0, 3).map(getCardDisplayName).join(', ')}
-                      {stealAlert.cardIds.length > 3 ? ` +${stealAlert.cardIds.length - 3} more` : ''}
-                    </p>
-                  </section>
-                ) : null}
-
-                {isMultiplayer && activityFeed.length > 0 ? (
-                  <section className="panel multiplayer-social-panel" aria-label="Multiplayer social">
-                    <h4>Social Pulse</h4>
-                    <ul className="multiplayer-activity-feed">
-                      {activityFeed.slice(0, 6).map((entry) => (
-                        <li key={entry.id} className={entry.kind === 'reaction' ? 'is-reaction' : undefined}>
-                          {entry.kind === 'reaction' ? <span className="multiplayer-activity-emoji">{reactionEmoji(entry.reaction)}</span> : null}
-                          <span>{entry.message}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ) : null}
-              </aside>
-            ) : null}
           </div>
         </div>
       </div>

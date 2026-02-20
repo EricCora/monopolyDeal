@@ -136,7 +136,7 @@ describe('multiplayer room service lifecycle', () => {
     const playerTwo = joinRoom(room, 'Player 2');
     const staleNow = Date.now();
     const staleParticipant = findParticipant(room, playerTwo.playerId);
-    staleParticipant.lastSeenAt = staleNow - 13_000;
+    staleParticipant.lastSeenAt = staleNow - 46_000;
 
     pruneInactiveRooms(rooms, staleNow);
 

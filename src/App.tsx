@@ -569,6 +569,17 @@ function App() {
   }, [isPaused, prompt, screen, shouldShowShield]);
   const turnStatusText = useMemo(() => {
     if (!prompt) return '';
+    const localCounterPending = game?.pending?.kind === 'counter' ? game.pending.payload : null;
+    if (prompt.kind === 'response' && game && localCounterPending) {
+      const awaitingPlayer = game.players.find((player) => player.id === localCounterPending.awaitingPlayerId);
+      const currentPlayer = game.players[game.currentPlayerIndex];
+      if (awaitingPlayer && currentPlayer.id === localCounterPending.sourcePlayerId && awaitingPlayer.id !== currentPlayer.id) {
+        return `Waiting for ${awaitingPlayer.name} to respond to your action.`;
+      }
+      if (awaitingPlayer) {
+        return `Waiting for ${awaitingPlayer.name} to respond.`;
+      }
+    }
     if (prompt.kind === 'discard') {
       return discardOverLimitCount > 0
         ? `Discard ${discardOverLimitCount} card${discardOverLimitCount === 1 ? '' : 's'} to end turn.`
@@ -578,7 +589,7 @@ function App() {
     if (prompt.kind === 'draw') return 'Draw to start the turn.';
     if (mainPhaseExhausted) return '3/3 plays used. Pass turn or use non-play actions.';
     return 'Play cards from hand or pass turn.';
-  }, [discardOverLimitCount, mainPhaseExhausted, prompt]);
+  }, [discardOverLimitCount, game, mainPhaseExhausted, prompt]);
 
   const multiplayerGame = screen === 'multiplayer' ? (multiplayerRoomView?.gameState ?? null) : null;
   const multiplayerPrompt = useMemo(
@@ -640,6 +651,18 @@ function App() {
   }, [multiplayerGame, multiplayerPrompt]);
   const multiplayerTurnStatusText = useMemo(() => {
     if (!multiplayerPrompt) return '';
+    const multiplayerCounterPending = multiplayerGame?.pending?.kind === 'counter' ? multiplayerGame.pending.payload : null;
+    if (multiplayerPrompt.kind === 'response' && multiplayerGame && multiplayerCounterPending && multiplayerRoomView) {
+      const awaitingPlayer = multiplayerGame.players.find((player) => player.id === multiplayerCounterPending.awaitingPlayerId);
+      if (awaitingPlayer) {
+        if (multiplayerCounterPending.sourcePlayerId === multiplayerRoomView.yourPlayerId && awaitingPlayer.id !== multiplayerRoomView.yourPlayerId) {
+          return `Waiting for ${awaitingPlayer.name} to respond to your action.`;
+        }
+        if (awaitingPlayer.id !== multiplayerRoomView.yourPlayerId) {
+          return `Waiting for ${awaitingPlayer.name} to respond.`;
+        }
+      }
+    }
     if (multiplayerRoomView && multiplayerPrompt.playerId !== multiplayerRoomView.yourPlayerId) {
       return `Waiting for ${multiplayerPromptPlayerName ?? multiplayerPrompt.playerId} to act.`;
     }
@@ -656,6 +679,7 @@ function App() {
     return 'Play cards from hand or pass turn.';
   }, [
     multiplayerDiscardOverLimitCount,
+    multiplayerGame,
     multiplayerMainPhaseExhausted,
     multiplayerPrompt,
     multiplayerPromptPlayerName,
@@ -718,9 +742,13 @@ function App() {
     );
     return [...multiplayerPendingPaymentPlayer.bank, ...propertyCards];
   }, [multiplayerPendingPaymentPlayer]);
+  const multiplayerSelectedPaymentCards = useMemo(
+    () => selectedPaymentCards.filter((cardId) => multiplayerPendingPaymentCardIds.includes(cardId)),
+    [multiplayerPendingPaymentCardIds, selectedPaymentCards],
+  );
   const multiplayerSelectedPaymentTotal = useMemo(
-    () => selectedPaymentCards.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
-    [selectedPaymentCards],
+    () => multiplayerSelectedPaymentCards.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
+    [multiplayerSelectedPaymentCards],
   );
   const multiplayerTotalPayableValue = useMemo(
     () => multiplayerPendingPaymentCardIds.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
@@ -729,7 +757,7 @@ function App() {
   const multiplayerPaymentCanSubmit = multiplayerPendingPayment
     ? multiplayerTotalPayableValue < multiplayerPendingPayment.amount
       ? multiplayerSelectedPaymentTotal >= multiplayerTotalPayableValue
-      : selectedPaymentCards.length > 0 && multiplayerSelectedPaymentTotal >= multiplayerPendingPayment.amount
+      : multiplayerSelectedPaymentCards.length > 0 && multiplayerSelectedPaymentTotal >= multiplayerPendingPayment.amount
     : false;
   const multiplayerCoachHint = useMemo(() => {
     if (!multiplayerGame || !multiplayerPrompt || !multiplayerRoomView) return null;
@@ -826,10 +854,14 @@ function App() {
     );
     return [...pendingPaymentPlayer.bank, ...propertyCards];
   }, [pendingPaymentPlayer]);
+  const selectedLocalPaymentCards = useMemo(
+    () => selectedPaymentCards.filter((cardId) => pendingPaymentCardIds.includes(cardId)),
+    [pendingPaymentCardIds, selectedPaymentCards],
+  );
 
   const selectedPaymentTotal = useMemo(
-    () => selectedPaymentCards.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
-    [selectedPaymentCards],
+    () => selectedLocalPaymentCards.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
+    [selectedLocalPaymentCards],
   );
   const totalPayableValue = useMemo(
     () => pendingPaymentCardIds.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
@@ -838,7 +870,7 @@ function App() {
   const paymentCanSubmit = pendingPayment
     ? totalPayableValue < pendingPayment.amount
       ? selectedPaymentTotal >= totalPayableValue
-      : selectedPaymentCards.length > 0 && selectedPaymentTotal >= pendingPayment.amount
+      : selectedLocalPaymentCards.length > 0 && selectedPaymentTotal >= pendingPayment.amount
     : false;
 
   const openSettings = useCallback((backScreen: SettingsBackScreen) => {
@@ -1317,7 +1349,7 @@ function App() {
     runAction({
       type: 'pay_request',
       playerId: pendingPayment.targetPlayerId,
-      cards: canonicalizePaymentCards(selectedPaymentCards),
+      cards: canonicalizePaymentCards(selectedLocalPaymentCards),
     });
   };
 
@@ -1437,7 +1469,7 @@ function App() {
     runMultiplayerActionWithConfirmation({
       type: 'pay_request',
       playerId: multiplayerPendingPayment.targetPlayerId,
-      cards: canonicalizePaymentCards(selectedPaymentCards),
+      cards: canonicalizePaymentCards(multiplayerSelectedPaymentCards),
     });
   };
 
@@ -1701,7 +1733,7 @@ function App() {
           playableCardIds={playableCardIds}
           selectedCardId={selectedCardId}
           selectedSelectionCardId={forcedDealSelection?.cardId ?? null}
-          selectedPaymentCards={selectedPaymentCards}
+          selectedPaymentCards={selectedLocalPaymentCards}
           selectedPaymentTotal={selectedPaymentTotal}
           totalPayableValue={totalPayableValue}
           paymentCanSubmit={paymentCanSubmit}
@@ -1779,7 +1811,7 @@ function App() {
           playableCardIds={multiplayerPlayableCardIds}
           selectedCardId={selectedCardId}
           selectedSelectionCardId={forcedDealSelection?.cardId ?? null}
-          selectedPaymentCards={selectedPaymentCards}
+          selectedPaymentCards={multiplayerSelectedPaymentCards}
           selectedPaymentTotal={multiplayerSelectedPaymentTotal}
           totalPayableValue={multiplayerTotalPayableValue}
           paymentCanSubmit={multiplayerPaymentCanSubmit}

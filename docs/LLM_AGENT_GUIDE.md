@@ -58,9 +58,12 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - `src/ui/components/MultiplayerChatDock.tsx` provides the bottom-left multiplayer chat pill/panel, unread badge, mention highlight, typing line, and aria-log stream.
   - `src/ui/components/RulesDrawer.tsx` provides in-game rules/set/rent quick reference.
   - Selection pending flows now support property-card click interactions for deal actions; keep action-button fallback intact.
+  - Main-phase wild repositioning supports direct table clicks (select movable wild card, then choose highlighted destination lane); keep legal-action fallback intact.
   - Game table panels include explicit request-state banners (payment/selection/response) so required actions are visible without opening the event log.
   - `GameTableScreen` now exposes a command-strip (active player, step, turn pressure, pending state), a priority turn banner, and collapsible timeline/insight panels to reduce clutter on narrow layouts.
+  - Discard pile UI supports both quick-stack preview and an expandable horizontal browser (newest-to-oldest) for turn-by-turn inspection.
   - `MultiplayerScreen` room controls are grouped by task area (invite/session/host), recent activity is user-collapsible, and the lobby includes snapshot cards plus current-turn tagging.
+  - `MultiplayerChatDock` now keeps auto-follow behavior only while the user is near the latest messages; if they scroll up, a `Jump to Recent` control appears.
   - `src/ui/theme/` contains tokenized CSS split by base/components/screens.
   - `GameShell` applies root table style classes (`table-style-classic-green`, `table-style-neon-arcade`) to drive felt/theme variants.
   - `SettingsScreen` now uses compact grouped cards, custom switch UI, and a collapsed-by-default Experimental accordion.
@@ -109,6 +112,7 @@ UI layers (steal banners/highlights, draw animation) should prefer `details` and
 - Win is 3 complete sets.
 - Banking follows official split: regular property cards cannot be banked; money/action/building cards and wild property cards can.
 - `just_say_no` uses counter chain flow (`pending.kind === 'counter'`) before resolving/canceling an effect.
+- Counter windows are opened for counterable targeted effects regardless of whether a `Just Say No` is in-hand, to avoid hidden-hand information leaks.
 - Multi-target payment (`It's My Birthday`) runs a target chain via `remainingTargetPlayerIds`.
 - Buildings (`house`, `hotel`) are treated as non-movable for property steal/swap flows.
 - Payment selection must satisfy requested amount when payer can cover; if payer cannot cover, all available bank/property cards must be paid.

@@ -680,6 +680,9 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     const source = getPlayer(state, req.sourcePlayerId);
     const target = getPlayer(state, req.targetPlayerId);
     if (!source || !target) return setErr(error('invalid_target', 'Player not found.'));
+    if (isCompleteSet(target, action.sourceColor)) {
+      return setErr(error('invalid_action', 'Cannot steal cards from a complete set.'));
+    }
 
     const removed = removePropertyCard(target, action.sourceColor, action.cardId);
     if (!removed) return setErr(error('invalid_target', 'Card not found in target set.'));
@@ -707,6 +710,9 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     const source = getPlayer(state, req.sourcePlayerId);
     const target = getPlayer(state, req.targetPlayerId);
     if (!source || !target) return setErr(error('invalid_target', 'Player not found.'));
+    if (isCompleteSet(source, action.giveColor) || isCompleteSet(target, action.takeColor)) {
+      return setErr(error('invalid_action', 'Cannot swap cards that are part of a complete set.'));
+    }
 
     const give = removePropertyCard(source, action.giveColor, action.giveCardId);
     const take = removePropertyCard(target, action.takeColor, action.takeCardId);
@@ -801,7 +807,7 @@ export function getNextPrompt(state: GameState): TurnPrompt {
     const actionCardName = cardLabel(state.pending.payload.actionCardId);
     return {
       playerId: pendingPlayer?.id ?? currentPlayer.id,
-      text: `${pendingPlayer?.name ?? 'Player'}: respond to ${sourceName}'s ${actionCardName} with Just Say No or resolve.`,
+      text: `${pendingPlayer?.name ?? 'Player'}: respond to ${sourceName}'s ${actionCardName} or allow it to resolve.`,
       kind: 'response',
     };
   }

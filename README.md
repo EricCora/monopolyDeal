@@ -26,8 +26,10 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Guided turn rail with draw/play/end-step progress and clearer required-action cues
 - New command-strip table header with active-player/step/pressure/pending status, plus one-tap timeline and insight toggles
 - Priority turn banner and player-state chips that keep mandatory flows (payment/response/selection/discard) visible at a glance
+- Discard pile now supports an in-panel browser (newest-to-oldest horizontal scroll) while keeping a compact top-stack preview
 - Explicit pending-action messaging (rent, debt, counter chains, and steals) shown directly in the active UI, not just the event log
 - Pending selection flows now highlight valid property targets directly on the table to reduce trial clicks
+- Wild property repositioning now supports direct table interaction: tap a movable wild card, then tap a highlighted destination lane (`Move Here`)
 - In-panel "money requested" banners so payment requests are obvious for the affected player
 - Risky action confirmation dialog for high-impact targeted/rent plays
 - Payment assistant auto-select for pending payment flows
@@ -48,6 +50,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Multiplayer activity feed (joins/reconnects/host changes/ready/reactions/checkpoints)
 - Collapsible multiplayer activity panels, grouped room/host controls, and lobby snapshot cards with turn tagging for lower clutter on mobile layouts
 - Multiplayer chat dock (bottom-left pill) with unread badge, typing indicators, mention highlighting (`@name`), and aria-log message semantics
+- Chat auto-follows recent messages by default; when reviewing history it shows a `Jump to Recent` shortcut instead of forcing scroll snaps
 - Multiplayer reconnect recovery UX that auto-clears stale sessions and avoids endless syncing states
 - UNO-style quick reactions via chat tray with transient per-player reaction bursts on lobby/table surfaces
 - Flagship lobby presentation refresh with structured roster table, clearer status pills, and stronger action hierarchy
