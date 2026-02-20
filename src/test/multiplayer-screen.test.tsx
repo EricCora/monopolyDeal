@@ -237,7 +237,9 @@ describe('MultiplayerScreen', () => {
     await waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('HRCWM');
     });
-    expect(screen.getByText(/room code copied instead/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/room code copied instead/i)).toBeInTheDocument();
+    });
   });
 
   it('auto-dismisses copy notices after the timeout', async () => {

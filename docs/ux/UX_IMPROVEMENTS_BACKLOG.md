@@ -22,3 +22,6 @@ This backlog is prioritized for practical, staged delivery.
 3. Verify valid target highlighting and pending banners stay in sync.
 4. Verify payment panel messaging for full pay, overpay, and shortfall.
 5. Check multiplayer lobby/table at mobile width (~390px) and desktop width.
+
+Automated guardrails:
+- `src/test/mobile-touch-contracts.test.ts` enforces touch-target and narrow-breakpoint layout contracts.

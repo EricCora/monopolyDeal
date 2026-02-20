@@ -16,9 +16,10 @@ This tracker supersedes the prior deep-research execution tracker and follows:
   - Engine pending-flow helper extraction (`src/engine/pending.ts`) and reconnect single-flight guard (`src/app/useMultiplayerRoom.ts`).
   - Multiplayer server payload hardening for session/revision/action validation (`apps/server/src/index.ts`, `apps/server/src/validation.ts`).
   - Regression coverage for server validation guards (`src/test/server-validation.test.ts`).
-- Still remaining before claiming full-plan completion:
-  - Stage 3: touch target/mobile layout validation pass.
-  - Stage 4: explicit push/poll reconnect-desync end-to-end matrix.
+  - Push/poll reconnect-desync matrix tests for hook orchestration (`src/test/use-multiplayer-room.test.tsx`).
+  - Mobile/touch layout guardrail tests for responsive contracts (`src/test/mobile-touch-contracts.test.ts`).
+- Remaining:
+  - Optional real-device manual pass for mobile/touch ergonomics using `docs/ux/UX_IMPROVEMENTS_BACKLOG.md`.
 
 ## Stage Checklist
 
@@ -66,7 +67,7 @@ Artifacts:
 - [x] Ship/harden pending action-state banner behavior
 - [x] Ship/harden payment clarity messaging
 - [x] Ship/harden event readability improvements
-- [ ] Validate touch hit targets/mobile layout behavior
+- [x] Validate touch hit targets/mobile layout behavior
 - [x] `docs/ux/UX_AUDIT.md`
 - [x] `docs/ux/UX_IMPROVEMENTS_BACKLOG.md`
 - [x] Update `README.md` and `docs/LLM_AGENT_GUIDE.md`
@@ -81,7 +82,7 @@ Artifacts:
 - [x] Tighten server payload/action validation boundaries
 - [x] Add protocol compatibility notes for `packages/shared`
 - [x] Add reconnect/desync test coverage
-- [ ] Add push/poll reconnect-desync end-to-end matrix
+- [x] Add push/poll reconnect-desync end-to-end matrix
 
 ### Stage 5 — AI System Consolidation
 

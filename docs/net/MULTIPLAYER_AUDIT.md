@@ -34,5 +34,5 @@
 
 ## Remaining hardening targets
 
-- Add end-to-end reconnect/desync test matrix with push/poll transitions.
+- Optional: run a real-device network chaos pass (offline/online toggles) to complement automated tests.
 - Add explicit protocol-compatibility checks between shared and client type surfaces.
