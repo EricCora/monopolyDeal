@@ -5,6 +5,11 @@ This roadmap is derived from:
 - `docs/features/FEATURES_CATALOG.md`
 - `docs/rules/*` and `docs/replay/*`
 
+Current status (2026-02-20):
+- `in_progress` program state.
+- Baseline gates are green and major UI clarity upgrades are shipped.
+- Remaining emphasis: deeper multiplayer hardening closure, expanded AI tier regression matrix, and final program closeout mapping.
+
 ## High impact / low effort
 
 - Keep baseline green with `npm run quality`

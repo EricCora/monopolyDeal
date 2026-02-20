@@ -12,15 +12,16 @@ This tracker supersedes the prior deep-research execution tracker and follows:
 
 ## Status Snapshot (2026-02-20)
 
-- Completed in this cycle:
-  - Engine pending-flow helper extraction (`src/engine/pending.ts`) and reconnect single-flight guard (`src/app/useMultiplayerRoom.ts`).
-  - Multiplayer server payload hardening for session/revision/action validation (`apps/server/src/index.ts`, `apps/server/src/validation.ts`).
-  - Regression coverage for server validation guards (`src/test/server-validation.test.ts`).
-  - Push/poll reconnect-desync matrix tests for hook orchestration (`src/test/use-multiplayer-room.test.tsx`).
-  - Mobile/touch layout guardrail tests for responsive contracts (`src/test/mobile-touch-contracts.test.ts`).
-  - Payment UX and turn-unblock fix: zero-asset debt/payment shortfalls can now be confirmed without card selection (`src/App.tsx`, `src/ui/screens/GameTableScreen.tsx`).
-- Remaining:
-  - Optional real-device manual pass for mobile/touch ergonomics using `docs/ux/UX_IMPROVEMENTS_BACKLOG.md`.
+- Program status: `in_progress` (major multi-stage progress completed; full modernization not fully closed yet).
+- Completed recently:
+  - Major table/lobby UI modernization pass (command strip, priority turn banner, grouped controls, lobby snapshot cards, turn tagging).
+  - Payment-flow unblock fix for zero-asset Debt Collector/payment shortfall confirmation.
+  - Multiplayer reconnect/desync validation hardening and targeted regression coverage.
+  - Rules/replay/determinism artifacts and tests in place.
+- Remaining to close full program:
+  - Stage 4: additional multiplayer hardening scenarios and migration closure docs.
+  - Stage 5: deeper AI contract/regression expansion beyond baseline deterministic coverage.
+  - Stage 6: final roadmap closure tying remaining findings to acceptance criteria.
 
 ## Stage Checklist
 
@@ -79,18 +80,22 @@ Artifacts:
 - [x] `docs/net/MULTIPLAYER_OPTIONS.md`
 - [x] `docs/net/LOBBY_AND_MATCHMAKING.md`
 - [x] `docs/net/SPECTATOR_AND_REPLAY.md`
-- [x] Harden reconnect/resync/error handling paths
-- [x] Tighten server payload/action validation boundaries
+- [x] Harden reconnect/resync/error handling paths (baseline complete)
+- [x] Tighten server payload/action validation boundaries (baseline complete)
 - [x] Add protocol compatibility notes for `packages/shared`
-- [x] Add reconnect/desync test coverage
-- [x] Add push/poll reconnect-desync end-to-end matrix
+- [x] Add reconnect/desync test coverage (baseline complete)
+- [x] Add push/poll reconnect-desync end-to-end matrix (baseline complete)
+- [ ] Close remaining expanded reconnect/revision-conflict edge scenarios
+- [ ] Finalize Stage 4 migration closure notes
 
 ### Stage 5 — AI System Consolidation
 
 - [x] `docs/ai/AI_ARCHITECTURE.md`
 - [x] `docs/ai/AI_TIERS.md`
-- [x] Enforce AI output contract: engine commands only
-- [x] Add deterministic AI regression tests
+- [x] Enforce AI output contract: engine commands only (baseline complete)
+- [x] Add deterministic AI regression tests (baseline complete)
+- [ ] Expand tier-by-tier deterministic regression matrix
+- [ ] Finalize documented difficulty knob verification matrix
 
 ### Stage 6 — Eng + Obs + Security + Final Roadmap
 
@@ -102,7 +107,8 @@ Artifacts:
 - [x] `docs/obs/REPLAY_DEBUGGING.md`
 - [x] `docs/obs/FEATURE_FLAGS.md`
 - [x] `docs/security/MULTIPLAYER_SECURITY.md`
-- [x] `docs/ROADMAP.md`
+- [x] `docs/ROADMAP.md` (baseline)
+- [ ] Publish final roadmap closure mapping remaining findings to acceptance gates
 
 ## Exit Gates (Program)
 
@@ -111,6 +117,7 @@ Artifacts:
 - [x] `npm run build` passes
 - [x] Deterministic replay hash verification passes across repeated runs
 - [x] Documentation set is internally linked and non-duplicative
+- [ ] Final program closure package published (all stages fully closed)
 
 ---
 
