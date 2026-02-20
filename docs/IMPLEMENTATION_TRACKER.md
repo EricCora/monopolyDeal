@@ -10,6 +10,16 @@ This tracker supersedes the prior deep-research execution tracker and follows:
 - Architecture defaults: pure engine, UI consumer, server-authoritative multiplayer
 - Compatibility: keep persistence payloads `version: 1` backward-readable
 
+## Status Snapshot (2026-02-20)
+
+- Completed in this cycle:
+  - Engine pending-flow helper extraction (`src/engine/pending.ts`) and reconnect single-flight guard (`src/app/useMultiplayerRoom.ts`).
+  - Multiplayer server payload hardening for session/revision/action validation (`apps/server/src/index.ts`, `apps/server/src/validation.ts`).
+  - Regression coverage for server validation guards (`src/test/server-validation.test.ts`).
+- Still remaining before claiming full-plan completion:
+  - Stage 3: touch target/mobile layout validation pass.
+  - Stage 4: explicit push/poll reconnect-desync end-to-end matrix.
+
 ## Stage Checklist
 
 ### Stage 0 — Baseline Recovery + Guardrails
@@ -68,8 +78,10 @@ Artifacts:
 - [x] `docs/net/LOBBY_AND_MATCHMAKING.md`
 - [x] `docs/net/SPECTATOR_AND_REPLAY.md`
 - [x] Harden reconnect/resync/error handling paths
+- [x] Tighten server payload/action validation boundaries
 - [x] Add protocol compatibility notes for `packages/shared`
 - [x] Add reconnect/desync test coverage
+- [ ] Add push/poll reconnect-desync end-to-end matrix
 
 ### Stage 5 — AI System Consolidation
 

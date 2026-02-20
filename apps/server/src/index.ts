@@ -26,9 +26,15 @@ import {
   type MultiplayerRoom,
 } from './gameService.ts';
 import { loadSnapshots, saveSnapshots } from './persistence/snapshots.ts';
-import type { Action, PlayerId } from '../../../src/engine/index.ts';
+import type { PlayerId } from '../../../src/engine/index.ts';
 import type { MultiplayerReaction, MultiplayerRoomEventEnvelope } from '../../../packages/shared/multiplayer.ts';
-import { isNonEmptyTrimmedString } from './validation.ts';
+import {
+  isNonEmptyTrimmedString,
+  isOptionalFiniteNumber,
+  isOptionalNonNegativeInteger,
+  isValidMultiplayerAction,
+  optionalTrimmedString,
+} from './validation.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const MULTIPLAYER_PUSH_ENABLED = process.env.MULTIPLAYER_PUSH_ENABLED !== 'false';
@@ -226,8 +232,8 @@ createServer(async (req, res) => {
 
     if (req.method === 'POST' && path === '/api/multiplayer/rooms') {
       const raw = await collectBody(req);
-      const payload = JSON.parse(raw || '{}') as { playerName?: string };
-      const created = createRoom(rooms, payload.playerName ?? 'Host');
+      const payload = JSON.parse(raw || '{}') as { playerName?: unknown };
+      const created = createRoom(rooms, optionalTrimmedString(payload.playerName) ?? 'Host');
       snapshotAll();
       writeJson(res, 200, created.session);
       return;
@@ -251,8 +257,8 @@ createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && operation === 'state') {
-      const playerId = String(parsed.query.playerId ?? '');
-      const sessionToken = String(parsed.query.sessionToken ?? '');
+      const playerId = optionalTrimmedString(parsed.query.playerId);
+      const sessionToken = optionalTrimmedString(parsed.query.sessionToken);
       if (!playerId || !sessionToken) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
@@ -264,8 +270,8 @@ createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && operation === 'checkpoints' && !checkpointOperation) {
-      const playerId = String(parsed.query.playerId ?? '');
-      const sessionToken = String(parsed.query.sessionToken ?? '');
+      const playerId = optionalTrimmedString(parsed.query.playerId);
+      const sessionToken = optionalTrimmedString(parsed.query.sessionToken);
       if (!playerId || !sessionToken) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
@@ -281,14 +287,14 @@ createServer(async (req, res) => {
         writeJson(res, 400, { error: 'push_disabled' });
         return;
       }
-      const playerId = String(parsed.query.playerId ?? '');
-      const sessionToken = String(parsed.query.sessionToken ?? '');
-      const lastEventId = Number(parsed.query.lastEventId ?? 0);
-      if (!playerId || !sessionToken) {
+      const playerId = optionalTrimmedString(parsed.query.playerId);
+      const sessionToken = optionalTrimmedString(parsed.query.sessionToken);
+      const lastEventIdValue = parsed.query.lastEventId == null ? 0 : Number(parsed.query.lastEventId);
+      if (!playerId || !sessionToken || !isOptionalNonNegativeInteger(lastEventIdValue)) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      openEventStream(req, res, room, playerId, sessionToken, Number.isFinite(lastEventId) ? lastEventId : 0);
+      openEventStream(req, res, room, playerId, sessionToken, lastEventIdValue ?? 0);
       return;
     }
 
@@ -299,37 +305,41 @@ createServer(async (req, res) => {
 
     const raw = await collectBody(req);
     const payload = JSON.parse(raw || '{}') as {
-      playerName?: string;
-      playerId?: string;
-      sessionToken?: string;
-      action?: Action;
-      seed?: number;
-      name?: string;
-      checkpointId?: string;
-      expectedRevision?: number;
-      ready?: boolean;
-      reaction?: MultiplayerReaction;
-      text?: string;
-      typing?: boolean;
+      playerName?: unknown;
+      playerId?: unknown;
+      sessionToken?: unknown;
+      action?: unknown;
+      seed?: unknown;
+      name?: unknown;
+      checkpointId?: unknown;
+      expectedRevision?: unknown;
+      ready?: unknown;
+      reaction?: unknown;
+      text?: unknown;
+      typing?: unknown;
     };
 
     if (operation === 'join') {
-      const session = joinRoom(room, payload.playerName ?? 'Player');
+      const session = joinRoom(room, optionalTrimmedString(payload.playerName) ?? 'Player');
       snapshotAll();
       broadcastRoomEvent(room, 'join');
       writeJson(res, 200, session);
       return;
     }
 
-    if (!payload.playerId || !payload.sessionToken) {
+    if (!isNonEmptyTrimmedString(payload.playerId)
+      || !isNonEmptyTrimmedString(payload.sessionToken)
+      || !isOptionalNonNegativeInteger(payload.expectedRevision)) {
       writeJson(res, 400, { error: 'invalid_payload' });
       return;
     }
 
     const playerId = payload.playerId as PlayerId;
+    const sessionToken = payload.sessionToken;
+    const expectedRevision = payload.expectedRevision;
 
     if (operation === 'reconnect') {
-      const session = reconnectRoom(room, playerId, payload.sessionToken, payload.expectedRevision);
+      const session = reconnectRoom(room, playerId, sessionToken, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'reconnect');
       writeJson(res, 200, session);
@@ -337,15 +347,20 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'start') {
-      startRoom(room, playerId, payload.sessionToken, payload.seed, payload.expectedRevision, payload.checkpointId);
+      if (!isOptionalFiniteNumber(payload.seed)) {
+        writeJson(res, 400, { error: 'invalid_payload' });
+        return;
+      }
+      const checkpointId = optionalTrimmedString(payload.checkpointId);
+      startRoom(room, playerId, sessionToken, payload.seed, expectedRevision, checkpointId);
       snapshotAll();
-      broadcastRoomEvent(room, payload.checkpointId ? 'start_from_checkpoint' : 'start');
+      broadcastRoomEvent(room, checkpointId ? 'start_from_checkpoint' : 'start');
       writeJson(res, 200, { ok: true });
       return;
     }
 
     if (operation === 'leave') {
-      leaveRoom(room, playerId, payload.sessionToken, payload.expectedRevision);
+      leaveRoom(room, playerId, sessionToken, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'leave');
       writeJson(res, 200, { ok: true });
@@ -353,7 +368,7 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'pause') {
-      pauseRoom(room, playerId, payload.sessionToken, payload.expectedRevision);
+      pauseRoom(room, playerId, sessionToken, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'pause');
       writeJson(res, 200, { ok: true });
@@ -361,7 +376,7 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'resume') {
-      resumeRoom(room, playerId, payload.sessionToken, payload.expectedRevision);
+      resumeRoom(room, playerId, sessionToken, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'resume');
       writeJson(res, 200, { ok: true });
@@ -369,7 +384,7 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'undo') {
-      undoRoomAction(room, playerId, payload.sessionToken, payload.expectedRevision);
+      undoRoomAction(room, playerId, sessionToken, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'undo');
       writeJson(res, 200, { ok: true });
@@ -377,7 +392,7 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'reset-turn') {
-      resetTurnRoomActions(room, playerId, payload.sessionToken, payload.expectedRevision);
+      resetTurnRoomActions(room, playerId, sessionToken, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'reset_turn');
       writeJson(res, 200, { ok: true });
@@ -385,11 +400,11 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'action') {
-      if (!payload.action) {
+      if (!isValidMultiplayerAction(payload.action)) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      applyRoomAction(room, playerId, payload.sessionToken, payload.action, payload.expectedRevision);
+      applyRoomAction(room, playerId, sessionToken, payload.action, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'action');
       writeJson(res, 200, { ok: true });
@@ -401,7 +416,7 @@ createServer(async (req, res) => {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      setRoomReady(room, playerId, payload.sessionToken, payload.ready, payload.expectedRevision);
+      setRoomReady(room, playerId, sessionToken, payload.ready, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'ready_changed');
       writeJson(res, 200, { ok: true });
@@ -413,12 +428,12 @@ createServer(async (req, res) => {
         writeJson(res, 400, { error: 'reactions_disabled' });
         return;
       }
-      const reaction = payload.reaction;
-      if (!reaction || !ROOM_REACTION_OPTIONS.includes(reaction)) {
+      const reaction = optionalTrimmedString(payload.reaction);
+      if (!reaction || !ROOM_REACTION_OPTIONS.includes(reaction as MultiplayerReaction)) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      sendRoomReaction(room, playerId, payload.sessionToken, reaction, payload.expectedRevision);
+      sendRoomReaction(room, playerId, sessionToken, reaction as MultiplayerReaction, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'reaction');
       writeJson(res, 200, { ok: true });
@@ -430,7 +445,7 @@ createServer(async (req, res) => {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      sendRoomChat(room, playerId, payload.sessionToken, payload.text, payload.expectedRevision);
+      sendRoomChat(room, playerId, sessionToken, payload.text.trim(), expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'chat');
       writeJson(res, 200, { ok: true });
@@ -442,7 +457,7 @@ createServer(async (req, res) => {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      setRoomTyping(room, playerId, payload.sessionToken, payload.typing, payload.expectedRevision);
+      setRoomTyping(room, playerId, sessionToken, payload.typing, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'typing');
       writeJson(res, 200, { ok: true });
@@ -450,11 +465,12 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'checkpoints' && checkpointOperation === 'save') {
-      if (!payload.name) {
+      const checkpointName = optionalTrimmedString(payload.name);
+      if (!checkpointName) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      const checkpoint = saveRoomCheckpoint(room, playerId, payload.sessionToken, payload.name, payload.expectedRevision);
+      const checkpoint = saveRoomCheckpoint(room, playerId, sessionToken, checkpointName, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'checkpoint_saved');
       writeJson(res, 200, { checkpoint });
@@ -462,11 +478,12 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'checkpoints' && checkpointOperation === 'load') {
-      if (!payload.checkpointId) {
+      const checkpointId = optionalTrimmedString(payload.checkpointId);
+      if (!checkpointId) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      loadRoomCheckpoint(room, playerId, payload.sessionToken, payload.checkpointId, payload.expectedRevision);
+      loadRoomCheckpoint(room, playerId, sessionToken, checkpointId, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'checkpoint_loaded');
       writeJson(res, 200, { ok: true });
@@ -474,11 +491,12 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'checkpoints' && checkpointOperation === 'delete') {
-      if (!payload.checkpointId) {
+      const checkpointId = optionalTrimmedString(payload.checkpointId);
+      if (!checkpointId) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      deleteRoomCheckpoint(room, playerId, payload.sessionToken, payload.checkpointId, payload.expectedRevision);
+      deleteRoomCheckpoint(room, playerId, sessionToken, checkpointId, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'checkpoint_deleted');
       writeJson(res, 200, { ok: true });

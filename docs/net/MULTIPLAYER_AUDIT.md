@@ -26,6 +26,9 @@
 
 ## Hardening updates in this stage
 
+- Added client reconnect single-flight guard to avoid overlapping reconnect attempts (`src/app/useMultiplayerRoom.ts`).
+- Added stricter server payload boundaries for session, revision, and action-shape validation (`apps/server/src/index.ts`, `apps/server/src/validation.ts`).
+- Added request-validation regression tests (`src/test/server-validation.test.ts`).
 - Added broader client-side revision-conflict refresh behavior in mutation paths.
 - Added server-room regression test ensuring stale revision action attempts do not mutate room state.
 
