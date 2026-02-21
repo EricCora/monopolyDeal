@@ -295,6 +295,65 @@ function resolveStealAlert(game: GameState, clockNow: number): TableStealAlert |
   return null;
 }
 
+interface DiscardPileCardProps {
+  discardCount: number;
+  discardPreviewCardIds: string[];
+  discardBrowserCardIds: string[];
+}
+
+function DiscardPileCard({ discardCount, discardPreviewCardIds, discardBrowserCardIds }: DiscardPileCardProps) {
+  const [discardBrowserOpen, setDiscardBrowserOpen] = useState(false);
+  const hasCards = discardCount > 0;
+
+  return (
+    <article className={`table-pile-card discard-pile-card ${discardBrowserOpen ? 'is-expanded' : ''}`}>
+      <div className="table-pile-head">
+        <div>
+          <h4>Discard Pile</h4>
+          <p>{discardCount} cards</p>
+        </div>
+        <button
+          type="button"
+          className="table-pile-toggle"
+          aria-expanded={discardBrowserOpen}
+          onClick={() => setDiscardBrowserOpen((open) => !open)}
+          disabled={!hasCards}
+        >
+          {discardBrowserOpen ? 'Hide Pile' : 'Browse Pile'}
+        </button>
+      </div>
+      <div className="table-discard-preview" aria-label="Discard pile preview">
+        {discardPreviewCardIds.length > 0 ? (
+          discardPreviewCardIds.map((cardId, index) => (
+            <div
+              key={`discard-preview-${cardId}-${index}`}
+              className={`table-discard-preview-card ${index === 0 ? 'is-top' : 'is-back'}`}
+              style={{ ['--discard-index' as string]: String(index) }}
+            >
+              <CardView cardId={cardId} size="sm" faceUp={index === 0} />
+            </div>
+          ))
+        ) : (
+          <p className="table-discard-empty">No cards discarded yet.</p>
+        )}
+      </div>
+      {discardBrowserOpen ? (
+        <div className="table-discard-browser" aria-label="Discard pile browser">
+          <p className="table-discard-browser-caption">Newest to oldest</p>
+          <div className="table-discard-browser-scroll">
+            {discardBrowserCardIds.map((cardId, index) => (
+              <div key={`discard-browser-${cardId}-${index}`} className="table-discard-browser-item">
+                <CardView cardId={cardId} size="sm" />
+                <span className="table-discard-browser-index">#{index + 1}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 export function GameTableScreen({
   mode = 'local',
   game,
@@ -364,7 +423,6 @@ export function GameTableScreen({
   const handledDrawEventKeyRef = useRef<string | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const [drawGhostCards, setDrawGhostCards] = useState<DrawGhostCard[]>([]);
-  const [discardBrowserOpen, setDiscardBrowserOpen] = useState(false);
   const [narrowLayout, setNarrowLayout] = useState(() => (
     typeof window !== 'undefined' ? window.innerWidth <= 980 : false
   ));
@@ -577,12 +635,6 @@ export function GameTableScreen({
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-
-  useEffect(() => {
-    if (game.discardPile.length === 0 && discardBrowserOpen) {
-      setDiscardBrowserOpen(false);
-    }
-  }, [discardBrowserOpen, game.discardPile.length]);
 
   useEffect(() => {
     for (let index = game.history.length - 1; index >= 0; index -= 1) {
@@ -849,51 +901,12 @@ export function GameTableScreen({
                   <span className="table-draw-card table-draw-card-top" />
                 </div>
               </article>
-              <article className={`table-pile-card discard-pile-card ${discardBrowserOpen ? 'is-expanded' : ''}`}>
-                <div className="table-pile-head">
-                  <div>
-                    <h4>Discard Pile</h4>
-                    <p>{game.discardPile.length} cards</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="table-pile-toggle"
-                    aria-expanded={discardBrowserOpen}
-                    onClick={() => setDiscardBrowserOpen((open) => !open)}
-                    disabled={game.discardPile.length === 0}
-                  >
-                    {discardBrowserOpen ? 'Hide Pile' : 'Browse Pile'}
-                  </button>
-                </div>
-                <div className="table-discard-preview" aria-label="Discard pile preview">
-                  {discardPreviewCardIds.length > 0 ? (
-                    discardPreviewCardIds.map((cardId, index) => (
-                      <div
-                        key={`discard-preview-${cardId}-${index}`}
-                        className={`table-discard-preview-card ${index === 0 ? 'is-top' : 'is-back'}`}
-                        style={{ ['--discard-index' as string]: String(index) }}
-                      >
-                        <CardView cardId={cardId} size="sm" faceUp={index === 0} />
-                      </div>
-                    ))
-                  ) : (
-                    <p className="table-discard-empty">No cards discarded yet.</p>
-                  )}
-                </div>
-                {discardBrowserOpen ? (
-                  <div className="table-discard-browser" aria-label="Discard pile browser">
-                    <p className="table-discard-browser-caption">Newest to oldest</p>
-                    <div className="table-discard-browser-scroll">
-                      {discardBrowserCardIds.map((cardId, index) => (
-                        <div key={`discard-browser-${cardId}-${index}`} className="table-discard-browser-item">
-                          <CardView cardId={cardId} size="sm" />
-                          <span className="table-discard-browser-index">#{index + 1}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </article>
+              <DiscardPileCard
+                key={game.discardPile.length === 0 ? 'empty' : 'non-empty'}
+                discardCount={game.discardPile.length}
+                discardPreviewCardIds={discardPreviewCardIds}
+                discardBrowserCardIds={discardBrowserCardIds}
+              />
             </div>
 
             <div className="players-grid">
