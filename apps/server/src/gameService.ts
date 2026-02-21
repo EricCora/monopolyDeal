@@ -22,6 +22,7 @@ import type {
 } from '../../../packages/shared/multiplayer.ts';
 
 const RECONNECT_WINDOW_MS = 5 * 60 * 1000;
+// Keep lobby heartbeat grace long enough for frequent tab switching during local beta sessions.
 const STALE_CONNECTION_MS = 1.5 * 60 * 1000;
 const MAX_CHECKPOINTS = 5;
 const MAX_ACTIVITY_FEED = 24;

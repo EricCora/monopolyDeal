@@ -210,6 +210,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Multiplayer state mutations are revision-guarded to prevent stale updates.
 - Multiplayer activity feed and host-change notices are surfaced in lobby/in-match UI.
 - Lobby disconnect policy: leaving in `lobby` removes your seat immediately; reconnect windows remain for `active`/`finished` matches only.
+- Lobby stale-heartbeat policy: connected lobby seats are pruned after a 90s inactivity window to reduce false disconnects during tab/device switching in local beta testing.
 
 ## Multiplayer Deployment Notes
 
