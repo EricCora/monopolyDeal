@@ -273,7 +273,9 @@ describe('MultiplayerScreen', () => {
     await waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('http://192.168.86.243:5173/join/HRCWM');
     });
-    expect(screen.getByText(/invite link copied/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/invite link copied/i)).toBeInTheDocument();
+    });
   });
 
   it('falls back to room code notice when LAN invite origin resolution fails', async () => {

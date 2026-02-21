@@ -92,4 +92,40 @@ describe('MultiplayerChatDock', () => {
     fireEvent.click(screen.getByRole('button', { name: /send wow reaction/i }));
     expect(onSendReaction).toHaveBeenCalledWith('wow');
   });
+
+  it('shows jump-to-recent when reading history and hides after jumping back', () => {
+    render(
+      <MultiplayerChatDock
+        messages={[
+          { id: 1, createdAt: 10, playerId: 'p2', playerName: 'Beta', text: 'older message' },
+          { id: 2, createdAt: 11, playerId: 'p2', playerName: 'Beta', text: 'newer message' },
+        ]}
+        typingNames={[]}
+        yourPlayerId="p1"
+        yourName="Host"
+        isOpen={true}
+        unreadCount={0}
+        onToggle={() => undefined}
+        onSendMessage={() => undefined}
+        onTypingChange={() => undefined}
+      />,
+    );
+
+    const log = screen.getByRole('log');
+    Object.defineProperty(log, 'scrollHeight', { configurable: true, value: 520 });
+    Object.defineProperty(log, 'clientHeight', { configurable: true, value: 200 });
+    Object.defineProperty(log, 'scrollTop', { configurable: true, writable: true, value: 20 });
+    Object.defineProperty(log, 'scrollTo', {
+      configurable: true,
+      value: vi.fn(({ top }: { top: number }) => {
+        (log as HTMLElement).scrollTop = top;
+      }),
+    });
+
+    fireEvent.scroll(log);
+    expect(screen.getByRole('button', { name: /jump to recent/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /jump to recent/i }));
+    expect(screen.queryByRole('button', { name: /jump to recent/i })).not.toBeInTheDocument();
+  });
 });

@@ -59,6 +59,19 @@
   font-weight: 700;
 }
 
+.table-pile-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.table-pile-toggle {
+  min-height: 32px;
+  padding: 0.22rem 0.58rem;
+  font-size: 0.76rem;
+}
+
 .draw-pile-card {
   position: relative;
 }
@@ -88,6 +101,86 @@
     radial-gradient(circle at 22% 18%, rgba(173, 212, 255, 0.3), transparent 42%),
     linear-gradient(165deg, rgba(63, 117, 168, 0.9), rgba(28, 53, 85, 0.94));
   box-shadow: 0 10px 16px rgba(1, 6, 10, 0.35);
+}
+
+.table-discard-preview {
+  margin-top: 0.45rem;
+  min-height: 102px;
+  height: 102px;
+  position: relative;
+  width: 90px;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.table-discard-preview-card {
+  position: absolute;
+  top: calc(var(--discard-index, 0) * 2px);
+  left: calc(var(--discard-index, 0) * 5px);
+  transform: rotate(calc(var(--discard-index, 0) * 2deg - 2deg));
+  transform-origin: center;
+  pointer-events: none;
+}
+
+.table-discard-preview-card .card-view {
+  box-shadow: 0 8px 14px rgba(2, 8, 10, 0.34);
+}
+
+.table-discard-preview-card.is-back {
+  filter: saturate(0.8);
+  opacity: 0.82;
+}
+
+.table-discard-preview-card.is-top {
+  z-index: 3;
+}
+
+.discard-pile-card {
+  overflow: hidden;
+}
+
+.discard-pile-card.is-expanded {
+  background: rgba(8, 19, 15, 0.66);
+}
+
+.table-discard-browser {
+  margin-top: 0.46rem;
+  border-top: 1px solid rgba(126, 153, 113, 0.36);
+  padding-top: 0.42rem;
+}
+
+.table-discard-browser-caption {
+  margin: 0 0 0.35rem;
+  color: #d2e1c8;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.table-discard-browser-scroll {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding: 0.06rem 0.04rem 0.2rem;
+}
+
+.table-discard-browser-item {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: center;
+  gap: 0.18rem;
+}
+
+.table-discard-browser-index {
+  color: #c8d9bc;
+  font-size: 0.68rem;
+}
+
+.table-discard-empty {
+  margin: 0.2rem 0 0;
+  color: #d0dcc9;
+  font-size: 0.82rem;
+  font-weight: 500;
 }
 
 .draw-animation-layer {
@@ -138,6 +231,17 @@
   .table-draw-deck {
     width: 46px;
     height: 64px;
+  }
+
+  .table-discard-preview {
+    min-height: 94px;
+    height: 94px;
+    width: 82px;
+  }
+
+  .table-pile-head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 

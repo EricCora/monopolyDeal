@@ -152,7 +152,7 @@
 .table-main-layout {
   margin-top: 0.72rem;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 330px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.72rem;
   align-items: start;
 }
@@ -165,6 +165,7 @@
 .table-insights-stack {
   display: grid;
   gap: 0.62rem;
+  grid-template-columns: 1fr;
 }
 
 .table-insights-stack.is-collapsed {
@@ -203,14 +204,26 @@
 
 .game-table-grid {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) 1fr;
+  grid-template-columns: minmax(240px, 290px) minmax(0, 1fr);
   gap: var(--space-4);
   align-items: start;
+}
+
+.game-table-left-stack {
+  display: grid;
+  gap: 0.72rem;
+  align-items: start;
+  position: sticky;
+  top: 1rem;
 }
 
 .action-rail {
   position: sticky;
   top: 1rem;
+}
+
+.game-table-left-stack .action-rail {
+  position: static;
 }
 
 .action-rail h3 {
@@ -593,6 +606,16 @@
   box-shadow: 0 0 0 1px rgba(127, 176, 136, 0.44), inset 0 0 0 1px rgba(227, 255, 231, 0.26);
 }
 
+.property-lane.is-move-target {
+  border-color: #87c49a;
+  box-shadow: 0 0 0 1px rgba(135, 196, 154, 0.6), inset 0 0 0 1px rgba(230, 255, 241, 0.34);
+}
+
+.property-lane.is-move-source-lane {
+  border-color: #78b0c2;
+  box-shadow: 0 0 0 1px rgba(120, 176, 194, 0.48), inset 0 0 0 1px rgba(216, 242, 250, 0.26);
+}
+
 .property-lane-chip {
   margin-left: 0.35rem;
   display: inline-flex;
@@ -605,6 +628,11 @@
   padding: 0.02rem 0.38rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.property-lane-chip-button {
+  cursor: pointer;
+  font-weight: 700;
 }
 
 .property-card-wrap {
@@ -628,6 +656,16 @@
   border-radius: 9px;
   border: 2px dashed rgba(120, 189, 123, 0.78);
   box-shadow: 0 0 0 2px rgba(120, 189, 123, 0.2);
+  pointer-events: none;
+}
+
+.property-card-wrap.is-move-source::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 9px;
+  border: 2px solid rgba(122, 176, 233, 0.84);
+  box-shadow: 0 0 0 2px rgba(122, 176, 233, 0.25);
   pointer-events: none;
 }
 
@@ -892,6 +930,14 @@
   overflow: auto;
 }
 
+.chat-recent-jump {
+  justify-self: end;
+  margin-top: 0.34rem;
+  min-height: 30px;
+  padding: 0.2rem 0.62rem;
+  font-size: 0.76rem;
+}
+
 .chat-message {
   border-radius: 9px;
   border: 1px solid rgba(129, 157, 126, 0.28);
@@ -934,7 +980,7 @@
 
 .chat-typing {
   min-height: 1.1rem;
-  margin: 0.32rem 0 0.38rem;
+  margin: 0.26rem 0 0.38rem;
   color: #b4d0ad;
   font-size: 0.82rem;
 }
@@ -986,6 +1032,11 @@
 
   .action-rail {
     position: static;
+  }
+
+  .game-table-left-stack {
+    position: static;
+    top: auto;
   }
 
   .table-main-layout {

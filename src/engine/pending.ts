@@ -56,8 +56,6 @@ export function maybeOpenCounter(
 ): boolean {
   const target = getPlayer(state, targetPlayerId);
   if (!target) return false;
-  const justSayNo = target.hand.find((cardId) => getCardDefinition(cardId).actionKind === 'just_say_no');
-  if (!justSayNo) return false;
   state.pending = {
     kind: 'counter',
     payload: {
@@ -180,22 +178,19 @@ function legalForSlyDealSelection(state: GameState, player: PlayerState): LegalA
   if (!target) return [];
 
   const choices: LegalAction[] = [];
-  for (const color of PROPERTY_COLORS) {
-    for (const entry of target.properties[color]) {
-      const def = getCardDefinition(entry.cardId);
-      if (def.actionKind === 'house' || def.actionKind === 'hotel') continue;
-      for (const destColor of PROPERTY_COLORS.filter((candidate) => canCardBePlacedInColor(def, candidate))) {
-        choices.push({
-          label: `Take ${cardLabel(entry.cardId)} from ${target.name} to ${colorLabel(destColor)}`,
-          action: {
-            type: 'sly_deal_pick',
-            playerId: player.id,
-            cardId: entry.cardId,
-            sourceColor: color,
-            destinationColor: destColor,
-          },
-        });
-      }
+  for (const movable of movablePropertyCards(target)) {
+    const def = getCardDefinition(movable.cardId);
+    for (const destColor of PROPERTY_COLORS.filter((candidate) => canCardBePlacedInColor(def, candidate))) {
+      choices.push({
+        label: `Take ${cardLabel(movable.cardId)} from ${target.name} to ${colorLabel(destColor)}`,
+        action: {
+          type: 'sly_deal_pick',
+          playerId: player.id,
+          cardId: movable.cardId,
+          sourceColor: movable.color,
+          destinationColor: destColor,
+        },
+      });
     }
   }
   return choices;
