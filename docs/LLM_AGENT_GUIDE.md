@@ -24,6 +24,8 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Retention helpers (`src/stats/retention.ts`) for achievements and daily challenge progression.
 - `src/ai/`
   - Heuristic and rollout decision helpers plus explainable coach hint generation.
+- `src/replay/`
+  - Deterministic replay normalization + fingerprint helper (`src/replay/serialize.ts`) used by replay tests and verification script.
 - `src/network/`
   - Hosted multiplayer client API wrappers (`src/network/multiplayerClient.ts`) for room create/join/reconnect/start/state/action/leave plus pause/resume/undo/reset-turn/checkpoint flows.
   - Adds lobby-ready (`/ready`) and quick-reaction (`/reaction`) helpers.
@@ -56,7 +58,12 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - `src/ui/components/MultiplayerChatDock.tsx` provides the bottom-left multiplayer chat pill/panel, unread badge, mention highlight, typing line, and aria-log stream.
   - `src/ui/components/RulesDrawer.tsx` provides in-game rules/set/rent quick reference.
   - Selection pending flows now support property-card click interactions for deal actions; keep action-button fallback intact.
+  - Main-phase wild repositioning supports direct table clicks (select movable wild card, then choose highlighted destination lane); keep legal-action fallback intact.
   - Game table panels include explicit request-state banners (payment/selection/response) so required actions are visible without opening the event log.
+  - `GameTableScreen` now exposes a command-strip (active player, step, turn pressure, pending state), a priority turn banner, and collapsible timeline/insight panels to reduce clutter on narrow layouts.
+  - Discard pile UI supports both quick-stack preview and an expandable horizontal browser (newest-to-oldest) for turn-by-turn inspection.
+  - `MultiplayerScreen` room controls are grouped by task area (invite/session/host), recent activity is user-collapsible, and the lobby includes snapshot cards plus current-turn tagging.
+  - `MultiplayerChatDock` now keeps auto-follow behavior only while the user is near the latest messages; if they scroll up, a `Jump to Recent` control appears.
   - `src/ui/theme/` contains tokenized CSS split by base/components/screens.
   - `GameShell` applies root table style classes (`table-style-classic-green`, `table-style-neon-arcade`) to drive felt/theme variants.
   - `SettingsScreen` now uses compact grouped cards, custom switch UI, and a collapsed-by-default Experimental accordion.
@@ -105,9 +112,11 @@ UI layers (steal banners/highlights, draw animation) should prefer `details` and
 - Win is 3 complete sets.
 - Banking follows official split: regular property cards cannot be banked; money/action/building cards and wild property cards can.
 - `just_say_no` uses counter chain flow (`pending.kind === 'counter'`) before resolving/canceling an effect.
+- Counter windows are opened for counterable targeted effects regardless of whether a `Just Say No` is in-hand, to avoid hidden-hand information leaks.
 - Multi-target payment (`It's My Birthday`) runs a target chain via `remainingTargetPlayerIds`.
 - Buildings (`house`, `hotel`) are treated as non-movable for property steal/swap flows.
 - Payment selection must satisfy requested amount when payer can cover; if payer cannot cover, all available bank/property cards must be paid.
+- If payer has no payable bank/property cards, an empty `pay_request.cards` submission is valid and resolves as a shortfall.
 
 ## Change Playbooks
 
@@ -161,6 +170,15 @@ UI layers (steal banners/highlights, draw animation) should prefer `details` and
 - UI-only change:
   - Rendering + user interaction test
 
+## Replay Determinism Gate
+
+- Deterministic replay verifier: `scripts/replay_verify.mjs` (run via `npm run replay:verify`)
+- Determinism tests:
+  - `src/test/replay.test.ts`
+  - `src/test/determinism.test.ts`
+- Replay hash contract:
+  - fingerprint is computed from normalized replay state (timestamps stripped) in `src/replay/serialize.ts`
+
 ## Regression Prevention System
 
 Use this section when a change risks "silent behavior loss" during refactors.
@@ -191,7 +209,8 @@ Suggested contract anchors in this repo:
 1. `npm run test`
 2. `npm run build`
 3. `npm run lint` (or document pre-existing warnings)
-4. Docs sync:
+4. `npm run replay:verify` for engine/rules-flow changes
+5. Docs sync:
 - user-visible workflow changes reflected in `README.md`
 - agent-facing architecture/workflow changes reflected in this guide
 

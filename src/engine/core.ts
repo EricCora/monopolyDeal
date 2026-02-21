@@ -177,6 +177,7 @@ export function getRentAmount(player: PlayerState, color: PropertyColor): number
 export function movablePropertyCards(player: PlayerState): Array<{ color: PropertyColor; cardId: string }> {
   const options: Array<{ color: PropertyColor; cardId: string }> = [];
   for (const color of PROPERTY_COLORS) {
+    if (isCompleteSet(player, color)) continue;
     for (const entry of player.properties[color]) {
       const def = getCardDefinition(entry.cardId);
       if (def.actionKind === 'house' || def.actionKind === 'hotel') continue;

@@ -141,6 +141,24 @@ describe('engine basics', () => {
     expect(next.pending?.kind).toBe('payment');
   });
 
+  it('opens a counter response window without revealing whether target has Just Say No', () => {
+    const state = mkState();
+    state.players[0].hand = ['debt_collector#d1'];
+    state.players[1].hand = ['money_1#y1'];
+
+    const next = applyAction(state, {
+      type: 'play_action',
+      playerId: 'p1',
+      cardId: 'debt_collector#d1',
+      targetPlayerId: 'p2',
+    }).state;
+
+    expect(next.pending?.kind).toBe('counter');
+    const targetLegal = getLegalActions(next, 'p2');
+    expect(targetLegal.some((item) => item.action.type === 'counter_response' && item.action.useJustSayNo)).toBe(false);
+    expect(targetLegal.some((item) => item.action.type === 'counter_response' && !item.action.useJustSayNo)).toBe(true);
+  });
+
   it('detects winner at 3 complete sets', () => {
     const state = mkState();
     state.players[0].properties.brown = [
@@ -215,12 +233,24 @@ describe('engine basics', () => {
       cardId: 'its_my_birthday#b1',
     }).state;
 
-    expect(next.pending?.kind).toBe('payment');
-    if (!next.pending || next.pending.kind !== 'payment') {
-      throw new Error('Expected payment pending after birthday.');
+    expect(next.pending?.kind).toBe('counter');
+    if (!next.pending || next.pending.kind !== 'counter') {
+      throw new Error('Expected counter pending after birthday.');
     }
     expect(next.pending.payload.targetPlayerId).toBe('p2');
     expect(next.turn.playsUsed).toBe(1);
+
+    next = applyAction(next, {
+      type: 'counter_response',
+      playerId: 'p2',
+      useJustSayNo: false,
+    }).state;
+
+    expect(next.pending?.kind).toBe('payment');
+    if (!next.pending || next.pending.kind !== 'payment') {
+      throw new Error('Expected payment pending after first counter response.');
+    }
+    expect(next.pending.payload.targetPlayerId).toBe('p2');
 
     next = applyAction(next, {
       type: 'pay_request',
@@ -228,9 +258,21 @@ describe('engine basics', () => {
       cards: ['money_2#p2m1'],
     }).state;
 
+    expect(next.pending?.kind).toBe('counter');
+    if (!next.pending || next.pending.kind !== 'counter') {
+      throw new Error('Expected second counter pending after first birthday payment.');
+    }
+    expect(next.pending.payload.targetPlayerId).toBe('p3');
+
+    next = applyAction(next, {
+      type: 'counter_response',
+      playerId: 'p3',
+      useJustSayNo: false,
+    }).state;
+
     expect(next.pending?.kind).toBe('payment');
     if (!next.pending || next.pending.kind !== 'payment') {
-      throw new Error('Expected second payment pending after first birthday payment.');
+      throw new Error('Expected second payment pending after second counter response.');
     }
     expect(next.pending.payload.targetPlayerId).toBe('p3');
 
@@ -289,9 +331,21 @@ describe('engine basics', () => {
       useJustSayNo: false,
     }).state;
 
+    expect(next.pending?.kind).toBe('counter');
+    if (!next.pending || next.pending.kind !== 'counter') {
+      throw new Error('Expected counter for the next target after cancellation.');
+    }
+    expect(next.pending.payload.targetPlayerId).toBe('p3');
+
+    next = applyAction(next, {
+      type: 'counter_response',
+      playerId: 'p3',
+      useJustSayNo: false,
+    }).state;
+
     expect(next.pending?.kind).toBe('payment');
     if (!next.pending || next.pending.kind !== 'payment') {
-      throw new Error('Expected payment for the next target after cancellation.');
+      throw new Error('Expected payment for the next target after counter resolve.');
     }
     expect(next.pending.payload.targetPlayerId).toBe('p3');
 
@@ -471,6 +525,33 @@ describe('engine basics', () => {
     const targeted = legal.filter((item) => item.action.type === 'play_action');
 
     expect(targeted).toHaveLength(0);
+  });
+
+  it('does not allow sly or forced deal targets that only have complete sets', () => {
+    const state = createGame({
+      seed: 25,
+      players: [
+        { id: 'p1', name: 'A' },
+        { id: 'p2', name: 'B' },
+      ],
+    });
+    state.currentPlayerIndex = 0;
+    state.turn.phase = 'action';
+    state.turn.playsUsed = 0;
+    state.pending = null;
+    state.players[0].hand = ['sly_deal#s1', 'forced_deal#f1'];
+    state.players[0].properties.utility = [{ cardId: 'utility_1#u1', assignedColor: 'utility' }];
+    state.players[1].properties.brown = [
+      { cardId: 'brown_1#b1', assignedColor: 'brown' },
+      { cardId: 'brown_1#b2', assignedColor: 'brown' },
+    ];
+
+    const legal = getLegalActions(state, 'p1').filter((item) => item.action.type === 'play_action');
+    const slyTargets = legal.filter((item) => item.action.type === 'play_action' && item.action.cardId === 'sly_deal#s1');
+    const forcedTargets = legal.filter((item) => item.action.type === 'play_action' && item.action.cardId === 'forced_deal#f1');
+
+    expect(slyTargets).toHaveLength(0);
+    expect(forcedTargets).toHaveLength(0);
   });
 
   it('rejects invalid targeted action before consuming action card', () => {
@@ -788,6 +869,42 @@ describe('engine basics', () => {
     expect(full.state.pending).toBeNull();
   });
 
+  it('allows resolving payment with zero cards when payer has no payable assets', () => {
+    const state = mkState();
+    state.pending = {
+      kind: 'payment',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        amount: 5,
+        reason: 'Debt Collector',
+        actionCardId: 'debt_collector#d1',
+      },
+    };
+    state.players[1].bank = [];
+    state.players[1].properties = {
+      brown: [],
+      light_blue: [],
+      pink: [],
+      orange: [],
+      red: [],
+      yellow: [],
+      green: [],
+      dark_blue: [],
+      railroad: [],
+      utility: [],
+    };
+
+    const result = applyAction(state, {
+      type: 'pay_request',
+      playerId: 'p2',
+      cards: [],
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.state.pending).toBeNull();
+  });
+
   it('draws five cards when starting draw phase with an empty hand', () => {
     const state = createGame({
       seed: 97,
@@ -942,6 +1059,64 @@ describe('engine basics', () => {
     expect(result.error?.code).toBe('invalid_action');
     expect(result.state.players[0].properties.utility.map((entry) => entry.cardId)).toEqual(['utility_1#u1']);
     expect(result.state.players[1].properties.brown.map((entry) => entry.cardId)).toEqual(['brown_1#b1']);
+  });
+
+  it('rejects sly deal picks that target cards in complete sets', () => {
+    const state = mkState();
+    state.pending = {
+      kind: 'sly_deal',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        actionCardId: 'sly_deal#sd1',
+      },
+    };
+    state.players[1].properties.brown = [
+      { cardId: 'brown_1#b1', assignedColor: 'brown' },
+      { cardId: 'brown_1#b2', assignedColor: 'brown' },
+    ];
+
+    const result = applyAction(state, {
+      type: 'sly_deal_pick',
+      playerId: 'p1',
+      cardId: 'brown_1#b1',
+      sourceColor: 'brown',
+      destinationColor: 'brown',
+    });
+
+    expect(result.error?.code).toBe('invalid_action');
+    expect(result.state.players[1].properties.brown.map((entry) => entry.cardId)).toEqual(['brown_1#b1', 'brown_1#b2']);
+  });
+
+  it('rejects forced deal picks that include cards in complete sets', () => {
+    const state = mkState();
+    state.pending = {
+      kind: 'forced_deal',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        actionCardId: 'forced_deal#fd1',
+      },
+    };
+    state.players[0].properties.brown = [
+      { cardId: 'brown_1#a1', assignedColor: 'brown' },
+      { cardId: 'brown_1#a2', assignedColor: 'brown' },
+    ];
+    state.players[1].properties.utility = [{ cardId: 'utility_1#u1', assignedColor: 'utility' }];
+
+    const result = applyAction(state, {
+      type: 'forced_deal_pick',
+      playerId: 'p1',
+      giveCardId: 'brown_1#a1',
+      giveColor: 'brown',
+      takeCardId: 'utility_1#u1',
+      takeColor: 'utility',
+      destinationColor: 'utility',
+    });
+
+    expect(result.error?.code).toBe('invalid_action');
+    expect(result.state.players[0].properties.brown.map((entry) => entry.cardId)).toEqual(['brown_1#a1', 'brown_1#a2']);
+    expect(result.state.players[1].properties.utility.map((entry) => entry.cardId)).toEqual(['utility_1#u1']);
   });
 
   it('uses custom ruleset values in turn prompts', () => {

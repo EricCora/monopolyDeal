@@ -136,7 +136,7 @@ describe('multiplayer room service lifecycle', () => {
     const playerTwo = joinRoom(room, 'Player 2');
     const staleNow = Date.now();
     const staleParticipant = findParticipant(room, playerTwo.playerId);
-    staleParticipant.lastSeenAt = staleNow - 13_000;
+    staleParticipant.lastSeenAt = staleNow - 91_000;
 
     pruneInactiveRooms(rooms, staleNow);
 
@@ -259,6 +259,26 @@ describe('multiplayer room service lifecycle', () => {
     const staleRevision = room.revision - 1;
 
     expect(() => pauseRoom(room, session.playerId, session.sessionToken, staleRevision)).toThrowError('revision_conflict');
+  });
+
+  it('rejects stale expected revision for applyRoomAction without mutating room state', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+
+    const currentView = roomView(room, session.playerId, session.sessionToken);
+    const nextAction = currentView.legalActions.find((entry) => entry.action.type === 'draw_cards')?.action ?? currentView.legalActions[0]?.action;
+    expect(nextAction).toBeDefined();
+    if (!nextAction) throw new Error('missing legal action');
+
+    const staleRevision = room.revision - 1;
+    const revisionBefore = room.revision;
+    const gameSnapshotBefore = JSON.stringify(room.game);
+
+    expect(() => applyRoomAction(room, session.playerId, session.sessionToken, nextAction, staleRevision)).toThrowError('revision_conflict');
+    expect(room.revision).toBe(revisionBefore);
+    expect(JSON.stringify(room.game)).toBe(gameSnapshotBefore);
   });
 
   it('reassigns host back to the original host after reconnect', () => {

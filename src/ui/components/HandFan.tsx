@@ -103,7 +103,7 @@ export function HandFan({
   return (
     <div
       ref={containerRef}
-      className={`hand-fan ${isRailLayout ? 'is-rail' : 'is-fan'}`}
+      className={`hand-fan ${isRailLayout ? 'is-rail' : 'is-fan'} ${interactive ? 'is-interactive' : 'is-static'}`}
       style={style}
       aria-label="Player hand"
       data-layout={fitModel.layout}

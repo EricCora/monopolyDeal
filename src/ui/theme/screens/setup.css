@@ -200,6 +200,32 @@
   margin-top: 0.7rem;
 }
 
+.multiplayer-room-actions-grid {
+  margin-top: 0.7rem;
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.multiplayer-room-action-group {
+  border: 1px solid rgba(117, 143, 103, 0.44);
+  border-radius: 11px;
+  background: rgba(17, 32, 21, 0.74);
+  padding: 0.5rem;
+}
+
+.multiplayer-room-action-label {
+  margin: 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #f1dc9c;
+}
+
+.multiplayer-room-action-group .multiplayer-room-actions {
+  margin-top: 0.45rem;
+}
+
 .multiplayer-lobby-shell {
   border: 1px solid #5a764f;
   border-radius: 14px;
@@ -266,6 +292,35 @@
   margin-top: 0.7rem;
 }
 
+.multiplayer-lobby-snapshot {
+  margin-top: 0.68rem;
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+}
+
+.multiplayer-lobby-snapshot-item {
+  border: 1px solid rgba(122, 154, 109, 0.46);
+  border-radius: 10px;
+  background: rgba(20, 40, 24, 0.76);
+  padding: 0.46rem 0.5rem;
+}
+
+.multiplayer-lobby-snapshot-label {
+  margin: 0;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #d8e6cd;
+}
+
+.multiplayer-lobby-snapshot-value {
+  margin: 0.2rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f0f7ea;
+}
+
 .multiplayer-roster-wrap {
   margin-top: 0.62rem;
   border: 1px solid #647f58;
@@ -320,6 +375,11 @@
 
 .multiplayer-roster-table tbody tr.is-self td {
   border-bottom-color: rgba(232, 194, 123, 0.5);
+}
+
+.multiplayer-roster-table tbody tr.is-turn {
+  box-shadow: inset 3px 0 0 rgba(137, 203, 124, 0.85);
+  background: rgba(43, 75, 44, 0.4);
 }
 
 .multiplayer-player-cell {
@@ -381,6 +441,12 @@
   font-weight: 700;
 }
 
+.multiplayer-player-tag.is-turn {
+  border-color: #88cc7c;
+  color: #e8ffe2;
+  background: rgba(48, 111, 56, 0.45);
+}
+
 .multiplayer-connection-chip {
   display: inline-flex;
   align-items: center;
@@ -421,8 +487,22 @@
 }
 
 .multiplayer-activity-panel h4 {
-  margin-bottom: 0.42rem;
+  margin: 0;
   color: #f3d997;
+}
+
+.multiplayer-activity-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.42rem;
+}
+
+.multiplayer-activity-toggle {
+  min-height: 34px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.78rem;
 }
 
 .multiplayer-screen .multiplayer-activity-feed {
@@ -471,6 +551,10 @@
     flex: 1 1 170px;
   }
 
+  .multiplayer-room-actions-grid {
+    grid-template-columns: 1fr;
+  }
+
 }
 
 @media (max-width: 620px) {
@@ -497,6 +581,10 @@
   .multiplayer-lobby-legal-actions button,
   .multiplayer-ready-actions button {
     flex: 1 1 100%;
+  }
+
+  .multiplayer-lobby-snapshot {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MultiplayerChatMessage, MultiplayerReaction } from '../../network/multiplayerTypes';
 
 interface MultiplayerChatDockProps {
@@ -44,11 +44,28 @@ export function MultiplayerChatDock({
   onTypingChange,
 }: MultiplayerChatDockProps) {
   const [draft, setDraft] = useState('');
+  const [pinnedToRecent, setPinnedToRecent] = useState(true);
+  const messageListRef = useRef<HTMLUListElement | null>(null);
   const orderedMessages = useMemo(
     () => [...messages].sort((left, right) => left.createdAt - right.createdAt),
     [messages],
   );
   const unreadLabel = unreadCount > 99 ? '99+' : String(unreadCount);
+
+  useEffect(() => {
+    if (!isOpen || !pinnedToRecent || !messageListRef.current) return;
+    const list = messageListRef.current;
+    if (typeof list.scrollTo === 'function') {
+      list.scrollTo({ top: list.scrollHeight, behavior: 'auto' });
+      return;
+    }
+    list.scrollTop = list.scrollHeight;
+  }, [isOpen, orderedMessages, pinnedToRecent]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setPinnedToRecent(true);
+  }, [isOpen]);
 
   return (
     <section className={`multiplayer-chat-dock ${isOpen ? 'is-open' : ''}`} aria-label="Multiplayer chat">
@@ -82,7 +99,19 @@ export function MultiplayerChatDock({
             </div>
           ) : null}
 
-          <ul className="chat-message-list" role="log" aria-live="polite" aria-relevant="additions text">
+          <ul
+            ref={messageListRef}
+            className="chat-message-list"
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions text"
+            onScroll={() => {
+              if (!messageListRef.current) return;
+              const list = messageListRef.current;
+              const distanceFromBottom = list.scrollHeight - (list.scrollTop + list.clientHeight);
+              setPinnedToRecent(distanceFromBottom <= 16);
+            }}
+          >
             {orderedMessages.length > 0 ? (
               orderedMessages.map((message) => {
                 const own = message.playerId === yourPlayerId;
@@ -104,6 +133,25 @@ export function MultiplayerChatDock({
               <li className="chat-message-empty">No messages yet. Start the table talk.</li>
             )}
           </ul>
+
+          {!pinnedToRecent && orderedMessages.length > 0 ? (
+            <button
+              type="button"
+              className="chat-recent-jump"
+              onClick={() => {
+                setPinnedToRecent(true);
+                const list = messageListRef.current;
+                if (!list) return;
+                if (typeof list.scrollTo === 'function') {
+                  list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
+                  return;
+                }
+                list.scrollTop = list.scrollHeight;
+              }}
+            >
+              Jump to Recent
+            </button>
+          ) : null}
 
           <p className="chat-typing" aria-live="polite">
             {typingNames.length > 0 ? `${typingNames.join(', ')} ${typingNames.length === 1 ? 'is' : 'are'} typing...` : ' '}
