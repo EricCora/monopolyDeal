@@ -18,7 +18,7 @@
 2. Add bounded in-memory ring buffer export in dev mode.
 3. Add explicit revision conflict/recovery counters in telemetry.
 
-## Reconnect-v1 Stub Telemetry (MD-C12)
+## Reconnect Stub Telemetry (MD-C12)
 
 Client-side counters:
 
@@ -48,7 +48,7 @@ Server-side counters/log markers:
   - `[mp][room_runtime]`
   - `[mp][action_rejected]`
 
-`[mp][resume_result]` status taxonomy (reconnect-v1):
+`[mp][resume_result]` status taxonomy:
 
 - `ok`
 - `invalid_token`

@@ -1311,9 +1311,7 @@ export function useMultiplayerRoom({
     pausedReason: roomView?.pausedReason ?? null,
     endedReason: roomView?.endedReason ?? null,
   }), [
-    connectionState,
     errorCode,
-    loading,
     pushState,
     roomView?.endedReason,
     roomView?.pausedReason,

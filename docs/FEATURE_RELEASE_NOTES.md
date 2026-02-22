@@ -8,14 +8,14 @@ Branch: `codex/epic-c-20-21-reconnect-foundation`
 
 Status: `complete`
 
-- Finalized MD-C10 host disconnect runtime policy behind `MP_PAUSE_ON_DISCONNECT_V1`:
+- Finalized MD-C10 host disconnect runtime policy (always-on):
   - pause on disconnect in active/finished rooms,
   - host-specific pause semantics,
   - terminal `ended_timeout` on host timeout,
   - no host migration after match start.
 - Finalized MD-C11 reconnect/resync coverage expansion across service/hook/screen/app tests, including prompt-flow reconnect scenarios and runtime-state transition smoke coverage.
 - Finalized MD-C12 diagnostics guardrails:
-  - reconnect diagnostics surfaced in dev UI behind `VITE_MP_RECONNECT_DEBUG`,
+  - reconnect diagnostics surfaced in dev UI via `VITE_MP_RECONNECT_DEBUG`,
   - structured server runtime/resume markers,
   - centralized token redaction helper (`apps/server/src/logging.ts`).
 - Closed Stage 5 AI verification expansion:

@@ -55,13 +55,12 @@ stateDiagram-v2
 
 ## Grace Behavior
 
-- Reconnect-v1 default grace: `90_000ms`.
-- Grace is configurable (`MP_RECONNECT_GRACE_MS`) when reconnect-v1 is enabled.
-- Legacy behavior remains at existing 5-minute grace while reconnect-v1 is disabled.
+- Default reconnect grace: `90_000ms`.
+- Grace is configurable via `MP_RECONNECT_GRACE_MS`.
 
 ## Client Retry Policy (MD-C05)
 
-- Reconnect-v1 client retry loop is bounded and single-flight.
+- Reconnect client retry loop is bounded and single-flight.
 - Attempt 1 is immediate, then exponential backoff with jitter:
   - `500ms`, `1_000ms`, `2_000ms`, `4_000ms`, `8_000ms` (capped at `8_000ms`).
   - Per-attempt jitter: `+/-20%`.
@@ -144,10 +143,9 @@ stateDiagram-v2
 ```
 
 MD-C06/MD-C07 implementation note:
-- With `MP_RECONNECT_V1=true`, `/reconnect` returns HTTP `200` for handshake outcomes and carries status in payload.
+- `/reconnect` returns HTTP `200` for handshake outcomes and carries status in payload.
 - Successful handshake (`status='ok'`) includes canonical/legacy session credentials plus authoritative `snapshot`.
 - Snapshot-in-handshake is the primary resync path; client falls back to `/state` fetch only if snapshot is missing.
-- Legacy reconnect behavior (session-only success + 400-style failures) is preserved when reconnect-v1 flags are disabled.
 
 ### Presence Events
 
@@ -191,7 +189,7 @@ Runtime-state fields surfaced in `MultiplayerRoomView`:
 }
 ```
 
-Policy behavior when `MP_PAUSE_ON_DISCONNECT_V1=true`:
+Policy behavior:
 
 - Active/finished room disconnect pauses gameplay.
 - Host disconnect enters `paused_host_disconnect`.
@@ -245,7 +243,7 @@ MD-C09 implementation note:
 | Version mismatch | Resume accepted with resync required | `resync_pending` until snapshot applied |
 | Stale action submit (`MD-C09`) | Reject with `action_rejected(reason=stale_state)` | Client auto-resyncs and resumes without manual rejoin |
 
-### Server Status Mapping (Reconnect-v1)
+### Server Status Mapping
 
 | Internal error code | Handshake status |
 | --- | --- |
@@ -266,7 +264,6 @@ MD-C09 implementation note:
 
 ## Host Timeout Policy (MD-C10)
 
-- Implemented behind `MP_PAUSE_ON_DISCONNECT_V1`.
 - Room pause/end outcomes are explicit via runtime-state fields and room-runtime events.
 - Host timeout branch is terminal for the room lifecycle (`ended_timeout`) with user-facing room-ended messaging.
 
@@ -276,7 +273,7 @@ MD-C09 implementation note:
 - Reconnect auth: ephemeral `resumeToken`
 - Grace default: `90_000ms` configurable
 - Duplicate reconnect: newest socket/session wins, prior binding invalidated
-- Host timeout behavior: implemented via runtime pause/end policy (`MP_PAUSE_ON_DISCONNECT_V1`)
+- Host timeout behavior: implemented via runtime pause/end policy (`ended_timeout`)
 
 ## Manual Simulation Scenarios (Spike validation)
 

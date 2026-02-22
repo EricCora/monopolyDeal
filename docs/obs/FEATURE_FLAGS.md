@@ -1,4 +1,4 @@
-# Feature Flags and Experiments
+# Feature Flags and Runtime Controls
 
 ## Current flag surfaces
 
@@ -12,39 +12,29 @@
 - Server env flags:
   - `MULTIPLAYER_PUSH_ENABLED`
   - `MULTIPLAYER_REACTIONS_ENABLED`
-  - `MP_RECONNECT_V1`
   - `MP_RECONNECT_GRACE_MS`
-  - `MP_VERSION_GUARD_V1`
-  - `MP_PAUSE_ON_DISCONNECT_V1`
 - Client env flags:
-  - `VITE_MP_RECONNECT_V1`
-  - `VITE_MP_RECONNECT_V1_UI`
-  - `VITE_MP_VERSION_GUARD_V1`
+  - `VITE_MULTIPLAYER_PUSH_ENABLED`
+  - `VITE_MULTIPLAYER_REACTIONS_ENABLED`
   - `VITE_MP_RECONNECT_DEBUG`
 
-## Reconnect Kill Switches
+## Always-on Multiplayer Policies
 
-- Transport/reconnect handshake kill switch:
-  - Server: `MP_RECONNECT_V1=false`
-  - Client: `VITE_MP_RECONNECT_V1=false`
-- Reconnect UI scaffolding kill switch:
-  - Client: `VITE_MP_RECONNECT_V1_UI=false`
-- Action stale-state guard kill switch:
-  - Server: `MP_VERSION_GUARD_V1=false`
-  - Client: `VITE_MP_VERSION_GUARD_V1=false`
-- Disconnect pause/end policy kill switch:
-  - Server: `MP_PAUSE_ON_DISCONNECT_V1=false`
-- Diagnostics UI kill switch:
-  - Client: `VITE_MP_RECONNECT_DEBUG=false`
+The following multiplayer hardening features are graduated and no longer rollout-gated:
 
-## Rollout rules
+- reconnect handshake + authoritative snapshot resync
+- bounded reconnect retry/backoff loop
+- stale-action rejection + auto-resync recovery
+- disconnect pause/resume runtime policy + host-timeout room ending
+- reconnect UI-state scaffolding (handshake/resync/terminal states)
 
-1. Default new risky features to off.
-2. Keep additive preference schema changes backward-compatible.
-3. Pair each flag with clear user-facing fallback behavior.
-4. Remove stale flags after stable graduation.
+## Debug visibility
 
-## Experiment hygiene
+- `VITE_MP_RECONNECT_DEBUG=false` keeps the detailed reconnect diagnostics panel off by default.
+- In local/dev context, multiplayer screens always show policy status and live-update/runtime state chips.
 
-- Record metrics for enablement and key outcomes.
-- Avoid flag interdependencies that create invalid combinations.
+## Rollout hygiene
+
+1. New risky features should still launch behind explicit flags.
+2. Remove stale flags once behavior is graduated.
+3. Keep each remaining flag mapped to a concrete fallback behavior.
