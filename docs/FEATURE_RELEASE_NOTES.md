@@ -2,6 +2,15 @@
 
 Branch: `codex/deep-research-improvements`
 
+## Update: Epic C Reconnect Foundation (In Progress)
+
+Status: `in_progress`
+
+- Added reconnect contract artifact: `docs/multiplayer-reconnect-contract.md`.
+- Added Epic C dependency tracker + decision log: `docs/IMPLEMENTATION_TRACKER.md`.
+- Started non-breaking seat identity compatibility (`seatId`/`resumeToken` + legacy aliases).
+- Added reconnect UI-state scaffolding and reconnect telemetry stubs for rollout debugging.
+
 ## Update: Gameplay Clarity + Chat + Recap Polish
 
 Branch: `codex/gameplay-clarity-chat-polish`

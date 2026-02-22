@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { isLanResolvableHost, listMultiplayerLanOrigins } from '../../network/multiplayerClient';
 import type {
   MultiplayerConnectionState,
+  MultiplayerConnectionUiState,
   MultiplayerPushState,
   MultiplayerRoomView,
   MultiplayerSession,
@@ -22,6 +23,8 @@ interface MultiplayerScreenProps {
   errorCode?: string | null;
   recoveryNotice?: { roomCode: string; reason: 'room_not_found' | 'reconnect_expired' } | null;
   connectionState: MultiplayerConnectionState;
+  connectionUiState?: MultiplayerConnectionUiState;
+  reconnectUiEnabled?: boolean;
   pushState: MultiplayerPushState;
   isHost: boolean;
   onPlayerNameChange: (value: string) => void;
@@ -60,6 +63,25 @@ function connectionTone(state: MultiplayerConnectionState): 'is-positive' | 'is-
   if (state === 'reconnecting') return 'is-warning';
   if (state === 'disconnected') return 'is-danger';
   return 'is-neutral';
+}
+
+function connectionUiLabel(state: MultiplayerConnectionUiState): string {
+  if (state === 'socket_disconnected') return 'Socket disconnected';
+  if (state === 'reconnecting_attempting') return 'Reconnecting';
+  if (state === 'reconnect_handshake_pending') return 'Restoring seat';
+  if (state === 'resync_pending') return 'Syncing state';
+  if (state === 'recovered') return 'Recovered';
+  if (state === 'resume_failed') return 'Resume failed';
+  if (state === 'timed_out') return 'Reconnect expired';
+  if (state === 'room_ended') return 'Room ended';
+  return 'Connected';
+}
+
+function connectionUiTone(state: MultiplayerConnectionUiState): 'is-positive' | 'is-neutral' | 'is-warning' | 'is-danger' {
+  if (state === 'connected' || state === 'recovered') return 'is-positive';
+  if (state === 'reconnect_handshake_pending' || state === 'resync_pending') return 'is-neutral';
+  if (state === 'socket_disconnected' || state === 'reconnecting_attempting') return 'is-warning';
+  return 'is-danger';
 }
 
 function pushTone(state: MultiplayerPushState): 'is-positive' | 'is-neutral' | 'is-warning' {
@@ -145,6 +167,8 @@ export function MultiplayerScreen({
   errorCode = null,
   recoveryNotice = null,
   connectionState,
+  connectionUiState = 'connected',
+  reconnectUiEnabled = false,
   pushState,
   isHost,
   onPlayerNameChange,
@@ -371,6 +395,30 @@ export function MultiplayerScreen({
     if (!roomView || !roomView.promptPlayerId) return null;
     return roomView.players.find((player) => player.id === roomView.promptPlayerId)?.name ?? roomView.promptPlayerId;
   }, [roomView]);
+  const reconnectBlockingStates = useMemo(() => new Set<MultiplayerConnectionUiState>([
+    'reconnecting_attempting',
+    'reconnect_handshake_pending',
+    'resync_pending',
+    'resume_failed',
+    'timed_out',
+    'room_ended',
+  ]), []);
+  const reconnectUiBlocking = reconnectUiEnabled && reconnectBlockingStates.has(connectionUiState);
+  const reconnectUiBannerText = useMemo(() => {
+    if (!reconnectUiEnabled) return null;
+    if (connectionUiState === 'reconnecting_attempting') return 'Connection lost. Attempting automatic reconnect.';
+    if (connectionUiState === 'reconnect_handshake_pending') return 'Reconnected to server. Restoring seat credentials.';
+    if (connectionUiState === 'resync_pending') return 'Seat restored. Syncing authoritative room state.';
+    if (connectionUiState === 'recovered') return 'Reconnect recovered successfully.';
+    if (connectionUiState === 'resume_failed') return 'Could not resume this seat automatically. Refresh or rejoin the room.';
+    if (connectionUiState === 'timed_out') return 'Reconnect window expired. Rejoin with room code.';
+    if (connectionUiState === 'room_ended') return 'Room is no longer available.';
+    return null;
+  }, [connectionUiState, reconnectUiEnabled]);
+  const showSyncPlaceholder = loading && session && (
+    connectionState === 'reconnecting'
+    || reconnectUiBlocking
+  );
 
   return (
     <section className="panel setup-screen multiplayer-screen card-enter">
@@ -380,6 +428,7 @@ export function MultiplayerScreen({
           ? 'Local testing uses a local multiplayer service.'
           : 'Create or join with a private room code or invite link.'}
       </p>
+      {reconnectUiBannerText ? <p className="setup-subtitle">{reconnectUiBannerText}</p> : null}
 
       {healthOk === false ? (
         <p className="error">
@@ -452,6 +501,11 @@ export function MultiplayerScreen({
                 <span className={`multiplayer-status-pill ${connectionTone(connectionState)}`}>
                   {connectionLabel(connectionState)}
                 </span>
+                {reconnectUiEnabled ? (
+                  <span className={`multiplayer-status-pill ${connectionUiTone(connectionUiState)}`}>
+                    {connectionUiLabel(connectionUiState)}
+                  </span>
+                ) : null}
                 <span className={`multiplayer-status-pill ${pushTone(pushState)}`}>
                   {pushLabel(pushState)}
                 </span>
@@ -462,10 +516,10 @@ export function MultiplayerScreen({
               <div className="multiplayer-room-action-group">
                 <p className="multiplayer-room-action-label">Invite</p>
                 <div className="actions multiplayer-room-actions">
-                  <button type="button" onClick={copyRoomCode} disabled={loading}>
+                  <button type="button" onClick={copyRoomCode} disabled={loading || reconnectUiBlocking}>
                     Copy Room Code
                   </button>
-                  <button type="button" className="cta-primary" onClick={copyInviteLink} disabled={loading}>
+                  <button type="button" className="cta-primary" onClick={copyInviteLink} disabled={loading || reconnectUiBlocking}>
                     Copy Invite Link
                   </button>
                 </div>
@@ -473,10 +527,10 @@ export function MultiplayerScreen({
               <div className="multiplayer-room-action-group">
                 <p className="multiplayer-room-action-label">Room Session</p>
                 <div className="actions multiplayer-room-actions">
-                  <button type="button" onClick={onRefresh} disabled={loading}>
+                  <button type="button" onClick={onRefresh} disabled={loading || reconnectUiBlocking}>
                     Refresh
                   </button>
-                  <button type="button" onClick={onLeaveRoom} disabled={loading}>
+                  <button type="button" onClick={onLeaveRoom} disabled={loading || reconnectUiBlocking}>
                     Forget Room
                   </button>
                 </div>
@@ -485,11 +539,11 @@ export function MultiplayerScreen({
                 <div className="multiplayer-room-action-group">
                   <p className="multiplayer-room-action-label">Host Match</p>
                   <div className="actions multiplayer-room-actions">
-                    <button type="button" onClick={() => onStartMatch()} disabled={loading}>
+                    <button type="button" onClick={() => onStartMatch()} disabled={loading || reconnectUiBlocking}>
                       Start Match
                     </button>
                     {roomView.checkpointSlots.length > 0 ? (
-                      <button type="button" onClick={startFromCheckpoint} disabled={loading}>
+                      <button type="button" onClick={startFromCheckpoint} disabled={loading || reconnectUiBlocking}>
                         Start From Checkpoint
                       </button>
                     ) : null}
@@ -514,7 +568,7 @@ export function MultiplayerScreen({
               </header>
               {!roomView.started && you ? (
                 <div className="actions multiplayer-ready-actions">
-                  <button type="button" className="cta-primary" onClick={() => onSetReady(!you.ready)} disabled={loading}>
+                  <button type="button" className="cta-primary" onClick={() => onSetReady(!you.ready)} disabled={loading || reconnectUiBlocking}>
                     {you.ready ? 'Mark Not Ready' : 'Mark Ready'}
                   </button>
                 </div>
@@ -595,7 +649,12 @@ export function MultiplayerScreen({
               {roomView.legalActions.length > 0 ? (
                 <div className="actions multiplayer-lobby-legal-actions">
                   {roomView.legalActions.map((item, index) => (
-                    <button key={`multiplayer-action-${index}`} type="button" onClick={() => onRunAction(index)} disabled={loading}>
+                    <button
+                      key={`multiplayer-action-${index}`}
+                      type="button"
+                      onClick={() => onRunAction(index)}
+                      disabled={loading || reconnectUiBlocking}
+                    >
                       {item.label}
                     </button>
                   ))}
@@ -648,7 +707,7 @@ export function MultiplayerScreen({
                   </div>
                 ) : null}
               </section>
-            ) : (
+            ) : showSyncPlaceholder ? (
               <section className="multiplayer-lobby-shell is-loading" aria-label="Loading room state">
                 <header className="multiplayer-lobby-header">
                   <h3>Syncing Room...</h3>
@@ -663,6 +722,13 @@ export function MultiplayerScreen({
                   <div className="multiplayer-skeleton-cell" />
                   <div className="multiplayer-skeleton-cell" />
                 </div>
+              </section>
+            ) : (
+              <section className="multiplayer-lobby-shell multiplayer-recovery-shell" aria-label="Room sync state">
+                <header className="multiplayer-lobby-header">
+                  <h3>Waiting For Room State</h3>
+                  <p className="multiplayer-lobby-status">Refresh room state to continue.</p>
+                </header>
               </section>
             )
           )}

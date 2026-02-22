@@ -19,6 +19,8 @@ function makeProps(overrides: Partial<MultiplayerScreenProps> = {}): Multiplayer
     errorCode: null,
     recoveryNotice: null,
     connectionState: 'idle',
+    connectionUiState: 'connected',
+    reconnectUiEnabled: false,
     pushState: 'disabled',
     isHost: false,
     onPlayerNameChange: vi.fn(),
@@ -232,6 +234,42 @@ describe('MultiplayerScreen', () => {
     );
 
     expect(screen.getByText(/syncing room/i)).toBeInTheDocument();
+  });
+
+  it('renders reconnect-ui status copy for scaffolded ui states', () => {
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          reconnectUiEnabled: true,
+          session: makeSession(),
+          roomView: makeLobbyView(),
+          connectionState: 'connected',
+          connectionUiState: 'resync_pending',
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/syncing state/i)).toBeInTheDocument();
+    expect(screen.getByText(/seat restored\. syncing authoritative room state/i)).toBeInTheDocument();
+  });
+
+  it('disables actionable lobby controls while reconnect ui is blocking input', () => {
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          reconnectUiEnabled: true,
+          session: makeSession(),
+          roomView: makeLobbyViewWithTurnState(),
+          isHost: true,
+          connectionState: 'reconnecting',
+          connectionUiState: 'reconnecting_attempting',
+        })}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /refresh/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /forget room/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /copy invite link/i })).toBeDisabled();
   });
 
   it('shows a copy notice when room code is copied', async () => {

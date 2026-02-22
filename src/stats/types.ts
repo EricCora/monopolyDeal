@@ -63,6 +63,11 @@ export type GrowthMetricEvent =
   | 'multiplayer_join_failed'
   | 'multiplayer_invite_copied'
   | 'multiplayer_deep_link_opened'
+  | 'multiplayer_resume_attempt'
+  | 'multiplayer_resume_success'
+  | 'multiplayer_resume_failure'
+  | 'multiplayer_resync_started'
+  | 'multiplayer_resync_completed'
   | 'multiplayer_reconnect_success'
   | 'multiplayer_reconnect_failed'
   | 'multiplayer_match_completed'
@@ -88,6 +93,11 @@ export interface GrowthMetricsV1 {
     multiplayer_join_failed: number;
     multiplayer_invite_copied: number;
     multiplayer_deep_link_opened: number;
+    multiplayer_resume_attempt: number;
+    multiplayer_resume_success: number;
+    multiplayer_resume_failure: number;
+    multiplayer_resync_started: number;
+    multiplayer_resync_completed: number;
     multiplayer_reconnect_success: number;
     multiplayer_reconnect_failed: number;
     multiplayer_match_completed: number;

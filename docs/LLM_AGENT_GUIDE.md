@@ -48,6 +48,8 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - `App.tsx` owns state/actions and passes typed props to screen containers.
   - `src/app/useFeedback.ts` encapsulates sound/haptic emission.
   - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, live-push subscription + polling fallback, reconnect lifecycle, and host/player controls (pause/undo/checkpoints/ready/reactions/chat/typing) plus `Exit Match` (retain reconnect session) vs `Forget Room` (clear session).
+  - Reconnect-v1 compatibility path now supports canonical `seatId`/`resumeToken` aliases while preserving legacy `playerId`/`sessionToken` payloads during migration.
+  - Reconnect-v1 UI scaffolding adds explicit connection UI phases (handshake, resync, recovered, terminal failure states) behind `VITE_MP_RECONNECT_V1_UI`.
   - `Forget Room` uses operation-version invalidation so stale in-flight refresh/reconnect responses cannot silently restore cleared sessions.
   - Stale reconnect terminal states (`room_not_found`, `reconnect_expired`) now auto-clear persisted session and expose explicit recovery notice state for UI.
   - Multiplayer lobby copy affordances (`Copy Room Code`, `Copy Invite Link`) now share a temporary, auto-dismissing status notice for consistent UX.

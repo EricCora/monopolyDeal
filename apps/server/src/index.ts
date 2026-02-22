@@ -39,6 +39,7 @@ import {
 const PORT = Number(process.env.PORT ?? 8787);
 const MULTIPLAYER_PUSH_ENABLED = process.env.MULTIPLAYER_PUSH_ENABLED !== 'false';
 const MULTIPLAYER_REACTIONS_ENABLED = process.env.MULTIPLAYER_REACTIONS_ENABLED !== 'false';
+const MP_RECONNECT_V1_ENABLED = process.env.MP_RECONNECT_V1 === 'true';
 const SSE_HEARTBEAT_MS = 25_000;
 
 const rooms = new Map<string, MultiplayerRoom>();
@@ -53,6 +54,52 @@ type EventStreamClient = {
 };
 
 const roomEventStreams = new Map<string, Set<EventStreamClient>>();
+const reconnectCounters = {
+  resume_request_total: 0,
+  resume_success_total: 0,
+  resume_failure_total: 0,
+};
+
+type SessionIdentity = {
+  playerId: PlayerId;
+  sessionToken: string;
+};
+
+function redactToken(token: string): string {
+  if (!token) return '***';
+  if (token.length <= 6) return '***';
+  return `${token.slice(0, 2)}***${token.slice(-2)}`;
+}
+
+function resolveSessionIdentity(
+  input: {
+    seatId?: unknown;
+    resumeToken?: unknown;
+    playerId?: unknown;
+    sessionToken?: unknown;
+  },
+): SessionIdentity | null {
+  const seatId = optionalTrimmedString(input.seatId);
+  const resumeToken = optionalTrimmedString(input.resumeToken);
+  const playerId = optionalTrimmedString(input.playerId);
+  const sessionToken = optionalTrimmedString(input.sessionToken);
+
+  if (MP_RECONNECT_V1_ENABLED && seatId && resumeToken) {
+    return {
+      playerId: seatId as PlayerId,
+      sessionToken: resumeToken,
+    };
+  }
+
+  if (playerId && sessionToken) {
+    return {
+      playerId: playerId as PlayerId,
+      sessionToken,
+    };
+  }
+
+  return null;
+}
 
 function listLanOrigins(uiPort: number): string[] {
   const nets = networkInterfaces();
@@ -257,26 +304,34 @@ createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && operation === 'state') {
-      const playerId = optionalTrimmedString(parsed.query.playerId);
-      const sessionToken = optionalTrimmedString(parsed.query.sessionToken);
-      if (!playerId || !sessionToken) {
+      const identity = resolveSessionIdentity({
+        seatId: parsed.query.seatId,
+        resumeToken: parsed.query.resumeToken,
+        playerId: parsed.query.playerId,
+        sessionToken: parsed.query.sessionToken,
+      });
+      if (!identity) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      const view = roomView(room, playerId as PlayerId, sessionToken);
+      const view = roomView(room, identity.playerId, identity.sessionToken);
       snapshotAll();
       writeJson(res, 200, view);
       return;
     }
 
     if (req.method === 'GET' && operation === 'checkpoints' && !checkpointOperation) {
-      const playerId = optionalTrimmedString(parsed.query.playerId);
-      const sessionToken = optionalTrimmedString(parsed.query.sessionToken);
-      if (!playerId || !sessionToken) {
+      const identity = resolveSessionIdentity({
+        seatId: parsed.query.seatId,
+        resumeToken: parsed.query.resumeToken,
+        playerId: parsed.query.playerId,
+        sessionToken: parsed.query.sessionToken,
+      });
+      if (!identity) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      const checkpoints = listRoomCheckpoints(room, playerId as PlayerId, sessionToken);
+      const checkpoints = listRoomCheckpoints(room, identity.playerId, identity.sessionToken);
       snapshotAll();
       writeJson(res, 200, { checkpoints });
       return;
@@ -287,14 +342,18 @@ createServer(async (req, res) => {
         writeJson(res, 400, { error: 'push_disabled' });
         return;
       }
-      const playerId = optionalTrimmedString(parsed.query.playerId);
-      const sessionToken = optionalTrimmedString(parsed.query.sessionToken);
+      const identity = resolveSessionIdentity({
+        seatId: parsed.query.seatId,
+        resumeToken: parsed.query.resumeToken,
+        playerId: parsed.query.playerId,
+        sessionToken: parsed.query.sessionToken,
+      });
       const lastEventIdValue = parsed.query.lastEventId == null ? 0 : Number(parsed.query.lastEventId);
-      if (!playerId || !sessionToken || !isOptionalNonNegativeInteger(lastEventIdValue)) {
+      if (!identity || !isOptionalNonNegativeInteger(lastEventIdValue)) {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      openEventStream(req, res, room, playerId, sessionToken, lastEventIdValue ?? 0);
+      openEventStream(req, res, room, identity.playerId, identity.sessionToken, lastEventIdValue ?? 0);
       return;
     }
 
@@ -306,6 +365,8 @@ createServer(async (req, res) => {
     const raw = await collectBody(req);
     const payload = JSON.parse(raw || '{}') as {
       playerName?: unknown;
+      seatId?: unknown;
+      resumeToken?: unknown;
       playerId?: unknown;
       sessionToken?: unknown;
       action?: unknown;
@@ -328,21 +389,39 @@ createServer(async (req, res) => {
     }
 
     if (!isNonEmptyTrimmedString(payload.playerId)
-      || !isNonEmptyTrimmedString(payload.sessionToken)
+      && !isNonEmptyTrimmedString(payload.seatId)
       || !isOptionalNonNegativeInteger(payload.expectedRevision)) {
       writeJson(res, 400, { error: 'invalid_payload' });
       return;
     }
 
-    const playerId = payload.playerId as PlayerId;
-    const sessionToken = payload.sessionToken;
+    const identity = resolveSessionIdentity(payload);
+    if (!identity) {
+      writeJson(res, 400, { error: 'invalid_payload' });
+      return;
+    }
+    const playerId = identity.playerId;
+    const sessionToken = identity.sessionToken;
     const expectedRevision = payload.expectedRevision;
 
     if (operation === 'reconnect') {
-      const session = reconnectRoom(room, playerId, sessionToken, expectedRevision);
-      snapshotAll();
-      broadcastRoomEvent(room, 'reconnect');
-      writeJson(res, 200, session);
+      reconnectCounters.resume_request_total += 1;
+      console.info(
+        `[mp][resume_request] room=${roomCode} seat=${playerId} token=${redactToken(sessionToken)} revision=${String(expectedRevision ?? '')}`,
+      );
+      try {
+        const session = reconnectRoom(room, playerId, sessionToken, expectedRevision);
+        reconnectCounters.resume_success_total += 1;
+        console.info(`[mp][resume_result] room=${roomCode} seat=${playerId} status=ok`);
+        snapshotAll();
+        broadcastRoomEvent(room, 'reconnect');
+        writeJson(res, 200, session);
+      } catch (resumeError) {
+        reconnectCounters.resume_failure_total += 1;
+        const reason = resumeError instanceof Error ? resumeError.message : 'server_error';
+        console.info(`[mp][resume_result] room=${roomCode} seat=${playerId} status=${reason}`);
+        throw resumeError;
+      }
       return;
     }
 

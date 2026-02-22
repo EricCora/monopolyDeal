@@ -364,6 +364,8 @@ function App() {
   const runtimeFeatureFlags = useMemo(() => resolveMultiplayerFeatureFlags(), []);
   const multiplayerPushEnabled = uiPreferences.experimental.multiplayerPushEnabled && runtimeFeatureFlags.multiplayerPushEnabled;
   const multiplayerReactionsEnabled = uiPreferences.experimental.multiplayerReactionsEnabled && runtimeFeatureFlags.multiplayerReactionsEnabled;
+  const multiplayerReconnectV1Enabled = runtimeFeatureFlags.mpReconnectV1Enabled;
+  const multiplayerReconnectV1UiEnabled = runtimeFeatureFlags.mpReconnectV1UiEnabled;
   const {
     apiBase: multiplayerApiBase,
     isLocalDevApi: multiplayerIsLocalDevApi,
@@ -379,6 +381,7 @@ function App() {
     errorCode: multiplayerErrorCode,
     recoveryNotice: multiplayerRecoveryNotice,
     connectionState: multiplayerConnectionState,
+    connectionUiState: multiplayerConnectionUiState,
     pushState: multiplayerPushState,
     hostChangeNotice: multiplayerHostChangeNotice,
     clearHostChangeNotice: clearMultiplayerHostChangeNotice,
@@ -408,6 +411,8 @@ function App() {
     enabled: screen === 'multiplayer',
     pushEnabled: multiplayerPushEnabled,
     reactionsEnabled: multiplayerReactionsEnabled,
+    reconnectV1Enabled: multiplayerReconnectV1Enabled,
+    reconnectV1UiEnabled: multiplayerReconnectV1UiEnabled,
     onMetricEvent: recordGrowthMetric,
   });
 
@@ -1798,6 +1803,8 @@ function App() {
           }
           connectionStatusLabel={multiplayerConnectionLabel(multiplayerConnectionState, multiplayerPushState)}
           multiplayerConnectionState={multiplayerConnectionState}
+          multiplayerConnectionUiState={multiplayerConnectionUiState}
+          reconnectUiEnabled={multiplayerReconnectV1UiEnabled}
           playerConnectionById={multiplayerConnectionByPlayerId}
           isMultiplayerHost={multiplayerIsHost}
           checkpointSlots={multiplayerRoomView.checkpointSlots}
@@ -1911,6 +1918,8 @@ function App() {
           errorCode={multiplayerErrorCode}
           recoveryNotice={multiplayerRecoveryNotice}
           connectionState={multiplayerConnectionState}
+          connectionUiState={multiplayerConnectionUiState}
+          reconnectUiEnabled={multiplayerReconnectV1UiEnabled}
           pushState={multiplayerPushState}
           isHost={multiplayerIsHost}
           onPlayerNameChange={setMultiplayerPlayerName}

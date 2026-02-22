@@ -10,6 +10,7 @@ import {
   pruneInactiveRooms,
   reconnectRoom,
   resetTurnRoomActions,
+  resolveReconnectWindowMs,
   resumeRoom,
   sendRoomChat,
   sendRoomReaction,
@@ -48,6 +49,27 @@ describe('multiplayer room service lifecycle', () => {
     roomView(room, session.playerId, session.sessionToken);
 
     expect(room.updatedAt).toBeGreaterThan(previousUpdatedAt);
+  });
+
+  it('returns canonical and legacy seat credentials for create/join/reconnect responses', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    expect(session.seatId).toBe(session.playerId);
+    expect(session.resumeToken).toBe(session.sessionToken);
+
+    const joined = joinRoom(room, 'Player 2');
+    expect(joined.seatId).toBe(joined.playerId);
+    expect(joined.resumeToken).toBe(joined.sessionToken);
+
+    const resumed = reconnectRoom(room, joined.playerId, joined.sessionToken);
+    expect(resumed.seatId).toBe(resumed.playerId);
+    expect(resumed.resumeToken).toBe(resumed.sessionToken);
+  });
+
+  it('uses 90s reconnect grace default when reconnect-v1 is enabled', () => {
+    expect(resolveReconnectWindowMs(true, undefined)).toBe(90_000);
+    expect(resolveReconnectWindowMs(true, '120000')).toBe(120_000);
+    expect(resolveReconnectWindowMs(false, '120000')).toBe(300_000);
   });
 
   it('keeps active room alive when poll heartbeat precedes prune', () => {

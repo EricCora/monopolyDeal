@@ -21,7 +21,10 @@ import type {
   RoomSessionResponse,
 } from '../../../packages/shared/multiplayer.ts';
 
-const RECONNECT_WINDOW_MS = 5 * 60 * 1000;
+const RECONNECT_WINDOW_LEGACY_MS = 5 * 60 * 1000;
+const RECONNECT_WINDOW_V1_DEFAULT_MS = 90_000;
+const MP_RECONNECT_V1_ENABLED = process.env.MP_RECONNECT_V1 === 'true';
+const RECONNECT_WINDOW_MS = resolveReconnectWindowMs(MP_RECONNECT_V1_ENABLED, process.env.MP_RECONNECT_GRACE_MS);
 // Keep lobby heartbeat grace long enough for frequent tab switching during local beta sessions.
 const STALE_CONNECTION_MS = 1.5 * 60 * 1000;
 const MAX_CHECKPOINTS = 5;
@@ -32,6 +35,15 @@ const CHAT_COOLDOWN_MS = 700;
 const MAX_CHAT_MESSAGE_LENGTH = 280;
 const TYPING_TTL_MS = 4_500;
 export const ROOM_REACTION_OPTIONS: MultiplayerReaction[] = ['nice', 'wow', 'gg', 'oops'];
+
+export function resolveReconnectWindowMs(mpReconnectV1Enabled: boolean, configuredGraceMs?: string): number {
+  if (!mpReconnectV1Enabled) return RECONNECT_WINDOW_LEGACY_MS;
+  const parsed = Number(configuredGraceMs);
+  if (Number.isFinite(parsed) && parsed >= 1_000) {
+    return Math.floor(parsed);
+  }
+  return RECONNECT_WINDOW_V1_DEFAULT_MS;
+}
 
 type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
 
@@ -495,6 +507,8 @@ export function createRoom(
     room,
     session: {
       roomCode: code,
+      seatId: playerId,
+      resumeToken: token,
       playerId,
       sessionToken: token,
       reconnectDeadlineMs: createdAt + RECONNECT_WINDOW_MS,
@@ -528,6 +542,8 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
   commitMutation(room);
   return {
     roomCode: room.code,
+    seatId: playerId,
+    resumeToken: token,
     playerId,
     sessionToken: token,
     reconnectDeadlineMs: now + RECONNECT_WINDOW_MS,
@@ -554,6 +570,8 @@ export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, session
   commitMutation(room);
   return {
     roomCode: room.code,
+    seatId: player.id,
+    resumeToken: player.sessionToken,
     playerId: player.id,
     sessionToken: player.sessionToken,
     reconnectDeadlineMs: player.reconnectDeadlineMs,

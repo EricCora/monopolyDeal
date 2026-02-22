@@ -16,7 +16,11 @@ import { PlayChooser, type ActionVariantView } from '../components/PlayChooser';
 import { RecentEvents } from '../components/RecentEvents';
 import { ActionRail } from '../layout/ActionRail';
 import { TopBar } from '../layout/TopBar';
-import type { MultiplayerActivityFeedItem, MultiplayerConnectionState } from '../../network/multiplayerTypes';
+import type {
+  MultiplayerActivityFeedItem,
+  MultiplayerConnectionState,
+  MultiplayerConnectionUiState,
+} from '../../network/multiplayerTypes';
 
 interface CardActionVariant extends ActionVariantView {
   action: Action;
@@ -51,6 +55,8 @@ interface GameTableScreenProps {
   pauseReasonText?: string;
   connectionStatusLabel?: string;
   multiplayerConnectionState?: MultiplayerConnectionState;
+  multiplayerConnectionUiState?: MultiplayerConnectionUiState;
+  reconnectUiEnabled?: boolean;
   playerConnectionById?: Record<string, { connected: boolean; lastSeenAt: number; reconnectDeadlineMs: number }>;
   isMultiplayerHost?: boolean;
   checkpointSlots?: { id: string; name: string; savedAt: number }[];
@@ -362,6 +368,8 @@ export function GameTableScreen({
   pauseReasonText,
   connectionStatusLabel,
   multiplayerConnectionState,
+  multiplayerConnectionUiState,
+  reconnectUiEnabled = false,
   playerConnectionById = {},
   isMultiplayerHost = false,
   checkpointSlots = [],
@@ -702,6 +710,57 @@ export function GameTableScreen({
     if (!confirmed) return;
     onDeleteCheckpoint(checkpointSlots[index].id);
   };
+
+  const blockingUiStates = new Set<MultiplayerConnectionUiState>([
+    'reconnecting_attempting',
+    'reconnect_handshake_pending',
+    'resync_pending',
+    'resume_failed',
+    'timed_out',
+    'room_ended',
+  ]);
+  const multiplayerUiState = multiplayerConnectionUiState ?? 'connected';
+  const showReconnectOverlay = isMultiplayer
+    && !over.done
+    && (
+      (reconnectUiEnabled && blockingUiStates.has(multiplayerUiState))
+      || multiplayerConnectionState === 'reconnecting'
+      || multiplayerConnectionState === 'disconnected'
+    );
+
+  const reconnectOverlayTitle = (() => {
+    if (reconnectUiEnabled) {
+      if (multiplayerUiState === 'reconnect_handshake_pending') return 'Restoring Seat...';
+      if (multiplayerUiState === 'resync_pending') return 'Syncing Game State...';
+      if (multiplayerUiState === 'timed_out') return 'Reconnect Window Expired';
+      if (multiplayerUiState === 'room_ended') return 'Room Ended';
+      if (multiplayerUiState === 'resume_failed') return 'Could Not Resume Seat';
+    }
+    return multiplayerConnectionState === 'reconnecting' ? 'Reconnecting...' : 'Connection Lost';
+  })();
+
+  const reconnectOverlayDetail = (() => {
+    if (reconnectUiEnabled) {
+      if (multiplayerUiState === 'reconnect_handshake_pending') {
+        return 'Re-authenticating your room seat before state recovery.';
+      }
+      if (multiplayerUiState === 'resync_pending') {
+        return 'Applying the latest authoritative room snapshot. Inputs stay disabled until sync finishes.';
+      }
+      if (multiplayerUiState === 'timed_out') {
+        return 'Your reconnect window expired. Rejoin with the room code to continue.';
+      }
+      if (multiplayerUiState === 'room_ended') {
+        return 'This room is no longer available. Create or join a new room to continue.';
+      }
+      if (multiplayerUiState === 'resume_failed') {
+        return 'Automatic resume failed. Refresh room state or rejoin manually.';
+      }
+    }
+    return multiplayerConnectionState === 'reconnecting'
+      ? 'Trying to restore your room session. You can wait here while reconnect attempts continue.'
+      : 'Unable to reconnect automatically. Refresh room state or exit the match.';
+  })();
 
   return (
     <section className={`game-table-screen ${isPaused ? 'is-paused' : ''}`}>
@@ -1305,15 +1364,11 @@ export function GameTableScreen({
         </div>
       ) : null}
 
-      {isMultiplayer && !over.done && (multiplayerConnectionState === 'reconnecting' || multiplayerConnectionState === 'disconnected') ? (
+      {showReconnectOverlay ? (
         <div className="network-overlay" role="dialog" aria-modal="true" aria-label="Multiplayer connection status">
           <div className="network-card card-enter">
-            <h3>{multiplayerConnectionState === 'reconnecting' ? 'Reconnecting...' : 'Connection Lost'}</h3>
-            <p>
-              {multiplayerConnectionState === 'reconnecting'
-                ? 'Trying to restore your room session. You can wait here while reconnect attempts continue.'
-                : 'Unable to reconnect automatically. Refresh room state or exit the match.'}
-            </p>
+            <h3>{reconnectOverlayTitle}</h3>
+            <p>{reconnectOverlayDetail}</p>
             <div className="winner-actions">
               {onRefreshMultiplayer ? (
                 <button type="button" onClick={onRefreshMultiplayer}>

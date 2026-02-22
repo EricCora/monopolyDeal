@@ -216,13 +216,18 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 
 Set `VITE_MULTIPLAYER_API_URL` to your deployed multiplayer API origin.
 See `.env.example` for the expected variable.
+For reconnect/resume implementation details and execution tracking, see `docs/multiplayer-reconnect-contract.md` and `docs/IMPLEMENTATION_TRACKER.md` (Epic C section).
 
 Optional multiplayer behavior flags:
 
 - `VITE_MULTIPLAYER_PUSH_ENABLED` (`true` by default) to enable client push subscriptions.
 - `VITE_MULTIPLAYER_REACTIONS_ENABLED` (`true` by default) to enable quick reactions.
+- `VITE_MP_RECONNECT_V1` (`false` by default) to enable reconnect-v1 canonical seat/token client behavior.
+- `VITE_MP_RECONNECT_V1_UI` (`false` by default) to enable reconnect-v1 UI state scaffolding.
 - `MULTIPLAYER_PUSH_ENABLED` (`true` by default) to enable server event stream endpoint.
 - `MULTIPLAYER_REACTIONS_ENABLED` (`true` by default) to enable server reaction endpoint.
+- `MP_RECONNECT_V1` (`false` by default) to enable reconnect-v1 canonical seat/token server behavior.
+- `MP_RECONNECT_GRACE_MS` (`90000` default when reconnect-v1 is enabled) to configure reconnect-v1 grace duration.
 
 For local multiplayer development, the backend service is required.
 Use the one-command startup:

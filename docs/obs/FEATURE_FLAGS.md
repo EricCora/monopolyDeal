@@ -12,6 +12,11 @@
 - Server env flags:
   - `MULTIPLAYER_PUSH_ENABLED`
   - `MULTIPLAYER_REACTIONS_ENABLED`
+  - `MP_RECONNECT_V1`
+  - `MP_RECONNECT_GRACE_MS`
+- Client env flags:
+  - `VITE_MP_RECONNECT_V1`
+  - `VITE_MP_RECONNECT_V1_UI`
 
 ## Rollout rules
 

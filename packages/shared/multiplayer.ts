@@ -67,6 +67,9 @@ export interface MultiplayerCheckpointSummary {
 
 export interface RoomSessionResponse {
   roomCode: string;
+  seatId: PlayerId;
+  resumeToken: string;
+  // Deprecated compatibility fields; remove after reconnect-v1 migration completes.
   playerId: PlayerId;
   sessionToken: string;
   reconnectDeadlineMs: number;
@@ -81,8 +84,11 @@ export interface JoinRoomRequest {
 }
 
 export interface ReconnectRoomRequest {
-  playerId: PlayerId;
-  sessionToken: string;
+  seatId?: PlayerId;
+  resumeToken?: string;
+  // Deprecated compatibility fields; remove after reconnect-v1 migration completes.
+  playerId?: PlayerId;
+  sessionToken?: string;
   expectedRevision?: number;
 }
 

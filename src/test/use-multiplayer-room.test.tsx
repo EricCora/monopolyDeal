@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useMultiplayerRoom } from '../app/useMultiplayerRoom';
+import { mapConnectionUiState, useMultiplayerRoom } from '../app/useMultiplayerRoom';
 import type { MultiplayerRoomView } from '../network/multiplayerTypes';
 
 const clientMocks = vi.hoisted(() => ({
@@ -78,6 +78,8 @@ async function flushMicrotasks(times = 3): Promise<void> {
 function makeSessionResponse(overrides: Partial<{ roomCode: string; playerId: string; sessionToken: string; reconnectDeadlineMs: number }> = {}) {
   return {
     roomCode: 'ABCDE',
+    seatId: 'p1',
+    resumeToken: 'token-1',
     playerId: 'p1',
     sessionToken: 'token-1',
     reconnectDeadlineMs: Date.now() + 30_000,
@@ -242,5 +244,49 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     });
     await flushMicrotasks(5);
     expect(result.current.connectionState).toBe('connected');
+  });
+
+  it('migrates legacy stored session shape to canonical seat credentials on bootstrap reconnect', async () => {
+    const now = Date.now();
+    localStorage.setItem('monopolyDeal.multiplayerSession.v1', JSON.stringify({
+      version: 1,
+      roomCode: 'ABCDE',
+      playerId: 'p1',
+      sessionToken: 'legacy-token',
+      playerName: 'Host',
+      reconnectDeadlineMs: now + 30_000,
+    }));
+    clientMocks.reconnectMultiplayerRoom.mockResolvedValue(makeSessionResponse({
+      playerId: 'p1',
+      sessionToken: 'legacy-token',
+    }));
+
+    renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+      reconnectV1Enabled: true,
+    }));
+
+    await flushMicrotasks(6);
+    expect(clientMocks.reconnectMultiplayerRoom).toHaveBeenCalled();
+    const reconnectArgs = clientMocks.reconnectMultiplayerRoom.mock.calls[0] ?? [];
+    expect(reconnectArgs[0]).toMatchObject({
+      seatId: 'p1',
+      resumeToken: 'legacy-token',
+      playerId: 'p1',
+      sessionToken: 'legacy-token',
+    });
+    expect(reconnectArgs[3]).toBe(true);
+  });
+});
+
+describe('mapConnectionUiState', () => {
+  it('maps transport/error states to reconnect ui states', () => {
+    expect(mapConnectionUiState('connected', null)).toBe('connected');
+    expect(mapConnectionUiState('reconnecting', null)).toBe('reconnecting_attempting');
+    expect(mapConnectionUiState('disconnected', null)).toBe('resume_failed');
+    expect(mapConnectionUiState('connecting', null)).toBe('reconnect_handshake_pending');
+    expect(mapConnectionUiState('connected', 'reconnect_expired')).toBe('timed_out');
+    expect(mapConnectionUiState('connected', 'room_not_found')).toBe('room_ended');
   });
 });

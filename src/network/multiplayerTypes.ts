@@ -3,6 +3,16 @@ import type { Action, GameState, LegalAction } from '../engine';
 export type MultiplayerRoomStatus = 'lobby' | 'active' | 'finished';
 export type MultiplayerConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
 export type MultiplayerPushState = 'disabled' | 'unsupported' | 'connecting' | 'connected' | 'fallback';
+export type MultiplayerConnectionUiState =
+  | 'connected'
+  | 'socket_disconnected'
+  | 'reconnecting_attempting'
+  | 'reconnect_handshake_pending'
+  | 'resync_pending'
+  | 'recovered'
+  | 'resume_failed'
+  | 'timed_out'
+  | 'room_ended';
 export type MultiplayerReaction = 'nice' | 'wow' | 'gg' | 'oops';
 export type MultiplayerActivityKind = 'lobby' | 'connection' | 'host' | 'ready' | 'reaction' | 'chat' | 'match' | 'checkpoint' | 'system';
 
@@ -70,6 +80,9 @@ export interface MultiplayerCheckpointSummary {
 export interface MultiplayerSession {
   version: 1;
   roomCode: string;
+  seatId?: string;
+  resumeToken?: string;
+  // Deprecated compatibility fields; remove after reconnect-v1 migration completes.
   playerId: string;
   sessionToken: string;
   playerName: string;
@@ -78,6 +91,9 @@ export interface MultiplayerSession {
 
 export interface MultiplayerRoomSessionResponse {
   roomCode: string;
+  seatId?: string;
+  resumeToken?: string;
+  // Deprecated compatibility fields; remove after reconnect-v1 migration completes.
   playerId: string;
   sessionToken: string;
   reconnectDeadlineMs: number;

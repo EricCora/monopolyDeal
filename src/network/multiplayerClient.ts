@@ -34,6 +34,8 @@ export interface ResolveMultiplayerApiBaseOptions {
 export interface MultiplayerFeatureFlags {
   multiplayerPushEnabled: boolean;
   multiplayerReactionsEnabled: boolean;
+  mpReconnectV1Enabled: boolean;
+  mpReconnectV1UiEnabled: boolean;
 }
 
 export interface MultiplayerLanOriginsResponse {
@@ -59,6 +61,8 @@ export function resolveMultiplayerFeatureFlags(): MultiplayerFeatureFlags {
   return {
     multiplayerPushEnabled: import.meta.env.VITE_MULTIPLAYER_PUSH_ENABLED !== 'false',
     multiplayerReactionsEnabled: import.meta.env.VITE_MULTIPLAYER_REACTIONS_ENABLED !== 'false',
+    mpReconnectV1Enabled: import.meta.env.VITE_MP_RECONNECT_V1 === 'true',
+    mpReconnectV1UiEnabled: import.meta.env.VITE_MP_RECONNECT_V1_UI === 'true',
   };
 }
 
@@ -166,13 +170,25 @@ export async function reconnectMultiplayerRoom(
   session: MultiplayerSession,
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
+  useReconnectV1 = false,
 ): Promise<MultiplayerRoomSessionResponse> {
+  const useCanonicalIdentity = useReconnectV1 && session.seatId && session.resumeToken;
   return request<MultiplayerRoomSessionResponse>(
     `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reconnect`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        ...(useCanonicalIdentity
+          ? {
+              seatId: session.seatId,
+              resumeToken: session.resumeToken,
+            }
+          : {
+              playerId: session.playerId,
+              sessionToken: session.sessionToken,
+            }),
+        // Send compatibility identity fields while the server migration is in-flight.
         playerId: session.playerId,
         sessionToken: session.sessionToken,
         expectedRevision,
