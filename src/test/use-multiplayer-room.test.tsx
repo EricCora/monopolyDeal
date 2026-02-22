@@ -481,7 +481,6 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     const { result } = renderHook(() => useMultiplayerRoom({
       enabled: true,
       pushEnabled: false,
-      reconnectV1UiEnabled: true,
     }));
 
     await act(async () => {
@@ -500,7 +499,6 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     const { result } = renderHook(() => useMultiplayerRoom({
       enabled: true,
       pushEnabled: false,
-      versionGuardV1Enabled: true,
     }));
 
     await act(async () => {
@@ -540,7 +538,6 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     renderHook(() => useMultiplayerRoom({
       enabled: true,
       pushEnabled: false,
-      reconnectV1Enabled: true,
     }));
 
     await advanceAndFlush(0, 6);
@@ -552,7 +549,7 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
       playerId: 'p1',
       sessionToken: 'legacy-token',
     });
-    expect(reconnectArgs[3]).toBe(true);
+    expect(reconnectArgs).toHaveLength(3);
   });
 
   it('hydrates from reconnect handshake snapshot without issuing extra /state fetch', async () => {
@@ -574,8 +571,6 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     const { result } = renderHook(() => useMultiplayerRoom({
       enabled: true,
       pushEnabled: false,
-      reconnectV1Enabled: true,
-      reconnectV1UiEnabled: true,
     }));
 
     await advanceAndFlush(0, 6);
@@ -613,8 +608,6 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     const { result } = renderHook(() => useMultiplayerRoom({
       enabled: true,
       pushEnabled: false,
-      reconnectV1Enabled: true,
-      reconnectV1UiEnabled: true,
     }));
 
     await advanceAndFlush(0, 6);
@@ -650,8 +643,6 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     const { result } = renderHook(() => useMultiplayerRoom({
       enabled: true,
       pushEnabled: false,
-      reconnectV1Enabled: true,
-      reconnectV1UiEnabled: true,
     }));
 
     await advanceAndFlush(0, 6);
@@ -680,8 +671,6 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     const { result } = renderHook(() => useMultiplayerRoom({
       enabled: true,
       pushEnabled: false,
-      reconnectV1Enabled: true,
-      reconnectV1UiEnabled: true,
     }));
 
     await advanceAndFlush(0, 6);
@@ -710,8 +699,6 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     const invalid = renderHook(() => useMultiplayerRoom({
       enabled: true,
       pushEnabled: false,
-      reconnectV1Enabled: true,
-      reconnectV1UiEnabled: true,
     }));
     await advanceAndFlush(0, 6);
     expect(invalid.result.current.connectionUiState).toBe('resume_failed');
@@ -734,8 +721,6 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     const mismatch = renderHook(() => useMultiplayerRoom({
       enabled: true,
       pushEnabled: false,
-      reconnectV1Enabled: true,
-      reconnectV1UiEnabled: true,
     }));
     await advanceAndFlush(0, 6);
     expect(mismatch.result.current.connectionUiState).toBe('resume_failed');
@@ -763,8 +748,6 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     const { result } = renderHook(() => useMultiplayerRoom({
       enabled: true,
       pushEnabled: false,
-      reconnectV1UiEnabled: true,
-      versionGuardV1Enabled: true,
       onMetricEvent,
     }));
 
@@ -815,7 +798,6 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     const { result } = renderHook(() => useMultiplayerRoom({
       enabled: true,
       pushEnabled: false,
-      versionGuardV1Enabled: true,
     }));
 
     await act(async () => {
@@ -851,8 +833,6 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
       enabled: true,
       pushEnabled: false,
       pollIntervalMs: 40,
-      reconnectV1Enabled: true,
-      reconnectV1UiEnabled: true,
     }));
 
     await act(async () => {
@@ -900,8 +880,6 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
       enabled: true,
       pushEnabled: false,
       pollIntervalMs: 40,
-      reconnectV1Enabled: true,
-      reconnectV1UiEnabled: true,
       onMetricEvent,
     }));
 

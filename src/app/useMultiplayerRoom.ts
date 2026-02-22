@@ -46,9 +46,6 @@ interface UseMultiplayerRoomOptions {
   pollIntervalMs?: number;
   pushEnabled?: boolean;
   reactionsEnabled?: boolean;
-  reconnectV1Enabled?: boolean;
-  reconnectV1UiEnabled?: boolean;
-  versionGuardV1Enabled?: boolean;
   onMetricEvent?: (event: GrowthMetricEvent) => void;
 }
 
@@ -251,9 +248,6 @@ export function useMultiplayerRoom({
   pollIntervalMs = 2_000,
   pushEnabled = true,
   reactionsEnabled = true,
-  reconnectV1Enabled = false,
-  reconnectV1UiEnabled = false,
-  versionGuardV1Enabled = false,
   onMetricEvent,
 }: UseMultiplayerRoomOptions) {
   const [apiBase] = useState(() => getMultiplayerApiBase());
@@ -419,12 +413,10 @@ export function useMultiplayerRoom({
     if (!current) return false;
     const operationVersion = sessionOperationVersionRef.current;
     onMetricEvent?.('multiplayer_resume_attempt');
-    if (reconnectV1UiEnabled) {
-      setConnectionUiStateOverride('reconnect_handshake_pending');
-    }
+    setConnectionUiStateOverride('reconnect_handshake_pending');
     diagnosticsClientVersionRef.current = expectedRevision ?? roomView?.revision ?? diagnosticsClientVersionRef.current;
     try {
-      const reconnected = await reconnectMultiplayerRoom(current, apiBase, expectedRevision, reconnectV1Enabled);
+      const reconnected = await reconnectMultiplayerRoom(current, apiBase, expectedRevision);
       reconnectLastErrorCodeRef.current = null;
       if (operationVersion !== sessionOperationVersionRef.current) return false;
 
@@ -441,7 +433,7 @@ export function useMultiplayerRoom({
           } else {
             reconnectLastErrorCodeRef.current = reconnected.status;
             setErrorFromCode(reconnected.status);
-            if (reconnectV1UiEnabled && !options.suppressTerminalUi) {
+            if (!options.suppressTerminalUi) {
               setConnectionUiStateOverride('resume_failed');
             }
           }
@@ -456,7 +448,7 @@ export function useMultiplayerRoom({
         if (!identities) {
           reconnectLastErrorCodeRef.current = 'invalid_token';
           setErrorFromCode('invalid_token');
-          if (reconnectV1UiEnabled && !options.suppressTerminalUi) {
+          if (!options.suppressTerminalUi) {
             setConnectionUiStateOverride('resume_failed');
           }
           onMetricEvent?.('multiplayer_resume_failure');
@@ -478,9 +470,7 @@ export function useMultiplayerRoom({
         };
         setSession(nextSession);
         saveStoredSession(nextSession);
-        if (reconnectV1UiEnabled) {
-          setConnectionUiStateOverride('resync_pending');
-        }
+        setConnectionUiStateOverride('resync_pending');
         onMetricEvent?.('multiplayer_resync_started');
         if (reconnected.snapshot) {
           const normalizedSnapshot = normalizeRoomViewPayload(reconnected.snapshot);
@@ -493,9 +483,7 @@ export function useMultiplayerRoom({
         setConnectionState('connected');
         setRecoveryNotice(null);
         onMetricEvent?.('multiplayer_resume_success');
-        if (reconnectV1UiEnabled) {
-          setRecoveredUiState();
-        }
+        setRecoveredUiState();
         if (!options.suppressReconnectMetrics) {
           onMetricEvent?.('multiplayer_reconnect_success');
         }
@@ -518,9 +506,7 @@ export function useMultiplayerRoom({
       };
       setSession(nextSession);
       saveStoredSession(nextSession);
-      if (reconnectV1UiEnabled) {
-        setConnectionUiStateOverride('resync_pending');
-      }
+      setConnectionUiStateOverride('resync_pending');
       onMetricEvent?.('multiplayer_resync_started');
       await refreshRoom(nextSession);
       onMetricEvent?.('multiplayer_resync_completed');
@@ -528,9 +514,7 @@ export function useMultiplayerRoom({
       setConnectionState('connected');
       setRecoveryNotice(null);
       onMetricEvent?.('multiplayer_resume_success');
-      if (reconnectV1UiEnabled) {
-        setRecoveredUiState();
-      }
+      setRecoveredUiState();
       if (!options.suppressReconnectMetrics) {
         onMetricEvent?.('multiplayer_reconnect_success');
       }
@@ -541,7 +525,7 @@ export function useMultiplayerRoom({
       setErrorFromCode(code);
       if (isStaleSessionCode(code)) {
         recoverStaleSession(code, current);
-      } else if (reconnectV1UiEnabled && !options.suppressTerminalUi) {
+      } else if (!options.suppressTerminalUi) {
         setConnectionUiStateOverride('resume_failed');
       }
       onMetricEvent?.('multiplayer_resume_failure');
@@ -555,8 +539,6 @@ export function useMultiplayerRoom({
     applyHydratedRoomView,
     expectedRevision,
     onMetricEvent,
-    reconnectV1Enabled,
-    reconnectV1UiEnabled,
     recoverStaleSession,
     refreshRoom,
     roomView?.revision,
@@ -593,12 +575,10 @@ export function useMultiplayerRoom({
     stopReconnectLoop();
     reconnectAutoRetryBlockedRef.current = true;
     setConnectionState('disconnected');
-    if (reconnectV1UiEnabled) {
-      setConnectionUiStateOverride('resume_failed');
-    }
+    setConnectionUiStateOverride('resume_failed');
     setErrorFromCode(code);
     onMetricEvent?.('multiplayer_reconnect_failed');
-  }, [onMetricEvent, reconnectV1UiEnabled, setErrorFromCode, stopReconnectLoop]);
+  }, [onMetricEvent, setErrorFromCode, stopReconnectLoop]);
 
   const runReconnectAttempt = useCallback(async (activeSession?: MultiplayerSession | null) => {
     if (!reconnectLoopActiveRef.current) return;
@@ -619,9 +599,7 @@ export function useMultiplayerRoom({
 
     reconnectLoopAttemptRef.current += 1;
     setConnectionState('reconnecting');
-    if (reconnectV1UiEnabled) {
-      setConnectionUiStateOverride('reconnecting_attempting');
-    }
+    setConnectionUiStateOverride('reconnecting_attempting');
 
     const recovered = await reconnectSessionSingleFlight(current, {
       suppressTerminalUi: true,
@@ -658,7 +636,6 @@ export function useMultiplayerRoom({
     markReconnectLoopTerminalFailure,
     onMetricEvent,
     reconnectSessionSingleFlight,
-    reconnectV1UiEnabled,
     scheduleReconnectAttempt,
     session,
     stopReconnectLoop,
@@ -674,20 +651,20 @@ export function useMultiplayerRoom({
   }, [runReconnectAttempt]);
 
   const startReconnectLoop = useCallback((activeSession?: MultiplayerSession | null) => {
-    if (!reconnectV1Enabled) return;
     if (reconnectAutoRetryBlockedRef.current) return;
     if (reconnectLoopActiveRef.current || reconnectInFlightRef.current) return;
     const current = activeSession ?? session;
     if (!current) return;
+    reconnectLoopRunnerRef.current = (nextSession?: MultiplayerSession | null) => {
+      void runReconnectAttempt(nextSession);
+    };
     reconnectLoopActiveRef.current = true;
     reconnectLoopAttemptRef.current = 0;
     reconnectLoopStartedAtRef.current = Date.now();
     setConnectionState('reconnecting');
-    if (reconnectV1UiEnabled) {
-      setConnectionUiStateOverride('socket_disconnected');
-    }
-    scheduleReconnectAttempt(0, current);
-  }, [reconnectV1Enabled, reconnectV1UiEnabled, scheduleReconnectAttempt, session]);
+    setConnectionUiStateOverride('socket_disconnected');
+    void runReconnectAttempt(current);
+  }, [runReconnectAttempt, session]);
 
   const refreshFromPush = useCallback(() => {
     if (pushRefreshInFlightRef.current) {
@@ -698,7 +675,7 @@ export function useMultiplayerRoom({
     refreshRoom()
       .catch((refreshError) => {
         const code = refreshError instanceof Error ? refreshError.message : 'request_failed';
-        if (reconnectV1Enabled && connectionState !== 'disconnected' && isTransportReconnectableError(code)) {
+        if (connectionState !== 'disconnected' && isTransportReconnectableError(code)) {
           startReconnectLoop();
           return;
         }
@@ -711,7 +688,7 @@ export function useMultiplayerRoom({
           refreshFromPush();
         }
       });
-  }, [connectionState, reconnectV1Enabled, refreshRoom, startReconnectLoop]);
+  }, [connectionState, refreshRoom, startReconnectLoop]);
 
   const refreshOnRevisionConflict = useCallback(async (code: string, activeSession: MultiplayerSession) => {
     if (code !== 'revision_conflict') return;
@@ -877,27 +854,21 @@ export function useMultiplayerRoom({
         selected.action,
         apiBase,
         expectedRevision,
-        versionGuardV1Enabled
-          ? {
-              clientStateVersion: roomView.revision,
-              actionId: createClientActionId(),
-            }
-          : undefined,
+        {
+          clientStateVersion: roomView.revision,
+          actionId: createClientActionId(),
+        },
       );
       await refreshRoom(current);
     } catch (actionError) {
       const actionRejected = parseActionRejectedError(actionError);
-      if (versionGuardV1Enabled && actionRejected) {
+      if (actionRejected) {
         if (actionRejected.reason === 'stale_state' || actionRejected.requiresResync) {
-          if (reconnectV1UiEnabled) {
-            setConnectionUiStateOverride('resync_pending');
-          }
+          setConnectionUiStateOverride('resync_pending');
           onMetricEvent?.('multiplayer_resync_started');
           try {
             await refreshRoom(current);
-            if (reconnectV1UiEnabled) {
-              setRecoveredUiState();
-            }
+            setRecoveredUiState();
           } catch (resyncError) {
             const resyncCode = resyncError instanceof Error ? resyncError.message : 'request_failed';
             setErrorFromCode(resyncCode);
@@ -921,14 +892,12 @@ export function useMultiplayerRoom({
     clearError,
     expectedRevision,
     onMetricEvent,
-    reconnectV1UiEnabled,
     refreshOnRevisionConflict,
     refreshRoom,
     roomView,
     session,
     setErrorFromCode,
     setRecoveredUiState,
-    versionGuardV1Enabled,
   ]);
 
   const setReady = useCallback(async (ready: boolean) => {
@@ -1151,9 +1120,8 @@ export function useMultiplayerRoom({
   );
 
   const connectionUiState = useMemo<MultiplayerConnectionUiState>(() => {
-    if (!reconnectV1UiEnabled) return mappedConnectionUiState;
     return connectionUiStateOverride ?? mappedConnectionUiState;
-  }, [connectionUiStateOverride, mappedConnectionUiState, reconnectV1UiEnabled]);
+  }, [connectionUiStateOverride, mappedConnectionUiState]);
 
   useEffect(() => {
     return () => {
@@ -1191,17 +1159,8 @@ export function useMultiplayerRoom({
     setJoinCode(stored.roomCode);
     setSession(stored);
     setConnectionState('reconnecting');
-    if (reconnectV1Enabled) {
-      startReconnectLoop(stored);
-      return;
-    }
-    if (reconnectV1UiEnabled) {
-      setConnectionUiStateOverride('reconnecting_attempting');
-    }
-    reconnectSessionSingleFlight(stored).catch(() => {
-      // reconnectSession sets error state.
-    });
-  }, [enabled, reconnectSessionSingleFlight, reconnectV1Enabled, reconnectV1UiEnabled, startReconnectLoop]);
+    startReconnectLoop(stored);
+  }, [enabled, startReconnectLoop]);
 
   useEffect(() => {
     if (!enabled || !session || !pushEnabled) {
@@ -1295,23 +1254,19 @@ export function useMultiplayerRoom({
     const timer = window.setInterval(() => {
       refreshRoom().catch(async (refreshError) => {
         const code = refreshError instanceof Error ? refreshError.message : 'request_failed';
-        if (reconnectV1Enabled && connectionState !== 'disconnected' && isTransportReconnectableError(code)) {
+        if (connectionState !== 'disconnected' && isTransportReconnectableError(code)) {
           startReconnectLoop();
           return;
         }
         setConnectionState('reconnecting');
-        if (reconnectV1UiEnabled) {
-          setConnectionUiStateOverride('reconnecting_attempting');
-        }
+        setConnectionUiStateOverride('reconnecting_attempting');
         if (reconnectInFlightRef.current) return;
         legacyReconnectAttemptRef.current += 1;
         const recovered = await reconnectSessionSingleFlight();
         if (!recovered) {
           if (legacyReconnectAttemptRef.current > 4) {
             setConnectionState('disconnected');
-            if (reconnectV1UiEnabled) {
-              setConnectionUiStateOverride('resume_failed');
-            }
+            setConnectionUiStateOverride('resume_failed');
           }
           return;
         }
@@ -1325,8 +1280,6 @@ export function useMultiplayerRoom({
     pollIntervalMs,
     pushState,
     reconnectSessionSingleFlight,
-    reconnectV1Enabled,
-    reconnectV1UiEnabled,
     refreshRoom,
     session,
     startReconnectLoop,

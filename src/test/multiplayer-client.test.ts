@@ -124,7 +124,7 @@ describe('reconnectMultiplayerRoom response compatibility', () => {
       }),
     );
 
-    const response = await reconnectMultiplayerRoom(session, 'http://localhost:8787', 7, true);
+    const response = await reconnectMultiplayerRoom(session, 'http://localhost:8787', 7);
     expect('status' in response).toBe(false);
     expect(response.roomCode).toBe('ABCDE');
   });
@@ -178,7 +178,7 @@ describe('reconnectMultiplayerRoom response compatibility', () => {
       }),
     );
 
-    const response = await reconnectMultiplayerRoom(session, 'http://localhost:8787', 7, true);
+    const response = await reconnectMultiplayerRoom(session, 'http://localhost:8787', 7);
     expect('status' in response).toBe(true);
     if ('status' in response) {
       expect(response.status).toBe('ok');

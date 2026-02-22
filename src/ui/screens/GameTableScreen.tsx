@@ -56,8 +56,15 @@ interface GameTableScreenProps {
   connectionStatusLabel?: string;
   multiplayerConnectionState?: MultiplayerConnectionState;
   multiplayerConnectionUiState?: MultiplayerConnectionUiState;
-  reconnectUiEnabled?: boolean;
   forceInputBlocked?: boolean;
+  showDevStatusChip?: boolean;
+  devStatus?: {
+    reconnectPolicyActive: boolean;
+    versionGuardActive: boolean;
+    disconnectPausePolicyActive: boolean;
+    pushState: 'disabled' | 'unsupported' | 'connecting' | 'connected' | 'fallback';
+    roomRuntimeState: 'active' | 'paused_disconnect' | 'paused_host_disconnect' | 'ended_timeout' | null;
+  };
   playerConnectionById?: Record<string, { connected: boolean; lastSeenAt: number; reconnectDeadlineMs: number }>;
   isMultiplayerHost?: boolean;
   checkpointSlots?: { id: string; name: string; savedAt: number }[];
@@ -379,8 +386,9 @@ export function GameTableScreen({
   connectionStatusLabel,
   multiplayerConnectionState,
   multiplayerConnectionUiState,
-  reconnectUiEnabled = false,
   forceInputBlocked = false,
+  showDevStatusChip = false,
+  devStatus,
   playerConnectionById = {},
   isMultiplayerHost = false,
   checkpointSlots = [],
@@ -440,8 +448,7 @@ export function GameTableScreen({
   const multiplayerUiState = multiplayerConnectionUiState ?? 'connected';
   const reconnectBlockingState = isMultiplayer
     && (
-      (reconnectUiEnabled && RECONNECT_BLOCKING_UI_STATES.has(multiplayerUiState))
-      || (!reconnectUiEnabled && multiplayerUiState === 'room_ended')
+      RECONNECT_BLOCKING_UI_STATES.has(multiplayerUiState)
       || multiplayerConnectionState === 'reconnecting'
       || multiplayerConnectionState === 'disconnected'
     );
@@ -741,10 +748,8 @@ export function GameTableScreen({
     if (multiplayerUiState === 'room_ended') return 'Room Ended';
     if (multiplayerUiState === 'timed_out') return 'Reconnect Window Expired';
     if (multiplayerUiState === 'resume_failed') return 'Could Not Resume Seat';
-    if (reconnectUiEnabled) {
-      if (multiplayerUiState === 'reconnect_handshake_pending') return 'Restoring Seat...';
-      if (multiplayerUiState === 'resync_pending') return 'Syncing Game State...';
-    }
+    if (multiplayerUiState === 'reconnect_handshake_pending') return 'Restoring Seat...';
+    if (multiplayerUiState === 'resync_pending') return 'Syncing Game State...';
     return multiplayerConnectionState === 'reconnecting' ? 'Reconnecting...' : 'Connection Lost';
   })();
 
@@ -758,13 +763,11 @@ export function GameTableScreen({
     if (multiplayerUiState === 'resume_failed') {
       return 'Automatic resume failed. Refresh room state or rejoin manually.';
     }
-    if (reconnectUiEnabled) {
-      if (multiplayerUiState === 'reconnect_handshake_pending') {
-        return 'Re-authenticating your room seat before state recovery.';
-      }
-      if (multiplayerUiState === 'resync_pending') {
-        return 'Applying the latest authoritative room snapshot. Inputs stay disabled until sync finishes.';
-      }
+    if (multiplayerUiState === 'reconnect_handshake_pending') {
+      return 'Re-authenticating your room seat before state recovery.';
+    }
+    if (multiplayerUiState === 'resync_pending') {
+      return 'Applying the latest authoritative room snapshot. Inputs stay disabled until sync finishes.';
     }
     return multiplayerConnectionState === 'reconnecting'
       ? 'Trying to restore your room session. You can wait here while reconnect attempts continue.'
@@ -778,6 +781,11 @@ export function GameTableScreen({
         subtitle={prompt.text}
         meta={(
           <>
+            {showDevStatusChip ? (
+              <p>
+                Dev: reconnect {devStatus?.reconnectPolicyActive ? 'on' : 'off'} | version guard {devStatus?.versionGuardActive ? 'on' : 'off'} | pause policy {devStatus?.disconnectPausePolicyActive ? 'on' : 'off'} | push {devStatus?.pushState ?? 'n/a'} | runtime {devStatus?.roomRuntimeState ?? 'n/a'}
+              </p>
+            ) : null}
             <p>
               Turn {game.turnCount} | Draw pile: {game.drawPile.length} | Discard: {game.discardPile.length}
             </p>

@@ -20,7 +20,6 @@ function makeProps(overrides: Partial<MultiplayerScreenProps> = {}): Multiplayer
     recoveryNotice: null,
     connectionState: 'idle',
     connectionUiState: 'connected',
-    reconnectUiEnabled: false,
     pushState: 'disabled',
     isHost: false,
     onPlayerNameChange: vi.fn(),
@@ -240,7 +239,6 @@ describe('MultiplayerScreen', () => {
     render(
       <MultiplayerScreen
         {...makeProps({
-          reconnectUiEnabled: true,
           session: makeSession(),
           roomView: makeLobbyView(),
           connectionState: 'connected',
@@ -261,7 +259,6 @@ describe('MultiplayerScreen', () => {
     const { rerender } = render(
       <MultiplayerScreen
         {...makeProps({
-          reconnectUiEnabled: true,
           session: makeSession(),
           roomView: makeLobbyView(),
           connectionState: 'disconnected',
@@ -275,7 +272,6 @@ describe('MultiplayerScreen', () => {
       rerender(
         <MultiplayerScreen
           {...makeProps({
-            reconnectUiEnabled: true,
             session: makeSession(),
             roomView: makeLobbyView(),
             connectionState: 'disconnected',
@@ -290,7 +286,6 @@ describe('MultiplayerScreen', () => {
       rerender(
         <MultiplayerScreen
           {...makeProps({
-            reconnectUiEnabled: true,
             session: makeSession(),
             roomView: makeLobbyView(),
             connectionState: 'disconnected',
@@ -310,7 +305,6 @@ describe('MultiplayerScreen', () => {
     const { rerender } = render(
       <MultiplayerScreen
         {...makeProps({
-          reconnectUiEnabled: true,
           session: makeSession(),
           roomView: makeLobbyView(),
           connectionState: 'reconnecting',
@@ -325,7 +319,6 @@ describe('MultiplayerScreen', () => {
       rerender(
         <MultiplayerScreen
           {...makeProps({
-            reconnectUiEnabled: true,
             session: makeSession(),
             roomView: makeLobbyView(),
             connectionState: 'reconnecting',
@@ -453,7 +446,6 @@ describe('MultiplayerScreen', () => {
     render(
       <MultiplayerScreen
         {...makeProps({
-          reconnectUiEnabled: true,
           session: makeSession(),
           roomView: makeLobbyViewWithTurnState(),
           isHost: true,

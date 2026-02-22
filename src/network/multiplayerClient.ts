@@ -36,9 +36,6 @@ export interface ResolveMultiplayerApiBaseOptions {
 export interface MultiplayerFeatureFlags {
   multiplayerPushEnabled: boolean;
   multiplayerReactionsEnabled: boolean;
-  mpReconnectV1Enabled: boolean;
-  mpReconnectV1UiEnabled: boolean;
-  mpVersionGuardV1Enabled: boolean;
   mpReconnectDebugEnabled: boolean;
 }
 
@@ -65,9 +62,6 @@ export function resolveMultiplayerFeatureFlags(): MultiplayerFeatureFlags {
   return {
     multiplayerPushEnabled: import.meta.env.VITE_MULTIPLAYER_PUSH_ENABLED !== 'false',
     multiplayerReactionsEnabled: import.meta.env.VITE_MULTIPLAYER_REACTIONS_ENABLED !== 'false',
-    mpReconnectV1Enabled: import.meta.env.VITE_MP_RECONNECT_V1 === 'true',
-    mpReconnectV1UiEnabled: import.meta.env.VITE_MP_RECONNECT_V1_UI === 'true',
-    mpVersionGuardV1Enabled: import.meta.env.VITE_MP_VERSION_GUARD_V1 === 'true',
     mpReconnectDebugEnabled: import.meta.env.VITE_MP_RECONNECT_DEBUG === 'true',
   };
 }
@@ -191,9 +185,8 @@ export async function reconnectMultiplayerRoom(
   session: MultiplayerSession,
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
-  useReconnectV1 = false,
 ): Promise<MultiplayerRoomSessionResponse | MultiplayerResumeRoomResponse> {
-  const useCanonicalIdentity = useReconnectV1 && session.seatId && session.resumeToken;
+  const useCanonicalIdentity = Boolean(session.seatId && session.resumeToken);
   return request<MultiplayerRoomSessionResponse>(
     `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reconnect`,
     {

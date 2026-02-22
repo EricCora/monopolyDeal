@@ -24,8 +24,8 @@ interface MultiplayerScreenProps {
   recoveryNotice?: { roomCode: string; reason: 'room_not_found' | 'reconnect_expired' } | null;
   connectionState: MultiplayerConnectionState;
   connectionUiState?: MultiplayerConnectionUiState;
-  reconnectUiEnabled?: boolean;
   reconnectDebugEnabled?: boolean;
+  showDevStatusChip?: boolean;
   reconnectDiagnostics?: {
     roomCode: string | null;
     seatId: string | null;
@@ -181,8 +181,8 @@ export function MultiplayerScreen({
   recoveryNotice = null,
   connectionState,
   connectionUiState = 'connected',
-  reconnectUiEnabled = false,
   reconnectDebugEnabled = false,
+  showDevStatusChip = false,
   reconnectDiagnostics = null,
   pushState,
   isHost,
@@ -418,11 +418,10 @@ export function MultiplayerScreen({
     'timed_out',
     'room_ended',
   ]), []);
-  const reconnectUiBlocking = reconnectUiEnabled && reconnectBlockingStates.has(connectionUiState);
+  const reconnectUiBlocking = reconnectBlockingStates.has(connectionUiState);
   const runtimeBlocking = roomView?.roomRuntimeState === 'ended_timeout';
   const actionBlocked = reconnectUiBlocking || runtimeBlocking;
   const reconnectUiBannerText = useMemo(() => {
-    if (!reconnectUiEnabled) return null;
     if (connectionUiState === 'reconnecting_attempting') return 'Connection lost. Attempting automatic reconnect.';
     if (connectionUiState === 'reconnect_handshake_pending') return 'Reconnected to server. Restoring seat credentials.';
     if (connectionUiState === 'resync_pending') return 'Seat restored. Syncing authoritative room state.';
@@ -431,7 +430,7 @@ export function MultiplayerScreen({
     if (connectionUiState === 'timed_out') return 'Reconnect window expired. Rejoin with room code.';
     if (connectionUiState === 'room_ended') return 'Room is no longer available.';
     return null;
-  }, [connectionUiState, reconnectUiEnabled]);
+  }, [connectionUiState]);
   const runtimeStateBannerText = useMemo(() => {
     if (!roomView) return null;
     if (roomView.roomRuntimeState === 'paused_host_disconnect') {
@@ -463,6 +462,11 @@ export function MultiplayerScreen({
       </p>
       {reconnectUiBannerText ? <p className="setup-subtitle">{reconnectUiBannerText}</p> : null}
       {runtimeStateBannerText ? <p className="setup-subtitle">{runtimeStateBannerText}</p> : null}
+      {showDevStatusChip ? (
+        <p className="setup-subtitle">
+          Dev status: reconnect policy active | version guard active | disconnect pause policy active | live updates {pushState} | room runtime {roomView?.roomRuntimeState ?? 'n/a'}
+        </p>
+      ) : null}
       {reconnectDebugEnabled && reconnectDiagnostics ? (
         <section className="multiplayer-debug-panel" aria-label="Reconnect diagnostics">
           <h3>Reconnect Debug</h3>
@@ -550,11 +554,9 @@ export function MultiplayerScreen({
                 <span className={`multiplayer-status-pill ${connectionTone(connectionState)}`}>
                   {connectionLabel(connectionState)}
                 </span>
-                {reconnectUiEnabled ? (
-                  <span className={`multiplayer-status-pill ${connectionUiTone(connectionUiState)}`}>
-                    {connectionUiLabel(connectionUiState)}
-                  </span>
-                ) : null}
+                <span className={`multiplayer-status-pill ${connectionUiTone(connectionUiState)}`}>
+                  {connectionUiLabel(connectionUiState)}
+                </span>
                 <span className={`multiplayer-status-pill ${pushTone(pushState)}`}>
                   {pushLabel(pushState)}
                 </span>

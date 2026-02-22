@@ -366,9 +366,6 @@ function App() {
   const runtimeFeatureFlags = useMemo(() => resolveMultiplayerFeatureFlags(), []);
   const multiplayerPushEnabled = uiPreferences.experimental.multiplayerPushEnabled && runtimeFeatureFlags.multiplayerPushEnabled;
   const multiplayerReactionsEnabled = uiPreferences.experimental.multiplayerReactionsEnabled && runtimeFeatureFlags.multiplayerReactionsEnabled;
-  const multiplayerReconnectV1Enabled = runtimeFeatureFlags.mpReconnectV1Enabled;
-  const multiplayerReconnectV1UiEnabled = runtimeFeatureFlags.mpReconnectV1UiEnabled;
-  const multiplayerVersionGuardV1Enabled = runtimeFeatureFlags.mpVersionGuardV1Enabled;
   const multiplayerReconnectDebugEnabled = runtimeFeatureFlags.mpReconnectDebugEnabled;
   const {
     apiBase: multiplayerApiBase,
@@ -416,11 +413,9 @@ function App() {
     enabled: screen === 'multiplayer',
     pushEnabled: multiplayerPushEnabled,
     reactionsEnabled: multiplayerReactionsEnabled,
-    reconnectV1Enabled: multiplayerReconnectV1Enabled,
-    reconnectV1UiEnabled: multiplayerReconnectV1UiEnabled,
-    versionGuardV1Enabled: multiplayerVersionGuardV1Enabled,
     onMetricEvent: recordGrowthMetric,
   });
+  const showMultiplayerDevStatus = import.meta.env.DEV || multiplayerIsLocalDevApi;
 
   useEffect(() => {
     if (deepLinkHandledRef.current) return;
@@ -1895,8 +1890,15 @@ function App() {
           connectionStatusLabel={multiplayerConnectionLabel(multiplayerConnectionState, multiplayerPushState)}
           multiplayerConnectionState={multiplayerConnectionState}
           multiplayerConnectionUiState={multiplayerConnectionUiState}
-          reconnectUiEnabled={multiplayerReconnectV1UiEnabled}
           forceInputBlocked={multiplayerPromptSoftLockActive || multiplayerRoomView.roomRuntimeState === 'ended_timeout'}
+          showDevStatusChip={showMultiplayerDevStatus}
+          devStatus={{
+            reconnectPolicyActive: true,
+            versionGuardActive: true,
+            disconnectPausePolicyActive: true,
+            pushState: multiplayerPushState,
+            roomRuntimeState: multiplayerRoomView.roomRuntimeState ?? null,
+          }}
           playerConnectionById={multiplayerConnectionByPlayerId}
           isMultiplayerHost={multiplayerIsHost}
           checkpointSlots={multiplayerRoomView.checkpointSlots}
@@ -2011,9 +2013,9 @@ function App() {
           recoveryNotice={multiplayerRecoveryNotice}
           connectionState={multiplayerConnectionState}
           connectionUiState={multiplayerConnectionUiState}
-          reconnectUiEnabled={multiplayerReconnectV1UiEnabled}
           reconnectDebugEnabled={multiplayerReconnectDebugEnabled}
           reconnectDiagnostics={multiplayerReconnectDiagnostics}
+          showDevStatusChip={showMultiplayerDevStatus}
           pushState={multiplayerPushState}
           isHost={multiplayerIsHost}
           onPlayerNameChange={setMultiplayerPlayerName}
