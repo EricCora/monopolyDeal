@@ -67,6 +67,19 @@ describe('multiplayer room service lifecycle', () => {
     expect(resumed.resumeToken).toBe(resumed.sessionToken);
   });
 
+  it('allows reconnect even when expected revision is stale', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const joined = joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+    leaveRoom(room, joined.playerId, joined.sessionToken);
+
+    expect(() => reconnectRoom(room, joined.playerId, joined.sessionToken, room.revision - 5)).not.toThrow();
+    const participant = findParticipant(room, joined.playerId);
+    expect(participant.connected).toBe(true);
+    expect(participant.connectionState).toBe('connected');
+  });
+
   it('uses 90s reconnect grace default when reconnect-v1 is enabled', () => {
     expect(resolveReconnectWindowMs(true, undefined)).toBe(90_000);
     expect(resolveReconnectWindowMs(true, '120000')).toBe(120_000);

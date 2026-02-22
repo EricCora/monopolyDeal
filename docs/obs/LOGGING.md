@@ -45,6 +45,15 @@ Server-side counters/log markers:
   - `[mp][resume_result]`
   - `[mp][disconnect_timeout]`
 
+`[mp][resume_result]` status taxonomy (reconnect-v1):
+
+- `ok`
+- `invalid_token`
+- `seat_not_found` (reserved for forward compatibility)
+- `room_closed`
+- `seat_timed_out`
+- `protocol_mismatch`
+
 Redaction rule:
 
 - Never log raw `resumeToken` values.

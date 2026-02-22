@@ -2,6 +2,7 @@ import type { Action } from '../engine';
 import type {
   MultiplayerCheckpointSummary,
   MultiplayerReaction,
+  MultiplayerResumeRoomResponse,
   MultiplayerRoomEventEnvelope,
   MultiplayerRoomSessionResponse,
   MultiplayerRoomView,
@@ -80,10 +81,14 @@ export function isLanResolvableHost(hostname: string): boolean {
 
 export function multiplayerErrorMessage(code: string): string {
   if (code === 'room_not_found') return 'Room code not found. Double-check the code and try again.';
+  if (code === 'room_closed') return 'This room is no longer available.';
   if (code === 'room_full') return 'This room is already full.';
   if (code === 'room_started') return 'This match already started. Re-enter from Multiplayer to reconnect, or ask the host for a fresh room.';
   if (code === 'invalid_session') return 'Your multiplayer session expired. Please rejoin the room.';
+  if (code === 'invalid_token') return 'Could not verify your reconnect credentials. Please rejoin the room.';
   if (code === 'reconnect_expired') return 'Rejoin window expired. Please rejoin with the room code.';
+  if (code === 'seat_timed_out') return 'Your reconnect window expired. Rejoin with the room code.';
+  if (code === 'protocol_mismatch') return 'Reconnect protocol mismatch. Please refresh and try again.';
   if (code === 'minimum_players_required') return 'At least 2 players are required to start.';
   if (code === 'host_required') return 'Only the host can start this room.';
   if (code === 'room_paused') return 'The host paused this match.';
@@ -171,7 +176,7 @@ export async function reconnectMultiplayerRoom(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
   useReconnectV1 = false,
-): Promise<MultiplayerRoomSessionResponse> {
+): Promise<MultiplayerRoomSessionResponse | MultiplayerResumeRoomResponse> {
   const useCanonicalIdentity = useReconnectV1 && session.seatId && session.resumeToken;
   return request<MultiplayerRoomSessionResponse>(
     `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reconnect`,

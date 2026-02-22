@@ -224,6 +224,7 @@ Optional multiplayer behavior flags:
 - `VITE_MULTIPLAYER_REACTIONS_ENABLED` (`true` by default) to enable quick reactions.
 - `VITE_MP_RECONNECT_V1` (`false` by default) to enable reconnect-v1 canonical seat/token client behavior.
   - When enabled, client reconnect uses a bounded retry loop (immediate attempt, then jittered exponential backoff up to 8s, with a 30s total budget).
+  - Reconnect-v1 handshake returns explicit resume statuses and (on success) an authoritative room snapshot for immediate resync.
 - `VITE_MP_RECONNECT_V1_UI` (`false` by default) to enable reconnect-v1 UI state scaffolding.
 - `MULTIPLAYER_PUSH_ENABLED` (`true` by default) to enable server event stream endpoint.
 - `MULTIPLAYER_REACTIONS_ENABLED` (`true` by default) to enable server reaction endpoint.

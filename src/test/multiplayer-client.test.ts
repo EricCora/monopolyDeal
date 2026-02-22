@@ -3,6 +3,7 @@ import {
   isLanResolvableHost,
   listMultiplayerLanOrigins,
   multiplayerErrorMessage,
+  reconnectMultiplayerRoom,
   resolveMultiplayerApiBase,
 } from '../network/multiplayerClient';
 
@@ -89,5 +90,98 @@ describe('listMultiplayerLanOrigins', () => {
       }),
     );
     await expect(listMultiplayerLanOrigins('http://localhost:8787', 5173)).resolves.toEqual(['http://192.168.86.243:5173']);
+  });
+});
+
+describe('reconnectMultiplayerRoom response compatibility', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('accepts legacy reconnect response shape', async () => {
+    const session = {
+      version: 1 as const,
+      roomCode: 'ABCDE',
+      seatId: 'p1',
+      resumeToken: 'token-1',
+      playerId: 'p1',
+      sessionToken: 'token-1',
+      playerName: 'Host',
+      reconnectDeadlineMs: Date.now() + 30_000,
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        roomCode: 'ABCDE',
+        seatId: 'p1',
+        resumeToken: 'token-1',
+        playerId: 'p1',
+        sessionToken: 'token-1',
+        reconnectDeadlineMs: Date.now() + 30_000,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const response = await reconnectMultiplayerRoom(session, 'http://localhost:8787', 7, true);
+    expect('status' in response).toBe(false);
+    expect(response.roomCode).toBe('ABCDE');
+  });
+
+  it('accepts handshake reconnect response shape with snapshot', async () => {
+    const now = Date.now();
+    const session = {
+      version: 1 as const,
+      roomCode: 'ABCDE',
+      seatId: 'p1',
+      resumeToken: 'token-1',
+      playerId: 'p1',
+      sessionToken: 'token-1',
+      playerName: 'Host',
+      reconnectDeadlineMs: now + 30_000,
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        status: 'ok',
+        roomCode: 'ABCDE',
+        seatId: 'p1',
+        resumeToken: 'token-1',
+        playerId: 'p1',
+        sessionToken: 'token-1',
+        reconnectDeadlineMs: now + 30_000,
+        requiresFullResync: true,
+        serverStateVersion: 3,
+        snapshot: {
+          roomCode: 'ABCDE',
+          status: 'lobby',
+          started: false,
+          hostPlayerId: 'p1',
+          yourPlayerId: 'p1',
+          players: [],
+          legalActions: [],
+          paused: false,
+          revision: 3,
+          turnSnapshotCount: 0,
+          checkpointSlots: [],
+          canStart: true,
+          reconnectDeadlineMs: now + 30_000,
+          serverTime: now,
+          activityFeed: [],
+          chatMessages: [],
+          typingPlayerIds: [],
+          lastEventId: 3,
+        },
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const response = await reconnectMultiplayerRoom(session, 'http://localhost:8787', 7, true);
+    expect('status' in response).toBe(true);
+    if ('status' in response) {
+      expect(response.status).toBe('ok');
+      expect(response.snapshot?.revision).toBe(3);
+    }
   });
 });

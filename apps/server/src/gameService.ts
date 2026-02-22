@@ -660,9 +660,9 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
 }
 
 export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, expectedRevision?: number): RoomSessionResponse {
+  void expectedRevision;
   const player = requireSession(room, playerId, sessionToken);
   const now = nowMs();
-  ensureExpectedRevision(room, expectedRevision);
   assertReconnectWindowOpen(player, now);
   const wasConnected = player.connected;
   const previousHostId = room.hostPlayerId;

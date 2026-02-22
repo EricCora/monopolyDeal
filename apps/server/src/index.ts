@@ -31,7 +31,12 @@ import {
 import { DisconnectTimerRegistry, disconnectTimerKey } from './disconnectTimers.ts';
 import { loadSnapshots, saveSnapshots } from './persistence/snapshots.ts';
 import type { PlayerId } from '../../../src/engine/index.ts';
-import type { MultiplayerReaction, MultiplayerRoomEventEnvelope } from '../../../packages/shared/multiplayer.ts';
+import type {
+  MultiplayerReaction,
+  MultiplayerRoomEventEnvelope,
+  ResumeResultStatus,
+  ResumeRoomResponse,
+} from '../../../packages/shared/multiplayer.ts';
 import {
   isNonEmptyTrimmedString,
   isOptionalFiniteNumber,
@@ -104,6 +109,14 @@ function resolveSessionIdentity(
   }
 
   return null;
+}
+
+function mapReconnectErrorToStatus(code: string): ResumeResultStatus {
+  if (code === 'invalid_session') return 'invalid_token';
+  if (code === 'reconnect_expired') return 'seat_timed_out';
+  if (code === 'revision_conflict') return 'protocol_mismatch';
+  if (code === 'room_not_found') return 'room_closed';
+  return 'invalid_token';
 }
 
 function listLanOrigins(uiPort: number): string[] {
@@ -397,6 +410,92 @@ createServer(async (req, res) => {
     const operation = match[2] ?? null;
     const checkpointOperation = match[3] ?? null;
     const room = rooms.get(roomCode);
+
+    if (req.method === 'POST' && operation === 'reconnect' && MP_RECONNECT_V1_ENABLED) {
+      const raw = await collectBody(req);
+      const payload = JSON.parse(raw || '{}') as {
+        seatId?: unknown;
+        resumeToken?: unknown;
+        playerId?: unknown;
+        sessionToken?: unknown;
+        expectedRevision?: unknown;
+      };
+
+      if (!isNonEmptyTrimmedString(payload.playerId)
+        && !isNonEmptyTrimmedString(payload.seatId)
+        || !isOptionalNonNegativeInteger(payload.expectedRevision)) {
+        writeJson(res, 400, { error: 'invalid_payload' });
+        return;
+      }
+      const identity = resolveSessionIdentity(payload);
+      if (!identity) {
+        writeJson(res, 400, { error: 'invalid_payload' });
+        return;
+      }
+      const playerId = identity.playerId;
+      const sessionToken = identity.sessionToken;
+      const expectedRevision = payload.expectedRevision;
+
+      reconnectCounters.resume_request_total += 1;
+      console.info(
+        `[mp][resume_request] room=${roomCode} seat=${playerId} token=${redactToken(sessionToken)} revision=${String(expectedRevision ?? '')}`,
+      );
+
+      if (!room) {
+        reconnectCounters.resume_failure_total += 1;
+        console.info(`[mp][resume_result] room=${roomCode} seat=${playerId} status=room_closed`);
+        const response: ResumeRoomResponse = {
+          status: 'room_closed',
+          roomCode,
+          seatId: playerId,
+          requiresFullResync: false,
+        };
+        writeJson(res, 200, response);
+        return;
+      }
+
+      try {
+        const session = reconnectRoom(room, playerId, sessionToken, expectedRevision);
+        const snapshot = roomView(room, session.playerId, session.sessionToken);
+        reconnectCounters.resume_success_total += 1;
+        console.info(`[mp][resume_result] room=${roomCode} seat=${playerId} status=ok`);
+        const seat = getSeatConnectionSnapshot(room, playerId);
+        syncDisconnectTimersForRoom(room);
+        snapshotAll();
+        broadcastRoomEvent(room, 'mp:player_reconnected', {
+          seatId: seat?.seatId ?? playerId,
+          displayName: seat?.displayName,
+          graceExpiresAt: seat?.reconnectDeadlineMs,
+        });
+        const response: ResumeRoomResponse = {
+          status: 'ok',
+          roomCode: session.roomCode,
+          seatId: session.seatId,
+          resumeToken: session.resumeToken,
+          playerId: session.playerId,
+          sessionToken: session.sessionToken,
+          reconnectDeadlineMs: session.reconnectDeadlineMs,
+          requiresFullResync: true,
+          serverStateVersion: snapshot.revision,
+          snapshot,
+        };
+        writeJson(res, 200, response);
+      } catch (resumeError) {
+        reconnectCounters.resume_failure_total += 1;
+        const reason = resumeError instanceof Error ? resumeError.message : 'server_error';
+        const status = mapReconnectErrorToStatus(reason);
+        console.info(`[mp][resume_result] room=${roomCode} seat=${playerId} status=${status}`);
+        const response: ResumeRoomResponse = {
+          status,
+          roomCode,
+          seatId: playerId,
+          requiresFullResync: false,
+        };
+        writeJson(res, 200, response);
+      }
+      return;
+    }
+
     if (!room) {
       writeJson(res, 404, { error: 'room_not_found' });
       return;

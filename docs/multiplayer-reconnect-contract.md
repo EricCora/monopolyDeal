@@ -120,13 +120,24 @@ stateDiagram-v2
 {
   status: 'ok' | 'invalid_token' | 'seat_not_found' | 'room_closed' | 'seat_timed_out' | 'protocol_mismatch',
   roomCode: string,
-  seatId: string,
+  seatId?: string,
   requiresFullResync: boolean,
   serverStateVersion?: number,
+  snapshot?: MultiplayerRoomView,
+  resumeToken?: string,
+  // Compatibility:
+  playerId?: string,
+  sessionToken?: string,
   reconnectDeadlineMs?: number,
   message?: string
 }
 ```
+
+MD-C06/MD-C07 implementation note:
+- With `MP_RECONNECT_V1=true`, `/reconnect` returns HTTP `200` for handshake outcomes and carries status in payload.
+- Successful handshake (`status='ok'`) includes canonical/legacy session credentials plus authoritative `snapshot`.
+- Snapshot-in-handshake is the primary resync path; client falls back to `/state` fetch only if snapshot is missing.
+- Legacy reconnect behavior (session-only success + 400-style failures) is preserved when reconnect-v1 flags are disabled.
 
 ### Presence Events
 
@@ -157,6 +168,16 @@ MD-C03 implementation note:
 | Room closed/not found | Reject resume (`room_closed`/`seat_not_found`) | `room_ended`, route to host/join flow |
 | Retry budget exhausted | No valid resume | `resume_failed`, allow retry/refresh/rejoin |
 | Version mismatch | Resume accepted with resync required | `resync_pending` until snapshot applied |
+
+### Server Status Mapping (Reconnect-v1)
+
+| Internal error code | Handshake status |
+| --- | --- |
+| `invalid_session` | `invalid_token` |
+| `reconnect_expired` | `seat_timed_out` |
+| `revision_conflict` | `protocol_mismatch` |
+| Room missing | `room_closed` |
+| Other reconnect failures | `invalid_token` |
 
 ## Edge-Case Decision Table
 

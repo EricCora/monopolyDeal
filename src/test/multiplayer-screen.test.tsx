@@ -253,6 +253,55 @@ describe('MultiplayerScreen', () => {
     expect(screen.getByText(/seat restored\. syncing authoritative room state/i)).toBeInTheDocument();
   });
 
+  it('renders terminal reconnect-ui status copy for timed_out, room_ended, and resume_failed', () => {
+    vi.useFakeTimers();
+    vi.mocked(globalThis.fetch).mockImplementation(
+      () => new Promise<Response>(() => {}),
+    );
+    const { rerender } = render(
+      <MultiplayerScreen
+        {...makeProps({
+          reconnectUiEnabled: true,
+          session: makeSession(),
+          roomView: makeLobbyView(),
+          connectionState: 'disconnected',
+          connectionUiState: 'timed_out',
+        })}
+      />,
+    );
+    expect(screen.getByText(/reconnect window expired/i)).toBeInTheDocument();
+
+    act(() => {
+      rerender(
+        <MultiplayerScreen
+          {...makeProps({
+            reconnectUiEnabled: true,
+            session: makeSession(),
+            roomView: makeLobbyView(),
+            connectionState: 'disconnected',
+            connectionUiState: 'room_ended',
+          })}
+        />,
+      );
+    });
+    expect(screen.getByText(/room is no longer available/i)).toBeInTheDocument();
+
+    act(() => {
+      rerender(
+        <MultiplayerScreen
+          {...makeProps({
+            reconnectUiEnabled: true,
+            session: makeSession(),
+            roomView: makeLobbyView(),
+            connectionState: 'disconnected',
+            connectionUiState: 'resume_failed',
+          })}
+        />,
+      );
+    });
+    expect(screen.getByText(/could not resume this seat automatically/i)).toBeInTheDocument();
+  });
+
   it('renders socket-disconnected and reconnecting status labels in reconnect ui mode', () => {
     vi.useFakeTimers();
     vi.mocked(globalThis.fetch).mockImplementation(

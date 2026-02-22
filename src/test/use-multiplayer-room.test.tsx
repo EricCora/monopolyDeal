@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computeReconnectDelayMs, mapConnectionUiState, useMultiplayerRoom } from '../app/useMultiplayerRoom';
-import type { MultiplayerRoomView } from '../network/multiplayerTypes';
+import type { MultiplayerResumeRoomResponse, MultiplayerRoomView } from '../network/multiplayerTypes';
 
 const clientMocks = vi.hoisted(() => ({
   applyMultiplayerAction: vi.fn(async () => undefined),
@@ -147,6 +147,26 @@ function makeRoomView(revision = 1): MultiplayerRoomView {
   };
 }
 
+function makeResumeResponse(
+  status: MultiplayerResumeRoomResponse['status'],
+  overrides: Partial<MultiplayerResumeRoomResponse> = {},
+): MultiplayerResumeRoomResponse {
+  const snapshot = makeRoomView(3);
+  return {
+    status,
+    roomCode: 'ABCDE',
+    seatId: 'p1',
+    resumeToken: 'token-1',
+    playerId: 'p1',
+    sessionToken: 'token-1',
+    reconnectDeadlineMs: Date.now() + 30_000,
+    requiresFullResync: status === 'ok',
+    serverStateVersion: snapshot.revision,
+    snapshot: status === 'ok' ? snapshot : undefined,
+    ...overrides,
+  };
+}
+
 describe('useMultiplayerRoom reconnect + sync behavior', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -288,6 +308,149 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     expect(reconnectArgs[3]).toBe(true);
   });
 
+  it('hydrates from reconnect handshake snapshot without issuing extra /state fetch', async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    localStorage.setItem('monopolyDeal.multiplayerSession.v1', JSON.stringify({
+      version: 1,
+      roomCode: 'ABCDE',
+      seatId: 'p1',
+      resumeToken: 'token-1',
+      playerId: 'p1',
+      sessionToken: 'token-1',
+      playerName: 'Host',
+      reconnectDeadlineMs: now + 30_000,
+    }));
+    clientMocks.loadMultiplayerRoomState.mockClear();
+    clientMocks.reconnectMultiplayerRoom.mockResolvedValue(makeResumeResponse('ok'));
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+      reconnectV1Enabled: true,
+      reconnectV1UiEnabled: true,
+    }));
+
+    await advanceAndFlush(0, 6);
+    expect(clientMocks.reconnectMultiplayerRoom).toHaveBeenCalledTimes(1);
+    expect(clientMocks.loadMultiplayerRoomState).not.toHaveBeenCalled();
+    expect(result.current.connectionState).toBe('connected');
+    expect(result.current.roomView?.revision).toBe(3);
+  });
+
+  it('maps seat_timed_out handshake status to timed_out recovery path', async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    localStorage.setItem('monopolyDeal.multiplayerSession.v1', JSON.stringify({
+      version: 1,
+      roomCode: 'ABCDE',
+      seatId: 'p1',
+      resumeToken: 'token-1',
+      playerId: 'p1',
+      sessionToken: 'token-1',
+      playerName: 'Host',
+      reconnectDeadlineMs: now + 30_000,
+    }));
+    clientMocks.reconnectMultiplayerRoom.mockResolvedValue(makeResumeResponse('seat_timed_out', {
+      requiresFullResync: false,
+      snapshot: undefined,
+    }));
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+      reconnectV1Enabled: true,
+      reconnectV1UiEnabled: true,
+    }));
+
+    await advanceAndFlush(0, 6);
+    expect(result.current.connectionUiState).toBe('timed_out');
+    expect(result.current.recoveryNotice?.reason).toBe('reconnect_expired');
+  });
+
+  it('maps room_closed handshake status to room_ended recovery path', async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    localStorage.setItem('monopolyDeal.multiplayerSession.v1', JSON.stringify({
+      version: 1,
+      roomCode: 'ABCDE',
+      seatId: 'p1',
+      resumeToken: 'token-1',
+      playerId: 'p1',
+      sessionToken: 'token-1',
+      playerName: 'Host',
+      reconnectDeadlineMs: now + 30_000,
+    }));
+    clientMocks.reconnectMultiplayerRoom.mockResolvedValue(makeResumeResponse('room_closed', {
+      requiresFullResync: false,
+      snapshot: undefined,
+    }));
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+      reconnectV1Enabled: true,
+      reconnectV1UiEnabled: true,
+    }));
+
+    await advanceAndFlush(0, 6);
+    expect(result.current.connectionUiState).toBe('room_ended');
+    expect(result.current.recoveryNotice?.reason).toBe('room_not_found');
+  });
+
+  it('maps invalid_token and protocol_mismatch handshake statuses to resume_failed', async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    localStorage.setItem('monopolyDeal.multiplayerSession.v1', JSON.stringify({
+      version: 1,
+      roomCode: 'ABCDE',
+      seatId: 'p1',
+      resumeToken: 'token-1',
+      playerId: 'p1',
+      sessionToken: 'token-1',
+      playerName: 'Host',
+      reconnectDeadlineMs: now + 30_000,
+    }));
+    clientMocks.reconnectMultiplayerRoom.mockResolvedValueOnce(makeResumeResponse('invalid_token', {
+      requiresFullResync: false,
+      snapshot: undefined,
+    }));
+
+    const invalid = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+      reconnectV1Enabled: true,
+      reconnectV1UiEnabled: true,
+    }));
+    await advanceAndFlush(0, 6);
+    expect(invalid.result.current.connectionUiState).toBe('resume_failed');
+    invalid.unmount();
+
+    localStorage.setItem('monopolyDeal.multiplayerSession.v1', JSON.stringify({
+      version: 1,
+      roomCode: 'ABCDE',
+      seatId: 'p1',
+      resumeToken: 'token-1',
+      playerId: 'p1',
+      sessionToken: 'token-1',
+      playerName: 'Host',
+      reconnectDeadlineMs: now + 30_000,
+    }));
+    clientMocks.reconnectMultiplayerRoom.mockResolvedValueOnce(makeResumeResponse('protocol_mismatch', {
+      requiresFullResync: false,
+      snapshot: undefined,
+    }));
+    const mismatch = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+      reconnectV1Enabled: true,
+      reconnectV1UiEnabled: true,
+    }));
+    await advanceAndFlush(0, 6);
+    expect(mismatch.result.current.connectionUiState).toBe('resume_failed');
+    mismatch.unmount();
+  });
+
   it('uses bounded reconnect-v1 backoff cadence with single-loop guard', async () => {
     vi.useFakeTimers();
     const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
@@ -391,7 +554,11 @@ describe('mapConnectionUiState', () => {
     expect(mapConnectionUiState('disconnected', null)).toBe('resume_failed');
     expect(mapConnectionUiState('connecting', null)).toBe('reconnect_handshake_pending');
     expect(mapConnectionUiState('connected', 'reconnect_expired')).toBe('timed_out');
+    expect(mapConnectionUiState('connected', 'seat_timed_out')).toBe('timed_out');
     expect(mapConnectionUiState('connected', 'room_not_found')).toBe('room_ended');
+    expect(mapConnectionUiState('connected', 'room_closed')).toBe('room_ended');
+    expect(mapConnectionUiState('connected', 'invalid_token')).toBe('resume_failed');
+    expect(mapConnectionUiState('connected', 'protocol_mismatch')).toBe('resume_failed');
   });
 });
 

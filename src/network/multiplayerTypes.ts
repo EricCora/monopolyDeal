@@ -101,6 +101,29 @@ export interface MultiplayerRoomSessionResponse {
   reconnectDeadlineMs: number;
 }
 
+export type MultiplayerResumeResultStatus =
+  | 'ok'
+  | 'invalid_token'
+  | 'seat_not_found'
+  | 'room_closed'
+  | 'seat_timed_out'
+  | 'protocol_mismatch';
+
+export interface MultiplayerResumeRoomResponse {
+  status: MultiplayerResumeResultStatus;
+  roomCode: string;
+  seatId?: string;
+  requiresFullResync: boolean;
+  serverStateVersion?: number;
+  snapshot?: MultiplayerRoomView;
+  message?: string;
+  resumeToken?: string;
+  // Deprecated compatibility fields; remove after reconnect-v1 migration completes.
+  playerId?: string;
+  sessionToken?: string;
+  reconnectDeadlineMs?: number;
+}
+
 export interface MultiplayerActionPayload {
   roomCode: string;
   playerId: string;

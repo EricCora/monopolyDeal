@@ -77,6 +77,29 @@ export interface RoomSessionResponse {
   reconnectDeadlineMs: number;
 }
 
+export type ResumeResultStatus =
+  | 'ok'
+  | 'invalid_token'
+  | 'seat_not_found'
+  | 'room_closed'
+  | 'seat_timed_out'
+  | 'protocol_mismatch';
+
+export interface ResumeRoomResponse {
+  status: ResumeResultStatus;
+  roomCode: string;
+  seatId?: PlayerId;
+  requiresFullResync: boolean;
+  serverStateVersion?: number;
+  snapshot?: MultiplayerRoomView;
+  message?: string;
+  resumeToken?: string;
+  // Deprecated compatibility fields; remove after reconnect-v1 migration completes.
+  playerId?: PlayerId;
+  sessionToken?: string;
+  reconnectDeadlineMs?: number;
+}
+
 export interface CreateRoomRequest {
   playerName: string;
 }
