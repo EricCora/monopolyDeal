@@ -28,6 +28,12 @@ Client-side counters:
 - `multiplayer_resync_started`
 - `multiplayer_resync_completed`
 
+Reconnect metric semantics:
+
+- `multiplayer_resume_*` counters track each resume handshake attempt/outcome.
+- `multiplayer_reconnect_success` emits once per recovered reconnect loop.
+- `multiplayer_reconnect_failed` emits once per terminal reconnect loop failure (for example retry-budget exhaustion).
+
 Server-side counters/log markers:
 
 - `resume_request_total`

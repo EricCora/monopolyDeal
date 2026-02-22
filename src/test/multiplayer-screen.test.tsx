@@ -253,6 +253,41 @@ describe('MultiplayerScreen', () => {
     expect(screen.getByText(/seat restored\. syncing authoritative room state/i)).toBeInTheDocument();
   });
 
+  it('renders socket-disconnected and reconnecting status labels in reconnect ui mode', () => {
+    vi.useFakeTimers();
+    vi.mocked(globalThis.fetch).mockImplementation(
+      () => new Promise<Response>(() => {}),
+    );
+    const { rerender } = render(
+      <MultiplayerScreen
+        {...makeProps({
+          reconnectUiEnabled: true,
+          session: makeSession(),
+          roomView: makeLobbyView(),
+          connectionState: 'reconnecting',
+          connectionUiState: 'socket_disconnected',
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/socket disconnected/i)).toBeInTheDocument();
+
+    act(() => {
+      rerender(
+        <MultiplayerScreen
+          {...makeProps({
+            reconnectUiEnabled: true,
+            session: makeSession(),
+            roomView: makeLobbyView(),
+            connectionState: 'reconnecting',
+            connectionUiState: 'reconnecting_attempting',
+          })}
+        />,
+      );
+    });
+    expect(screen.getByText(/connection lost\. attempting automatic reconnect/i)).toBeInTheDocument();
+  });
+
   it('disables actionable lobby controls while reconnect ui is blocking input', () => {
     render(
       <MultiplayerScreen

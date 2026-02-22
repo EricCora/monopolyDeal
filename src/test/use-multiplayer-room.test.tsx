@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mapConnectionUiState, useMultiplayerRoom } from '../app/useMultiplayerRoom';
+import { computeReconnectDelayMs, mapConnectionUiState, useMultiplayerRoom } from '../app/useMultiplayerRoom';
 import type { MultiplayerRoomView } from '../network/multiplayerTypes';
 
 const clientMocks = vi.hoisted(() => ({
@@ -73,6 +73,14 @@ async function flushMicrotasks(times = 3): Promise<void> {
       await Promise.resolve();
     }
   });
+}
+
+async function advanceAndFlush(ms: number, flushCount = 4): Promise<void> {
+  await act(async () => {
+    vi.advanceTimersByTime(ms);
+    await Promise.resolve();
+  });
+  await flushMicrotasks(flushCount);
 }
 
 function makeSessionResponse(overrides: Partial<{ roomCode: string; playerId: string; sessionToken: string; reconnectDeadlineMs: number }> = {}) {
@@ -247,6 +255,7 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
   });
 
   it('migrates legacy stored session shape to canonical seat credentials on bootstrap reconnect', async () => {
+    vi.useFakeTimers();
     const now = Date.now();
     localStorage.setItem('monopolyDeal.multiplayerSession.v1', JSON.stringify({
       version: 1,
@@ -267,7 +276,7 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
       reconnectV1Enabled: true,
     }));
 
-    await flushMicrotasks(6);
+    await advanceAndFlush(0, 6);
     expect(clientMocks.reconnectMultiplayerRoom).toHaveBeenCalled();
     const reconnectArgs = clientMocks.reconnectMultiplayerRoom.mock.calls[0] ?? [];
     expect(reconnectArgs[0]).toMatchObject({
@@ -277,6 +286,101 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
       sessionToken: 'legacy-token',
     });
     expect(reconnectArgs[3]).toBe(true);
+  });
+
+  it('uses bounded reconnect-v1 backoff cadence with single-loop guard', async () => {
+    vi.useFakeTimers();
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    let failRefresh = false;
+    let revision = 1;
+
+    clientMocks.loadMultiplayerRoomState.mockImplementation(async () => {
+      if (failRefresh) throw new Error('request_failed');
+      revision += 1;
+      return makeRoomView(revision);
+    });
+    clientMocks.reconnectMultiplayerRoom.mockRejectedValue(new Error('request_failed'));
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+      pollIntervalMs: 40,
+      reconnectV1Enabled: true,
+      reconnectV1UiEnabled: true,
+    }));
+
+    await act(async () => {
+      const ok = await result.current.hostRoom();
+      expect(ok).toBe(true);
+    });
+    await flushMicrotasks();
+
+    failRefresh = true;
+    await advanceAndFlush(40);
+    await advanceAndFlush(0);
+    expect(clientMocks.reconnectMultiplayerRoom).toHaveBeenCalledTimes(1);
+    expect(result.current.connectionState).toBe('reconnecting');
+    expect(['reconnecting_attempting', 'reconnect_handshake_pending']).toContain(result.current.connectionUiState);
+
+    await advanceAndFlush(499);
+    expect(clientMocks.reconnectMultiplayerRoom).toHaveBeenCalledTimes(1);
+
+    await advanceAndFlush(1);
+    expect(clientMocks.reconnectMultiplayerRoom).toHaveBeenCalledTimes(2);
+
+    await advanceAndFlush(1_000);
+    expect(clientMocks.reconnectMultiplayerRoom).toHaveBeenCalledTimes(3);
+
+    await advanceAndFlush(2_000);
+    expect(clientMocks.reconnectMultiplayerRoom).toHaveBeenCalledTimes(4);
+    randomSpy.mockRestore();
+  });
+
+  it('enters terminal resume_failed state after reconnect-v1 budget exhaustion', async () => {
+    vi.useFakeTimers();
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const onMetricEvent = vi.fn();
+    let failRefresh = false;
+    let revision = 1;
+
+    clientMocks.loadMultiplayerRoomState.mockImplementation(async () => {
+      if (failRefresh) throw new Error('request_failed');
+      revision += 1;
+      return makeRoomView(revision);
+    });
+    clientMocks.reconnectMultiplayerRoom.mockRejectedValue(new Error('request_failed'));
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+      pollIntervalMs: 40,
+      reconnectV1Enabled: true,
+      reconnectV1UiEnabled: true,
+      onMetricEvent,
+    }));
+
+    await act(async () => {
+      const ok = await result.current.hostRoom();
+      expect(ok).toBe(true);
+    });
+    await flushMicrotasks();
+
+    failRefresh = true;
+    await advanceAndFlush(40);
+    await advanceAndFlush(0);
+    await advanceAndFlush(31_500, 8);
+
+    expect(result.current.connectionState).toBe('disconnected');
+    expect(result.current.connectionUiState).toBe('resume_failed');
+    const reconnectFailedEvents = onMetricEvent.mock.calls
+      .filter(([event]) => event === 'multiplayer_reconnect_failed');
+    expect(reconnectFailedEvents).toHaveLength(1);
+
+    await advanceAndFlush(5_000, 6);
+    const reconnectCallsAfterSettle = clientMocks.reconnectMultiplayerRoom.mock.calls.length;
+    await advanceAndFlush(5_000, 6);
+    expect(clientMocks.reconnectMultiplayerRoom.mock.calls.length).toBe(reconnectCallsAfterSettle);
+    randomSpy.mockRestore();
   });
 });
 
@@ -288,5 +392,19 @@ describe('mapConnectionUiState', () => {
     expect(mapConnectionUiState('connecting', null)).toBe('reconnect_handshake_pending');
     expect(mapConnectionUiState('connected', 'reconnect_expired')).toBe('timed_out');
     expect(mapConnectionUiState('connected', 'room_not_found')).toBe('room_ended');
+  });
+});
+
+describe('computeReconnectDelayMs', () => {
+  it('returns immediate first-attempt and capped exponential delays with jitter', () => {
+    expect(computeReconnectDelayMs(1, () => 0.5)).toBe(0);
+    expect(computeReconnectDelayMs(2, () => 0.5)).toBe(500);
+    expect(computeReconnectDelayMs(3, () => 0.5)).toBe(1_000);
+    expect(computeReconnectDelayMs(4, () => 0.5)).toBe(2_000);
+    expect(computeReconnectDelayMs(5, () => 0.5)).toBe(4_000);
+    expect(computeReconnectDelayMs(6, () => 0.5)).toBe(8_000);
+    expect(computeReconnectDelayMs(7, () => 0.5)).toBe(8_000);
+    expect(computeReconnectDelayMs(3, () => 0)).toBe(800);
+    expect(computeReconnectDelayMs(3, () => 1)).toBe(1_200);
   });
 });

@@ -54,6 +54,27 @@ export interface MultiplayerRecoveryNotice {
 }
 
 const SESSION_KEY = 'monopolyDeal.multiplayerSession.v1';
+const RECONNECT_BACKOFF_BASE_MS = 500;
+const RECONNECT_BACKOFF_MAX_MS = 8_000;
+const RECONNECT_JITTER_RATIO = 0.2;
+const RECONNECT_TOTAL_BUDGET_MS = 30_000;
+
+export function isTransportReconnectableError(code: string): boolean {
+  return code === 'request_failed' || code === 'network_unavailable';
+}
+
+export function computeReconnectDelayMs(
+  attemptIndex: number,
+  random: () => number = Math.random,
+): number {
+  if (attemptIndex <= 1) return 0;
+  const exponent = Math.max(0, attemptIndex - 2);
+  const baseDelay = Math.min(RECONNECT_BACKOFF_MAX_MS, RECONNECT_BACKOFF_BASE_MS * (2 ** exponent));
+  const sampled = random();
+  const normalizedSample = Number.isFinite(sampled) ? Math.min(1, Math.max(0, sampled)) : 0.5;
+  const jitterMultiplier = 1 + ((normalizedSample * 2) - 1) * RECONNECT_JITTER_RATIO;
+  return Math.max(0, Math.round(baseDelay * jitterMultiplier));
+}
 
 function sanitizeName(input: string): string {
   const trimmed = input.trim();
@@ -168,7 +189,14 @@ export function useMultiplayerRoom({
   const [recoveryNotice, setRecoveryNotice] = useState<MultiplayerRecoveryNotice | null>(null);
   const [connectionUiStateOverride, setConnectionUiStateOverride] = useState<MultiplayerConnectionUiState | null>(null);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
-  const reconnectAttemptRef = useRef(0);
+  const legacyReconnectAttemptRef = useRef(0);
+  const reconnectLoopActiveRef = useRef(false);
+  const reconnectLoopAttemptRef = useRef(0);
+  const reconnectLoopStartedAtRef = useRef<number | null>(null);
+  const reconnectLoopTimerRef = useRef<number | null>(null);
+  const reconnectLoopRunnerRef = useRef<((activeSession?: MultiplayerSession | null) => void) | null>(null);
+  const reconnectLastErrorCodeRef = useRef<string | null>(null);
+  const reconnectAutoRetryBlockedRef = useRef(false);
   const autoReconnectAttemptedRef = useRef(false);
   const sessionOperationVersionRef = useRef(0);
   const [checkpointLoading, setCheckpointLoading] = useState(false);
@@ -182,6 +210,20 @@ export function useMultiplayerRoom({
   const recoveredUiTimerRef = useRef<number | null>(null);
 
   const expectedRevision = roomView?.revision;
+
+  const clearReconnectLoopTimer = useCallback(() => {
+    if (reconnectLoopTimerRef.current != null) {
+      window.clearTimeout(reconnectLoopTimerRef.current);
+      reconnectLoopTimerRef.current = null;
+    }
+  }, []);
+
+  const stopReconnectLoop = useCallback(() => {
+    clearReconnectLoopTimer();
+    reconnectLoopActiveRef.current = false;
+    reconnectLoopAttemptRef.current = 0;
+    reconnectLoopStartedAtRef.current = null;
+  }, [clearReconnectLoopTimer]);
 
   const clearError = useCallback(() => {
     setError(null);
@@ -216,6 +258,9 @@ export function useMultiplayerRoom({
 
   const clearSession = useCallback(() => {
     nextSessionOperationVersion();
+    stopReconnectLoop();
+    reconnectLastErrorCodeRef.current = null;
+    reconnectAutoRetryBlockedRef.current = false;
     setSession(null);
     setRoomView(null);
     setHostChangeNotice(null);
@@ -224,7 +269,7 @@ export function useMultiplayerRoom({
     lastHostPlayerIdRef.current = null;
     lastEventIdRef.current = 0;
     saveStoredSession(null);
-  }, [clearRecoveredUiTimer, nextSessionOperationVersion]);
+  }, [clearRecoveredUiTimer, nextSessionOperationVersion, stopReconnectLoop]);
 
   const recoverStaleSession = useCallback((reason: MultiplayerRecoveryReason, staleSession?: MultiplayerSession | null) => {
     const roomCode = staleSession?.roomCode ?? '';
@@ -278,6 +323,7 @@ export function useMultiplayerRoom({
 
     setRoomView(next);
     setConnectionState('connected');
+    reconnectAutoRetryBlockedRef.current = false;
     clearError();
     setRecoveryNotice(null);
     const nextSession: MultiplayerSession = {
@@ -289,26 +335,15 @@ export function useMultiplayerRoom({
     return next;
   }, [apiBase, clearError, recoverStaleSession, session, setErrorFromCode]);
 
-  const refreshFromPush = useCallback(() => {
-    if (pushRefreshInFlightRef.current) {
-      pushRefreshQueuedRef.current = true;
-      return;
-    }
-    pushRefreshInFlightRef.current = true;
-    refreshRoom()
-      .catch(() => {
-        setConnectionState('reconnecting');
-      })
-      .finally(() => {
-        pushRefreshInFlightRef.current = false;
-        if (pushRefreshQueuedRef.current) {
-          pushRefreshQueuedRef.current = false;
-          refreshFromPush();
-        }
-      });
-  }, [refreshRoom]);
+  interface ReconnectSessionOptions {
+    suppressTerminalUi?: boolean;
+    suppressReconnectMetrics?: boolean;
+  }
 
-  const reconnectSession = useCallback(async (activeSession?: MultiplayerSession | null): Promise<boolean> => {
+  const reconnectSession = useCallback(async (
+    activeSession?: MultiplayerSession | null,
+    options: ReconnectSessionOptions = {},
+  ): Promise<boolean> => {
     const current = activeSession ?? session;
     if (!current) return false;
     const operationVersion = sessionOperationVersionRef.current;
@@ -318,6 +353,7 @@ export function useMultiplayerRoom({
     }
     try {
       const reconnected = await reconnectMultiplayerRoom(current, apiBase, expectedRevision, reconnectV1Enabled);
+      reconnectLastErrorCodeRef.current = null;
       if (operationVersion !== sessionOperationVersionRef.current) return false;
       const identities = resolveSessionIdentityFields(reconnected);
       const nextSession: MultiplayerSession = {
@@ -345,18 +381,23 @@ export function useMultiplayerRoom({
       if (reconnectV1UiEnabled) {
         setRecoveredUiState();
       }
-      onMetricEvent?.('multiplayer_reconnect_success');
+      if (!options.suppressReconnectMetrics) {
+        onMetricEvent?.('multiplayer_reconnect_success');
+      }
       return true;
     } catch (reconnectError) {
       const code = reconnectError instanceof Error ? reconnectError.message : 'request_failed';
+      reconnectLastErrorCodeRef.current = code;
       setErrorFromCode(code);
       if (isStaleSessionCode(code)) {
         recoverStaleSession(code, current);
-      } else if (reconnectV1UiEnabled) {
+      } else if (reconnectV1UiEnabled && !options.suppressTerminalUi) {
         setConnectionUiStateOverride('resume_failed');
       }
       onMetricEvent?.('multiplayer_resume_failure');
-      onMetricEvent?.('multiplayer_reconnect_failed');
+      if (!options.suppressReconnectMetrics) {
+        onMetricEvent?.('multiplayer_reconnect_failed');
+      }
       return false;
     }
   }, [
@@ -372,17 +413,153 @@ export function useMultiplayerRoom({
     setRecoveredUiState,
   ]);
 
-  const reconnectSessionSingleFlight = useCallback((activeSession?: MultiplayerSession | null): Promise<boolean> => {
+  const reconnectSessionSingleFlight = useCallback((
+    activeSession?: MultiplayerSession | null,
+    options?: ReconnectSessionOptions,
+  ): Promise<boolean> => {
     if (reconnectInFlightRef.current) {
       return reconnectInFlightRef.current;
     }
-    const run = reconnectSession(activeSession)
+    const run = reconnectSession(activeSession, options)
       .finally(() => {
         reconnectInFlightRef.current = null;
       });
     reconnectInFlightRef.current = run;
     return run;
   }, [reconnectSession]);
+
+  const scheduleReconnectAttempt = useCallback((delayMs: number, activeSession?: MultiplayerSession | null) => {
+    if (!reconnectLoopActiveRef.current) return;
+    clearReconnectLoopTimer();
+    reconnectLoopTimerRef.current = window.setTimeout(() => {
+      reconnectLoopTimerRef.current = null;
+      reconnectLoopRunnerRef.current?.(activeSession);
+    }, Math.max(0, Math.floor(delayMs)));
+  }, [clearReconnectLoopTimer]);
+
+  const markReconnectLoopTerminalFailure = useCallback((code: string) => {
+    stopReconnectLoop();
+    reconnectAutoRetryBlockedRef.current = true;
+    setConnectionState('disconnected');
+    if (reconnectV1UiEnabled) {
+      setConnectionUiStateOverride('resume_failed');
+    }
+    setErrorFromCode(code);
+    onMetricEvent?.('multiplayer_reconnect_failed');
+  }, [onMetricEvent, reconnectV1UiEnabled, setErrorFromCode, stopReconnectLoop]);
+
+  const runReconnectAttempt = useCallback(async (activeSession?: MultiplayerSession | null) => {
+    if (!reconnectLoopActiveRef.current) return;
+    const current = activeSession ?? session;
+    if (!current) {
+      stopReconnectLoop();
+      return;
+    }
+    const startedAt = reconnectLoopStartedAtRef.current ?? Date.now();
+    if (reconnectLoopStartedAtRef.current == null) {
+      reconnectLoopStartedAtRef.current = startedAt;
+    }
+    const elapsedBeforeAttempt = Date.now() - startedAt;
+    if (elapsedBeforeAttempt >= RECONNECT_TOTAL_BUDGET_MS) {
+      markReconnectLoopTerminalFailure(reconnectLastErrorCodeRef.current ?? 'request_failed');
+      return;
+    }
+
+    reconnectLoopAttemptRef.current += 1;
+    setConnectionState('reconnecting');
+    if (reconnectV1UiEnabled) {
+      setConnectionUiStateOverride('reconnecting_attempting');
+    }
+
+    const recovered = await reconnectSessionSingleFlight(current, {
+      suppressTerminalUi: true,
+      suppressReconnectMetrics: true,
+    });
+    if (!reconnectLoopActiveRef.current) return;
+    if (recovered) {
+      stopReconnectLoop();
+      reconnectAutoRetryBlockedRef.current = false;
+      onMetricEvent?.('multiplayer_reconnect_success');
+      return;
+    }
+
+    const failureCode = reconnectLastErrorCodeRef.current;
+    if (failureCode && isStaleSessionCode(failureCode)) {
+      stopReconnectLoop();
+      return;
+    }
+    if (failureCode && !isTransportReconnectableError(failureCode)) {
+      markReconnectLoopTerminalFailure(failureCode);
+      return;
+    }
+
+    const elapsedAfterAttempt = Date.now() - startedAt;
+    const remainingBudgetMs = RECONNECT_TOTAL_BUDGET_MS - elapsedAfterAttempt;
+    if (remainingBudgetMs <= 0) {
+      markReconnectLoopTerminalFailure(failureCode ?? 'request_failed');
+      return;
+    }
+    const nextAttemptIndex = reconnectLoopAttemptRef.current + 1;
+    const nextDelayMs = Math.min(remainingBudgetMs, computeReconnectDelayMs(nextAttemptIndex));
+    scheduleReconnectAttempt(nextDelayMs, current);
+  }, [
+    markReconnectLoopTerminalFailure,
+    onMetricEvent,
+    reconnectSessionSingleFlight,
+    reconnectV1UiEnabled,
+    scheduleReconnectAttempt,
+    session,
+    stopReconnectLoop,
+  ]);
+
+  useEffect(() => {
+    reconnectLoopRunnerRef.current = (activeSession?: MultiplayerSession | null) => {
+      void runReconnectAttempt(activeSession);
+    };
+    return () => {
+      reconnectLoopRunnerRef.current = null;
+    };
+  }, [runReconnectAttempt]);
+
+  const startReconnectLoop = useCallback((activeSession?: MultiplayerSession | null) => {
+    if (!reconnectV1Enabled) return;
+    if (reconnectAutoRetryBlockedRef.current) return;
+    if (reconnectLoopActiveRef.current || reconnectInFlightRef.current) return;
+    const current = activeSession ?? session;
+    if (!current) return;
+    reconnectLoopActiveRef.current = true;
+    reconnectLoopAttemptRef.current = 0;
+    reconnectLoopStartedAtRef.current = Date.now();
+    setConnectionState('reconnecting');
+    if (reconnectV1UiEnabled) {
+      setConnectionUiStateOverride('socket_disconnected');
+    }
+    scheduleReconnectAttempt(0, current);
+  }, [reconnectV1Enabled, reconnectV1UiEnabled, scheduleReconnectAttempt, session]);
+
+  const refreshFromPush = useCallback(() => {
+    if (pushRefreshInFlightRef.current) {
+      pushRefreshQueuedRef.current = true;
+      return;
+    }
+    pushRefreshInFlightRef.current = true;
+    refreshRoom()
+      .catch((refreshError) => {
+        const code = refreshError instanceof Error ? refreshError.message : 'request_failed';
+        if (reconnectV1Enabled && connectionState !== 'disconnected' && isTransportReconnectableError(code)) {
+          startReconnectLoop();
+          return;
+        }
+        setConnectionState('reconnecting');
+      })
+      .finally(() => {
+        pushRefreshInFlightRef.current = false;
+        if (pushRefreshQueuedRef.current) {
+          pushRefreshQueuedRef.current = false;
+          refreshFromPush();
+        }
+      });
+  }, [connectionState, reconnectV1Enabled, refreshRoom, startReconnectLoop]);
 
   const refreshOnRevisionConflict = useCallback(async (code: string, activeSession: MultiplayerSession) => {
     if (code !== 'revision_conflict') return;
@@ -397,6 +574,7 @@ export function useMultiplayerRoom({
     setConnectionUiStateOverride(null);
     clearError();
     try {
+      reconnectAutoRetryBlockedRef.current = false;
       const nextName = sanitizeName(playerName);
       const created = await createMultiplayerRoom(nextName, apiBase);
       const identities = resolveSessionIdentityFields(created);
@@ -435,6 +613,7 @@ export function useMultiplayerRoom({
     setConnectionUiStateOverride(null);
     clearError();
     try {
+      reconnectAutoRetryBlockedRef.current = false;
       const nextName = sanitizeName(playerName);
       const roomCode = sanitizeRoomCode(joinCode);
       const joined = await joinMultiplayerRoom(roomCode, nextName, apiBase);
@@ -477,6 +656,7 @@ export function useMultiplayerRoom({
       }
       return;
     }
+    stopReconnectLoop();
     setLoading(true);
     const operationVersion = forgetSession ? nextSessionOperationVersion() : sessionOperationVersionRef.current;
     try {
@@ -498,7 +678,7 @@ export function useMultiplayerRoom({
       }
       setLoading(false);
     }
-  }, [apiBase, clearError, clearSession, expectedRevision, nextSessionOperationVersion, session]);
+  }, [apiBase, clearError, clearSession, expectedRevision, nextSessionOperationVersion, session, stopReconnectLoop]);
 
   const exitRoom = useCallback(async () => {
     await leaveRoomInternal(false);
@@ -771,8 +951,9 @@ export function useMultiplayerRoom({
   useEffect(() => {
     return () => {
       clearRecoveredUiTimer();
+      stopReconnectLoop();
     };
-  }, [clearRecoveredUiTimer]);
+  }, [clearRecoveredUiTimer, stopReconnectLoop]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -790,6 +971,11 @@ export function useMultiplayerRoom({
   }, [apiBase, enabled]);
 
   useEffect(() => {
+    if (enabled) return;
+    stopReconnectLoop();
+  }, [enabled, stopReconnectLoop]);
+
+  useEffect(() => {
     if (!enabled || autoReconnectAttemptedRef.current) return;
     autoReconnectAttemptedRef.current = true;
     const stored = loadStoredSession();
@@ -798,13 +984,17 @@ export function useMultiplayerRoom({
     setJoinCode(stored.roomCode);
     setSession(stored);
     setConnectionState('reconnecting');
+    if (reconnectV1Enabled) {
+      startReconnectLoop(stored);
+      return;
+    }
     if (reconnectV1UiEnabled) {
       setConnectionUiStateOverride('reconnecting_attempting');
     }
     reconnectSessionSingleFlight(stored).catch(() => {
       // reconnectSession sets error state.
     });
-  }, [enabled, reconnectSessionSingleFlight, reconnectV1UiEnabled]);
+  }, [enabled, reconnectSessionSingleFlight, reconnectV1Enabled, reconnectV1UiEnabled, startReconnectLoop]);
 
   useEffect(() => {
     if (!enabled || !session || !pushEnabled) {
@@ -869,16 +1059,21 @@ export function useMultiplayerRoom({
     if (!enabled || !session) return;
     const effectivePollIntervalMs = pushState === 'connected' ? Math.max(pollIntervalMs, 8_000) : pollIntervalMs;
     const timer = window.setInterval(() => {
-      refreshRoom().catch(async () => {
+      refreshRoom().catch(async (refreshError) => {
+        const code = refreshError instanceof Error ? refreshError.message : 'request_failed';
+        if (reconnectV1Enabled && connectionState !== 'disconnected' && isTransportReconnectableError(code)) {
+          startReconnectLoop();
+          return;
+        }
         setConnectionState('reconnecting');
         if (reconnectV1UiEnabled) {
           setConnectionUiStateOverride('reconnecting_attempting');
         }
         if (reconnectInFlightRef.current) return;
-        reconnectAttemptRef.current += 1;
+        legacyReconnectAttemptRef.current += 1;
         const recovered = await reconnectSessionSingleFlight();
         if (!recovered) {
-          if (reconnectAttemptRef.current > 4) {
+          if (legacyReconnectAttemptRef.current > 4) {
             setConnectionState('disconnected');
             if (reconnectV1UiEnabled) {
               setConnectionUiStateOverride('resume_failed');
@@ -886,11 +1081,22 @@ export function useMultiplayerRoom({
           }
           return;
         }
-        reconnectAttemptRef.current = 0;
+        legacyReconnectAttemptRef.current = 0;
       });
     }, effectivePollIntervalMs);
     return () => window.clearInterval(timer);
-  }, [enabled, pollIntervalMs, pushState, reconnectSessionSingleFlight, reconnectV1UiEnabled, refreshRoom, session]);
+  }, [
+    enabled,
+    connectionState,
+    pollIntervalMs,
+    pushState,
+    reconnectSessionSingleFlight,
+    reconnectV1Enabled,
+    reconnectV1UiEnabled,
+    refreshRoom,
+    session,
+    startReconnectLoop,
+  ]);
 
   useEffect(() => {
     if (!enabled || !session) return;

@@ -59,6 +59,17 @@ stateDiagram-v2
 - Grace is configurable (`MP_RECONNECT_GRACE_MS`) when reconnect-v1 is enabled.
 - Legacy behavior remains at existing 5-minute grace while reconnect-v1 is disabled.
 
+## Client Retry Policy (MD-C05)
+
+- Reconnect-v1 client retry loop is bounded and single-flight.
+- Attempt 1 is immediate, then exponential backoff with jitter:
+  - `500ms`, `1_000ms`, `2_000ms`, `4_000ms`, `8_000ms` (capped at `8_000ms`).
+  - Per-attempt jitter: `+/-20%`.
+- Total reconnect retry budget: `30_000ms` from loop start.
+- Retry loop only auto-retries transport failures (`request_failed`, `network_unavailable`).
+- Stale terminal failures (`room_not_found`, `reconnect_expired`) clear session state and stop retry.
+- Budget exhaustion transitions client UI to `resume_failed` and stops auto-retry until a successful refresh/join/host flow resets state.
+
 ## Duplicate Reconnect Policy
 
 - If two active clients attempt reconnect for the same seat:
