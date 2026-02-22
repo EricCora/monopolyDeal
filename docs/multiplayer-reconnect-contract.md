@@ -130,6 +130,13 @@ stateDiagram-v2
 }
 ```
 
+MD-C03 implementation note:
+- Server push events use `MultiplayerRoomEventEnvelope.reason` values:
+  - `mp:player_disconnected`
+  - `mp:player_reconnected`
+  - `mp:player_timed_out`
+- Optional envelope fields (`seatId`, `displayName`, `graceExpiresAt`) are included when available.
+
 ## Failure Modes and User Outcomes
 
 | Failure | Server outcome | Client/UI outcome |

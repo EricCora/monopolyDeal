@@ -4,6 +4,7 @@ import {
   createRoom,
   joinRoom,
   leaveRoom,
+  markSeatTimedOutIfExpired,
   loadRoomCheckpoint,
   normalizeRoomForRuntime,
   pauseRoom,
@@ -175,10 +176,15 @@ describe('multiplayer room service lifecycle', () => {
     leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
     const disconnected = findParticipant(room, playerTwo.playerId);
     expect(disconnected.connected).toBe(false);
+    expect(disconnected.connectionState).toBe('disconnected');
+    expect(disconnected.disconnectedAt).not.toBeNull();
     expect(room.players.some((entry) => entry.id === playerTwo.playerId)).toBe(true);
 
     reconnectRoom(room, playerTwo.playerId, playerTwo.sessionToken);
-    expect(findParticipant(room, playerTwo.playerId).connected).toBe(true);
+    const reconnected = findParticipant(room, playerTwo.playerId);
+    expect(reconnected.connected).toBe(true);
+    expect(reconnected.connectionState).toBe('connected');
+    expect(reconnected.disconnectedAt).toBeNull();
   });
 
   it('rejects room state access after reconnect window expiration', () => {
@@ -209,6 +215,24 @@ describe('multiplayer room service lifecycle', () => {
     expect(disconnected.connected).toBe(false);
     const playerSummary = view.players.find((player) => player.id === playerTwo.playerId);
     expect(playerSummary?.connected).toBe(false);
+    expect(playerSummary?.connectionState).toBe('disconnected');
+  });
+
+  it('marks a disconnected seat as timed out only after grace expiration', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+    leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+
+    const beforeDeadline = markSeatTimedOutIfExpired(room, playerTwo.playerId, Date.now());
+    expect(beforeDeadline.transitioned).toBe(false);
+
+    const participant = findParticipant(room, playerTwo.playerId);
+    participant.reconnectDeadlineMs = Date.now() - 1;
+    const afterDeadline = markSeatTimedOutIfExpired(room, playerTwo.playerId, Date.now());
+    expect(afterDeadline.transitioned).toBe(true);
+    expect(findParticipant(room, playerTwo.playerId).connectionState).toBe('timed_out');
   });
 
   it('enforces host-only pause and resume', () => {

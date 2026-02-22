@@ -23,6 +23,8 @@ export interface MultiplayerPlayerSummary {
   bankCount: number;
   completeSets: number;
   connected: boolean;
+  connectionState?: 'connected' | 'disconnected' | 'reconnecting' | 'timed_out';
+  disconnectedAt?: number | null;
   lastSeenAt: number;
   reconnectDeadlineMs: number;
   isHost: boolean;
@@ -113,4 +115,7 @@ export interface MultiplayerRoomEventEnvelope {
   reason: string;
   serverTime: number;
   eventId: number;
+  seatId?: string;
+  displayName?: string;
+  graceExpiresAt?: number;
 }

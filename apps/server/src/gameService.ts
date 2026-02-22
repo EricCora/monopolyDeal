@@ -52,6 +52,8 @@ interface RoomParticipant {
   name: string;
   sessionToken: string;
   connected: boolean;
+  connectionState: 'connected' | 'disconnected' | 'reconnecting' | 'timed_out';
+  disconnectedAt: number | null;
   lastSeenAt: number;
   reconnectDeadlineMs: number;
   ready: boolean;
@@ -89,6 +91,32 @@ export interface MultiplayerRoom {
   typingByPlayerId: Record<string, number>;
 }
 
+export interface SeatConnectionSnapshot {
+  seatId: PlayerId;
+  displayName: string;
+  connected: boolean;
+  connectionState: 'connected' | 'disconnected' | 'reconnecting' | 'timed_out';
+  disconnectedAt: number | null;
+  reconnectDeadlineMs: number;
+}
+
+export interface TimeoutTransitionResult {
+  transitioned: boolean;
+  seatId: PlayerId;
+  displayName: string;
+  graceExpiresAt: number;
+}
+
+export interface PruneInactiveRoomsResult {
+  disconnectedSeats: Array<{
+    roomCode: string;
+    seatId: PlayerId;
+    displayName: string;
+    graceExpiresAt: number;
+  }>;
+  removedRoomCodes: string[];
+}
+
 export function normalizeRoomForRuntime(room: MultiplayerRoom): MultiplayerRoom {
   room.activityFeed = Array.isArray(room.activityFeed) ? room.activityFeed : [];
   room.nextActivityId = Number.isFinite(room.nextActivityId)
@@ -116,6 +144,15 @@ export function normalizeRoomForRuntime(room: MultiplayerRoom): MultiplayerRoom 
   const players = Array.isArray(room.players) ? room.players : [];
   room.players = players.map((player) => ({
     ...player,
+    connectionState: player.connectionState === 'connected'
+      || player.connectionState === 'disconnected'
+      || player.connectionState === 'reconnecting'
+      || player.connectionState === 'timed_out'
+      ? player.connectionState
+      : (player.connected ? 'connected' : 'disconnected'),
+    disconnectedAt: Number.isFinite(player.disconnectedAt)
+      ? Number(player.disconnectedAt)
+      : (player.connected ? null : (Number.isFinite(player.lastSeenAt) ? Number(player.lastSeenAt) : null)),
     ready: Boolean(player.ready),
     lastReactionAt: Number.isFinite(player.lastReactionAt) ? Number(player.lastReactionAt) : 0,
     lastChatAt: Number.isFinite(player.lastChatAt) ? Number(player.lastChatAt) : 0,
@@ -204,6 +241,8 @@ function playerDisplayName(room: MultiplayerRoom, playerId: PlayerId): string {
 function touchPlayer(player: RoomParticipant): void {
   const now = nowMs();
   player.connected = true;
+  player.connectionState = 'connected';
+  player.disconnectedAt = null;
   player.lastSeenAt = now;
   player.reconnectDeadlineMs = now + RECONNECT_WINDOW_MS;
 }
@@ -224,7 +263,7 @@ function requireSession(room: MultiplayerRoom, playerId: PlayerId, sessionToken:
 }
 
 function assertReconnectWindowOpen(player: RoomParticipant, now = nowMs()): void {
-  if (!player.connected && now > player.reconnectDeadlineMs) {
+  if (!player.connected && (now > player.reconnectDeadlineMs || player.connectionState === 'timed_out')) {
     throw new Error('reconnect_expired');
   }
 }
@@ -262,6 +301,8 @@ function markDisconnected(room: MultiplayerRoom, player: RoomParticipant): void 
   if (!player.connected) return;
   const now = nowMs();
   player.connected = false;
+  player.connectionState = 'disconnected';
+  player.disconnectedAt = now;
   player.lastSeenAt = now;
   player.reconnectDeadlineMs = now + RECONNECT_WINDOW_MS;
   delete room.typingByPlayerId[player.id];
@@ -278,6 +319,66 @@ function markDisconnected(room: MultiplayerRoom, player: RoomParticipant): void 
   bumpUpdatedAt(room);
 }
 
+export function getSeatConnectionSnapshot(room: MultiplayerRoom, seatId: PlayerId): SeatConnectionSnapshot | null {
+  const player = findPlayer(room, seatId);
+  if (!player) return null;
+  return {
+    seatId: player.id,
+    displayName: player.name,
+    connected: player.connected,
+    connectionState: player.connectionState,
+    disconnectedAt: player.disconnectedAt,
+    reconnectDeadlineMs: player.reconnectDeadlineMs,
+  };
+}
+
+export function listSeatConnectionSnapshots(room: MultiplayerRoom): SeatConnectionSnapshot[] {
+  return room.players.map((player) => ({
+    seatId: player.id,
+    displayName: player.name,
+    connected: player.connected,
+    connectionState: player.connectionState,
+    disconnectedAt: player.disconnectedAt,
+    reconnectDeadlineMs: player.reconnectDeadlineMs,
+  }));
+}
+
+export function markSeatTimedOutIfExpired(
+  room: MultiplayerRoom,
+  seatId: PlayerId,
+  now = nowMs(),
+): TimeoutTransitionResult {
+  const player = findPlayer(room, seatId);
+  if (!player) {
+    return {
+      transitioned: false,
+      seatId,
+      displayName: seatId,
+      graceExpiresAt: now,
+    };
+  }
+  if (player.connected || player.reconnectDeadlineMs > now || player.connectionState === 'timed_out') {
+    return {
+      transitioned: false,
+      seatId: player.id,
+      displayName: player.name,
+      graceExpiresAt: player.reconnectDeadlineMs,
+    };
+  }
+  player.connected = false;
+  player.connectionState = 'timed_out';
+  player.lastSeenAt = now;
+  appendActivity(room, 'connection', `${player.name} timed out.`, { playerId: player.id });
+  incrementRevision(room);
+  bumpUpdatedAt(room);
+  return {
+    transitioned: true,
+    seatId: player.id,
+    displayName: player.name,
+    graceExpiresAt: player.reconnectDeadlineMs,
+  };
+}
+
 function roomPlayerSummary(room: MultiplayerRoom): MultiplayerPlayerSummary[] {
   if (!room.game) {
     return room.players.map((entry) => ({
@@ -287,6 +388,8 @@ function roomPlayerSummary(room: MultiplayerRoom): MultiplayerPlayerSummary[] {
       bankCount: 0,
       completeSets: 0,
       connected: entry.connected,
+      connectionState: entry.connectionState,
+      disconnectedAt: entry.disconnectedAt,
       lastSeenAt: entry.lastSeenAt,
       reconnectDeadlineMs: entry.reconnectDeadlineMs,
       isHost: entry.id === room.hostPlayerId,
@@ -303,6 +406,8 @@ function roomPlayerSummary(room: MultiplayerRoom): MultiplayerPlayerSummary[] {
       bankCount: player.bank.length,
       completeSets: getSetCompletionCount(player),
       connected: Boolean(entry?.connected),
+      connectionState: entry?.connectionState ?? (entry?.connected ? 'connected' : 'disconnected'),
+      disconnectedAt: entry?.disconnectedAt ?? null,
       lastSeenAt: entry?.lastSeenAt ?? room.updatedAt,
       reconnectDeadlineMs: entry?.reconnectDeadlineMs ?? room.updatedAt,
       isHost: player.id === room.hostPlayerId,
@@ -484,6 +589,8 @@ export function createRoom(
       name: sanitizeName(hostName, 'Host'),
       sessionToken: token,
       connected: true,
+      connectionState: 'connected',
+      disconnectedAt: null,
       lastSeenAt: createdAt,
       reconnectDeadlineMs: createdAt + RECONNECT_WINDOW_MS,
       ready: false,
@@ -532,6 +639,8 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
     name: sanitizeName(playerName, `Player ${playerId.slice(1)}`),
     sessionToken: token,
     connected: true,
+    connectionState: 'connected',
+    disconnectedAt: null,
     lastSeenAt: now,
     reconnectDeadlineMs: now + RECONNECT_WINDOW_MS,
     ready: false,
@@ -984,7 +1093,9 @@ export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken
   };
 }
 
-export function pruneInactiveRooms(rooms: Map<string, MultiplayerRoom>, now = nowMs()): void {
+export function pruneInactiveRooms(rooms: Map<string, MultiplayerRoom>, now = nowMs()): PruneInactiveRoomsResult {
+  const disconnectedSeats: PruneInactiveRoomsResult['disconnectedSeats'] = [];
+  const removedRoomCodes: string[] = [];
   for (const [code, room] of rooms) {
     pruneExpiredTyping(room, now);
     const staleConnectedPlayers = room.players.filter((player) => (
@@ -995,6 +1106,12 @@ export function pruneInactiveRooms(rooms: Map<string, MultiplayerRoom>, now = no
         removeLobbyParticipant(room, player.id);
       } else {
         markDisconnected(room, player);
+        disconnectedSeats.push({
+          roomCode: room.code,
+          seatId: player.id,
+          displayName: player.name,
+          graceExpiresAt: player.reconnectDeadlineMs,
+        });
       }
       incrementRevision(room);
     }
@@ -1004,6 +1121,8 @@ export function pruneInactiveRooms(rooms: Map<string, MultiplayerRoom>, now = no
     const ttl = room.status === 'lobby' ? 30 * 60 * 1000 : room.status === 'finished' ? 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;
     if (inactiveForMs > ttl) {
       rooms.delete(code);
+      removedRoomCodes.push(code);
     }
   }
+  return { disconnectedSeats, removedRoomCodes };
 }

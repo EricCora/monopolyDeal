@@ -33,9 +33,11 @@ Server-side counters/log markers:
 - `resume_request_total`
 - `resume_success_total`
 - `resume_failure_total`
+- `disconnect_timeout_total`
 - Log markers:
   - `[mp][resume_request]`
   - `[mp][resume_result]`
+  - `[mp][disconnect_timeout]`
 
 Redaction rule:
 

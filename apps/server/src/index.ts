@@ -5,10 +5,13 @@ import {
   applyRoomAction,
   createRoom,
   deleteRoomCheckpoint,
+  getSeatConnectionSnapshot,
   joinRoom,
   leaveRoom,
+  listSeatConnectionSnapshots,
   listRoomCheckpoints,
   loadRoomCheckpoint,
+  markSeatTimedOutIfExpired,
   pauseRoom,
   pruneInactiveRooms,
   reconnectRoom,
@@ -25,6 +28,7 @@ import {
   undoRoomAction,
   type MultiplayerRoom,
 } from './gameService.ts';
+import { DisconnectTimerRegistry, disconnectTimerKey } from './disconnectTimers.ts';
 import { loadSnapshots, saveSnapshots } from './persistence/snapshots.ts';
 import type { PlayerId } from '../../../src/engine/index.ts';
 import type { MultiplayerReaction, MultiplayerRoomEventEnvelope } from '../../../packages/shared/multiplayer.ts';
@@ -58,6 +62,7 @@ const reconnectCounters = {
   resume_request_total: 0,
   resume_success_total: 0,
   resume_failure_total: 0,
+  disconnect_timeout_total: 0,
 };
 
 type SessionIdentity = {
@@ -119,6 +124,13 @@ function listLanOrigins(uiPort: number): string[] {
   return Array.from(origins);
 }
 
+const disconnectTimers = new DisconnectTimerRegistry((roomCode, seatId) => {
+  handleDisconnectTimeout(roomCode, seatId).catch((error) => {
+    const message = error instanceof Error ? error.message : 'unknown_error';
+    console.info(`[mp][disconnect_timeout_handler_error] room=${roomCode} seat=${seatId} error=${message}`);
+  });
+});
+
 function writeJson(
   res: { writeHead: (code: number, headers: Record<string, string>) => void; end: (body: string) => void },
   code: number,
@@ -169,7 +181,11 @@ function addEventStreamClient(roomCode: string, client: EventStreamClient): void
   roomEventStreams.set(roomCode, existing);
 }
 
-function broadcastRoomEvent(room: MultiplayerRoom, reason: string): void {
+function broadcastRoomEvent(
+  room: MultiplayerRoom,
+  reason: string,
+  details?: { seatId?: PlayerId; displayName?: string; graceExpiresAt?: number },
+): void {
   if (!MULTIPLAYER_PUSH_ENABLED) return;
   const clients = roomEventStreams.get(room.code);
   if (!clients || clients.size === 0) return;
@@ -179,6 +195,9 @@ function broadcastRoomEvent(room: MultiplayerRoom, reason: string): void {
     reason,
     serverTime: Date.now(),
     eventId: room.revision,
+    seatId: details?.seatId,
+    displayName: details?.displayName,
+    graceExpiresAt: details?.graceExpiresAt,
   };
 
   for (const client of clients) {
@@ -188,6 +207,61 @@ function broadcastRoomEvent(room: MultiplayerRoom, reason: string): void {
       removeEventStreamClient(room.code, client);
     }
   }
+}
+
+function syncDisconnectTimersForRoom(room: MultiplayerRoom): void {
+  if (!MP_RECONNECT_V1_ENABLED) return;
+  const now = Date.now();
+  for (const seat of listSeatConnectionSnapshots(room)) {
+    if (seat.connected || seat.connectionState === 'timed_out') {
+      disconnectTimers.cancel(room.code, seat.seatId);
+      continue;
+    }
+    if (seat.reconnectDeadlineMs <= now) {
+      void handleDisconnectTimeout(room.code, seat.seatId);
+      continue;
+    }
+    disconnectTimers.schedule(room.code, seat.seatId, seat.reconnectDeadlineMs);
+  }
+}
+
+function syncDisconnectTimersForAllRooms(): void {
+  if (!MP_RECONNECT_V1_ENABLED) return;
+  const validKeys = new Set<string>();
+  for (const room of rooms.values()) {
+    syncDisconnectTimersForRoom(room);
+    for (const seat of listSeatConnectionSnapshots(room)) {
+      if (seat.connected || seat.connectionState === 'timed_out') continue;
+      validKeys.add(disconnectTimerKey(room.code, seat.seatId));
+    }
+  }
+  disconnectTimers.syncValidKeys(validKeys);
+}
+
+async function handleDisconnectTimeout(roomCode: string, seatId: string): Promise<void> {
+  if (!MP_RECONNECT_V1_ENABLED) {
+    disconnectTimers.cancel(roomCode, seatId);
+    return;
+  }
+  const room = rooms.get(roomCode);
+  if (!room) {
+    disconnectTimers.cancel(roomCode, seatId);
+    return;
+  }
+  const result = markSeatTimedOutIfExpired(room, seatId as PlayerId, Date.now());
+  if (!result.transitioned) {
+    syncDisconnectTimersForRoom(room);
+    return;
+  }
+  reconnectCounters.disconnect_timeout_total += 1;
+  console.info(`[mp][disconnect_timeout] room=${roomCode} seat=${result.seatId}`);
+  snapshotAll();
+  broadcastRoomEvent(room, 'mp:player_timed_out', {
+    seatId: result.seatId,
+    displayName: result.displayName,
+    graceExpiresAt: result.graceExpiresAt,
+  });
+  syncDisconnectTimersForRoom(room);
 }
 
 function openEventStream(
@@ -241,7 +315,19 @@ function openEventStream(
 }
 
 setInterval(() => {
-  pruneInactiveRooms(rooms);
+  const pruneResult = pruneInactiveRooms(rooms);
+  if (MP_RECONNECT_V1_ENABLED) {
+    for (const disconnected of pruneResult.disconnectedSeats) {
+      const room = rooms.get(disconnected.roomCode);
+      if (!room) continue;
+      broadcastRoomEvent(room, 'mp:player_disconnected', {
+        seatId: disconnected.seatId,
+        displayName: disconnected.displayName,
+        graceExpiresAt: disconnected.graceExpiresAt,
+      });
+    }
+  }
+  syncDisconnectTimersForAllRooms();
   snapshotAll();
 }, 60_000);
 
@@ -258,7 +344,19 @@ createServer(async (req, res) => {
 
   const parsed = parse(req.url, true);
   const path = parsed.pathname ?? '';
-  pruneInactiveRooms(rooms);
+  const pruneResult = pruneInactiveRooms(rooms);
+  if (MP_RECONNECT_V1_ENABLED) {
+    for (const disconnected of pruneResult.disconnectedSeats) {
+      const room = rooms.get(disconnected.roomCode);
+      if (!room) continue;
+      broadcastRoomEvent(room, 'mp:player_disconnected', {
+        seatId: disconnected.seatId,
+        displayName: disconnected.displayName,
+        graceExpiresAt: disconnected.graceExpiresAt,
+      });
+    }
+  }
+  syncDisconnectTimersForAllRooms();
 
   try {
     if (req.method === 'GET' && path === '/api/multiplayer/health') {
@@ -281,6 +379,7 @@ createServer(async (req, res) => {
       const raw = await collectBody(req);
       const payload = JSON.parse(raw || '{}') as { playerName?: unknown };
       const created = createRoom(rooms, optionalTrimmedString(payload.playerName) ?? 'Host');
+      syncDisconnectTimersForRoom(created.room);
       snapshotAll();
       writeJson(res, 200, created.session);
       return;
@@ -382,6 +481,7 @@ createServer(async (req, res) => {
 
     if (operation === 'join') {
       const session = joinRoom(room, optionalTrimmedString(payload.playerName) ?? 'Player');
+      syncDisconnectTimersForRoom(room);
       snapshotAll();
       broadcastRoomEvent(room, 'join');
       writeJson(res, 200, session);
@@ -413,8 +513,16 @@ createServer(async (req, res) => {
         const session = reconnectRoom(room, playerId, sessionToken, expectedRevision);
         reconnectCounters.resume_success_total += 1;
         console.info(`[mp][resume_result] room=${roomCode} seat=${playerId} status=ok`);
+        const seat = getSeatConnectionSnapshot(room, playerId);
+        syncDisconnectTimersForRoom(room);
         snapshotAll();
-        broadcastRoomEvent(room, 'reconnect');
+        broadcastRoomEvent(room, MP_RECONNECT_V1_ENABLED ? 'mp:player_reconnected' : 'reconnect', MP_RECONNECT_V1_ENABLED
+          ? {
+              seatId: seat?.seatId ?? playerId,
+              displayName: seat?.displayName,
+              graceExpiresAt: seat?.reconnectDeadlineMs,
+            }
+          : undefined);
         writeJson(res, 200, session);
       } catch (resumeError) {
         reconnectCounters.resume_failure_total += 1;
@@ -439,9 +547,20 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'leave') {
+      const preStatus = room.status;
       leaveRoom(room, playerId, sessionToken, expectedRevision);
+      const seat = getSeatConnectionSnapshot(room, playerId);
+      syncDisconnectTimersForRoom(room);
       snapshotAll();
-      broadcastRoomEvent(room, 'leave');
+      if (MP_RECONNECT_V1_ENABLED && preStatus !== 'lobby' && seat && !seat.connected) {
+        broadcastRoomEvent(room, 'mp:player_disconnected', {
+          seatId: seat.seatId,
+          displayName: seat.displayName,
+          graceExpiresAt: seat.reconnectDeadlineMs,
+        });
+      } else {
+        broadcastRoomEvent(room, 'leave');
+      }
       writeJson(res, 200, { ok: true });
       return;
     }
