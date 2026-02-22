@@ -42,17 +42,7 @@ function fillLobby(room: MultiplayerRoom) {
 }
 
 function withPauseOnDisconnectPolicy<T>(run: () => T): T {
-  const previous = process.env.MP_PAUSE_ON_DISCONNECT_V1;
-  process.env.MP_PAUSE_ON_DISCONNECT_V1 = 'true';
-  try {
-    return run();
-  } finally {
-    if (previous == null) {
-      delete process.env.MP_PAUSE_ON_DISCONNECT_V1;
-    } else {
-      process.env.MP_PAUSE_ON_DISCONNECT_V1 = previous;
-    }
-  }
+  return run();
 }
 
 describe('multiplayer room service lifecycle', () => {
@@ -508,7 +498,7 @@ describe('multiplayer room service lifecycle', () => {
     expect(JSON.stringify(room.game)).toBe(gameSnapshotBefore);
   });
 
-  it('rejects stale clientStateVersion under version-guarded action mode', () => {
+  it('rejects stale clientStateVersion under always-on version guard', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     joinRoom(room, 'Player 2');

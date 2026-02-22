@@ -727,7 +727,7 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     mismatch.unmount();
   });
 
-  it('auto-resyncs on stale_state action rejection when version guard is enabled', async () => {
+  it('auto-resyncs on stale_state action rejection via always-on version guard', async () => {
     vi.useFakeTimers();
     const onMetricEvent = vi.fn();
     let revision = 1;
@@ -816,7 +816,7 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     expect(clientMocks.loadMultiplayerRoomState.mock.calls.length).toBe(refreshCallsBeforeAction);
   });
 
-  it('uses bounded reconnect-v1 backoff cadence with single-loop guard', async () => {
+  it('uses bounded reconnect backoff cadence with single-loop guard', async () => {
     vi.useFakeTimers();
     const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
     let failRefresh = false;
@@ -862,7 +862,7 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     randomSpy.mockRestore();
   });
 
-  it('enters terminal resume_failed state after reconnect-v1 budget exhaustion', async () => {
+  it('enters terminal resume_failed state after reconnect budget exhaustion', async () => {
     vi.useFakeTimers();
     const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const onMetricEvent = vi.fn();

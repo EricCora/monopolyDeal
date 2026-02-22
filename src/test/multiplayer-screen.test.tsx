@@ -442,6 +442,22 @@ describe('MultiplayerScreen', () => {
     expect(screen.queryByText(/reconnect debug/i)).not.toBeInTheDocument();
   });
 
+  it('shows always-on multiplayer policy status in dev chip when enabled', () => {
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          session: makeSession(),
+          roomView: makeLobbyViewWithTurnState(),
+          showDevStatusChip: true,
+          pushState: 'connected',
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/dev status: reconnect policy active/i)).toBeInTheDocument();
+    expect(screen.getByText(/live updates connected/i)).toBeInTheDocument();
+  });
+
   it('disables actionable lobby controls while reconnect ui is blocking input', () => {
     render(
       <MultiplayerScreen
