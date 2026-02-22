@@ -24,11 +24,8 @@ import type {
   RoomSessionResponse,
 } from '../../../packages/shared/multiplayer.ts';
 
-const RECONNECT_WINDOW_LEGACY_MS = 5 * 60 * 1000;
 const RECONNECT_WINDOW_V1_DEFAULT_MS = 90_000;
-const MP_RECONNECT_V1_ENABLED = process.env.MP_RECONNECT_V1 === 'true';
-const MP_VERSION_GUARD_V1_ENABLED = process.env.MP_VERSION_GUARD_V1 === 'true';
-const RECONNECT_WINDOW_MS = resolveReconnectWindowMs(MP_RECONNECT_V1_ENABLED, process.env.MP_RECONNECT_GRACE_MS);
+const RECONNECT_WINDOW_MS = resolveReconnectWindowMs(process.env.MP_RECONNECT_GRACE_MS);
 // Keep lobby heartbeat grace long enough for frequent tab switching during local beta sessions.
 const STALE_CONNECTION_MS = 1.5 * 60 * 1000;
 const MAX_CHECKPOINTS = 5;
@@ -41,12 +38,7 @@ const MAX_CHAT_MESSAGE_LENGTH = 280;
 const TYPING_TTL_MS = 4_500;
 export const ROOM_REACTION_OPTIONS: MultiplayerReaction[] = ['nice', 'wow', 'gg', 'oops'];
 
-function isPauseOnDisconnectV1Enabled(): boolean {
-  return process.env.MP_PAUSE_ON_DISCONNECT_V1 === 'true';
-}
-
-export function resolveReconnectWindowMs(mpReconnectV1Enabled: boolean, configuredGraceMs?: string): number {
-  if (!mpReconnectV1Enabled) return RECONNECT_WINDOW_LEGACY_MS;
+export function resolveReconnectWindowMs(configuredGraceMs?: string): number {
   const parsed = Number(configuredGraceMs);
   if (Number.isFinite(parsed) && parsed >= 1_000) {
     return Math.floor(parsed);
@@ -323,7 +315,6 @@ function hasDisconnectedSeatAwaitingReconnect(room: MultiplayerRoom): boolean {
 }
 
 function applyDisconnectPauseState(room: MultiplayerRoom, disconnectedSeatId: PlayerId): void {
-  if (!isPauseOnDisconnectV1Enabled()) return;
   if (room.status !== 'active' && room.status !== 'finished') return;
   if (room.roomRuntimeState === 'ended_timeout') return;
   const hostSeatDisconnected = isHostSeat(room, disconnectedSeatId);
@@ -334,7 +325,6 @@ function applyDisconnectPauseState(room: MultiplayerRoom, disconnectedSeatId: Pl
 }
 
 function resolveDisconnectPauseStateAfterReconnect(room: MultiplayerRoom): void {
-  if (!isPauseOnDisconnectV1Enabled()) return;
   if (room.roomRuntimeState !== 'paused_disconnect' && room.roomRuntimeState !== 'paused_host_disconnect') return;
   if (hasDisconnectedSeatAwaitingReconnect(room)) return;
   room.paused = false;
@@ -344,7 +334,6 @@ function resolveDisconnectPauseStateAfterReconnect(room: MultiplayerRoom): void 
 }
 
 function resolveDisconnectPauseStateAfterTimeout(room: MultiplayerRoom): void {
-  if (!isPauseOnDisconnectV1Enabled()) return;
   if (room.roomRuntimeState !== 'paused_disconnect' && room.roomRuntimeState !== 'paused_host_disconnect') return;
   if (hasDisconnectedSeatAwaitingReconnect(room)) return;
   room.paused = false;
@@ -446,7 +435,7 @@ export function markSeatTimedOutIfExpired(
   player.connectionState = 'timed_out';
   player.lastSeenAt = now;
   appendActivity(room, 'connection', `${player.name} timed out.`, { playerId: player.id });
-  if (isPauseOnDisconnectV1Enabled() && room.status !== 'lobby') {
+  if (room.status !== 'lobby') {
     if (isHostSeat(room, player.id)) {
       room.paused = false;
       room.pausedByPlayerId = undefined;
@@ -895,8 +884,7 @@ export function resumeRoom(room: MultiplayerRoom, playerId: PlayerId, sessionTok
     throw new Error('room_closed');
   }
   if (
-    isPauseOnDisconnectV1Enabled()
-    && (room.pausedReason === 'host_disconnect' || room.pausedReason === 'player_disconnect')
+    (room.pausedReason === 'host_disconnect' || room.pausedReason === 'player_disconnect')
     && hasDisconnectedSeatAwaitingReconnect(room)
   ) {
     throw new Error('room_paused');
@@ -919,9 +907,7 @@ export function applyRoomAction(
   options: ApplyRoomActionOptions = {},
 ): MultiplayerRoom {
   const actionId = options.actionId?.trim();
-  const versionGuardEnabled = MP_VERSION_GUARD_V1_ENABLED
-    || options.clientStateVersion != null
-    || Boolean(actionId);
+  const versionGuardEnabled = true;
   ensureExpectedRevision(room, expectedRevision);
   const player = requireSession(room, playerId, sessionToken);
   const game = requireGame(room);

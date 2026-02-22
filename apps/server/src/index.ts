@@ -51,9 +51,6 @@ import {
 const PORT = Number(process.env.PORT ?? 8787);
 const MULTIPLAYER_PUSH_ENABLED = process.env.MULTIPLAYER_PUSH_ENABLED !== 'false';
 const MULTIPLAYER_REACTIONS_ENABLED = process.env.MULTIPLAYER_REACTIONS_ENABLED !== 'false';
-const MP_RECONNECT_V1_ENABLED = process.env.MP_RECONNECT_V1 === 'true';
-const MP_VERSION_GUARD_V1_ENABLED = process.env.MP_VERSION_GUARD_V1 === 'true';
-const MP_PAUSE_ON_DISCONNECT_V1_ENABLED = process.env.MP_PAUSE_ON_DISCONNECT_V1 === 'true';
 const SSE_HEARTBEAT_MS = 25_000;
 
 const rooms = new Map<string, MultiplayerRoom>();
@@ -94,7 +91,7 @@ function resolveSessionIdentity(
   const playerId = optionalTrimmedString(input.playerId);
   const sessionToken = optionalTrimmedString(input.sessionToken);
 
-  if (MP_RECONNECT_V1_ENABLED && seatId && resumeToken) {
+  if (seatId && resumeToken) {
     return {
       playerId: seatId as PlayerId,
       sessionToken: resumeToken,
@@ -244,7 +241,6 @@ function emitRoomRuntimeTransition(
   room: MultiplayerRoom,
   previousRuntimeState: string | undefined,
 ): void {
-  if (!MP_PAUSE_ON_DISCONNECT_V1_ENABLED) return;
   const nextRuntimeState = room.roomRuntimeState;
   if (previousRuntimeState === nextRuntimeState) return;
   if (nextRuntimeState === 'paused_disconnect' || nextRuntimeState === 'paused_host_disconnect') {
@@ -269,7 +265,6 @@ function emitRoomRuntimeTransition(
 }
 
 function syncDisconnectTimersForRoom(room: MultiplayerRoom): void {
-  if (!MP_RECONNECT_V1_ENABLED) return;
   const now = Date.now();
   for (const seat of listSeatConnectionSnapshots(room)) {
     if (seat.connected || seat.connectionState === 'timed_out') {
@@ -285,7 +280,6 @@ function syncDisconnectTimersForRoom(room: MultiplayerRoom): void {
 }
 
 function syncDisconnectTimersForAllRooms(): void {
-  if (!MP_RECONNECT_V1_ENABLED) return;
   const validKeys = new Set<string>();
   for (const room of rooms.values()) {
     syncDisconnectTimersForRoom(room);
@@ -298,10 +292,6 @@ function syncDisconnectTimersForAllRooms(): void {
 }
 
 async function handleDisconnectTimeout(roomCode: string, seatId: string): Promise<void> {
-  if (!MP_RECONNECT_V1_ENABLED) {
-    disconnectTimers.cancel(roomCode, seatId);
-    return;
-  }
   const room = rooms.get(roomCode);
   if (!room) {
     disconnectTimers.cancel(roomCode, seatId);
@@ -389,16 +379,14 @@ function openEventStream(
 
 setInterval(() => {
   const pruneResult = pruneInactiveRooms(rooms);
-  if (MP_RECONNECT_V1_ENABLED) {
-    for (const disconnected of pruneResult.disconnectedSeats) {
-      const room = rooms.get(disconnected.roomCode);
-      if (!room) continue;
-      broadcastRoomEvent(room, 'mp:player_disconnected', {
-        seatId: disconnected.seatId,
-        displayName: disconnected.displayName,
-        graceExpiresAt: disconnected.graceExpiresAt,
-      });
-    }
+  for (const disconnected of pruneResult.disconnectedSeats) {
+    const room = rooms.get(disconnected.roomCode);
+    if (!room) continue;
+    broadcastRoomEvent(room, 'mp:player_disconnected', {
+      seatId: disconnected.seatId,
+      displayName: disconnected.displayName,
+      graceExpiresAt: disconnected.graceExpiresAt,
+    });
   }
   syncDisconnectTimersForAllRooms();
   snapshotAll();
@@ -418,16 +406,14 @@ createServer(async (req, res) => {
   const parsed = parse(req.url, true);
   const path = parsed.pathname ?? '';
   const pruneResult = pruneInactiveRooms(rooms);
-  if (MP_RECONNECT_V1_ENABLED) {
-    for (const disconnected of pruneResult.disconnectedSeats) {
-      const room = rooms.get(disconnected.roomCode);
-      if (!room) continue;
-      broadcastRoomEvent(room, 'mp:player_disconnected', {
-        seatId: disconnected.seatId,
-        displayName: disconnected.displayName,
-        graceExpiresAt: disconnected.graceExpiresAt,
-      });
-    }
+  for (const disconnected of pruneResult.disconnectedSeats) {
+    const room = rooms.get(disconnected.roomCode);
+    if (!room) continue;
+    broadcastRoomEvent(room, 'mp:player_disconnected', {
+      seatId: disconnected.seatId,
+      displayName: disconnected.displayName,
+      graceExpiresAt: disconnected.graceExpiresAt,
+    });
   }
   syncDisconnectTimersForAllRooms();
 
@@ -471,7 +457,7 @@ createServer(async (req, res) => {
     const checkpointOperation = match[3] ?? null;
     const room = rooms.get(roomCode);
 
-    if (req.method === 'POST' && operation === 'reconnect' && MP_RECONNECT_V1_ENABLED) {
+    if (req.method === 'POST' && operation === 'reconnect') {
       const raw = await collectBody(req);
       const payload = JSON.parse(raw || '{}') as {
         seatId?: unknown;
@@ -670,35 +656,7 @@ createServer(async (req, res) => {
     const expectedRevision = payload.expectedRevision;
 
     if (operation === 'reconnect') {
-      reconnectCounters.resume_request_total += 1;
-      console.info(
-        `[mp][resume_request] room=${roomCode} seat=${playerId} token=${redactSensitiveToken(sessionToken)} revision=${String(expectedRevision ?? '')}`,
-      );
-      try {
-        const previousRuntimeState = room.roomRuntimeState;
-        const session = reconnectRoom(room, playerId, sessionToken, expectedRevision);
-        reconnectCounters.resume_success_total += 1;
-        console.info(
-          `[mp][resume_result] room=${roomCode} seat=${playerId} status=ok runtime=${room.roomRuntimeState ?? 'none'} endedReason=${room.endedReason ?? 'none'}`,
-        );
-        const seat = getSeatConnectionSnapshot(room, playerId);
-        syncDisconnectTimersForRoom(room);
-        snapshotAll();
-        broadcastRoomEvent(room, MP_RECONNECT_V1_ENABLED ? 'mp:player_reconnected' : 'reconnect', MP_RECONNECT_V1_ENABLED
-          ? {
-              seatId: seat?.seatId ?? playerId,
-              displayName: seat?.displayName,
-              graceExpiresAt: seat?.reconnectDeadlineMs,
-            }
-          : undefined);
-        emitRoomRuntimeTransition(room, previousRuntimeState);
-        writeJson(res, 200, session);
-      } catch (resumeError) {
-        reconnectCounters.resume_failure_total += 1;
-        const reason = resumeError instanceof Error ? resumeError.message : 'server_error';
-        console.info(`[mp][resume_result] room=${roomCode} seat=${playerId} status=${reason}`);
-        throw resumeError;
-      }
+      writeJson(res, 404, { error: 'not_found' });
       return;
     }
 
@@ -724,7 +682,7 @@ createServer(async (req, res) => {
       const seat = getSeatConnectionSnapshot(room, playerId);
       syncDisconnectTimersForRoom(room);
       snapshotAll();
-      if (MP_RECONNECT_V1_ENABLED && preStatus !== 'lobby' && seat && !seat.connected) {
+      if (preStatus !== 'lobby' && seat && !seat.connected) {
         broadcastRoomEvent(room, 'mp:player_disconnected', {
           seatId: seat.seatId,
           displayName: seat.displayName,
@@ -793,16 +751,14 @@ createServer(async (req, res) => {
           sessionToken,
           payload.action,
           expectedRevision,
-          MP_VERSION_GUARD_V1_ENABLED
-            ? {
-                clientStateVersion,
-                actionId,
-              }
-            : {},
+          {
+            clientStateVersion,
+            actionId,
+          },
         );
       } catch (actionError) {
         const code = actionError instanceof Error ? actionError.message : 'server_error';
-        if (MP_VERSION_GUARD_V1_ENABLED && isActionRejectionCandidate(code)) {
+        if (isActionRejectionCandidate(code)) {
           const reason = mapActionErrorToRejectedReason(code);
           if (reason === 'stale_state') {
             reconnectCounters.stale_action_reject_total += 1;

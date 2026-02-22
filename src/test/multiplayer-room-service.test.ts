@@ -95,10 +95,10 @@ describe('multiplayer room service lifecycle', () => {
     expect(participant.connectionState).toBe('connected');
   });
 
-  it('uses 90s reconnect grace default when reconnect-v1 is enabled', () => {
-    expect(resolveReconnectWindowMs(true, undefined)).toBe(90_000);
-    expect(resolveReconnectWindowMs(true, '120000')).toBe(120_000);
-    expect(resolveReconnectWindowMs(false, '120000')).toBe(300_000);
+  it('uses 90s reconnect grace default and respects configured override', () => {
+    expect(resolveReconnectWindowMs(undefined)).toBe(90_000);
+    expect(resolveReconnectWindowMs('120000')).toBe(120_000);
+    expect(resolveReconnectWindowMs('invalid')).toBe(90_000);
   });
 
   it('keeps active room alive when poll heartbeat precedes prune', () => {
