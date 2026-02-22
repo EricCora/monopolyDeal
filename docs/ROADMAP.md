@@ -5,49 +5,35 @@ This roadmap is derived from:
 - `docs/features/FEATURES_CATALOG.md`
 - `docs/rules/*` and `docs/replay/*`
 
-Current status (2026-02-20):
-- `in_progress` program state.
-- Baseline gates are green and major UI clarity upgrades are shipped.
-- Remaining emphasis: deeper multiplayer hardening closure, expanded AI tier regression matrix, and final program closeout mapping.
+Current status (2026-02-22):
+- Program baseline and staged modernization roadmap are complete.
+- Epic C reconnect/resume hardening is complete through MD-C12.
+- Stage 5 AI deterministic verification matrix and difficulty checks are complete.
+- Final closure mapping is published in `docs/PROGRAM_CLOSURE.md`.
 
-## High impact / low effort
+## Completed Program Outcomes
 
-- Keep baseline green with `npm run quality`
-- Maintain deterministic replay verification gate
-- Continue valid-target highlighting and action-state clarity improvements
-- Improve last-action clarity and event readability
-- Keep multiplayer revision-conflict refresh behavior consistent
+- Multiplayer reconnect/resume contract, handshake statuses, and authoritative resync flow.
+- Disconnect grace retention, runtime pause/end policy, and host-timeout terminal behavior.
+- State-version stale-action guard with auto-resync and duplicate-action idempotency.
+- Live-updates bootstrap reliability with polling fallback safety.
+- Reconnect telemetry and dev diagnostics with token-safe logging.
+- Expanded reconnect/resync automation coverage across service/hook/screen/app tests.
+- AI deterministic tier matrix coverage and documented verification references.
 
-Acceptance:
-- No quality regressions
-- Replay hash checks remain stable
-- UX clarity changes validated in app/multiplayer tests
+## Ongoing Maintenance Track
 
-## Medium effort / high value
+- Keep quality gates green on each release slice:
+  - `npm run lint`
+  - `npm run test`
+  - `npm run build`
+  - `npm run replay:verify`
+- Preserve compatibility until dedicated deprecation cleanup:
+  - legacy reconnect identity aliases (`playerId`/`sessionToken`)
+- Continue incremental ergonomics improvements without changing core rules invariants.
 
-- Incrementally extract engine validation/resolution helpers from `applyAction`
-- Further split multiplayer lifecycle handling in `useMultiplayerRoom`
-- Expand protocol compatibility checks/tests between shared and client types
-- Add richer accessibility non-color affordances for selection states
+## Future Backlog (Post-Closure)
 
-Acceptance:
-- Public engine API unchanged
-- Multiplayer reconnect/resync scenarios pass expanded tests
-- Accessibility checks documented and validated
-
-## Ambitious / showcase
-
-- Full replay export/import workflow and timeline tooling
-- Spectator mode with strict public-state policy
-- Adaptive AI tier with deterministic adaptation policy
-- Offline-first app shell strategy
-
-Acceptance:
-- Security/integrity constraints documented and test-backed
-- Feature flags + rollback paths defined for each release slice
-
-## Execution gate
-
-Each roadmap item lands only when:
-- `npm run lint`, `npm run test`, `npm run build` pass
-- docs stay synchronized in README + agent guides + tracker
+- Spectator/replay export workflow and public-state policy hardening.
+- Optional adaptive AI tier with deterministic adaptation constraints.
+- Additional real-device network chaos validation for multiplayer transport behavior.

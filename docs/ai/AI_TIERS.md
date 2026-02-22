@@ -32,3 +32,11 @@
 - AI output is always a legal engine command.
 - Fixed seed produces repeatable rollout decisions.
 - Coach hints resolve to actionable legal choices.
+
+## Verification references
+
+- Contract and legality coverage: `src/test/ai-contract.test.ts`
+- Tier/scenario deterministic matrix: `src/test/ai-tier-matrix.test.ts`
+- Engine determinism baseline: `src/test/determinism.test.ts`
+- Replay compatibility baseline: `src/test/replay.test.ts`
+- Difficulty verification guide: `docs/ai/AI_DIFFICULTY_VERIFICATION_MATRIX.md`

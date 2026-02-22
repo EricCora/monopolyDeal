@@ -1769,6 +1769,85 @@ describe('App', () => {
     fetchSpy.mockRestore();
   });
 
+  it('transitions multiplayer runtime banner from host disconnect pause to host timeout end', async () => {
+    const multiplayerState = structuredClone(baseState);
+    const now = Date.now();
+    let stateRequestCount = 0;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/multiplayer/health')) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.endsWith('/api/multiplayer/rooms')) {
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            playerId: 'p1',
+            sessionToken: 'token',
+            reconnectDeadlineMs: now + 30_000,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/multiplayer/rooms/ABCDE/state')) {
+        stateRequestCount += 1;
+        const hostTimedOut = stateRequestCount > 1;
+        return new Response(
+          JSON.stringify({
+            roomCode: 'ABCDE',
+            status: 'active',
+            started: true,
+            hostPlayerId: 'p1',
+            yourPlayerId: 'p1',
+            players: [
+              { id: 'p1', name: 'Host', handCount: 1, bankCount: 0, completeSets: 0, connected: false, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: true },
+              { id: 'p2', name: 'Guest', handCount: 1, bankCount: 1, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: false },
+            ],
+            promptPlayerId: 'p1',
+            legalActions: [{ label: 'Pass turn', action: { type: 'pass_turn', playerId: 'p1' } }],
+            gameState: multiplayerState,
+            paused: !hostTimedOut,
+            roomRuntimeState: hostTimedOut ? 'ended_timeout' : 'paused_host_disconnect',
+            pausedReason: hostTimedOut ? undefined : 'host_disconnect',
+            endedReason: hostTimedOut ? 'host_timeout' : undefined,
+            revision: hostTimedOut ? 4 : 3,
+            turnSnapshotCount: 0,
+            checkpointSlots: [],
+            canStart: false,
+            reconnectDeadlineMs: now + 30_000,
+            serverTime: now,
+            activityFeed: [],
+            chatMessages: [],
+            typingPlayerIds: [],
+            lastEventId: hostTimedOut ? 4 : 3,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+    fireEvent.change(await screen.findByLabelText(/your name/i), { target: { value: 'Host' } });
+    fireEvent.click(screen.getByRole('button', { name: /host multiplayer game/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/host disconnected\. room is paused until reconnect or timeout/i).length).toBeGreaterThan(0);
+    });
+    const enabledRefreshButton = screen.getAllByRole('button', { name: /refresh/i })
+      .find((button) => !button.hasAttribute('disabled'));
+    expect(enabledRefreshButton).toBeDefined();
+    if (enabledRefreshButton) {
+      fireEvent.click(enabledRefreshButton);
+    }
+    await waitFor(() => {
+      expect(screen.getAllByText(/host timed out\. room ended/i).length).toBeGreaterThan(0);
+    });
+
+    fetchSpy.mockRestore();
+  });
+
   it('keeps reconnect session on exit match but clears it on forget room', async () => {
     const multiplayerState = structuredClone(baseState);
     const now = Date.now();

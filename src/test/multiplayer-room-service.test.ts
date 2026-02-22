@@ -23,6 +23,7 @@ import {
   undoRoomAction,
   type MultiplayerRoom,
 } from '../../apps/server/src/gameService.ts';
+import { formatReconnectTrace } from './fixtures/reconnect-trace';
 
 function findParticipant(room: MultiplayerRoom, playerId: string) {
   const participant = room.players.find((player) => player.id === playerId);
@@ -38,6 +39,20 @@ function fillLobby(room: MultiplayerRoom) {
   const p3 = joinRoom(room, 'Player 3');
   const p4 = joinRoom(room, 'Player 4');
   return [p2, p3, p4];
+}
+
+function withPauseOnDisconnectPolicy<T>(run: () => T): T {
+  const previous = process.env.MP_PAUSE_ON_DISCONNECT_V1;
+  process.env.MP_PAUSE_ON_DISCONNECT_V1 = 'true';
+  try {
+    return run();
+  } finally {
+    if (previous == null) {
+      delete process.env.MP_PAUSE_ON_DISCONNECT_V1;
+    } else {
+      process.env.MP_PAUSE_ON_DISCONNECT_V1 = previous;
+    }
+  }
 }
 
 describe('multiplayer room service lifecycle', () => {
@@ -181,23 +196,176 @@ describe('multiplayer room service lifecycle', () => {
   });
 
   it('keeps active-match disconnect seats reserved and allows explicit reconnect', () => {
-    const rooms = new Map<string, MultiplayerRoom>();
-    const { room, session } = createRoom(rooms, 'Host');
-    const playerTwo = joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    withPauseOnDisconnectPolicy(() => {
+      const rooms = new Map<string, MultiplayerRoom>();
+      const { room, session } = createRoom(rooms, 'Host');
+      const playerTwo = joinRoom(room, 'Player 2');
+      startRoom(room, session.playerId, session.sessionToken);
 
-    leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
-    const disconnected = findParticipant(room, playerTwo.playerId);
-    expect(disconnected.connected).toBe(false);
-    expect(disconnected.connectionState).toBe('disconnected');
-    expect(disconnected.disconnectedAt).not.toBeNull();
-    expect(room.players.some((entry) => entry.id === playerTwo.playerId)).toBe(true);
+      leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+      const disconnected = findParticipant(room, playerTwo.playerId);
+      expect(disconnected.connected).toBe(false);
+      expect(disconnected.connectionState).toBe('disconnected');
+      expect(disconnected.disconnectedAt).not.toBeNull();
+      expect(room.players.some((entry) => entry.id === playerTwo.playerId)).toBe(true);
+      expect(room.roomRuntimeState).toBe('paused_disconnect');
+      expect(room.pausedReason).toBe('player_disconnect');
+      expect(room.paused).toBe(true);
 
-    reconnectRoom(room, playerTwo.playerId, playerTwo.sessionToken);
-    const reconnected = findParticipant(room, playerTwo.playerId);
-    expect(reconnected.connected).toBe(true);
-    expect(reconnected.connectionState).toBe('connected');
-    expect(reconnected.disconnectedAt).toBeNull();
+      reconnectRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+      const reconnected = findParticipant(room, playerTwo.playerId);
+      expect(reconnected.connected).toBe(true);
+      expect(reconnected.connectionState).toBe('connected');
+      expect(reconnected.disconnectedAt).toBeNull();
+      expect(room.roomRuntimeState).toBe('active');
+      expect(room.paused).toBe(false);
+    });
+  });
+
+  it('restores disconnected seat during opponent turn without changing active actor', () => {
+    withPauseOnDisconnectPolicy(() => {
+      const rooms = new Map<string, MultiplayerRoom>();
+      const { room, session } = createRoom(rooms, 'Host');
+      const playerTwo = joinRoom(room, 'Player 2');
+      startRoom(room, session.playerId, session.sessionToken);
+      if (!room.game) throw new Error('expected active game');
+      room.game.currentPlayerIndex = 0;
+      room.game.turn.phase = 'action';
+      room.game.pending = null;
+
+      leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+      reconnectRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+      const resumedView = roomView(room, playerTwo.playerId, playerTwo.sessionToken);
+
+      expect(resumedView.promptPlayerId).toBe(session.playerId);
+      expect(resumedView.yourPlayerId).toBe(playerTwo.playerId);
+      expect(room.roomRuntimeState).toBe('active');
+      expect(room.paused).toBe(false);
+    });
+  });
+
+  it('restores payment prompt context after reconnect during pending payment flow', () => {
+    withPauseOnDisconnectPolicy(() => {
+      const rooms = new Map<string, MultiplayerRoom>();
+      const { room, session } = createRoom(rooms, 'Host');
+      const playerTwo = joinRoom(room, 'Player 2');
+      startRoom(room, session.playerId, session.sessionToken);
+      if (!room.game) throw new Error('expected active game');
+
+      room.game.currentPlayerIndex = 0;
+      room.game.turn.phase = 'action';
+      room.game.turn.playsUsed = 1;
+      room.game.pending = {
+        kind: 'payment',
+        payload: {
+          sourcePlayerId: session.playerId,
+          targetPlayerId: playerTwo.playerId,
+          amount: 3,
+          reason: 'rent',
+          actionCardId: 'rent_color#r1',
+        },
+      };
+      const payer = room.game.players.find((player) => player.id === playerTwo.playerId);
+      if (!payer) throw new Error('expected payer');
+      payer.bank = ['money_1#pay1', 'money_2#pay2'];
+
+      leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+      reconnectRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+      const resumedView = roomView(room, playerTwo.playerId, playerTwo.sessionToken);
+      if (!resumedView.gameState) throw new Error('expected resumed game state');
+
+      expect(resumedView.gameState.pending?.kind).toBe('payment');
+      expect(resumedView.promptPlayerId).toBe(playerTwo.playerId);
+      expect(resumedView.legalActions.some((entry) => entry.action.type === 'pay_request')).toBe(true);
+    });
+  });
+
+  it('restores discard prompt context after reconnect during discard-to-limit flow', () => {
+    withPauseOnDisconnectPolicy(() => {
+      const rooms = new Map<string, MultiplayerRoom>();
+      const { room, session } = createRoom(rooms, 'Host');
+      joinRoom(room, 'Player 2');
+      startRoom(room, session.playerId, session.sessionToken);
+      if (!room.game) throw new Error('expected active game');
+
+      room.game.currentPlayerIndex = 0;
+      room.game.turn.phase = 'action';
+      room.game.turn.endingTurn = true;
+      room.game.turn.playsUsed = 3;
+      room.game.pending = null;
+      const hostPlayer = room.game.players.find((player) => player.id === session.playerId);
+      if (!hostPlayer) throw new Error('expected host');
+      hostPlayer.hand = [
+        'money_1#d1',
+        'money_1#d2',
+        'money_2#d3',
+        'money_3#d4',
+        'pass_go#d5',
+        'rent_color#d6',
+        'debt_collector#d7',
+        'house#d8',
+      ];
+
+      leaveRoom(room, session.playerId, session.sessionToken);
+      reconnectRoom(room, session.playerId, session.sessionToken);
+      const resumedView = roomView(room, session.playerId, session.sessionToken);
+      if (!resumedView.gameState) throw new Error('expected resumed game state');
+
+      expect(resumedView.gameState.pending).toBeNull();
+      expect(resumedView.promptPlayerId).toBe(session.playerId);
+      const resumedHost = resumedView.gameState.players.find((player) => player.id === session.playerId);
+      expect(resumedHost?.hand.length ?? 0).toBeGreaterThan(7);
+      expect(resumedView.legalActions.some((entry) => entry.action.type === 'discard_card')).toBe(true);
+    });
+  });
+
+  it('pauses room on host disconnect and ends room when host times out', () => {
+    withPauseOnDisconnectPolicy(() => {
+      const rooms = new Map<string, MultiplayerRoom>();
+      const { room, session } = createRoom(rooms, 'Host');
+      joinRoom(room, 'Player 2');
+      startRoom(room, session.playerId, session.sessionToken);
+
+      leaveRoom(room, session.playerId, session.sessionToken);
+      if (room.roomRuntimeState !== 'paused_host_disconnect') {
+        throw new Error(formatReconnectTrace({
+          roomCode: room.code,
+          seatId: session.playerId,
+          revision: room.revision,
+          eventSequence: ['start', 'host_disconnect'],
+          stateSequence: [room.roomRuntimeState ?? 'none', room.pausedReason ?? 'none'],
+        }));
+      }
+      expect(room.roomRuntimeState).toBe('paused_host_disconnect');
+      expect(room.pausedReason).toBe('host_disconnect');
+      expect(room.paused).toBe(true);
+      expect(room.hostPlayerId).toBe(session.playerId);
+
+      const host = findParticipant(room, session.playerId);
+      host.reconnectDeadlineMs = Date.now() - 1;
+      const timeoutResult = markSeatTimedOutIfExpired(room, session.playerId, Date.now());
+      expect(timeoutResult.transitioned).toBe(true);
+      expect(room.roomRuntimeState).toBe('ended_timeout');
+      expect(room.endedReason).toBe('host_timeout');
+      expect(room.paused).toBe(false);
+    });
+  });
+
+  it('resumes host-disconnect pause when host reconnects before timeout', () => {
+    withPauseOnDisconnectPolicy(() => {
+      const rooms = new Map<string, MultiplayerRoom>();
+      const { room, session } = createRoom(rooms, 'Host');
+      joinRoom(room, 'Player 2');
+      startRoom(room, session.playerId, session.sessionToken);
+
+      leaveRoom(room, session.playerId, session.sessionToken);
+      expect(room.roomRuntimeState).toBe('paused_host_disconnect');
+
+      reconnectRoom(room, session.playerId, session.sessionToken);
+      expect(room.roomRuntimeState).toBe('active');
+      expect(room.pausedReason).toBeUndefined();
+      expect(room.paused).toBe(false);
+    });
   });
 
   it('rejects room state access after reconnect window expiration', () => {
@@ -387,18 +555,20 @@ describe('multiplayer room service lifecycle', () => {
     expect(JSON.stringify(room.game)).toBe(gameSnapshotAfterFirst);
   });
 
-  it('reassigns host back to the original host after reconnect', () => {
-    const rooms = new Map<string, MultiplayerRoom>();
-    const { room, session } = createRoom(rooms, 'Host');
-    const playerTwo = joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+  it('does not migrate host seat after match start when host disconnects', () => {
+    withPauseOnDisconnectPolicy(() => {
+      const rooms = new Map<string, MultiplayerRoom>();
+      const { room, session } = createRoom(rooms, 'Host');
+      const playerTwo = joinRoom(room, 'Player 2');
+      startRoom(room, session.playerId, session.sessionToken);
 
-    leaveRoom(room, session.playerId, session.sessionToken);
-    expect(room.hostPlayerId).toBe(playerTwo.playerId);
+      leaveRoom(room, session.playerId, session.sessionToken);
+      expect(room.hostPlayerId).toBe(session.playerId);
 
-    reconnectRoom(room, session.playerId, session.sessionToken);
-    expect(room.hostPlayerId).toBe(session.playerId);
-    expect(room.activityFeed.some((entry) => /now host/i.test(entry.message))).toBe(true);
+      reconnectRoom(room, session.playerId, session.sessionToken);
+      expect(room.hostPlayerId).toBe(session.playerId);
+      expect(room.hostPlayerId).not.toBe(playerTwo.playerId);
+    });
   });
 
   it('updates player ready state in lobby and exposes it in room view', () => {

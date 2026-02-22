@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computeReconnectDelayMs, mapConnectionUiState, useMultiplayerRoom } from '../app/useMultiplayerRoom';
+import { createGame, type GameState, type LegalAction } from '../engine';
 import type { MultiplayerResumeRoomResponse, MultiplayerRoomView } from '../network/multiplayerTypes';
 
 const clientMocks = vi.hoisted(() => ({
@@ -95,7 +96,7 @@ function makeSessionResponse(overrides: Partial<{ roomCode: string; playerId: st
   };
 }
 
-function makeRoomView(revision = 1): MultiplayerRoomView {
+function makeRoomView(revision = 1, overrides: Partial<MultiplayerRoomView> = {}): MultiplayerRoomView {
   const now = Date.now();
   return {
     roomCode: 'ABCDE',
@@ -144,6 +145,7 @@ function makeRoomView(revision = 1): MultiplayerRoomView {
     chatMessages: [],
     typingPlayerIds: [],
     lastEventId: revision,
+    ...overrides,
   };
 }
 
@@ -162,6 +164,115 @@ function makeActionRoomView(revision = 1): MultiplayerRoomView {
       },
     ],
   };
+}
+
+function makePromptSnapshot(
+  promptKind: 'payment' | 'response' | 'selection' | 'discard',
+  revision = 9,
+): MultiplayerRoomView {
+  const game: GameState = createGame({
+    seed: 777,
+    players: [
+      { id: 'p1', name: 'Host' },
+      { id: 'p2', name: 'Guest' },
+    ],
+  });
+  game.currentPlayerIndex = 0;
+  game.turn.phase = 'action';
+  game.turn.playsUsed = 1;
+  game.pending = null;
+
+  let action: LegalAction = {
+    label: 'Pass turn',
+    action: { type: 'pass_turn' as const, playerId: 'p1' },
+  };
+
+  if (promptKind === 'payment') {
+    game.pending = {
+      kind: 'payment',
+      payload: {
+        sourcePlayerId: 'p2',
+        targetPlayerId: 'p1',
+        amount: 3,
+        reason: 'rent',
+        actionCardId: 'rent_color#r1',
+      },
+    };
+    action = {
+      label: 'Pay with $3',
+      action: { type: 'pay_request', playerId: 'p1', cards: ['money_1#a1', 'money_2#a2'] },
+    };
+  } else if (promptKind === 'response') {
+    game.pending = {
+      kind: 'counter',
+      payload: {
+        sourcePlayerId: 'p2',
+        targetPlayerId: 'p1',
+        actionCardId: 'debt_collector#dc1',
+        effect: {
+          kind: 'payment',
+          payload: {
+            sourcePlayerId: 'p2',
+            targetPlayerId: 'p1',
+            amount: 5,
+            reason: 'debt_collector',
+            actionCardId: 'debt_collector#dc1',
+          },
+        },
+        chain: [],
+        awaitingPlayerId: 'p1',
+      },
+    };
+    action = {
+      label: 'No counter',
+      action: { type: 'counter_response', playerId: 'p1', useJustSayNo: false },
+    };
+  } else if (promptKind === 'selection') {
+    game.pending = {
+      kind: 'forced_deal',
+      payload: {
+        sourcePlayerId: 'p1',
+        targetPlayerId: 'p2',
+        actionCardId: 'forced_deal#fd1',
+      },
+    };
+    action = {
+      label: 'Trade property',
+      action: {
+        type: 'forced_deal_pick',
+        playerId: 'p1',
+        giveCardId: 'brown_1#b1',
+        giveColor: 'brown',
+        takeCardId: 'light_blue_1#l1',
+        takeColor: 'light_blue',
+        destinationColor: 'light_blue',
+      },
+    };
+  } else if (promptKind === 'discard') {
+    game.turn.phase = 'finished';
+    game.players[0].hand = [
+      'money_1#d1',
+      'money_1#d2',
+      'money_2#d3',
+      'money_3#d4',
+      'pass_go#d5',
+      'rent_color#d6',
+      'debt_collector#d7',
+      'house#d8',
+    ];
+    action = {
+      label: 'Discard $1',
+      action: { type: 'discard_card', playerId: 'p1', cardId: 'money_1#d1' },
+    };
+  }
+
+  return makeRoomView(revision, {
+    status: 'active',
+    started: true,
+    promptPlayerId: 'p1',
+    gameState: game,
+    legalActions: [action],
+  });
 }
 
 function makeResumeResponse(
@@ -357,6 +468,59 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     expect(connectedEvents).toHaveLength(1);
   });
 
+  it('maps ended_timeout room runtime state to room_ended ui state', async () => {
+    vi.useFakeTimers();
+    clientMocks.loadMultiplayerRoomState.mockResolvedValue(
+      makeRoomView(2, {
+        started: true,
+        roomRuntimeState: 'ended_timeout',
+        endedReason: 'host_timeout',
+      }),
+    );
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+      reconnectV1UiEnabled: true,
+    }));
+
+    await act(async () => {
+      const ok = await result.current.hostRoom();
+      expect(ok).toBe(true);
+    });
+    await flushMicrotasks();
+
+    expect(result.current.connectionUiState).toBe('room_ended');
+  });
+
+  it('exposes reconnect diagnostics and updates client/server revision markers', async () => {
+    vi.useFakeTimers();
+    clientMocks.loadMultiplayerRoomState.mockResolvedValue(makeActionRoomView(7));
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+      versionGuardV1Enabled: true,
+    }));
+
+    await act(async () => {
+      const ok = await result.current.hostRoom();
+      expect(ok).toBe(true);
+    });
+    await flushMicrotasks();
+
+    expect(result.current.reconnectDiagnostics.roomCode).toBe('ABCDE');
+    expect(result.current.reconnectDiagnostics.seatId).toBe('p1');
+    expect(result.current.reconnectDiagnostics.lastServerVersion).toBe(7);
+    expect(result.current.reconnectDiagnostics.lastReconnectError).toBeNull();
+
+    await act(async () => {
+      await result.current.runAction(0);
+    });
+    await flushMicrotasks();
+    expect(result.current.reconnectDiagnostics.lastClientVersion).toBe(7);
+  });
+
   it('migrates legacy stored session shape to canonical seat credentials on bootstrap reconnect', async () => {
     vi.useFakeTimers();
     const now = Date.now();
@@ -419,6 +583,50 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     expect(clientMocks.loadMultiplayerRoomState).not.toHaveBeenCalled();
     expect(result.current.connectionState).toBe('connected');
     expect(result.current.roomView?.revision).toBe(3);
+  });
+
+  it.each([
+    { promptKind: 'payment', pendingKind: 'payment' },
+    { promptKind: 'response', pendingKind: 'counter' },
+    { promptKind: 'selection', pendingKind: 'forced_deal' },
+    { promptKind: 'discard', pendingKind: null },
+  ] as const)('hydrates reconnect snapshot prompt flow ($promptKind) without extra /state fetch', async ({ promptKind, pendingKind }) => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    localStorage.setItem('monopolyDeal.multiplayerSession.v1', JSON.stringify({
+      version: 1,
+      roomCode: 'ABCDE',
+      seatId: 'p1',
+      resumeToken: 'token-1',
+      playerId: 'p1',
+      sessionToken: 'token-1',
+      playerName: 'Host',
+      reconnectDeadlineMs: now + 30_000,
+    }));
+    const snapshot = makePromptSnapshot(promptKind, 11);
+    clientMocks.loadMultiplayerRoomState.mockClear();
+    clientMocks.reconnectMultiplayerRoom.mockResolvedValue(makeResumeResponse('ok', {
+      serverStateVersion: snapshot.revision,
+      snapshot,
+    }));
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+      reconnectV1Enabled: true,
+      reconnectV1UiEnabled: true,
+    }));
+
+    await advanceAndFlush(0, 6);
+    expect(clientMocks.reconnectMultiplayerRoom).toHaveBeenCalledTimes(1);
+    expect(clientMocks.loadMultiplayerRoomState).not.toHaveBeenCalled();
+    expect(result.current.roomView?.promptPlayerId).toBe('p1');
+    expect(result.current.roomView?.legalActions.length).toBeGreaterThan(0);
+    if (pendingKind === null) {
+      expect(result.current.roomView?.gameState?.pending).toBeNull();
+    } else {
+      expect(result.current.roomView?.gameState?.pending?.kind).toBe(pendingKind);
+    }
   });
 
   it('maps seat_timed_out handshake status to timed_out recovery path', async () => {
@@ -732,6 +940,7 @@ describe('mapConnectionUiState', () => {
     expect(mapConnectionUiState('connected', 'seat_timed_out')).toBe('timed_out');
     expect(mapConnectionUiState('connected', 'room_not_found')).toBe('room_ended');
     expect(mapConnectionUiState('connected', 'room_closed')).toBe('room_ended');
+    expect(mapConnectionUiState('connected', null, 'ended_timeout')).toBe('room_ended');
     expect(mapConnectionUiState('connected', 'invalid_token')).toBe('resume_failed');
     expect(mapConnectionUiState('connected', 'protocol_mismatch')).toBe('resume_failed');
   });

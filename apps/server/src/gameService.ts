@@ -14,9 +14,12 @@ import type {
   MultiplayerActivityFeedItem,
   MultiplayerChatMessage,
   MultiplayerCheckpointSummary,
+  MultiplayerEndedReason,
+  MultiplayerPausedReason,
   MultiplayerPlayerSummary,
   MultiplayerReaction,
   MultiplayerRoomView,
+  MultiplayerRoomRuntimeState,
   MultiplayerRoomStatus,
   RoomSessionResponse,
 } from '../../../packages/shared/multiplayer.ts';
@@ -37,6 +40,10 @@ const CHAT_COOLDOWN_MS = 700;
 const MAX_CHAT_MESSAGE_LENGTH = 280;
 const TYPING_TTL_MS = 4_500;
 export const ROOM_REACTION_OPTIONS: MultiplayerReaction[] = ['nice', 'wow', 'gg', 'oops'];
+
+function isPauseOnDisconnectV1Enabled(): boolean {
+  return process.env.MP_PAUSE_ON_DISCONNECT_V1 === 'true';
+}
 
 export function resolveReconnectWindowMs(mpReconnectV1Enabled: boolean, configuredGraceMs?: string): number {
   if (!mpReconnectV1Enabled) return RECONNECT_WINDOW_LEGACY_MS;
@@ -88,6 +95,9 @@ export interface MultiplayerRoom {
   game: GameState | null;
   paused: boolean;
   pausedByPlayerId?: PlayerId;
+  roomRuntimeState?: MultiplayerRoomRuntimeState;
+  pausedReason?: MultiplayerPausedReason;
+  endedReason?: MultiplayerEndedReason;
   revision: number;
   recentActionIds: string[];
   turnSnapshots: GameState[];
@@ -168,6 +178,21 @@ export function normalizeRoomForRuntime(room: MultiplayerRoom): MultiplayerRoom 
   room.recentActionIds = Array.isArray(room.recentActionIds)
     ? room.recentActionIds.filter((entry) => typeof entry === 'string' && entry.trim().length > 0).slice(-MAX_TRACKED_ACTION_IDS)
     : [];
+  room.roomRuntimeState = room.roomRuntimeState === 'active'
+    || room.roomRuntimeState === 'paused_disconnect'
+    || room.roomRuntimeState === 'paused_host_disconnect'
+    || room.roomRuntimeState === 'ended_timeout'
+    ? room.roomRuntimeState
+    : (room.game ? 'active' : undefined);
+  room.pausedReason = room.pausedReason === 'manual'
+    || room.pausedReason === 'player_disconnect'
+    || room.pausedReason === 'host_disconnect'
+    ? room.pausedReason
+    : (room.paused ? 'manual' : undefined);
+  room.endedReason = room.endedReason === 'host_timeout'
+    || room.endedReason === 'disconnect_timeout'
+    ? room.endedReason
+    : undefined;
   return room;
 }
 
@@ -289,7 +314,47 @@ function ensureExpectedRevision(room: MultiplayerRoom, expectedRevision?: number
   }
 }
 
+function isHostSeat(room: MultiplayerRoom, seatId: PlayerId): boolean {
+  return room.hostPlayerId === seatId;
+}
+
+function hasDisconnectedSeatAwaitingReconnect(room: MultiplayerRoom): boolean {
+  return room.players.some((player) => player.connectionState === 'disconnected');
+}
+
+function applyDisconnectPauseState(room: MultiplayerRoom, disconnectedSeatId: PlayerId): void {
+  if (!isPauseOnDisconnectV1Enabled()) return;
+  if (room.status !== 'active' && room.status !== 'finished') return;
+  if (room.roomRuntimeState === 'ended_timeout') return;
+  const hostSeatDisconnected = isHostSeat(room, disconnectedSeatId);
+  room.paused = true;
+  room.pausedByPlayerId = undefined;
+  room.roomRuntimeState = hostSeatDisconnected ? 'paused_host_disconnect' : 'paused_disconnect';
+  room.pausedReason = hostSeatDisconnected ? 'host_disconnect' : 'player_disconnect';
+}
+
+function resolveDisconnectPauseStateAfterReconnect(room: MultiplayerRoom): void {
+  if (!isPauseOnDisconnectV1Enabled()) return;
+  if (room.roomRuntimeState !== 'paused_disconnect' && room.roomRuntimeState !== 'paused_host_disconnect') return;
+  if (hasDisconnectedSeatAwaitingReconnect(room)) return;
+  room.paused = false;
+  room.pausedByPlayerId = undefined;
+  room.roomRuntimeState = 'active';
+  room.pausedReason = undefined;
+}
+
+function resolveDisconnectPauseStateAfterTimeout(room: MultiplayerRoom): void {
+  if (!isPauseOnDisconnectV1Enabled()) return;
+  if (room.roomRuntimeState !== 'paused_disconnect' && room.roomRuntimeState !== 'paused_host_disconnect') return;
+  if (hasDisconnectedSeatAwaitingReconnect(room)) return;
+  room.paused = false;
+  room.pausedByPlayerId = undefined;
+  room.roomRuntimeState = 'active';
+  room.pausedReason = undefined;
+}
+
 function migrateHost(room: MultiplayerRoom): { previousHostId: PlayerId; nextHostId: PlayerId } | null {
+  if (room.status !== 'lobby') return null;
   const previousHostId = room.hostPlayerId;
   const currentHost = findPlayer(room, room.hostPlayerId);
   if (currentHost?.connected) return null;
@@ -318,6 +383,7 @@ function markDisconnected(room: MultiplayerRoom, player: RoomParticipant): void 
   player.reconnectDeadlineMs = now + RECONNECT_WINDOW_MS;
   delete room.typingByPlayerId[player.id];
   appendActivity(room, 'connection', `${player.name} disconnected.`, { playerId: player.id });
+  applyDisconnectPauseState(room, player.id);
   const migrated = migrateHost(room);
   if (migrated) {
     appendActivity(
@@ -380,6 +446,18 @@ export function markSeatTimedOutIfExpired(
   player.connectionState = 'timed_out';
   player.lastSeenAt = now;
   appendActivity(room, 'connection', `${player.name} timed out.`, { playerId: player.id });
+  if (isPauseOnDisconnectV1Enabled() && room.status !== 'lobby') {
+    if (isHostSeat(room, player.id)) {
+      room.paused = false;
+      room.pausedByPlayerId = undefined;
+      room.roomRuntimeState = 'ended_timeout';
+      room.pausedReason = undefined;
+      room.endedReason = 'host_timeout';
+      appendActivity(room, 'system', 'Host timed out. Room ended.', { playerId: player.id });
+    } else {
+      resolveDisconnectPauseStateAfterTimeout(room);
+    }
+  }
   incrementRevision(room);
   bumpUpdatedAt(room);
   return {
@@ -556,6 +634,9 @@ function requireConnectedPlayer(player: RoomParticipant): void {
 }
 
 function ensureNotPaused(room: MultiplayerRoom): void {
+  if (room.roomRuntimeState === 'ended_timeout') {
+    throw new Error('room_closed');
+  }
   if (room.paused) {
     throw new Error('room_paused');
   }
@@ -577,10 +658,18 @@ function commitMutation(room: MultiplayerRoom): void {
 function updateStatusFromGame(room: MultiplayerRoom): void {
   if (!room.game) {
     room.status = 'lobby';
+    room.roomRuntimeState = undefined;
+    room.pausedReason = undefined;
+    room.endedReason = undefined;
     return;
   }
   const status = isGameOver(room.game);
   room.status = status.done ? 'finished' : 'active';
+  if (room.roomRuntimeState !== 'paused_disconnect'
+    && room.roomRuntimeState !== 'paused_host_disconnect'
+    && room.roomRuntimeState !== 'ended_timeout') {
+    room.roomRuntimeState = 'active';
+  }
 }
 
 function findCheckpoint(room: MultiplayerRoom, checkpointId: string): RoomCheckpoint {
@@ -621,6 +710,9 @@ export function createRoom(
     }],
     game: null,
     paused: false,
+    roomRuntimeState: undefined,
+    pausedReason: undefined,
+    endedReason: undefined,
     revision: 0,
     recentActionIds: [],
     turnSnapshots: [],
@@ -693,12 +785,13 @@ export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, session
   if (!wasConnected) {
     appendActivity(room, 'connection', `${player.name} reconnected.`, { playerId: player.id });
   }
-  if (player.id === room.originalHostPlayerId && room.hostPlayerId !== player.id) {
+  if (room.status === 'lobby' && player.id === room.originalHostPlayerId && room.hostPlayerId !== player.id) {
     room.hostPlayerId = player.id;
     appendActivity(room, 'host', `${player.name} is now host.`, { playerId: player.id });
-  } else if (previousHostId !== room.hostPlayerId) {
+  } else if (room.status === 'lobby' && previousHostId !== room.hostPlayerId) {
     appendActivity(room, 'host', `${playerDisplayName(room, room.hostPlayerId)} is now host.`, { playerId: room.hostPlayerId });
   }
+  resolveDisconnectPauseStateAfterReconnect(room);
   commitMutation(room);
   return {
     roomCode: room.code,
@@ -760,6 +853,9 @@ export function startRoom(
   }
   room.paused = false;
   room.pausedByPlayerId = undefined;
+  room.roomRuntimeState = 'active';
+  room.pausedReason = undefined;
+  room.endedReason = undefined;
   room.turnSnapshots = [];
   room.recentActionIds = [];
   room.players.forEach((entry) => {
@@ -777,8 +873,13 @@ export function pauseRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToke
   requireConnectedPlayer(player);
   requireHost(room, playerId);
   requireGame(room);
+  if (room.roomRuntimeState === 'ended_timeout') {
+    throw new Error('room_closed');
+  }
   room.paused = true;
   room.pausedByPlayerId = playerId;
+  room.pausedReason = 'manual';
+  room.roomRuntimeState = 'active';
   appendActivity(room, 'match', `${player.name} paused the match.`, { playerId });
   commitMutation(room);
   return room;
@@ -790,8 +891,20 @@ export function resumeRoom(room: MultiplayerRoom, playerId: PlayerId, sessionTok
   requireConnectedPlayer(player);
   requireHost(room, playerId);
   requireGame(room);
+  if (room.roomRuntimeState === 'ended_timeout') {
+    throw new Error('room_closed');
+  }
+  if (
+    isPauseOnDisconnectV1Enabled()
+    && (room.pausedReason === 'host_disconnect' || room.pausedReason === 'player_disconnect')
+    && hasDisconnectedSeatAwaitingReconnect(room)
+  ) {
+    throw new Error('room_paused');
+  }
   room.paused = false;
   room.pausedByPlayerId = undefined;
+  room.pausedReason = undefined;
+  room.roomRuntimeState = 'active';
   appendActivity(room, 'match', `${player.name} resumed the match.`, { playerId });
   commitMutation(room);
   return room;
@@ -964,6 +1077,9 @@ export function loadRoomCheckpoint(
   room.recentActionIds = [];
   room.paused = false;
   room.pausedByPlayerId = undefined;
+  room.roomRuntimeState = 'active';
+  room.pausedReason = undefined;
+  room.endedReason = undefined;
   appendActivity(room, 'checkpoint', `${player.name} loaded checkpoint "${checkpoint.name}".`, { playerId });
   updateStatusFromGame(room);
   commitMutation(room);
@@ -1109,7 +1225,12 @@ export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken
   pruneExpiredTyping(room);
   const started = Boolean(room.game);
   const promptPlayerId = room.game ? getNextPrompt(room.game).playerId : undefined;
-  const legalActions = room.game && viewer.connected && !room.paused ? getLegalActions(room.game, viewerId) : [];
+  const legalActions = room.game
+    && viewer.connected
+    && !room.paused
+    && room.roomRuntimeState !== 'ended_timeout'
+    ? getLegalActions(room.game, viewerId)
+    : [];
   const status = room.game ? isGameOver(room.game) : { done: false as const };
   const reconnectDeadlineMs = viewer.reconnectDeadlineMs;
   const serverTime = nowMs();
@@ -1127,6 +1248,9 @@ export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken
     gameState: room.game ? maskForViewer(room.game, viewerId) : undefined,
     paused: room.paused,
     pausedByPlayerId: room.pausedByPlayerId,
+    roomRuntimeState: room.roomRuntimeState,
+    pausedReason: room.pausedReason,
+    endedReason: room.endedReason,
     revision: room.revision,
     turnSnapshotCount: room.turnSnapshots.length,
     checkpointSlots: room.checkpoints.map(checkpointSummary),

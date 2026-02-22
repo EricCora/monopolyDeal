@@ -10,18 +10,19 @@ This tracker supersedes the prior deep-research execution tracker and follows:
 - Architecture defaults: pure engine, UI consumer, server-authoritative multiplayer
 - Compatibility: keep persistence payloads `version: 1` backward-readable
 
-## Status Snapshot (2026-02-20)
+## Status Snapshot (2026-02-22)
 
-- Program status: `in_progress` (major multi-stage progress completed; full modernization not fully closed yet).
+- Program status: `complete` (all staged closure gates passed).
 - Completed recently:
   - Major table/lobby UI modernization pass (command strip, priority turn banner, grouped controls, lobby snapshot cards, turn tagging).
   - Payment-flow unblock fix for zero-asset Debt Collector/payment shortfall confirmation.
   - Multiplayer reconnect/desync validation hardening and targeted regression coverage.
-  - Rules/replay/determinism artifacts and tests in place.
+  - Host disconnect runtime pause/resume/end policy with terminal host-timeout handling.
+  - Reconnect diagnostics/debug panel and server logging redaction utility.
+  - LAN live-update bootstrap reliability patch (`stream_bootstrap` frame) with polling fallback safety.
+- Rules/replay/determinism artifacts and tests in place.
 - Remaining to close full program:
-  - Stage 4: additional multiplayer hardening scenarios and migration closure docs.
-  - Stage 5: deeper AI contract/regression expansion beyond baseline deterministic coverage.
-  - Stage 6: final roadmap closure tying remaining findings to acceptance criteria.
+  - None. Program closure package published.
 
 ## Epic C — Reconnect/Resume Program
 
@@ -38,15 +39,17 @@ This tracker supersedes the prior deep-research execution tracker and follows:
 | MD-C07 | Authoritative full-state resync | MD-C06, MD-C04 | `in_progress` | `@unassigned` | `src/app/useMultiplayerRoom.ts`, `apps/server/src/index.ts`, `packages/shared/multiplayer.ts`, `src/network/multiplayerTypes.ts`, `src/test/use-multiplayer-room.test.tsx`, `src/test/multiplayer-screen.test.tsx` |
 | MD-C08 | Prompt/turn-phase correctness post-reconnect | MD-C07 | `in_progress` | `@unassigned` | `src/App.tsx`, `src/ui/screens/GameTableScreen.tsx`, `src/app/useMultiplayerRoom.ts`, `src/test/use-multiplayer-room.test.tsx`, `src/test/multiplayer-screen.test.tsx` |
 | MD-C09 | State-version guard + stale action recovery | MD-C06, MD-C07 | `in_progress` | `@unassigned` | `packages/shared/multiplayer.ts`, `apps/server/src/gameService.ts`, `apps/server/src/index.ts`, `src/network/multiplayerTypes.ts`, `src/network/multiplayerClient.ts`, `src/app/useMultiplayerRoom.ts`, `src/test/multiplayer-room-service.test.ts`, `src/test/use-multiplayer-room.test.tsx`, `src/test/multiplayer-client.test.ts` |
-| MD-C10 | Host disconnect timeout policy (pause/end) | MD-C03, MD-C04, MD-C06 | `pending` | `@unassigned` | `apps/server/src/gameService.ts`, `src/ui/screens/MultiplayerScreen.tsx` |
-| MD-C11 | Automated reconnect/resync scenario suite | MD-C03..MD-C10 | `pending` | `@unassigned` | `src/test/multiplayer-room-service.test.ts`, `src/test/use-multiplayer-room.test.tsx`, `src/test/multiplayer-screen.test.tsx`, `src/test/app.test.tsx` |
-| MD-C12 | Telemetry + diagnostics stubs and rollout guardrails | MD-C04, MD-C05, MD-C06, MD-C07, MD-C09 | `in_progress` | `@unassigned` | `src/stats/types.ts`, `src/app/useMultiplayerRoom.ts`, `apps/server/src/index.ts`, `src/test/use-multiplayer-room.test.tsx`, `src/test/multiplayer-screen.test.tsx`, `docs/obs/LOGGING.md` |
+| MD-C10 | Host disconnect timeout policy (pause/end) | MD-C03, MD-C04, MD-C06 | `complete` | `@unassigned` | `apps/server/src/gameService.ts`, `apps/server/src/index.ts`, `src/app/useMultiplayerRoom.ts`, `src/ui/screens/MultiplayerScreen.tsx`, `src/test/multiplayer-room-service.test.ts`, `src/test/multiplayer-screen.test.tsx`, `src/test/app.test.tsx` |
+| MD-C11 | Automated reconnect/resync scenario suite | MD-C03..MD-C10 | `complete` | `@unassigned` | `src/test/multiplayer-room-service.test.ts`, `src/test/use-multiplayer-room.test.tsx`, `src/test/multiplayer-screen.test.tsx`, `src/test/app.test.tsx`, `src/test/fixtures/reconnect-trace.ts` |
+| MD-C12 | Telemetry + diagnostics stubs and rollout guardrails | MD-C04, MD-C05, MD-C06, MD-C07, MD-C09 | `complete` | `@unassigned` | `src/stats/types.ts`, `src/app/useMultiplayerRoom.ts`, `src/ui/screens/MultiplayerScreen.tsx`, `apps/server/src/index.ts`, `apps/server/src/logging.ts`, `src/test/use-multiplayer-room.test.tsx`, `src/test/multiplayer-screen.test.tsx`, `src/test/server-logging.test.ts`, `docs/obs/LOGGING.md`, `docs/obs/FEATURE_FLAGS.md` |
 
 ### Decision Log
 
 - `2026-02-21`: C02 API = Additive Alias (`seatId`/`resumeToken` + legacy compatibility fields).
 - `2026-02-21`: Reconnect grace default = `90_000ms` configurable when reconnect-v1 is enabled.
 - `2026-02-22`: SSE live-updates now emit immediate `stream_bootstrap` frame on subscribe open to reduce false polling fallback on LAN/Safari.
+- `2026-02-22`: Disconnect runtime policy = pause on active/finished disconnect and end room on host timeout (`MP_PAUSE_ON_DISCONNECT_V1`).
+- `2026-02-22`: AI stage closure requires deterministic tier-matrix coverage plus difficulty verification doc references.
 
 ## Stage Checklist
 
@@ -110,17 +113,18 @@ Artifacts:
 - [x] Add protocol compatibility notes for `packages/shared`
 - [x] Add reconnect/desync test coverage (baseline complete)
 - [x] Add push/poll reconnect-desync end-to-end matrix (baseline complete)
-- [ ] Close remaining expanded reconnect/revision-conflict edge scenarios
-- [ ] Finalize Stage 4 migration closure notes
+- [x] Close remaining expanded reconnect/revision-conflict edge scenarios
+- [x] Finalize Stage 4 migration closure notes
 
 ### Stage 5 — AI System Consolidation
 
 - [x] `docs/ai/AI_ARCHITECTURE.md`
 - [x] `docs/ai/AI_TIERS.md`
+- [x] `docs/ai/AI_DIFFICULTY_VERIFICATION_MATRIX.md`
 - [x] Enforce AI output contract: engine commands only (baseline complete)
 - [x] Add deterministic AI regression tests (baseline complete)
-- [ ] Expand tier-by-tier deterministic regression matrix
-- [ ] Finalize documented difficulty knob verification matrix
+- [x] Expand tier-by-tier deterministic regression matrix
+- [x] Finalize documented difficulty knob verification matrix
 
 ### Stage 6 — Eng + Obs + Security + Final Roadmap
 
@@ -133,7 +137,8 @@ Artifacts:
 - [x] `docs/obs/FEATURE_FLAGS.md`
 - [x] `docs/security/MULTIPLAYER_SECURITY.md`
 - [x] `docs/ROADMAP.md` (baseline)
-- [ ] Publish final roadmap closure mapping remaining findings to acceptance gates
+- [x] `docs/PROGRAM_CLOSURE.md`
+- [x] Publish final roadmap closure mapping remaining findings to acceptance gates
 
 ## Exit Gates (Program)
 
@@ -142,7 +147,7 @@ Artifacts:
 - [x] `npm run build` passes
 - [x] Deterministic replay hash verification passes across repeated runs
 - [x] Documentation set is internally linked and non-duplicative
-- [ ] Final program closure package published (all stages fully closed)
+- [x] Final program closure package published (all stages fully closed)
 
 ---
 

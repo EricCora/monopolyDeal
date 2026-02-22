@@ -15,10 +15,27 @@
   - `MP_RECONNECT_V1`
   - `MP_RECONNECT_GRACE_MS`
   - `MP_VERSION_GUARD_V1`
+  - `MP_PAUSE_ON_DISCONNECT_V1`
 - Client env flags:
   - `VITE_MP_RECONNECT_V1`
   - `VITE_MP_RECONNECT_V1_UI`
   - `VITE_MP_VERSION_GUARD_V1`
+  - `VITE_MP_RECONNECT_DEBUG`
+
+## Reconnect Kill Switches
+
+- Transport/reconnect handshake kill switch:
+  - Server: `MP_RECONNECT_V1=false`
+  - Client: `VITE_MP_RECONNECT_V1=false`
+- Reconnect UI scaffolding kill switch:
+  - Client: `VITE_MP_RECONNECT_V1_UI=false`
+- Action stale-state guard kill switch:
+  - Server: `MP_VERSION_GUARD_V1=false`
+  - Client: `VITE_MP_VERSION_GUARD_V1=false`
+- Disconnect pause/end policy kill switch:
+  - Server: `MP_PAUSE_ON_DISCONNECT_V1=false`
+- Diagnostics UI kill switch:
+  - Client: `VITE_MP_RECONNECT_DEBUG=false`
 
 ## Rollout rules
 

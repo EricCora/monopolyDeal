@@ -1,6 +1,9 @@
 import type { Action, GameState, LegalAction, PlayerId } from '../../src/engine';
 
 export type MultiplayerRoomStatus = 'lobby' | 'active' | 'finished';
+export type MultiplayerRoomRuntimeState = 'active' | 'paused_disconnect' | 'paused_host_disconnect' | 'ended_timeout';
+export type MultiplayerPausedReason = 'manual' | 'player_disconnect' | 'host_disconnect';
+export type MultiplayerEndedReason = 'host_timeout' | 'disconnect_timeout';
 export type MultiplayerReaction = 'nice' | 'wow' | 'gg' | 'oops';
 export type MultiplayerActivityKind = 'lobby' | 'connection' | 'host' | 'ready' | 'reaction' | 'chat' | 'match' | 'checkpoint' | 'system';
 
@@ -49,6 +52,9 @@ export interface MultiplayerRoomView {
   gameState?: GameState;
   paused: boolean;
   pausedByPlayerId?: PlayerId;
+  roomRuntimeState?: MultiplayerRoomRuntimeState;
+  pausedReason?: MultiplayerPausedReason;
+  endedReason?: MultiplayerEndedReason;
   revision: number;
   turnSnapshotCount: number;
   checkpointSlots: MultiplayerCheckpointSummary[];

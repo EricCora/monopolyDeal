@@ -25,6 +25,19 @@ interface MultiplayerScreenProps {
   connectionState: MultiplayerConnectionState;
   connectionUiState?: MultiplayerConnectionUiState;
   reconnectUiEnabled?: boolean;
+  reconnectDebugEnabled?: boolean;
+  reconnectDiagnostics?: {
+    roomCode: string | null;
+    seatId: string | null;
+    pushState: MultiplayerPushState;
+    reconnectAttempt: number;
+    lastClientVersion: number | null;
+    lastServerVersion: number | null;
+    lastReconnectError: string | null;
+    roomRuntimeState: 'active' | 'paused_disconnect' | 'paused_host_disconnect' | 'ended_timeout' | null;
+    pausedReason: 'manual' | 'player_disconnect' | 'host_disconnect' | null;
+    endedReason: 'host_timeout' | 'disconnect_timeout' | null;
+  } | null;
   pushState: MultiplayerPushState;
   isHost: boolean;
   onPlayerNameChange: (value: string) => void;
@@ -169,6 +182,8 @@ export function MultiplayerScreen({
   connectionState,
   connectionUiState = 'connected',
   reconnectUiEnabled = false,
+  reconnectDebugEnabled = false,
+  reconnectDiagnostics = null,
   pushState,
   isHost,
   onPlayerNameChange,
@@ -404,6 +419,8 @@ export function MultiplayerScreen({
     'room_ended',
   ]), []);
   const reconnectUiBlocking = reconnectUiEnabled && reconnectBlockingStates.has(connectionUiState);
+  const runtimeBlocking = roomView?.roomRuntimeState === 'ended_timeout';
+  const actionBlocked = reconnectUiBlocking || runtimeBlocking;
   const reconnectUiBannerText = useMemo(() => {
     if (!reconnectUiEnabled) return null;
     if (connectionUiState === 'reconnecting_attempting') return 'Connection lost. Attempting automatic reconnect.';
@@ -415,6 +432,22 @@ export function MultiplayerScreen({
     if (connectionUiState === 'room_ended') return 'Room is no longer available.';
     return null;
   }, [connectionUiState, reconnectUiEnabled]);
+  const runtimeStateBannerText = useMemo(() => {
+    if (!roomView) return null;
+    if (roomView.roomRuntimeState === 'paused_host_disconnect') {
+      return 'Host disconnected. Room is paused until host reconnects or times out.';
+    }
+    if (roomView.roomRuntimeState === 'paused_disconnect') {
+      return 'A player disconnected. Room is paused while reconnect is in progress.';
+    }
+    if (roomView.roomRuntimeState === 'ended_timeout') {
+      if (roomView.endedReason === 'host_timeout') {
+        return 'Host timed out. Room ended.';
+      }
+      return 'Room ended due to disconnect timeout.';
+    }
+    return null;
+  }, [roomView]);
   const showSyncPlaceholder = loading && session && (
     connectionState === 'reconnecting'
     || reconnectUiBlocking
@@ -429,6 +462,22 @@ export function MultiplayerScreen({
           : 'Create or join with a private room code or invite link.'}
       </p>
       {reconnectUiBannerText ? <p className="setup-subtitle">{reconnectUiBannerText}</p> : null}
+      {runtimeStateBannerText ? <p className="setup-subtitle">{runtimeStateBannerText}</p> : null}
+      {reconnectDebugEnabled && reconnectDiagnostics ? (
+        <section className="multiplayer-debug-panel" aria-label="Reconnect diagnostics">
+          <h3>Reconnect Debug</h3>
+          <p>
+            room={reconnectDiagnostics.roomCode ?? 'n/a'} seat={reconnectDiagnostics.seatId ?? 'n/a'} push={reconnectDiagnostics.pushState}
+          </p>
+          <p>
+            attempt={reconnectDiagnostics.reconnectAttempt} clientVersion={reconnectDiagnostics.lastClientVersion ?? 'n/a'} serverVersion={reconnectDiagnostics.lastServerVersion ?? 'n/a'}
+          </p>
+          <p>
+            runtime={reconnectDiagnostics.roomRuntimeState ?? 'n/a'} pausedReason={reconnectDiagnostics.pausedReason ?? 'n/a'} endedReason={reconnectDiagnostics.endedReason ?? 'n/a'}
+          </p>
+          <p>lastReconnectError={reconnectDiagnostics.lastReconnectError ?? 'none'}</p>
+        </section>
+      ) : null}
 
       {healthOk === false ? (
         <p className="error">
@@ -518,10 +567,10 @@ export function MultiplayerScreen({
               <div className="multiplayer-room-action-group">
                 <p className="multiplayer-room-action-label">Invite</p>
                 <div className="actions multiplayer-room-actions">
-                  <button type="button" onClick={copyRoomCode} disabled={loading || reconnectUiBlocking}>
+                  <button type="button" onClick={copyRoomCode} disabled={loading || actionBlocked}>
                     Copy Room Code
                   </button>
-                  <button type="button" className="cta-primary" onClick={copyInviteLink} disabled={loading || reconnectUiBlocking}>
+                  <button type="button" className="cta-primary" onClick={copyInviteLink} disabled={loading || actionBlocked}>
                     Copy Invite Link
                   </button>
                 </div>
@@ -529,10 +578,10 @@ export function MultiplayerScreen({
               <div className="multiplayer-room-action-group">
                 <p className="multiplayer-room-action-label">Room Session</p>
                 <div className="actions multiplayer-room-actions">
-                  <button type="button" onClick={onRefresh} disabled={loading || reconnectUiBlocking}>
+                  <button type="button" onClick={onRefresh} disabled={loading || actionBlocked}>
                     Refresh
                   </button>
-                  <button type="button" onClick={onLeaveRoom} disabled={loading || reconnectUiBlocking}>
+                  <button type="button" onClick={onLeaveRoom} disabled={loading || actionBlocked}>
                     Forget Room
                   </button>
                 </div>
@@ -541,11 +590,11 @@ export function MultiplayerScreen({
                 <div className="multiplayer-room-action-group">
                   <p className="multiplayer-room-action-label">Host Match</p>
                   <div className="actions multiplayer-room-actions">
-                    <button type="button" onClick={() => onStartMatch()} disabled={loading || reconnectUiBlocking}>
+                    <button type="button" onClick={() => onStartMatch()} disabled={loading || actionBlocked}>
                       Start Match
                     </button>
                     {roomView.checkpointSlots.length > 0 ? (
-                      <button type="button" onClick={startFromCheckpoint} disabled={loading || reconnectUiBlocking}>
+                      <button type="button" onClick={startFromCheckpoint} disabled={loading || actionBlocked}>
                         Start From Checkpoint
                       </button>
                     ) : null}
@@ -570,7 +619,7 @@ export function MultiplayerScreen({
               </header>
               {!roomView.started && you ? (
                 <div className="actions multiplayer-ready-actions">
-                  <button type="button" className="cta-primary" onClick={() => onSetReady(!you.ready)} disabled={loading || reconnectUiBlocking}>
+                  <button type="button" className="cta-primary" onClick={() => onSetReady(!you.ready)} disabled={loading || actionBlocked}>
                     {you.ready ? 'Mark Not Ready' : 'Mark Ready'}
                   </button>
                 </div>
@@ -655,7 +704,7 @@ export function MultiplayerScreen({
                       key={`multiplayer-action-${index}`}
                       type="button"
                       onClick={() => onRunAction(index)}
-                      disabled={loading || reconnectUiBlocking}
+                      disabled={loading || actionBlocked}
                     >
                       {item.label}
                     </button>

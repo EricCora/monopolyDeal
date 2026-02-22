@@ -29,9 +29,12 @@ import type {
   MultiplayerCheckpointSummary,
   MultiplayerConnectionState,
   MultiplayerConnectionUiState,
+  MultiplayerEndedReason,
+  MultiplayerPausedReason,
   MultiplayerPushState,
   MultiplayerReaction,
   MultiplayerResumeRoomResponse,
+  MultiplayerRoomRuntimeState,
   MultiplayerRoomView,
   MultiplayerRoomSessionResponse,
   MultiplayerSession,
@@ -54,6 +57,19 @@ export type MultiplayerRecoveryReason = 'room_not_found' | 'reconnect_expired';
 export interface MultiplayerRecoveryNotice {
   roomCode: string;
   reason: MultiplayerRecoveryReason;
+}
+
+export interface MultiplayerReconnectDiagnostics {
+  roomCode: string | null;
+  seatId: string | null;
+  pushState: MultiplayerPushState;
+  reconnectAttempt: number;
+  lastClientVersion: number | null;
+  lastServerVersion: number | null;
+  lastReconnectError: string | null;
+  roomRuntimeState: MultiplayerRoomRuntimeState | null;
+  pausedReason: MultiplayerPausedReason | null;
+  endedReason: MultiplayerEndedReason | null;
 }
 
 const SESSION_KEY = 'monopolyDeal.multiplayerSession.v1';
@@ -218,7 +234,9 @@ function resolveSessionIdentityFields(response: {
 export function mapConnectionUiState(
   connectionState: MultiplayerConnectionState,
   errorCode: string | null,
+  roomRuntimeState?: MultiplayerRoomRuntimeState,
 ): MultiplayerConnectionUiState {
+  if (roomRuntimeState === 'ended_timeout') return 'room_ended';
   if (errorCode === 'reconnect_expired' || errorCode === 'seat_timed_out') return 'timed_out';
   if (errorCode === 'room_not_found' || errorCode === 'room_closed') return 'room_ended';
   if (errorCode === 'invalid_token' || errorCode === 'protocol_mismatch') return 'resume_failed';
@@ -271,6 +289,7 @@ export function useMultiplayerRoom({
   const pushFallbackMetricSentRef = useRef(false);
   const reconnectInFlightRef = useRef<Promise<boolean> | null>(null);
   const recoveredUiTimerRef = useRef<number | null>(null);
+  const diagnosticsClientVersionRef = useRef<number | null>(null);
 
   const expectedRevision = roomView?.revision;
 
@@ -357,6 +376,7 @@ export function useMultiplayerRoom({
     lastEventIdRef.current = Math.max(lastEventIdRef.current, loaded.lastEventId ?? loaded.revision);
 
     setRoomView(loaded);
+    diagnosticsClientVersionRef.current = loaded.revision;
     setConnectionState('connected');
     reconnectAutoRetryBlockedRef.current = false;
     clearError();
@@ -402,6 +422,7 @@ export function useMultiplayerRoom({
     if (reconnectV1UiEnabled) {
       setConnectionUiStateOverride('reconnect_handshake_pending');
     }
+    diagnosticsClientVersionRef.current = expectedRevision ?? roomView?.revision ?? diagnosticsClientVersionRef.current;
     try {
       const reconnected = await reconnectMultiplayerRoom(current, apiBase, expectedRevision, reconnectV1Enabled);
       reconnectLastErrorCodeRef.current = null;
@@ -538,6 +559,7 @@ export function useMultiplayerRoom({
     reconnectV1UiEnabled,
     recoverStaleSession,
     refreshRoom,
+    roomView?.revision,
     session,
     setErrorFromCode,
     setRecoveredUiState,
@@ -849,6 +871,7 @@ export function useMultiplayerRoom({
     setLoading(true);
     clearError();
     try {
+      diagnosticsClientVersionRef.current = roomView.revision;
       await applyMultiplayerAction(
         current,
         selected.action,
@@ -1123,8 +1146,8 @@ export function useMultiplayerRoom({
   }, [apiBase, session, setErrorFromCode]);
 
   const mappedConnectionUiState = useMemo(
-    () => mapConnectionUiState(connectionState, errorCode),
-    [connectionState, errorCode],
+    () => mapConnectionUiState(connectionState, errorCode, roomView?.roomRuntimeState),
+    [connectionState, errorCode, roomView?.roomRuntimeState],
   );
 
   const connectionUiState = useMemo<MultiplayerConnectionUiState>(() => {
@@ -1323,6 +1346,31 @@ export function useMultiplayerRoom({
     return roomView.hostPlayerId === session.playerId;
   }, [roomView, session]);
 
+  const reconnectDiagnostics = useMemo<MultiplayerReconnectDiagnostics>(() => ({
+    roomCode: session?.roomCode ?? null,
+    seatId: session?.seatId ?? session?.playerId ?? null,
+    pushState,
+    reconnectAttempt: reconnectLoopAttemptRef.current,
+    lastClientVersion: diagnosticsClientVersionRef.current,
+    lastServerVersion: roomView?.revision ?? null,
+    lastReconnectError: reconnectLastErrorCodeRef.current ?? errorCode,
+    roomRuntimeState: roomView?.roomRuntimeState ?? null,
+    pausedReason: roomView?.pausedReason ?? null,
+    endedReason: roomView?.endedReason ?? null,
+  }), [
+    connectionState,
+    errorCode,
+    loading,
+    pushState,
+    roomView?.endedReason,
+    roomView?.pausedReason,
+    roomView?.revision,
+    roomView?.roomRuntimeState,
+    session?.playerId,
+    session?.roomCode,
+    session?.seatId,
+  ]);
+
   return {
     apiBase,
     isLocalDevApi,
@@ -1342,6 +1390,7 @@ export function useMultiplayerRoom({
     connectionState,
     connectionUiState,
     pushState,
+    reconnectDiagnostics,
     reactionsEnabled,
     hostChangeNotice,
     clearHostChangeNotice: () => setHostChangeNotice(null),

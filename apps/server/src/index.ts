@@ -30,6 +30,7 @@ import {
 } from './gameService.ts';
 import { DisconnectTimerRegistry, disconnectTimerKey } from './disconnectTimers.ts';
 import { loadSnapshots, saveSnapshots } from './persistence/snapshots.ts';
+import { redactSensitiveToken } from './logging.ts';
 import type { PlayerId } from '../../../src/engine/index.ts';
 import type {
   ActionRejectedReason,
@@ -52,6 +53,7 @@ const MULTIPLAYER_PUSH_ENABLED = process.env.MULTIPLAYER_PUSH_ENABLED !== 'false
 const MULTIPLAYER_REACTIONS_ENABLED = process.env.MULTIPLAYER_REACTIONS_ENABLED !== 'false';
 const MP_RECONNECT_V1_ENABLED = process.env.MP_RECONNECT_V1 === 'true';
 const MP_VERSION_GUARD_V1_ENABLED = process.env.MP_VERSION_GUARD_V1 === 'true';
+const MP_PAUSE_ON_DISCONNECT_V1_ENABLED = process.env.MP_PAUSE_ON_DISCONNECT_V1 === 'true';
 const SSE_HEARTBEAT_MS = 25_000;
 
 const rooms = new Map<string, MultiplayerRoom>();
@@ -78,12 +80,6 @@ type SessionIdentity = {
   playerId: PlayerId;
   sessionToken: string;
 };
-
-function redactToken(token: string): string {
-  if (!token) return '***';
-  if (token.length <= 6) return '***';
-  return `${token.slice(0, 2)}***${token.slice(-2)}`;
-}
 
 function resolveSessionIdentity(
   input: {
@@ -244,6 +240,34 @@ function broadcastRoomEvent(
   }
 }
 
+function emitRoomRuntimeTransition(
+  room: MultiplayerRoom,
+  previousRuntimeState: string | undefined,
+): void {
+  if (!MP_PAUSE_ON_DISCONNECT_V1_ENABLED) return;
+  const nextRuntimeState = room.roomRuntimeState;
+  if (previousRuntimeState === nextRuntimeState) return;
+  if (nextRuntimeState === 'paused_disconnect' || nextRuntimeState === 'paused_host_disconnect') {
+    console.info(
+      `[mp][room_runtime] room=${room.code} status=paused_disconnect pausedReason=${room.pausedReason ?? 'unknown'} from=${previousRuntimeState ?? 'none'}`,
+    );
+    broadcastRoomEvent(room, 'mp:room_paused_disconnect');
+    return;
+  }
+  if (previousRuntimeState === 'paused_disconnect' || previousRuntimeState === 'paused_host_disconnect') {
+    if (nextRuntimeState === 'active') {
+      console.info(`[mp][room_runtime] room=${room.code} status=resumed_disconnect from=${previousRuntimeState}`);
+      broadcastRoomEvent(room, 'mp:room_resumed_disconnect');
+    }
+  }
+  if (nextRuntimeState === 'ended_timeout') {
+    console.info(
+      `[mp][room_runtime] room=${room.code} status=ended_timeout endedReason=${room.endedReason ?? 'unknown'} from=${previousRuntimeState ?? 'none'}`,
+    );
+    broadcastRoomEvent(room, 'mp:room_ended_timeout');
+  }
+}
+
 function syncDisconnectTimersForRoom(room: MultiplayerRoom): void {
   if (!MP_RECONNECT_V1_ENABLED) return;
   const now = Date.now();
@@ -283,19 +307,23 @@ async function handleDisconnectTimeout(roomCode: string, seatId: string): Promis
     disconnectTimers.cancel(roomCode, seatId);
     return;
   }
+  const previousRuntimeState = room.roomRuntimeState;
   const result = markSeatTimedOutIfExpired(room, seatId as PlayerId, Date.now());
   if (!result.transitioned) {
     syncDisconnectTimersForRoom(room);
     return;
   }
   reconnectCounters.disconnect_timeout_total += 1;
-  console.info(`[mp][disconnect_timeout] room=${roomCode} seat=${result.seatId}`);
+  console.info(
+    `[mp][disconnect_timeout] room=${roomCode} seat=${result.seatId} runtime=${room.roomRuntimeState ?? 'none'} endedReason=${room.endedReason ?? 'none'}`,
+  );
   snapshotAll();
   broadcastRoomEvent(room, 'mp:player_timed_out', {
     seatId: result.seatId,
     displayName: result.displayName,
     graceExpiresAt: result.graceExpiresAt,
   });
+  emitRoomRuntimeTransition(room, previousRuntimeState);
   syncDisconnectTimersForRoom(room);
 }
 
@@ -470,7 +498,7 @@ createServer(async (req, res) => {
 
       reconnectCounters.resume_request_total += 1;
       console.info(
-        `[mp][resume_request] room=${roomCode} seat=${playerId} token=${redactToken(sessionToken)} revision=${String(expectedRevision ?? '')}`,
+        `[mp][resume_request] room=${roomCode} seat=${playerId} token=${redactSensitiveToken(sessionToken)} revision=${String(expectedRevision ?? '')}`,
       );
 
       if (!room) {
@@ -487,10 +515,13 @@ createServer(async (req, res) => {
       }
 
       try {
+        const previousRuntimeState = room.roomRuntimeState;
         const session = reconnectRoom(room, playerId, sessionToken, expectedRevision);
         const snapshot = roomView(room, session.playerId, session.sessionToken);
         reconnectCounters.resume_success_total += 1;
-        console.info(`[mp][resume_result] room=${roomCode} seat=${playerId} status=ok`);
+        console.info(
+          `[mp][resume_result] room=${roomCode} seat=${playerId} status=ok runtime=${room.roomRuntimeState ?? 'none'} endedReason=${room.endedReason ?? 'none'}`,
+        );
         const seat = getSeatConnectionSnapshot(room, playerId);
         syncDisconnectTimersForRoom(room);
         snapshotAll();
@@ -499,6 +530,7 @@ createServer(async (req, res) => {
           displayName: seat?.displayName,
           graceExpiresAt: seat?.reconnectDeadlineMs,
         });
+        emitRoomRuntimeTransition(room, previousRuntimeState);
         const response: ResumeRoomResponse = {
           status: 'ok',
           roomCode: session.roomCode,
@@ -640,12 +672,15 @@ createServer(async (req, res) => {
     if (operation === 'reconnect') {
       reconnectCounters.resume_request_total += 1;
       console.info(
-        `[mp][resume_request] room=${roomCode} seat=${playerId} token=${redactToken(sessionToken)} revision=${String(expectedRevision ?? '')}`,
+        `[mp][resume_request] room=${roomCode} seat=${playerId} token=${redactSensitiveToken(sessionToken)} revision=${String(expectedRevision ?? '')}`,
       );
       try {
+        const previousRuntimeState = room.roomRuntimeState;
         const session = reconnectRoom(room, playerId, sessionToken, expectedRevision);
         reconnectCounters.resume_success_total += 1;
-        console.info(`[mp][resume_result] room=${roomCode} seat=${playerId} status=ok`);
+        console.info(
+          `[mp][resume_result] room=${roomCode} seat=${playerId} status=ok runtime=${room.roomRuntimeState ?? 'none'} endedReason=${room.endedReason ?? 'none'}`,
+        );
         const seat = getSeatConnectionSnapshot(room, playerId);
         syncDisconnectTimersForRoom(room);
         snapshotAll();
@@ -656,6 +691,7 @@ createServer(async (req, res) => {
               graceExpiresAt: seat?.reconnectDeadlineMs,
             }
           : undefined);
+        emitRoomRuntimeTransition(room, previousRuntimeState);
         writeJson(res, 200, session);
       } catch (resumeError) {
         reconnectCounters.resume_failure_total += 1;
@@ -672,15 +708,18 @@ createServer(async (req, res) => {
         return;
       }
       const checkpointId = optionalTrimmedString(payload.checkpointId);
+      const previousRuntimeState = room.roomRuntimeState;
       startRoom(room, playerId, sessionToken, payload.seed, expectedRevision, checkpointId);
       snapshotAll();
       broadcastRoomEvent(room, checkpointId ? 'start_from_checkpoint' : 'start');
+      emitRoomRuntimeTransition(room, previousRuntimeState);
       writeJson(res, 200, { ok: true });
       return;
     }
 
     if (operation === 'leave') {
       const preStatus = room.status;
+      const previousRuntimeState = room.roomRuntimeState;
       leaveRoom(room, playerId, sessionToken, expectedRevision);
       const seat = getSeatConnectionSnapshot(room, playerId);
       syncDisconnectTimersForRoom(room);
@@ -694,22 +733,27 @@ createServer(async (req, res) => {
       } else {
         broadcastRoomEvent(room, 'leave');
       }
+      emitRoomRuntimeTransition(room, previousRuntimeState);
       writeJson(res, 200, { ok: true });
       return;
     }
 
     if (operation === 'pause') {
+      const previousRuntimeState = room.roomRuntimeState;
       pauseRoom(room, playerId, sessionToken, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'pause');
+      emitRoomRuntimeTransition(room, previousRuntimeState);
       writeJson(res, 200, { ok: true });
       return;
     }
 
     if (operation === 'resume') {
+      const previousRuntimeState = room.roomRuntimeState;
       resumeRoom(room, playerId, sessionToken, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'resume');
+      emitRoomRuntimeTransition(room, previousRuntimeState);
       writeJson(res, 200, { ok: true });
       return;
     }

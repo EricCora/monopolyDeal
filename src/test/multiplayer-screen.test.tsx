@@ -352,6 +352,46 @@ describe('MultiplayerScreen', () => {
     expect(screen.getByText(/live updates unavailable, using polling/i)).toBeInTheDocument();
   });
 
+  it('renders host disconnect pause banner copy from room runtime state', () => {
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          session: makeSession(),
+          roomView: {
+            ...makeLobbyView(),
+            roomRuntimeState: 'paused_host_disconnect',
+            pausedReason: 'host_disconnect',
+          },
+          connectionState: 'connected',
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/host disconnected\. room is paused until host reconnects or times out/i)).toBeInTheDocument();
+  });
+
+  it('renders host timeout room-ended banner and blocks room actions', () => {
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          session: makeSession(),
+          roomView: {
+            ...makeLobbyViewWithTurnState(),
+            roomRuntimeState: 'ended_timeout',
+            endedReason: 'host_timeout',
+          },
+          connectionState: 'connected',
+          isHost: true,
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/host timed out\. room ended/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /refresh/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /forget room/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /copy invite link/i })).toBeDisabled();
+  });
+
   it('renders connected live-updates status when stream is active', () => {
     render(
       <MultiplayerScreen
@@ -365,6 +405,48 @@ describe('MultiplayerScreen', () => {
     );
 
     expect(screen.getByText(/live updates active/i)).toBeInTheDocument();
+  });
+
+  it('renders reconnect debug panel only when reconnect debug is enabled', async () => {
+    const diagnostics = {
+      roomCode: 'HRCWM',
+      seatId: 'p1',
+      pushState: 'connected' as const,
+      reconnectAttempt: 2,
+      lastClientVersion: 5,
+      lastServerVersion: 6,
+      lastReconnectError: null,
+      roomRuntimeState: 'active' as const,
+      pausedReason: null,
+      endedReason: null,
+    };
+    const { rerender } = render(
+      <MultiplayerScreen
+        {...makeProps({
+          session: null,
+          roomView: null,
+          reconnectDebugEnabled: true,
+          reconnectDiagnostics: diagnostics,
+        })}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/reconnect debug/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/room=HRCWM seat=p1 push=connected/i)).toBeInTheDocument();
+
+    rerender(
+      <MultiplayerScreen
+        {...makeProps({
+          session: null,
+          roomView: null,
+          reconnectDebugEnabled: false,
+          reconnectDiagnostics: diagnostics,
+        })}
+      />,
+    );
+    expect(screen.queryByText(/reconnect debug/i)).not.toBeInTheDocument();
   });
 
   it('disables actionable lobby controls while reconnect ui is blocking input', () => {

@@ -211,12 +211,14 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Multiplayer activity feed and host-change notices are surfaced in lobby/in-match UI.
 - Lobby disconnect policy: leaving in `lobby` removes your seat immediately; reconnect windows remain for `active`/`finished` matches only.
 - Lobby stale-heartbeat policy: connected lobby seats are pruned after a 90s inactivity window to reduce false disconnects during tab/device switching in local beta testing.
+- Optional runtime disconnect policy (`MP_PAUSE_ON_DISCONNECT_V1`) pauses active matches on disconnect and ends the room if the host times out before reconnect.
 
 ## Multiplayer Deployment Notes
 
 Set `VITE_MULTIPLAYER_API_URL` to your deployed multiplayer API origin.
 See `.env.example` for the expected variable.
 For reconnect/resume implementation details and execution tracking, see `docs/multiplayer-reconnect-contract.md` and `docs/IMPLEMENTATION_TRACKER.md` (Epic C section).
+Final closure artifact and acceptance mapping: `docs/PROGRAM_CLOSURE.md`.
 
 Optional multiplayer behavior flags:
 
@@ -229,11 +231,13 @@ Optional multiplayer behavior flags:
   - Reconnect-v1 handshake returns explicit resume statuses and (on success) an authoritative room snapshot for immediate resync.
 - `VITE_MP_RECONNECT_V1_UI` (`false` by default) to enable reconnect-v1 UI state scaffolding.
 - `VITE_MP_VERSION_GUARD_V1` (`false` by default) to enable stale-action rejection handling + auto-resync on the client.
+- `VITE_MP_RECONNECT_DEBUG` (`false` by default) to show reconnect diagnostics panel in multiplayer UI (dev-focused).
 - `MULTIPLAYER_PUSH_ENABLED` (`true` by default) to enable server event stream endpoint.
 - `MULTIPLAYER_REACTIONS_ENABLED` (`true` by default) to enable server reaction endpoint.
 - `MP_RECONNECT_V1` (`false` by default) to enable reconnect-v1 canonical seat/token server behavior.
 - `MP_RECONNECT_GRACE_MS` (`90000` default when reconnect-v1 is enabled) to configure reconnect-v1 grace duration.
 - `MP_VERSION_GUARD_V1` (`false` by default) to enable server-side stale-action guards (`action_rejected` with stale-state recovery hints).
+- `MP_PAUSE_ON_DISCONNECT_V1` (`false` by default) to enable host/player disconnect pause policy and host-timeout room ending behavior.
 
 For local multiplayer development, the backend service is required.
 Use the one-command startup:

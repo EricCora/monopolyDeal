@@ -441,6 +441,7 @@ export function GameTableScreen({
   const reconnectBlockingState = isMultiplayer
     && (
       (reconnectUiEnabled && RECONNECT_BLOCKING_UI_STATES.has(multiplayerUiState))
+      || (!reconnectUiEnabled && multiplayerUiState === 'room_ended')
       || multiplayerConnectionState === 'reconnecting'
       || multiplayerConnectionState === 'disconnected'
     );
@@ -737,32 +738,32 @@ export function GameTableScreen({
     );
 
   const reconnectOverlayTitle = (() => {
+    if (multiplayerUiState === 'room_ended') return 'Room Ended';
+    if (multiplayerUiState === 'timed_out') return 'Reconnect Window Expired';
+    if (multiplayerUiState === 'resume_failed') return 'Could Not Resume Seat';
     if (reconnectUiEnabled) {
       if (multiplayerUiState === 'reconnect_handshake_pending') return 'Restoring Seat...';
       if (multiplayerUiState === 'resync_pending') return 'Syncing Game State...';
-      if (multiplayerUiState === 'timed_out') return 'Reconnect Window Expired';
-      if (multiplayerUiState === 'room_ended') return 'Room Ended';
-      if (multiplayerUiState === 'resume_failed') return 'Could Not Resume Seat';
     }
     return multiplayerConnectionState === 'reconnecting' ? 'Reconnecting...' : 'Connection Lost';
   })();
 
   const reconnectOverlayDetail = (() => {
+    if (multiplayerUiState === 'room_ended') {
+      return pauseReasonText ?? 'This room is no longer available. Create or join a new room to continue.';
+    }
+    if (multiplayerUiState === 'timed_out') {
+      return 'Your reconnect window expired. Rejoin with the room code to continue.';
+    }
+    if (multiplayerUiState === 'resume_failed') {
+      return 'Automatic resume failed. Refresh room state or rejoin manually.';
+    }
     if (reconnectUiEnabled) {
       if (multiplayerUiState === 'reconnect_handshake_pending') {
         return 'Re-authenticating your room seat before state recovery.';
       }
       if (multiplayerUiState === 'resync_pending') {
         return 'Applying the latest authoritative room snapshot. Inputs stay disabled until sync finishes.';
-      }
-      if (multiplayerUiState === 'timed_out') {
-        return 'Your reconnect window expired. Rejoin with the room code to continue.';
-      }
-      if (multiplayerUiState === 'room_ended') {
-        return 'This room is no longer available. Create or join a new room to continue.';
-      }
-      if (multiplayerUiState === 'resume_failed') {
-        return 'Automatic resume failed. Refresh room state or rejoin manually.';
       }
     }
     return multiplayerConnectionState === 'reconnecting'
@@ -801,7 +802,7 @@ export function GameTableScreen({
             {isMultiplayer ? (
               <div className="table-top-group">
                 <p className="table-top-group-label">Room</p>
-                <button onClick={onRefreshMultiplayer} disabled={isPaused || checkpointLoading}>Refresh</button>
+                <button onClick={onRefreshMultiplayer} disabled={checkpointLoading}>Refresh</button>
                 <button onClick={onExitMultiplayer} disabled={checkpointLoading}>Exit Match</button>
                 <button onClick={onForgetMultiplayer} disabled={checkpointLoading}>Forget Room</button>
               </div>

@@ -369,6 +369,7 @@ function App() {
   const multiplayerReconnectV1Enabled = runtimeFeatureFlags.mpReconnectV1Enabled;
   const multiplayerReconnectV1UiEnabled = runtimeFeatureFlags.mpReconnectV1UiEnabled;
   const multiplayerVersionGuardV1Enabled = runtimeFeatureFlags.mpVersionGuardV1Enabled;
+  const multiplayerReconnectDebugEnabled = runtimeFeatureFlags.mpReconnectDebugEnabled;
   const {
     apiBase: multiplayerApiBase,
     isLocalDevApi: multiplayerIsLocalDevApi,
@@ -386,6 +387,7 @@ function App() {
     connectionState: multiplayerConnectionState,
     connectionUiState: multiplayerConnectionUiState,
     pushState: multiplayerPushState,
+    reconnectDiagnostics: multiplayerReconnectDiagnostics,
     hostChangeNotice: multiplayerHostChangeNotice,
     clearHostChangeNotice: clearMultiplayerHostChangeNotice,
     clearRecoveryNotice: clearMultiplayerRecoveryNotice,
@@ -1878,15 +1880,23 @@ function App() {
           isPaused={multiplayerRoomView.paused}
           reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
           pauseReasonText={
-            multiplayerRoomView.pausedByPlayerId
-              ? `Gameplay is paused by ${multiplayerGame.players.find((player) => player.id === multiplayerRoomView.pausedByPlayerId)?.name ?? multiplayerRoomView.pausedByPlayerId}.`
-              : 'Gameplay is paused by the host.'
+            multiplayerRoomView.roomRuntimeState === 'ended_timeout'
+              ? (multiplayerRoomView.endedReason === 'host_timeout'
+                  ? 'Host timed out. Room ended.'
+                  : 'Room ended due to disconnect timeout.')
+              : multiplayerRoomView.pausedReason === 'host_disconnect'
+                ? 'Host disconnected. Room is paused until reconnect or timeout.'
+                : multiplayerRoomView.pausedReason === 'player_disconnect'
+                  ? 'A player disconnected. Room is paused while reconnect is in progress.'
+                  : multiplayerRoomView.pausedByPlayerId
+                    ? `Gameplay is paused by ${multiplayerGame.players.find((player) => player.id === multiplayerRoomView.pausedByPlayerId)?.name ?? multiplayerRoomView.pausedByPlayerId}.`
+                    : 'Gameplay is paused by the host.'
           }
           connectionStatusLabel={multiplayerConnectionLabel(multiplayerConnectionState, multiplayerPushState)}
           multiplayerConnectionState={multiplayerConnectionState}
           multiplayerConnectionUiState={multiplayerConnectionUiState}
           reconnectUiEnabled={multiplayerReconnectV1UiEnabled}
-          forceInputBlocked={multiplayerPromptSoftLockActive}
+          forceInputBlocked={multiplayerPromptSoftLockActive || multiplayerRoomView.roomRuntimeState === 'ended_timeout'}
           playerConnectionById={multiplayerConnectionByPlayerId}
           isMultiplayerHost={multiplayerIsHost}
           checkpointSlots={multiplayerRoomView.checkpointSlots}
@@ -2002,6 +2012,8 @@ function App() {
           connectionState={multiplayerConnectionState}
           connectionUiState={multiplayerConnectionUiState}
           reconnectUiEnabled={multiplayerReconnectV1UiEnabled}
+          reconnectDebugEnabled={multiplayerReconnectDebugEnabled}
+          reconnectDiagnostics={multiplayerReconnectDiagnostics}
           pushState={multiplayerPushState}
           isHost={multiplayerIsHost}
           onPlayerNameChange={setMultiplayerPlayerName}

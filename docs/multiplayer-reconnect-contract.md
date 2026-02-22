@@ -1,6 +1,6 @@
 # Multiplayer Reconnect Contract (MD-C01)
 
-Status: Draft for implementation and tracker check-off
+Status: Active v1 contract (implemented through MD-C12 baseline slices)
 
 Related:
 - `docs/IMPLEMENTATION_TRACKER.md` (`Epic C — Reconnect/Resume Program`)
@@ -169,6 +169,36 @@ MD-C03 implementation note:
   - `mp:player_timed_out`
 - Optional envelope fields (`seatId`, `displayName`, `graceExpiresAt`) are included when available.
 
+### Room Runtime Events (MD-C10)
+
+```ts
+{
+  event: 'mp:room_paused_disconnect' | 'mp:room_resumed_disconnect' | 'mp:room_ended_timeout',
+  roomCode: string,
+  revision: number,
+  serverTime: number,
+  eventId: number
+}
+```
+
+Runtime-state fields surfaced in `MultiplayerRoomView`:
+
+```ts
+{
+  roomRuntimeState?: 'active' | 'paused_disconnect' | 'paused_host_disconnect' | 'ended_timeout',
+  pausedReason?: 'manual' | 'player_disconnect' | 'host_disconnect',
+  endedReason?: 'host_timeout' | 'disconnect_timeout'
+}
+```
+
+Policy behavior when `MP_PAUSE_ON_DISCONNECT_V1=true`:
+
+- Active/finished room disconnect pauses gameplay.
+- Host disconnect enters `paused_host_disconnect`.
+- Host reconnect before timeout resumes to `active` when no unresolved disconnect remains.
+- Host timeout transitions room to `ended_timeout` with `endedReason='host_timeout'`.
+- No host migration after match start (lobby-only migration behavior).
+
 ### Action Submit (Version Guard v1)
 
 ```ts
@@ -210,6 +240,7 @@ MD-C09 implementation note:
 | Invalid token | Reject resume (`invalid_token`) | `resume_failed`, show manual rejoin guidance |
 | Seat timed out | Reject resume (`seat_timed_out`) | `timed_out`, require rejoin |
 | Room closed/not found | Reject resume (`room_closed`/`seat_not_found`) | `room_ended`, route to host/join flow |
+| Host disconnect timeout (`MD-C10`) | Room enters `ended_timeout` | `room_ended`, no further gameplay actions |
 | Retry budget exhausted | No valid resume | `resume_failed`, allow retry/refresh/rejoin |
 | Version mismatch | Resume accepted with resync required | `resync_pending` until snapshot applied |
 | Stale action submit (`MD-C09`) | Reject with `action_rejected(reason=stale_state)` | Client auto-resyncs and resumes without manual rejoin |
@@ -233,10 +264,11 @@ MD-C09 implementation note:
 | Disconnect then reconnect after grace timeout | Resume rejected as timed out; user must rejoin with room code |
 | Duplicate tabs reconnect same seat | Newest valid reconnect owns seat; previous connection invalidated |
 
-## Host Timeout Policy (MD-C10 Follow-On)
+## Host Timeout Policy (MD-C10)
 
-- For this slice, host-timeout behavior is specified but not fully implemented.
-- Planned policy: pause room on host disconnect; resume if host reconnects in grace; end room if host times out.
+- Implemented behind `MP_PAUSE_ON_DISCONNECT_V1`.
+- Room pause/end outcomes are explicit via runtime-state fields and room-runtime events.
+- Host timeout branch is terminal for the room lifecycle (`ended_timeout`) with user-facing room-ended messaging.
 
 ## Explicit Decisions (Locked)
 
@@ -244,7 +276,7 @@ MD-C09 implementation note:
 - Reconnect auth: ephemeral `resumeToken`
 - Grace default: `90_000ms` configurable
 - Duplicate reconnect: newest socket/session wins, prior binding invalidated
-- Host timeout behavior: specified in contract; implementation deferred to `MD-C10`
+- Host timeout behavior: implemented via runtime pause/end policy (`MP_PAUSE_ON_DISCONNECT_V1`)
 
 ## Manual Simulation Scenarios (Spike validation)
 

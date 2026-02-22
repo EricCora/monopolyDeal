@@ -39,6 +39,7 @@ export interface MultiplayerFeatureFlags {
   mpReconnectV1Enabled: boolean;
   mpReconnectV1UiEnabled: boolean;
   mpVersionGuardV1Enabled: boolean;
+  mpReconnectDebugEnabled: boolean;
 }
 
 export interface MultiplayerLanOriginsResponse {
@@ -67,6 +68,7 @@ export function resolveMultiplayerFeatureFlags(): MultiplayerFeatureFlags {
     mpReconnectV1Enabled: import.meta.env.VITE_MP_RECONNECT_V1 === 'true',
     mpReconnectV1UiEnabled: import.meta.env.VITE_MP_RECONNECT_V1_UI === 'true',
     mpVersionGuardV1Enabled: import.meta.env.VITE_MP_VERSION_GUARD_V1 === 'true',
+    mpReconnectDebugEnabled: import.meta.env.VITE_MP_RECONNECT_DEBUG === 'true',
   };
 }
 

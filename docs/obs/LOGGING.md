@@ -45,6 +45,7 @@ Server-side counters/log markers:
   - `[mp][resume_request]`
   - `[mp][resume_result]`
   - `[mp][disconnect_timeout]`
+  - `[mp][room_runtime]`
   - `[mp][action_rejected]`
 
 `[mp][resume_result]` status taxonomy (reconnect-v1):
@@ -68,6 +69,14 @@ Push bootstrap fallback note:
 - If push stream bootstrap does not open in time, client transitions to polling fallback and emits:
   - `multiplayer_push_disconnected`
   - `multiplayer_push_fallback` (once per session fallback entry)
+
+Disconnect pause/end runtime markers:
+
+- Room runtime transitions emit structured log markers:
+  - pause due to disconnect: `[mp][room_runtime] ... status=paused_disconnect`
+  - auto-resume after reconnect/timeout resolution: `[mp][room_runtime] ... status=resumed_disconnect`
+  - terminal timeout end: `[mp][room_runtime] ... status=ended_timeout`
+- `resume_request` logs always use redacted token format via shared redaction helper.
 
 ## Boundaries
 

@@ -1,6 +1,9 @@
 import type { Action, GameState, LegalAction } from '../engine';
 
 export type MultiplayerRoomStatus = 'lobby' | 'active' | 'finished';
+export type MultiplayerRoomRuntimeState = 'active' | 'paused_disconnect' | 'paused_host_disconnect' | 'ended_timeout';
+export type MultiplayerPausedReason = 'manual' | 'player_disconnect' | 'host_disconnect';
+export type MultiplayerEndedReason = 'host_timeout' | 'disconnect_timeout';
 export type MultiplayerConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
 export type MultiplayerPushState = 'disabled' | 'unsupported' | 'connecting' | 'connected' | 'fallback';
 export type MultiplayerConnectionUiState =
@@ -61,6 +64,9 @@ export interface MultiplayerRoomView {
   gameState?: GameState;
   paused: boolean;
   pausedByPlayerId?: string;
+  roomRuntimeState?: MultiplayerRoomRuntimeState;
+  pausedReason?: MultiplayerPausedReason;
+  endedReason?: MultiplayerEndedReason;
   revision: number;
   turnSnapshotCount: number;
   checkpointSlots: MultiplayerCheckpointSummary[];
