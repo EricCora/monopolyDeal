@@ -147,6 +147,23 @@ function makeRoomView(revision = 1): MultiplayerRoomView {
   };
 }
 
+function makeActionRoomView(revision = 1): MultiplayerRoomView {
+  return {
+    ...makeRoomView(revision),
+    started: true,
+    promptPlayerId: 'p1',
+    legalActions: [
+      {
+        label: 'Draw cards',
+        action: {
+          type: 'draw_cards',
+          playerId: 'p1',
+        },
+      },
+    ],
+  };
+}
+
 function makeResumeResponse(
   status: MultiplayerResumeRoomResponse['status'],
   overrides: Partial<MultiplayerResumeRoomResponse> = {},
@@ -272,6 +289,72 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     });
     await flushMicrotasks(5);
     expect(result.current.connectionState).toBe('connected');
+  });
+
+  it('falls back to polling when push stream never opens within bootstrap timeout', async () => {
+    vi.useFakeTimers();
+    const onMetricEvent = vi.fn();
+    clientMocks.subscribeMultiplayerRoomEvents.mockReturnValue({ close: vi.fn() });
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: true,
+      pollIntervalMs: 40,
+      onMetricEvent,
+    }));
+
+    await act(async () => {
+      const ok = await result.current.hostRoom();
+      expect(ok).toBe(true);
+    });
+    await flushMicrotasks();
+    expect(result.current.pushState).toBe('connecting');
+
+    await advanceAndFlush(5_100, 5);
+    expect(result.current.pushState).toBe('fallback');
+
+    const fallbackEvents = onMetricEvent.mock.calls.filter(([event]) => event === 'multiplayer_push_fallback');
+    expect(fallbackEvents).toHaveLength(1);
+  });
+
+  it('treats first push event as connected even if onOpen is delayed', async () => {
+    vi.useFakeTimers();
+    const onMetricEvent = vi.fn();
+    let onEventHandler: ((event: { eventId: number; revision: number }) => void) | null = null;
+
+    clientMocks.subscribeMultiplayerRoomEvents.mockImplementation((_session, handlers) => {
+      onEventHandler = handlers.onEvent as ((event: { eventId: number; revision: number }) => void);
+      return { close: vi.fn() };
+    });
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: true,
+      pollIntervalMs: 40,
+      onMetricEvent,
+    }));
+
+    await act(async () => {
+      const ok = await result.current.hostRoom();
+      expect(ok).toBe(true);
+    });
+    await flushMicrotasks();
+
+    expect(result.current.pushState).toBe('connecting');
+
+    await act(async () => {
+      onEventHandler?.({
+        eventId: 0,
+        revision: 0,
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.pushState).toBe('connected');
+    const fallbackEvents = onMetricEvent.mock.calls.filter(([event]) => event === 'multiplayer_push_fallback');
+    expect(fallbackEvents).toHaveLength(0);
+    const connectedEvents = onMetricEvent.mock.calls.filter(([event]) => event === 'multiplayer_push_connected');
+    expect(connectedEvents).toHaveLength(1);
   });
 
   it('migrates legacy stored session shape to canonical seat credentials on bootstrap reconnect', async () => {
@@ -449,6 +532,98 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     await advanceAndFlush(0, 6);
     expect(mismatch.result.current.connectionUiState).toBe('resume_failed');
     mismatch.unmount();
+  });
+
+  it('auto-resyncs on stale_state action rejection when version guard is enabled', async () => {
+    vi.useFakeTimers();
+    const onMetricEvent = vi.fn();
+    let revision = 1;
+    clientMocks.loadMultiplayerRoomState.mockImplementation(async () => {
+      revision += 1;
+      return makeActionRoomView(revision);
+    });
+    const staleActionError = Object.assign(new Error('action_rejected'), {
+      details: {
+        error: 'action_rejected',
+        reason: 'stale_state',
+        serverStateVersion: 9,
+        requiresResync: true,
+      },
+    });
+    clientMocks.applyMultiplayerAction.mockRejectedValue(staleActionError);
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+      reconnectV1UiEnabled: true,
+      versionGuardV1Enabled: true,
+      onMetricEvent,
+    }));
+
+    await act(async () => {
+      const ok = await result.current.hostRoom();
+      expect(ok).toBe(true);
+    });
+    await flushMicrotasks();
+
+    const refreshCallsBeforeAction = clientMocks.loadMultiplayerRoomState.mock.calls.length;
+    await act(async () => {
+      await result.current.runAction(0);
+    });
+    await flushMicrotasks(6);
+
+    expect(clientMocks.applyMultiplayerAction).toHaveBeenCalledTimes(1);
+    const applyArgs = (clientMocks.applyMultiplayerAction.mock.calls[0] ?? []) as unknown[];
+    expect(applyArgs[4] as Record<string, unknown>).toMatchObject({
+      clientStateVersion: expect.any(Number),
+      actionId: expect.any(String),
+    });
+    expect(clientMocks.loadMultiplayerRoomState.mock.calls.length).toBeGreaterThan(refreshCallsBeforeAction);
+    expect(result.current.connectionState).toBe('connected');
+
+    const resyncStarted = onMetricEvent.mock.calls.filter(([event]) => event === 'multiplayer_resync_started');
+    const resyncCompleted = onMetricEvent.mock.calls.filter(([event]) => event === 'multiplayer_resync_completed');
+    expect(resyncStarted.length).toBeGreaterThan(0);
+    expect(resyncCompleted.length).toBeGreaterThan(0);
+  });
+
+  it('surfaces non-stale action rejection without forced resync', async () => {
+    vi.useFakeTimers();
+    let revision = 1;
+    clientMocks.loadMultiplayerRoomState.mockImplementation(async () => {
+      revision += 1;
+      return makeActionRoomView(revision);
+    });
+    const rejectedActionError = Object.assign(new Error('action_rejected'), {
+      details: {
+        error: 'action_rejected',
+        reason: 'not_your_turn',
+        serverStateVersion: 6,
+        requiresResync: false,
+      },
+    });
+    clientMocks.applyMultiplayerAction.mockRejectedValue(rejectedActionError);
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+      versionGuardV1Enabled: true,
+    }));
+
+    await act(async () => {
+      const ok = await result.current.hostRoom();
+      expect(ok).toBe(true);
+    });
+    await flushMicrotasks();
+
+    const refreshCallsBeforeAction = clientMocks.loadMultiplayerRoomState.mock.calls.length;
+    await act(async () => {
+      await result.current.runAction(0);
+    });
+    await flushMicrotasks(4);
+
+    expect(result.current.errorCode).toBe('not_your_turn');
+    expect(clientMocks.loadMultiplayerRoomState.mock.calls.length).toBe(refreshCallsBeforeAction);
   });
 
   it('uses bounded reconnect-v1 backoff cadence with single-loop guard', async () => {

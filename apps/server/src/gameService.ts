@@ -24,12 +24,14 @@ import type {
 const RECONNECT_WINDOW_LEGACY_MS = 5 * 60 * 1000;
 const RECONNECT_WINDOW_V1_DEFAULT_MS = 90_000;
 const MP_RECONNECT_V1_ENABLED = process.env.MP_RECONNECT_V1 === 'true';
+const MP_VERSION_GUARD_V1_ENABLED = process.env.MP_VERSION_GUARD_V1 === 'true';
 const RECONNECT_WINDOW_MS = resolveReconnectWindowMs(MP_RECONNECT_V1_ENABLED, process.env.MP_RECONNECT_GRACE_MS);
 // Keep lobby heartbeat grace long enough for frequent tab switching during local beta sessions.
 const STALE_CONNECTION_MS = 1.5 * 60 * 1000;
 const MAX_CHECKPOINTS = 5;
 const MAX_ACTIVITY_FEED = 24;
 const MAX_CHAT_MESSAGES = 150;
+const MAX_TRACKED_ACTION_IDS = 128;
 const REACTION_COOLDOWN_MS = 1_500;
 const CHAT_COOLDOWN_MS = 700;
 const MAX_CHAT_MESSAGE_LENGTH = 280;
@@ -68,6 +70,11 @@ interface RoomCheckpoint {
   game: GameState;
 }
 
+export interface ApplyRoomActionOptions {
+  clientStateVersion?: number;
+  actionId?: string;
+}
+
 type RoomActivityEntry = MultiplayerActivityFeedItem;
 
 export interface MultiplayerRoom {
@@ -82,6 +89,7 @@ export interface MultiplayerRoom {
   paused: boolean;
   pausedByPlayerId?: PlayerId;
   revision: number;
+  recentActionIds: string[];
   turnSnapshots: GameState[];
   checkpoints: RoomCheckpoint[];
   activityFeed: RoomActivityEntry[];
@@ -157,6 +165,9 @@ export function normalizeRoomForRuntime(room: MultiplayerRoom): MultiplayerRoom 
     lastReactionAt: Number.isFinite(player.lastReactionAt) ? Number(player.lastReactionAt) : 0,
     lastChatAt: Number.isFinite(player.lastChatAt) ? Number(player.lastChatAt) : 0,
   }));
+  room.recentActionIds = Array.isArray(room.recentActionIds)
+    ? room.recentActionIds.filter((entry) => typeof entry === 'string' && entry.trim().length > 0).slice(-MAX_TRACKED_ACTION_IDS)
+    : [];
   return room;
 }
 
@@ -506,6 +517,17 @@ function shouldRetainTurnSnapshots(nextState: GameState, nextPromptPlayerId: str
     || nextState.pending.kind === 'deal_breaker';
 }
 
+function hasTrackedActionId(room: MultiplayerRoom, actionId: string): boolean {
+  if (!actionId) return false;
+  return room.recentActionIds.includes(actionId);
+}
+
+function trackActionId(room: MultiplayerRoom, actionId?: string): void {
+  if (!actionId) return;
+  room.recentActionIds = [...room.recentActionIds.filter((entry) => entry !== actionId), actionId]
+    .slice(-MAX_TRACKED_ACTION_IDS);
+}
+
 function checkpointSummary(checkpoint: RoomCheckpoint): MultiplayerCheckpointSummary {
   return {
     id: checkpoint.id,
@@ -600,6 +622,7 @@ export function createRoom(
     game: null,
     paused: false,
     revision: 0,
+    recentActionIds: [],
     turnSnapshots: [],
     checkpoints: [],
     activityFeed: [],
@@ -738,6 +761,7 @@ export function startRoom(
   room.paused = false;
   room.pausedByPlayerId = undefined;
   room.turnSnapshots = [];
+  room.recentActionIds = [];
   room.players.forEach((entry) => {
     entry.ready = false;
   });
@@ -779,13 +803,32 @@ export function applyRoomAction(
   sessionToken: string,
   action: Action,
   expectedRevision?: number,
+  options: ApplyRoomActionOptions = {},
 ): MultiplayerRoom {
+  const actionId = options.actionId?.trim();
+  const versionGuardEnabled = MP_VERSION_GUARD_V1_ENABLED
+    || options.clientStateVersion != null
+    || Boolean(actionId);
   ensureExpectedRevision(room, expectedRevision);
   const player = requireSession(room, playerId, sessionToken);
   const game = requireGame(room);
   requireConnectedPlayer(player);
   ensureNotPaused(room);
   touchPlayer(player);
+  if (versionGuardEnabled && actionId && hasTrackedActionId(room, actionId)) {
+    return room;
+  }
+  if (
+    versionGuardEnabled
+    && Number.isFinite(options.clientStateVersion)
+    && Number(options.clientStateVersion) !== room.revision
+  ) {
+    throw new Error('stale_state');
+  }
+  const activePromptPlayerId = getNextPrompt(game).playerId;
+  if (versionGuardEnabled && activePromptPlayerId !== playerId) {
+    throw new Error('not_your_turn');
+  }
   if (action.playerId !== playerId) {
     throw new Error('player_action_mismatch');
   }
@@ -817,6 +860,9 @@ export function applyRoomAction(
   }
   updateStatusFromGame(room);
   commitMutation(room);
+  if (versionGuardEnabled && actionId) {
+    trackActionId(room, actionId);
+  }
   return room;
 }
 
@@ -915,6 +961,7 @@ export function loadRoomCheckpoint(
   const checkpoint = findCheckpoint(room, checkpointId);
   room.game = structuredClone(checkpoint.game);
   room.turnSnapshots = [];
+  room.recentActionIds = [];
   room.paused = false;
   room.pausedByPlayerId = undefined;
   appendActivity(room, 'checkpoint', `${player.name} loaded checkpoint "${checkpoint.name}".`, { playerId });

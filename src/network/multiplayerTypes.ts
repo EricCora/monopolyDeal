@@ -130,6 +130,22 @@ export interface MultiplayerActionPayload {
   sessionToken: string;
   action: Action;
   expectedRevision?: number;
+  clientStateVersion?: number;
+  actionId?: string;
+}
+
+export type MultiplayerActionRejectedReason =
+  | 'stale_state'
+  | 'not_your_turn'
+  | 'invalid_action'
+  | 'prompt_mismatch';
+
+export interface MultiplayerActionRejectedResponse {
+  error: 'action_rejected';
+  reason: MultiplayerActionRejectedReason;
+  serverStateVersion: number;
+  requiresResync: boolean;
+  message?: string;
 }
 
 export interface MultiplayerRoomEventEnvelope {

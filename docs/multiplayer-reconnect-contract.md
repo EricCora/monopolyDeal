@@ -70,6 +70,16 @@ stateDiagram-v2
 - Stale terminal failures (`room_not_found`, `reconnect_expired`) clear session state and stop retry.
 - Budget exhaustion transitions client UI to `resume_failed` and stops auto-retry until a successful refresh/join/host flow resets state.
 
+## Push Bootstrap Fallback (LAN/Safari hardening)
+
+- Client enters `pushState='connecting'` while opening the SSE room stream.
+- Server emits an immediate `room_update` bootstrap frame (`reason='stream_bootstrap'`) when SSE opens.
+- If SSE does not emit `onOpen` within `5_000ms`, client closes that stream and switches to polling fallback.
+- Lobby status pill must settle to either:
+  - `Live updates active`, or
+  - `Live updates unavailable, using polling`.
+- Client must never remain indefinitely in `Connecting live updates`.
+
 ## Duplicate Reconnect Policy
 
 - If two active clients attempt reconnect for the same seat:
@@ -159,6 +169,40 @@ MD-C03 implementation note:
   - `mp:player_timed_out`
 - Optional envelope fields (`seatId`, `displayName`, `graceExpiresAt`) are included when available.
 
+### Action Submit (Version Guard v1)
+
+```ts
+{
+  roomCode: string,
+  seatId?: string,
+  resumeToken?: string,
+  // Compatibility:
+  playerId?: string,
+  sessionToken?: string,
+  action: Action,
+  expectedRevision?: number,
+  clientStateVersion?: number,
+  actionId?: string
+}
+```
+
+### Action Rejected (Version Guard v1)
+
+```ts
+{
+  error: 'action_rejected',
+  reason: 'stale_state' | 'not_your_turn' | 'invalid_action' | 'prompt_mismatch',
+  serverStateVersion: number,
+  requiresResync: boolean,
+  message?: string
+}
+```
+
+MD-C09 implementation note:
+- `stale_state` responses include `requiresResync=true`.
+- Client immediately enters `resync_pending`, refreshes authoritative room state, then returns to connected flow.
+- Duplicate `actionId` retries are idempotent (first apply wins; duplicate retries do not double-apply).
+
 ## Failure Modes and User Outcomes
 
 | Failure | Server outcome | Client/UI outcome |
@@ -168,6 +212,7 @@ MD-C03 implementation note:
 | Room closed/not found | Reject resume (`room_closed`/`seat_not_found`) | `room_ended`, route to host/join flow |
 | Retry budget exhausted | No valid resume | `resume_failed`, allow retry/refresh/rejoin |
 | Version mismatch | Resume accepted with resync required | `resync_pending` until snapshot applied |
+| Stale action submit (`MD-C09`) | Reject with `action_rejected(reason=stale_state)` | Client auto-resyncs and resumes without manual rejoin |
 
 ### Server Status Mapping (Reconnect-v1)
 

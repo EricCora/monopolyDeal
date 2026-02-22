@@ -36,16 +36,17 @@ This tracker supersedes the prior deep-research execution tracker and follows:
 | MD-C05 | Auto-reconnect retry/backoff | MD-C02, MD-C03, MD-C04 | `in_progress` | `@unassigned` | `src/app/useMultiplayerRoom.ts`, `src/test/use-multiplayer-room.test.tsx`, `src/test/multiplayer-screen.test.tsx` |
 | MD-C06 | Resume handshake + seat rebind | MD-C02, MD-C03, MD-C05 | `in_progress` | `@unassigned` | `apps/server/src/index.ts`, `apps/server/src/gameService.ts`, `packages/shared/multiplayer.ts`, `src/network/multiplayerClient.ts`, `src/network/multiplayerTypes.ts`, `src/test/multiplayer-client.test.ts`, `src/test/multiplayer-room-service.test.ts` |
 | MD-C07 | Authoritative full-state resync | MD-C06, MD-C04 | `in_progress` | `@unassigned` | `src/app/useMultiplayerRoom.ts`, `apps/server/src/index.ts`, `packages/shared/multiplayer.ts`, `src/network/multiplayerTypes.ts`, `src/test/use-multiplayer-room.test.tsx`, `src/test/multiplayer-screen.test.tsx` |
-| MD-C08 | Prompt/turn-phase correctness post-reconnect | MD-C07 | `pending` | `@unassigned` | `src/ui/screens/GameTableScreen.tsx`, `src/app/useMultiplayerRoom.ts`, `src/engine/*` |
-| MD-C09 | State-version guard + stale action recovery | MD-C06, MD-C07 | `pending` | `@unassigned` | `apps/server/src/gameService.ts`, `src/app/useMultiplayerRoom.ts` |
+| MD-C08 | Prompt/turn-phase correctness post-reconnect | MD-C07 | `in_progress` | `@unassigned` | `src/App.tsx`, `src/ui/screens/GameTableScreen.tsx`, `src/app/useMultiplayerRoom.ts`, `src/test/use-multiplayer-room.test.tsx`, `src/test/multiplayer-screen.test.tsx` |
+| MD-C09 | State-version guard + stale action recovery | MD-C06, MD-C07 | `in_progress` | `@unassigned` | `packages/shared/multiplayer.ts`, `apps/server/src/gameService.ts`, `apps/server/src/index.ts`, `src/network/multiplayerTypes.ts`, `src/network/multiplayerClient.ts`, `src/app/useMultiplayerRoom.ts`, `src/test/multiplayer-room-service.test.ts`, `src/test/use-multiplayer-room.test.tsx`, `src/test/multiplayer-client.test.ts` |
 | MD-C10 | Host disconnect timeout policy (pause/end) | MD-C03, MD-C04, MD-C06 | `pending` | `@unassigned` | `apps/server/src/gameService.ts`, `src/ui/screens/MultiplayerScreen.tsx` |
 | MD-C11 | Automated reconnect/resync scenario suite | MD-C03..MD-C10 | `pending` | `@unassigned` | `src/test/multiplayer-room-service.test.ts`, `src/test/use-multiplayer-room.test.tsx`, `src/test/multiplayer-screen.test.tsx`, `src/test/app.test.tsx` |
-| MD-C12 | Telemetry + diagnostics stubs and rollout guardrails | MD-C04, MD-C05, MD-C06, MD-C07, MD-C09 | `in_progress` | `@unassigned` | `src/stats/types.ts`, `src/app/useMultiplayerRoom.ts`, `apps/server/src/index.ts`, `docs/obs/LOGGING.md` |
+| MD-C12 | Telemetry + diagnostics stubs and rollout guardrails | MD-C04, MD-C05, MD-C06, MD-C07, MD-C09 | `in_progress` | `@unassigned` | `src/stats/types.ts`, `src/app/useMultiplayerRoom.ts`, `apps/server/src/index.ts`, `src/test/use-multiplayer-room.test.tsx`, `src/test/multiplayer-screen.test.tsx`, `docs/obs/LOGGING.md` |
 
 ### Decision Log
 
 - `2026-02-21`: C02 API = Additive Alias (`seatId`/`resumeToken` + legacy compatibility fields).
 - `2026-02-21`: Reconnect grace default = `90_000ms` configurable when reconnect-v1 is enabled.
+- `2026-02-22`: SSE live-updates now emit immediate `stream_bootstrap` frame on subscribe open to reduce false polling fallback on LAN/Safari.
 
 ## Stage Checklist
 

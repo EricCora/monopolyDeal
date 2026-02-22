@@ -1,5 +1,6 @@
 import type { Action } from '../engine';
 import type {
+  MultiplayerActionRejectedResponse,
   MultiplayerCheckpointSummary,
   MultiplayerReaction,
   MultiplayerResumeRoomResponse,
@@ -37,6 +38,7 @@ export interface MultiplayerFeatureFlags {
   multiplayerReactionsEnabled: boolean;
   mpReconnectV1Enabled: boolean;
   mpReconnectV1UiEnabled: boolean;
+  mpVersionGuardV1Enabled: boolean;
 }
 
 export interface MultiplayerLanOriginsResponse {
@@ -64,6 +66,7 @@ export function resolveMultiplayerFeatureFlags(): MultiplayerFeatureFlags {
     multiplayerReactionsEnabled: import.meta.env.VITE_MULTIPLAYER_REACTIONS_ENABLED !== 'false',
     mpReconnectV1Enabled: import.meta.env.VITE_MP_RECONNECT_V1 === 'true',
     mpReconnectV1UiEnabled: import.meta.env.VITE_MP_RECONNECT_V1_UI === 'true',
+    mpVersionGuardV1Enabled: import.meta.env.VITE_MP_VERSION_GUARD_V1 === 'true',
   };
 }
 
@@ -93,6 +96,11 @@ export function multiplayerErrorMessage(code: string): string {
   if (code === 'host_required') return 'Only the host can start this room.';
   if (code === 'room_paused') return 'The host paused this match.';
   if (code === 'revision_conflict') return 'Room state changed. Refreshing now.';
+  if (code === 'action_rejected') return 'Action no longer applies to the latest room state. Syncing now.';
+  if (code === 'stale_state') return 'Room state changed. Syncing to latest state now.';
+  if (code === 'not_your_turn') return 'It is no longer your turn to act.';
+  if (code === 'prompt_mismatch') return 'That prompt changed before your action was processed.';
+  if (code === 'invalid_action') return 'That action is no longer valid in the current room state.';
   if (code === 'no_turn_snapshot') return 'No undo snapshots are available for this turn.';
   if (code === 'checkpoint_slots_full') return 'Checkpoint slots are full. Delete one and try again.';
   if (code === 'checkpoint_not_found') return 'Checkpoint not found. Refresh the room and try again.';
@@ -111,7 +119,13 @@ async function parseJson<T>(response: Response): Promise<T> {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = typeof payload?.error === 'string' ? payload.error : 'request_failed';
-    throw new Error(message);
+    const error = new Error(message) as Error & {
+      details?: MultiplayerActionRejectedResponse | Record<string, unknown>;
+    };
+    if (payload && typeof payload === 'object') {
+      error.details = payload as MultiplayerActionRejectedResponse | Record<string, unknown>;
+    }
+    throw error;
   }
   return payload as T;
 }
@@ -256,6 +270,10 @@ export async function applyMultiplayerAction(
   action: Action,
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
+  options?: {
+    clientStateVersion?: number;
+    actionId?: string;
+  },
 ): Promise<void> {
   await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/action`, {
     method: 'POST',
@@ -265,6 +283,8 @@ export async function applyMultiplayerAction(
       sessionToken: session.sessionToken,
       action,
       expectedRevision,
+      clientStateVersion: options?.clientStateVersion,
+      actionId: options?.actionId,
     }),
   });
 }

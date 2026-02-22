@@ -340,6 +340,53 @@ describe('multiplayer room service lifecycle', () => {
     expect(JSON.stringify(room.game)).toBe(gameSnapshotBefore);
   });
 
+  it('rejects stale clientStateVersion under version-guarded action mode', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+
+    const currentView = roomView(room, session.playerId, session.sessionToken);
+    const nextAction = currentView.legalActions.find((entry) => entry.action.type === 'draw_cards')?.action ?? currentView.legalActions[0]?.action;
+    expect(nextAction).toBeDefined();
+    if (!nextAction) throw new Error('missing legal action');
+
+    const revisionBefore = room.revision;
+    const gameSnapshotBefore = JSON.stringify(room.game);
+    expect(() => applyRoomAction(room, session.playerId, session.sessionToken, nextAction, undefined, {
+      clientStateVersion: room.revision - 1,
+      actionId: 'stale-action-1',
+    })).toThrowError('stale_state');
+    expect(room.revision).toBe(revisionBefore);
+    expect(JSON.stringify(room.game)).toBe(gameSnapshotBefore);
+  });
+
+  it('dedupes repeated actionId submissions so duplicate retries do not double-apply', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    joinRoom(room, 'Player 2');
+    startRoom(room, session.playerId, session.sessionToken);
+
+    const currentView = roomView(room, session.playerId, session.sessionToken);
+    const nextAction = currentView.legalActions.find((entry) => entry.action.type === 'draw_cards')?.action ?? currentView.legalActions[0]?.action;
+    expect(nextAction).toBeDefined();
+    if (!nextAction) throw new Error('missing legal action');
+
+    applyRoomAction(room, session.playerId, session.sessionToken, nextAction, undefined, {
+      clientStateVersion: room.revision,
+      actionId: 'dedupe-action-1',
+    });
+    const revisionAfterFirst = room.revision;
+    const gameSnapshotAfterFirst = JSON.stringify(room.game);
+
+    expect(() => applyRoomAction(room, session.playerId, session.sessionToken, nextAction, undefined, {
+      clientStateVersion: 0,
+      actionId: 'dedupe-action-1',
+    })).not.toThrow();
+    expect(room.revision).toBe(revisionAfterFirst);
+    expect(JSON.stringify(room.game)).toBe(gameSnapshotAfterFirst);
+  });
+
   it('reassigns host back to the original host after reconnect', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');

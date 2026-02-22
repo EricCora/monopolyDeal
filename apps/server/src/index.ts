@@ -32,6 +32,8 @@ import { DisconnectTimerRegistry, disconnectTimerKey } from './disconnectTimers.
 import { loadSnapshots, saveSnapshots } from './persistence/snapshots.ts';
 import type { PlayerId } from '../../../src/engine/index.ts';
 import type {
+  ActionRejectedReason,
+  ActionRejectedResponse,
   MultiplayerReaction,
   MultiplayerRoomEventEnvelope,
   ResumeResultStatus,
@@ -49,6 +51,7 @@ const PORT = Number(process.env.PORT ?? 8787);
 const MULTIPLAYER_PUSH_ENABLED = process.env.MULTIPLAYER_PUSH_ENABLED !== 'false';
 const MULTIPLAYER_REACTIONS_ENABLED = process.env.MULTIPLAYER_REACTIONS_ENABLED !== 'false';
 const MP_RECONNECT_V1_ENABLED = process.env.MP_RECONNECT_V1 === 'true';
+const MP_VERSION_GUARD_V1_ENABLED = process.env.MP_VERSION_GUARD_V1 === 'true';
 const SSE_HEARTBEAT_MS = 25_000;
 
 const rooms = new Map<string, MultiplayerRoom>();
@@ -68,6 +71,7 @@ const reconnectCounters = {
   resume_success_total: 0,
   resume_failure_total: 0,
   disconnect_timeout_total: 0,
+  stale_action_reject_total: 0,
 };
 
 type SessionIdentity = {
@@ -117,6 +121,24 @@ function mapReconnectErrorToStatus(code: string): ResumeResultStatus {
   if (code === 'revision_conflict') return 'protocol_mismatch';
   if (code === 'room_not_found') return 'room_closed';
   return 'invalid_token';
+}
+
+function mapActionErrorToRejectedReason(code: string): ActionRejectedReason {
+  if (code === 'stale_state' || code === 'revision_conflict') return 'stale_state';
+  if (code === 'not_your_turn' || code === 'invalid_turn' || code === 'player_action_mismatch') return 'not_your_turn';
+  if (code === 'unresolved_pending') return 'prompt_mismatch';
+  return 'invalid_action';
+}
+
+function isActionRejectionCandidate(code: string): boolean {
+  return code === 'stale_state'
+    || code === 'revision_conflict'
+    || code === 'not_your_turn'
+    || code === 'invalid_turn'
+    || code === 'illegal_action'
+    || code === 'invalid_action'
+    || code === 'unresolved_pending'
+    || code === 'player_action_mismatch';
 }
 
 function listLanOrigins(uiPort: number): string[] {
@@ -309,6 +331,16 @@ function openEventStream(
     }, SSE_HEARTBEAT_MS),
   };
   addEventStreamClient(room.code, client);
+
+  // Emit an immediate bootstrap frame so clients/proxies can confirm stream readiness
+  // without waiting for the first room mutation or heartbeat.
+  writeSseEvent(client, {
+    roomCode: room.code,
+    revision: room.revision,
+    reason: 'stream_bootstrap',
+    serverTime: Date.now(),
+    eventId: room.revision,
+  });
 
   if (room.revision > lastEventId) {
     writeSseEvent(client, {
@@ -568,6 +600,8 @@ createServer(async (req, res) => {
       playerId?: unknown;
       sessionToken?: unknown;
       action?: unknown;
+      clientStateVersion?: unknown;
+      actionId?: unknown;
       seed?: unknown;
       name?: unknown;
       checkpointId?: unknown;
@@ -701,9 +735,52 @@ createServer(async (req, res) => {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      applyRoomAction(room, playerId, sessionToken, payload.action, expectedRevision);
-      snapshotAll();
-      broadcastRoomEvent(room, 'action');
+      const clientStateVersion = payload.clientStateVersion;
+      const actionId = optionalTrimmedString(payload.actionId);
+      if (!isOptionalNonNegativeInteger(clientStateVersion)) {
+        writeJson(res, 400, { error: 'invalid_payload' });
+        return;
+      }
+      const revisionBeforeAction = room.revision;
+      try {
+        applyRoomAction(
+          room,
+          playerId,
+          sessionToken,
+          payload.action,
+          expectedRevision,
+          MP_VERSION_GUARD_V1_ENABLED
+            ? {
+                clientStateVersion,
+                actionId,
+              }
+            : {},
+        );
+      } catch (actionError) {
+        const code = actionError instanceof Error ? actionError.message : 'server_error';
+        if (MP_VERSION_GUARD_V1_ENABLED && isActionRejectionCandidate(code)) {
+          const reason = mapActionErrorToRejectedReason(code);
+          if (reason === 'stale_state') {
+            reconnectCounters.stale_action_reject_total += 1;
+          }
+          const response: ActionRejectedResponse = {
+            error: 'action_rejected',
+            reason,
+            serverStateVersion: room.revision,
+            requiresResync: reason === 'stale_state',
+          };
+          console.info(
+            `[mp][action_rejected] room=${room.code} seat=${playerId} reason=${reason} serverStateVersion=${room.revision}`,
+          );
+          writeJson(res, 409, response);
+          return;
+        }
+        throw actionError;
+      }
+      if (room.revision !== revisionBeforeAction) {
+        snapshotAll();
+        broadcastRoomEvent(room, 'action');
+      }
       writeJson(res, 200, { ok: true });
       return;
     }

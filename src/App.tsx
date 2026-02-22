@@ -279,6 +279,8 @@ function App() {
   const multiplayerFinishedMetricRef = useRef<string | null>(null);
   const multiplayerChatLastSeenRef = useRef(0);
   const multiplayerTypingSentRef = useRef(false);
+  const multiplayerPromptContextRef = useRef<{ revision: number; signature: string } | null>(null);
+  const multiplayerPromptSoftLockRef = useRef<string | null>(null);
   const deepLinkHandledRef = useRef(false);
 
   useEffect(() => {
@@ -366,6 +368,7 @@ function App() {
   const multiplayerReactionsEnabled = uiPreferences.experimental.multiplayerReactionsEnabled && runtimeFeatureFlags.multiplayerReactionsEnabled;
   const multiplayerReconnectV1Enabled = runtimeFeatureFlags.mpReconnectV1Enabled;
   const multiplayerReconnectV1UiEnabled = runtimeFeatureFlags.mpReconnectV1UiEnabled;
+  const multiplayerVersionGuardV1Enabled = runtimeFeatureFlags.mpVersionGuardV1Enabled;
   const {
     apiBase: multiplayerApiBase,
     isLocalDevApi: multiplayerIsLocalDevApi,
@@ -413,6 +416,7 @@ function App() {
     reactionsEnabled: multiplayerReactionsEnabled,
     reconnectV1Enabled: multiplayerReconnectV1Enabled,
     reconnectV1UiEnabled: multiplayerReconnectV1UiEnabled,
+    versionGuardV1Enabled: multiplayerVersionGuardV1Enabled,
     onMetricEvent: recordGrowthMetric,
   });
 
@@ -779,6 +783,40 @@ function App() {
     uiPreferences.experimental.aiCoach,
     uiPreferences.experimental.aiOpponents,
   ]);
+  const resetMultiplayerInteractionState = useCallback(() => {
+    setChooser(null);
+    setSelectedCardId(null);
+    setSelectedPaymentCards([]);
+    setForcedDealSelection(null);
+    setRiskyActionConfirmation((current) => (current?.mode === 'multiplayer' ? null : current));
+  }, []);
+  const multiplayerPromptPendingSignature = useMemo(() => {
+    if (!multiplayerRoomView?.started || !multiplayerGame || !multiplayerPrompt) return null;
+    const pendingKind = multiplayerGame.pending?.kind ?? 'none';
+    const pendingTargetPlayerId = multiplayerGame.pending?.kind === 'payment'
+      ? multiplayerGame.pending.payload.targetPlayerId
+      : '';
+    return [
+      multiplayerPrompt.playerId,
+      multiplayerPrompt.kind,
+      pendingKind,
+      pendingTargetPlayerId,
+      multiplayerGame.turn.phase,
+      String(multiplayerGame.turn.playsUsed),
+      String(multiplayerLegalActions.length),
+    ].join('|');
+  }, [multiplayerGame, multiplayerLegalActions.length, multiplayerPrompt, multiplayerRoomView?.started]);
+  const multiplayerPromptSoftLockActive = useMemo(() => {
+    if (screen !== 'multiplayer') return false;
+    if (!multiplayerRoomView?.started || !multiplayerPrompt || !multiplayerGame) return false;
+    const isMandatoryPrompt = multiplayerPrompt.kind === 'payment'
+      || multiplayerPrompt.kind === 'selection'
+      || multiplayerPrompt.kind === 'response'
+      || multiplayerPrompt.kind === 'discard';
+    if (!isMandatoryPrompt) return false;
+    if (multiplayerPrompt.playerId !== multiplayerRoomView.yourPlayerId) return false;
+    return multiplayerLegalActions.length === 0;
+  }, [multiplayerGame, multiplayerLegalActions.length, multiplayerPrompt, multiplayerRoomView, screen]);
 
   useEffect(() => {
     if (screen !== 'multiplayer' || !multiplayerRoomView || !multiplayerGame) return;
@@ -796,9 +834,7 @@ function App() {
     const promptKind = multiplayerPrompt?.kind;
     if (screen !== 'multiplayer') return;
     if (!yourPlayerId || !promptPlayerId || !promptKind) {
-      setChooser(null);
-      setSelectedCardId(null);
-      setSelectedPaymentCards([]);
+      resetMultiplayerInteractionState();
       return;
     }
 
@@ -816,7 +852,52 @@ function App() {
     multiplayerPrompt?.kind,
     multiplayerPrompt?.playerId,
     multiplayerRoomView?.yourPlayerId,
+    resetMultiplayerInteractionState,
     screen,
+  ]);
+
+  useEffect(() => {
+    if (screen !== 'multiplayer' || !multiplayerRoomView?.started || !multiplayerPromptPendingSignature) {
+      multiplayerPromptContextRef.current = null;
+      return;
+    }
+    const nextContext = {
+      revision: multiplayerRoomView.revision,
+      signature: multiplayerPromptPendingSignature,
+    };
+    const previousContext = multiplayerPromptContextRef.current;
+    if (!previousContext) {
+      multiplayerPromptContextRef.current = nextContext;
+      return;
+    }
+    if (previousContext.revision !== nextContext.revision && previousContext.signature !== nextContext.signature) {
+      resetMultiplayerInteractionState();
+    }
+    multiplayerPromptContextRef.current = nextContext;
+  }, [
+    multiplayerPromptPendingSignature,
+    multiplayerRoomView?.revision,
+    multiplayerRoomView?.started,
+    resetMultiplayerInteractionState,
+    screen,
+  ]);
+
+  useEffect(() => {
+    if (!multiplayerPromptSoftLockActive || !multiplayerRoomView) {
+      multiplayerPromptSoftLockRef.current = null;
+      return;
+    }
+    const key = `${multiplayerRoomView.revision}:${multiplayerPromptPendingSignature ?? 'unknown'}`;
+    if (multiplayerPromptSoftLockRef.current === key) return;
+    multiplayerPromptSoftLockRef.current = key;
+    setMultiplayerError('Prompt sync mismatch detected. Refreshing room state.');
+    void refreshMultiplayerRoom();
+  }, [
+    multiplayerPromptPendingSignature,
+    multiplayerPromptSoftLockActive,
+    multiplayerRoomView,
+    refreshMultiplayerRoom,
+    setMultiplayerError,
   ]);
 
   useEffect(() => {
@@ -1805,6 +1886,7 @@ function App() {
           multiplayerConnectionState={multiplayerConnectionState}
           multiplayerConnectionUiState={multiplayerConnectionUiState}
           reconnectUiEnabled={multiplayerReconnectV1UiEnabled}
+          forceInputBlocked={multiplayerPromptSoftLockActive}
           playerConnectionById={multiplayerConnectionByPlayerId}
           isMultiplayerHost={multiplayerIsHost}
           checkpointSlots={multiplayerRoomView.checkpointSlots}

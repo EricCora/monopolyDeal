@@ -40,10 +40,12 @@ Server-side counters/log markers:
 - `resume_success_total`
 - `resume_failure_total`
 - `disconnect_timeout_total`
+- `stale_action_reject_total`
 - Log markers:
   - `[mp][resume_request]`
   - `[mp][resume_result]`
   - `[mp][disconnect_timeout]`
+  - `[mp][action_rejected]`
 
 `[mp][resume_result]` status taxonomy (reconnect-v1):
 
@@ -58,6 +60,14 @@ Redaction rule:
 
 - Never log raw `resumeToken` values.
 - Use masked token format only (for example: `ab***yz`).
+
+Push bootstrap fallback note:
+
+- Client applies a 5s SSE-open timeout guard.
+- Server now emits an immediate `room_update` bootstrap frame (`reason=stream_bootstrap`) at stream open to avoid false idle-connect timeouts.
+- If push stream bootstrap does not open in time, client transitions to polling fallback and emits:
+  - `multiplayer_push_disconnected`
+  - `multiplayer_push_fallback` (once per session fallback entry)
 
 ## Boundaries
 

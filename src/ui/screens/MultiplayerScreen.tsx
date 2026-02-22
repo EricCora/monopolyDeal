@@ -511,7 +511,9 @@ export function MultiplayerScreen({
                 </span>
               </div>
             </div>
-            <p className="multiplayer-room-rejoin">Rejoin window: {deadlineLabel(session.reconnectDeadlineMs)}</p>
+            <p className="multiplayer-room-rejoin">
+              Rejoin window: {deadlineLabel(roomView?.reconnectDeadlineMs ?? session.reconnectDeadlineMs)}
+            </p>
             <div className="multiplayer-room-actions-grid">
               <div className="multiplayer-room-action-group">
                 <p className="multiplayer-room-action-label">Invite</p>

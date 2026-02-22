@@ -337,6 +337,36 @@ describe('MultiplayerScreen', () => {
     expect(screen.getByText(/connection lost\. attempting automatic reconnect/i)).toBeInTheDocument();
   });
 
+  it('renders polling fallback status when live-update bootstrap does not connect', () => {
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          session: makeSession(),
+          roomView: makeLobbyView(),
+          connectionState: 'connected',
+          pushState: 'fallback',
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/live updates unavailable, using polling/i)).toBeInTheDocument();
+  });
+
+  it('renders connected live-updates status when stream is active', () => {
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          session: makeSession(),
+          roomView: makeLobbyView(),
+          connectionState: 'connected',
+          pushState: 'connected',
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/live updates active/i)).toBeInTheDocument();
+  });
+
   it('disables actionable lobby controls while reconnect ui is blocking input', () => {
     render(
       <MultiplayerScreen

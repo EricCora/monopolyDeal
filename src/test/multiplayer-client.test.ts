@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  applyMultiplayerAction,
   isLanResolvableHost,
   listMultiplayerLanOrigins,
   multiplayerErrorMessage,
@@ -183,5 +184,46 @@ describe('reconnectMultiplayerRoom response compatibility', () => {
       expect(response.status).toBe('ok');
       expect(response.snapshot?.revision).toBe(3);
     }
+  });
+});
+
+describe('applyMultiplayerAction action_rejected error details', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('surfaces structured rejection details for stale-state recovery', async () => {
+    const session = {
+      version: 1 as const,
+      roomCode: 'ABCDE',
+      seatId: 'p1',
+      resumeToken: 'token-1',
+      playerId: 'p1',
+      sessionToken: 'token-1',
+      playerName: 'Host',
+      reconnectDeadlineMs: Date.now() + 30_000,
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        error: 'action_rejected',
+        reason: 'stale_state',
+        serverStateVersion: 12,
+        requiresResync: true,
+      }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(applyMultiplayerAction(session, { type: 'draw_cards', playerId: 'p1' }, 'http://localhost:8787'))
+      .rejects
+      .toMatchObject({
+        message: 'action_rejected',
+        details: {
+          reason: 'stale_state',
+          serverStateVersion: 12,
+          requiresResync: true,
+        },
+      });
   });
 });

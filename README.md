@@ -221,15 +221,19 @@ For reconnect/resume implementation details and execution tracking, see `docs/mu
 Optional multiplayer behavior flags:
 
 - `VITE_MULTIPLAYER_PUSH_ENABLED` (`true` by default) to enable client push subscriptions.
+  - Server sends an immediate stream bootstrap event so healthy live-updates connections confirm quickly (especially in LAN/Safari paths).
+  - Client push bootstrap has a 5s open-timeout guard; if live updates still do not establish, UI falls back to polling automatically.
 - `VITE_MULTIPLAYER_REACTIONS_ENABLED` (`true` by default) to enable quick reactions.
 - `VITE_MP_RECONNECT_V1` (`false` by default) to enable reconnect-v1 canonical seat/token client behavior.
   - When enabled, client reconnect uses a bounded retry loop (immediate attempt, then jittered exponential backoff up to 8s, with a 30s total budget).
   - Reconnect-v1 handshake returns explicit resume statuses and (on success) an authoritative room snapshot for immediate resync.
 - `VITE_MP_RECONNECT_V1_UI` (`false` by default) to enable reconnect-v1 UI state scaffolding.
+- `VITE_MP_VERSION_GUARD_V1` (`false` by default) to enable stale-action rejection handling + auto-resync on the client.
 - `MULTIPLAYER_PUSH_ENABLED` (`true` by default) to enable server event stream endpoint.
 - `MULTIPLAYER_REACTIONS_ENABLED` (`true` by default) to enable server reaction endpoint.
 - `MP_RECONNECT_V1` (`false` by default) to enable reconnect-v1 canonical seat/token server behavior.
 - `MP_RECONNECT_GRACE_MS` (`90000` default when reconnect-v1 is enabled) to configure reconnect-v1 grace duration.
+- `MP_VERSION_GUARD_V1` (`false` by default) to enable server-side stale-action guards (`action_rejected` with stale-state recovery hints).
 
 For local multiplayer development, the backend service is required.
 Use the one-command startup:

@@ -126,6 +126,22 @@ export type LeaveRoomRequest = ReconnectRoomRequest;
 
 export interface ApplyRoomActionRequest extends ReconnectRoomRequest {
   action: Action;
+  clientStateVersion?: number;
+  actionId?: string;
+}
+
+export type ActionRejectedReason =
+  | 'stale_state'
+  | 'not_your_turn'
+  | 'invalid_action'
+  | 'prompt_mismatch';
+
+export interface ActionRejectedResponse {
+  error: 'action_rejected';
+  reason: ActionRejectedReason;
+  serverStateVersion: number;
+  requiresResync: boolean;
+  message?: string;
 }
 
 export interface SaveCheckpointRequest extends ReconnectRoomRequest {

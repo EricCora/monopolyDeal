@@ -25,6 +25,7 @@ import {
   undoMultiplayerRoomAction,
 } from '../network/multiplayerClient';
 import type {
+  MultiplayerActionRejectedReason,
   MultiplayerCheckpointSummary,
   MultiplayerConnectionState,
   MultiplayerConnectionUiState,
@@ -44,6 +45,7 @@ interface UseMultiplayerRoomOptions {
   reactionsEnabled?: boolean;
   reconnectV1Enabled?: boolean;
   reconnectV1UiEnabled?: boolean;
+  versionGuardV1Enabled?: boolean;
   onMetricEvent?: (event: GrowthMetricEvent) => void;
 }
 
@@ -59,6 +61,7 @@ const RECONNECT_BACKOFF_BASE_MS = 500;
 const RECONNECT_BACKOFF_MAX_MS = 8_000;
 const RECONNECT_JITTER_RATIO = 0.2;
 const RECONNECT_TOTAL_BUDGET_MS = 30_000;
+const PUSH_CONNECT_TIMEOUT_MS = 5_000;
 
 export function isTransportReconnectableError(code: string): boolean {
   return code === 'request_failed' || code === 'network_unavailable';
@@ -85,6 +88,36 @@ function sanitizeName(input: string): string {
 
 function sanitizeRoomCode(input: string): string {
   return input.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+}
+
+function createClientActionId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+interface ActionRejectedErrorPayload {
+  error: 'action_rejected';
+  reason: MultiplayerActionRejectedReason;
+  serverStateVersion: number;
+  requiresResync: boolean;
+  message?: string;
+}
+
+function parseActionRejectedError(error: unknown): ActionRejectedErrorPayload | null {
+  if (!(error instanceof Error) || error.message !== 'action_rejected') return null;
+  const details = (error as Error & { details?: unknown }).details;
+  if (!details || typeof details !== 'object') return null;
+  const payload = details as Partial<ActionRejectedErrorPayload>;
+  if (payload.error !== 'action_rejected') return null;
+  if (
+    payload.reason !== 'stale_state'
+    && payload.reason !== 'not_your_turn'
+    && payload.reason !== 'invalid_action'
+    && payload.reason !== 'prompt_mismatch'
+  ) {
+    return null;
+  }
+  if (!Number.isFinite(payload.serverStateVersion) || typeof payload.requiresResync !== 'boolean') return null;
+  return payload as ActionRejectedErrorPayload;
 }
 
 function loadStoredSession(): MultiplayerSession | null {
@@ -202,6 +235,7 @@ export function useMultiplayerRoom({
   reactionsEnabled = true,
   reconnectV1Enabled = false,
   reconnectV1UiEnabled = false,
+  versionGuardV1Enabled = false,
   onMetricEvent,
 }: UseMultiplayerRoomOptions) {
   const [apiBase] = useState(() => getMultiplayerApiBase());
@@ -327,13 +361,7 @@ export function useMultiplayerRoom({
     reconnectAutoRetryBlockedRef.current = false;
     clearError();
     setRecoveryNotice(null);
-    const nextSession: MultiplayerSession = {
-      ...activeSession,
-      reconnectDeadlineMs: loaded.reconnectDeadlineMs,
-    };
-    setSession(nextSession);
-    saveStoredSession(nextSession);
-    return nextSession;
+    return activeSession;
   }, [clearError]);
 
   const refreshRoom = useCallback(async (activeSession?: MultiplayerSession | null): Promise<MultiplayerRoomView | null> => {
@@ -821,16 +849,64 @@ export function useMultiplayerRoom({
     setLoading(true);
     clearError();
     try {
-      await applyMultiplayerAction(current, selected.action, apiBase, expectedRevision);
+      await applyMultiplayerAction(
+        current,
+        selected.action,
+        apiBase,
+        expectedRevision,
+        versionGuardV1Enabled
+          ? {
+              clientStateVersion: roomView.revision,
+              actionId: createClientActionId(),
+            }
+          : undefined,
+      );
       await refreshRoom(current);
     } catch (actionError) {
+      const actionRejected = parseActionRejectedError(actionError);
+      if (versionGuardV1Enabled && actionRejected) {
+        if (actionRejected.reason === 'stale_state' || actionRejected.requiresResync) {
+          if (reconnectV1UiEnabled) {
+            setConnectionUiStateOverride('resync_pending');
+          }
+          onMetricEvent?.('multiplayer_resync_started');
+          try {
+            await refreshRoom(current);
+            if (reconnectV1UiEnabled) {
+              setRecoveredUiState();
+            }
+          } catch (resyncError) {
+            const resyncCode = resyncError instanceof Error ? resyncError.message : 'request_failed';
+            setErrorFromCode(resyncCode);
+            await refreshOnRevisionConflict(resyncCode, current);
+          } finally {
+            onMetricEvent?.('multiplayer_resync_completed');
+          }
+          return;
+        }
+        setErrorFromCode(actionRejected.reason);
+        return;
+      }
       const code = actionError instanceof Error ? actionError.message : 'request_failed';
       setErrorFromCode(code);
       await refreshOnRevisionConflict(code, current);
     } finally {
       setLoading(false);
     }
-  }, [apiBase, clearError, expectedRevision, refreshOnRevisionConflict, refreshRoom, roomView, session, setErrorFromCode]);
+  }, [
+    apiBase,
+    clearError,
+    expectedRevision,
+    onMetricEvent,
+    reconnectV1UiEnabled,
+    refreshOnRevisionConflict,
+    refreshRoom,
+    roomView,
+    session,
+    setErrorFromCode,
+    setRecoveredUiState,
+    versionGuardV1Enabled,
+  ]);
 
   const setReady = useCallback(async (ready: boolean) => {
     const current = session;
@@ -1114,36 +1190,62 @@ export function useMultiplayerRoom({
     setPushState('connecting');
     let cancelled = false;
     let subscription: { close: () => void } | null = null;
+    let opened = false;
+    let connectTimeoutId: number | null = null;
+    const clearConnectTimeout = () => {
+      if (connectTimeoutId != null) {
+        window.clearTimeout(connectTimeoutId);
+        connectTimeoutId = null;
+      }
+    };
+    const enterPushFallback = () => {
+      if (cancelled) return;
+      setPushState('fallback');
+      onMetricEvent?.('multiplayer_push_disconnected');
+      if (!pushFallbackMetricSentRef.current) {
+        onMetricEvent?.('multiplayer_push_fallback');
+        pushFallbackMetricSentRef.current = true;
+      }
+    };
+    const markPushConnected = () => {
+      if (cancelled || opened) return;
+      opened = true;
+      clearConnectTimeout();
+      setPushState('connected');
+      onMetricEvent?.('multiplayer_push_connected');
+    };
 
     try {
       subscription = subscribeMultiplayerRoomEvents(
         session,
         {
           onOpen: () => {
-            if (cancelled) return;
-            setPushState('connected');
-            onMetricEvent?.('multiplayer_push_connected');
+            markPushConnected();
           },
           onEvent: (event) => {
             if (cancelled) return;
+            // Some environments can deliver room events before an explicit onOpen callback.
+            // Accepting the first event as stream readiness avoids false polling fallback.
+            markPushConnected();
             if (event.eventId <= lastEventIdRef.current) return;
             lastEventIdRef.current = event.eventId;
             refreshFromPush();
           },
           onDisconnect: () => {
-            if (cancelled) return;
-            setPushState('fallback');
-            onMetricEvent?.('multiplayer_push_disconnected');
-            if (!pushFallbackMetricSentRef.current) {
-              onMetricEvent?.('multiplayer_push_fallback');
-              pushFallbackMetricSentRef.current = true;
-            }
+            clearConnectTimeout();
+            enterPushFallback();
           },
         },
         apiBase,
         lastEventIdRef.current,
       );
+      connectTimeoutId = window.setTimeout(() => {
+        if (cancelled || opened) return;
+        subscription?.close();
+        enterPushFallback();
+      }, PUSH_CONNECT_TIMEOUT_MS);
     } catch (pushError) {
+      clearConnectTimeout();
       if (cancelled) return;
       const code = pushError instanceof Error ? pushError.message : 'push_not_supported';
       if (code === 'push_not_supported') {
@@ -1159,6 +1261,7 @@ export function useMultiplayerRoom({
 
     return () => {
       cancelled = true;
+      clearConnectTimeout();
       subscription?.close();
     };
   }, [apiBase, enabled, onMetricEvent, pushEnabled, refreshFromPush, session]);

@@ -57,6 +57,7 @@ interface GameTableScreenProps {
   multiplayerConnectionState?: MultiplayerConnectionState;
   multiplayerConnectionUiState?: MultiplayerConnectionUiState;
   reconnectUiEnabled?: boolean;
+  forceInputBlocked?: boolean;
   playerConnectionById?: Record<string, { connected: boolean; lastSeenAt: number; reconnectDeadlineMs: number }>;
   isMultiplayerHost?: boolean;
   checkpointSlots?: { id: string; name: string; savedAt: number }[];
@@ -116,6 +117,15 @@ interface GameTableScreenProps {
   onRevealTurn: () => void;
   onNavigateHome: () => void;
 }
+
+const RECONNECT_BLOCKING_UI_STATES = new Set<MultiplayerConnectionUiState>([
+  'reconnecting_attempting',
+  'reconnect_handshake_pending',
+  'resync_pending',
+  'resume_failed',
+  'timed_out',
+  'room_ended',
+]);
 
 function colorLabel(color: PropertyColor): string {
   return formatPropertyColor(color);
@@ -370,6 +380,7 @@ export function GameTableScreen({
   multiplayerConnectionState,
   multiplayerConnectionUiState,
   reconnectUiEnabled = false,
+  forceInputBlocked = false,
   playerConnectionById = {},
   isMultiplayerHost = false,
   checkpointSlots = [],
@@ -426,6 +437,14 @@ export function GameTableScreen({
 }: GameTableScreenProps) {
   const over = isGameOver(game);
   const isMultiplayer = mode === 'multiplayer';
+  const multiplayerUiState = multiplayerConnectionUiState ?? 'connected';
+  const reconnectBlockingState = isMultiplayer
+    && (
+      (reconnectUiEnabled && RECONNECT_BLOCKING_UI_STATES.has(multiplayerUiState))
+      || multiplayerConnectionState === 'reconnecting'
+      || multiplayerConnectionState === 'disconnected'
+    );
+  const inputBlocked = isPaused || reconnectBlockingState || forceInputBlocked;
   const drawPileDeckRef = useRef<HTMLDivElement | null>(null);
   const visibleHandZoneByPlayerIdRef = useRef<Record<string, HTMLDivElement | null>>({});
   const handledDrawEventKeyRef = useRef<string | null>(null);
@@ -524,7 +543,7 @@ export function GameTableScreen({
     return map;
   }, [game.pending, legalActions, prompt.kind]);
   const moveWildSourceCardIds = useMemo(() => new Set(moveWildActionsByCard.keys()), [moveWildActionsByCard]);
-  const canDirectWildMove = !isPaused
+  const canDirectWildMove = !inputBlocked
     && !over.done
     && prompt.kind === 'main'
     && !game.pending
@@ -711,21 +730,10 @@ export function GameTableScreen({
     onDeleteCheckpoint(checkpointSlots[index].id);
   };
 
-  const blockingUiStates = new Set<MultiplayerConnectionUiState>([
-    'reconnecting_attempting',
-    'reconnect_handshake_pending',
-    'resync_pending',
-    'resume_failed',
-    'timed_out',
-    'room_ended',
-  ]);
-  const multiplayerUiState = multiplayerConnectionUiState ?? 'connected';
   const showReconnectOverlay = isMultiplayer
     && !over.done
     && (
-      (reconnectUiEnabled && blockingUiStates.has(multiplayerUiState))
-      || multiplayerConnectionState === 'reconnecting'
-      || multiplayerConnectionState === 'disconnected'
+      reconnectBlockingState
     );
 
   const reconnectOverlayTitle = (() => {
@@ -974,10 +982,10 @@ export function GameTableScreen({
               const isCurrent = game.players[game.currentPlayerIndex].id === player.id;
               const isPromptPlayer = prompt.playerId === player.id;
               const handFitMode = isPromptPlayer && prompt.kind === 'draw' ? 'rail' : 'auto';
-              const handInteractive = Boolean(canSeeHand && prompt.playerId === player.id && !over.done && !isPaused);
+              const handInteractive = Boolean(canSeeHand && prompt.playerId === player.id && !over.done && !inputBlocked);
               const isPaymentPayer = pendingPayment?.targetPlayerId === player.id;
-              const paymentSelectionEnabled = Boolean(isPaymentPayer && revealedPlayerId === player.id && !over.done && !isPaused);
-              const selectionCardPickingEnabled = Boolean(prompt.kind === 'selection' && revealedPlayerId === prompt.playerId && !over.done && !isPaused);
+              const paymentSelectionEnabled = Boolean(isPaymentPayer && revealedPlayerId === player.id && !over.done && !inputBlocked);
+              const selectionCardPickingEnabled = Boolean(prompt.kind === 'selection' && revealedPlayerId === prompt.playerId && !over.done && !inputBlocked);
               const requestBanner = isPromptPlayer ? pendingRequestBanner(game, player.id) : null;
               const inlineActions = isPromptPlayer
                 ? (
@@ -1007,7 +1015,7 @@ export function GameTableScreen({
                   && moveWildDestinationColors.has(color);
               });
               const playerStatusTags: string[] = [];
-              if (isPromptPlayer && !over.done && !isPaused) playerStatusTags.push('Acting');
+              if (isPromptPlayer && !over.done && !inputBlocked) playerStatusTags.push('Acting');
               if (isCurrent) playerStatusTags.push('Turn Seat');
               if (isPaymentPayer) playerStatusTags.push('Payment Requested');
               if (selectionCardPickingEnabled) {
@@ -1110,10 +1118,10 @@ export function GameTableScreen({
                                 ) : (
                                   <p className="payment-selected">Click cards in {player.name}&apos;s bank/properties to pay.</p>
                                 )}
-                                <button type="button" onClick={onAutoSelectPayment} disabled={isPaused}>
+                                <button type="button" onClick={onAutoSelectPayment} disabled={inputBlocked}>
                                   Auto-select Payment
                                 </button>
-                                <button type="button" onClick={onSubmitSelectedPayment} disabled={!paymentCanSubmit || isPaused}>
+                                <button type="button" onClick={onSubmitSelectedPayment} disabled={!paymentCanSubmit || inputBlocked}>
                                   {isShortfall ? 'Confirm Shortfall Payment' : 'Confirm Payment'}
                                 </button>
                               </>
@@ -1127,7 +1135,7 @@ export function GameTableScreen({
                           <button
                             key={`inline-${item.label}-${index}`}
                             onClick={() => onRunAction(item.action, item)}
-                            disabled={isPaused}
+                            disabled={inputBlocked}
                           >
                             {item.label}
                             {actionDetailText(item) ? <span className="action-detail">{actionDetailText(item)}</span> : null}
@@ -1140,10 +1148,10 @@ export function GameTableScreen({
 
                       {turnSnapshotsCount > 0 && (prompt.kind === 'main' || prompt.kind === 'discard' || prompt.kind === 'draw') ? (
                         <div className="actions inline-actions">
-                          <button type="button" onClick={onUndoLastPlay} disabled={isPaused}>
+                          <button type="button" onClick={onUndoLastPlay} disabled={inputBlocked}>
                             Undo Last Play
                           </button>
-                          <button type="button" onClick={onResetTurnPlays} disabled={isPaused}>
+                          <button type="button" onClick={onResetTurnPlays} disabled={inputBlocked}>
                             Reset Turn Plays
                           </button>
                         </div>
@@ -1338,7 +1346,7 @@ export function GameTableScreen({
         </div>
       </div>
 
-      {chooser && !isPaused ? (
+      {chooser && !inputBlocked ? (
         <PlayChooser
           cardId={chooser.cardId}
           cardLabel={chooser.cardLabel}
@@ -1352,7 +1360,7 @@ export function GameTableScreen({
         />
       ) : null}
 
-      {shouldShowShield && !over.done && !isPaused ? (
+      {shouldShowShield && !over.done && !inputBlocked ? (
         <div className="shield" role="dialog" aria-modal="true">
           <div className="shield-card card-enter">
             <h3>Pass Device</h3>
