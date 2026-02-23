@@ -4,7 +4,9 @@ import {
   checkMultiplayerHealth,
   createMultiplayerRoom,
   deleteMultiplayerCheckpoint,
+  disconnectMultiplayerSocketTransport,
   getMultiplayerApiBase,
+  getMultiplayerTransportMode,
   joinMultiplayerRoom,
   loadMultiplayerCheckpoint,
   leaveMultiplayerRoom,
@@ -21,6 +23,7 @@ import {
   setMultiplayerTyping,
   setMultiplayerReady,
   startMultiplayerRoom,
+  subscribeMultiplayerTransportMode,
   subscribeMultiplayerRoomEvents,
   undoMultiplayerRoomAction,
 } from '../network/multiplayerClient';
@@ -38,6 +41,7 @@ import type {
   MultiplayerRoomView,
   MultiplayerRoomSessionResponse,
   MultiplayerSession,
+  MultiplayerTransportMode,
 } from '../network/multiplayerTypes';
 import type { GrowthMetricEvent } from '../stats';
 
@@ -60,6 +64,7 @@ export interface MultiplayerReconnectDiagnostics {
   roomCode: string | null;
   seatId: string | null;
   pushState: MultiplayerPushState;
+  transportMode: MultiplayerTransportMode;
   reconnectAttempt: number;
   lastClientVersion: number | null;
   lastServerVersion: number | null;
@@ -258,6 +263,7 @@ export function useMultiplayerRoom({
   const [roomView, setRoomView] = useState<MultiplayerRoomView | null>(null);
   const [connectionState, setConnectionState] = useState<MultiplayerConnectionState>('idle');
   const [pushState, setPushState] = useState<MultiplayerPushState>(pushEnabled ? 'connecting' : 'disabled');
+  const [transportMode, setTransportMode] = useState<MultiplayerTransportMode>(() => getMultiplayerTransportMode());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -344,6 +350,7 @@ export function useMultiplayerRoom({
     setConnectionUiStateOverride(null);
     lastHostPlayerIdRef.current = null;
     lastEventIdRef.current = 0;
+    disconnectMultiplayerSocketTransport();
     saveStoredSession(null);
   }, [clearRecoveredUiTimer, nextSessionOperationVersion, stopReconnectLoop]);
 
@@ -1249,6 +1256,12 @@ export function useMultiplayerRoom({
   }, [apiBase, enabled, onMetricEvent, pushEnabled, refreshFromPush, session]);
 
   useEffect(() => {
+    return subscribeMultiplayerTransportMode((mode) => {
+      setTransportMode(mode);
+    });
+  }, []);
+
+  useEffect(() => {
     if (!enabled || !session) return;
     const effectivePollIntervalMs = pushState === 'connected' ? Math.max(pollIntervalMs, 8_000) : pollIntervalMs;
     const timer = window.setInterval(() => {
@@ -1303,6 +1316,7 @@ export function useMultiplayerRoom({
     roomCode: session?.roomCode ?? null,
     seatId: session?.seatId ?? session?.playerId ?? null,
     pushState,
+    transportMode,
     reconnectAttempt: reconnectLoopAttemptRef.current,
     lastClientVersion: diagnosticsClientVersionRef.current,
     lastServerVersion: roomView?.revision ?? null,
@@ -1313,6 +1327,7 @@ export function useMultiplayerRoom({
   }), [
     errorCode,
     pushState,
+    transportMode,
     roomView?.endedReason,
     roomView?.pausedReason,
     roomView?.revision,
@@ -1341,6 +1356,7 @@ export function useMultiplayerRoom({
     connectionState,
     connectionUiState,
     pushState,
+    transportMode,
     reconnectDiagnostics,
     reactionsEnabled,
     hostChangeNotice,

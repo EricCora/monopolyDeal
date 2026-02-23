@@ -30,6 +30,7 @@ interface MultiplayerScreenProps {
     roomCode: string | null;
     seatId: string | null;
     pushState: MultiplayerPushState;
+    transportMode: 'socket_primary' | 'http_fallback';
     reconnectAttempt: number;
     lastClientVersion: number | null;
     lastServerVersion: number | null;
@@ -464,7 +465,7 @@ export function MultiplayerScreen({
       {runtimeStateBannerText ? <p className="setup-subtitle">{runtimeStateBannerText}</p> : null}
       {showDevStatusChip ? (
         <p className="setup-subtitle">
-          Dev status: reconnect policy active | version guard active | disconnect pause policy active | live updates {pushState} | room runtime {roomView?.roomRuntimeState ?? 'n/a'}
+          Dev status: reconnect policy active | version guard active | disconnect pause policy active | transport {reconnectDiagnostics?.transportMode ?? 'http_fallback'} | live updates {pushState} | room runtime {roomView?.roomRuntimeState ?? 'n/a'}
         </p>
       ) : null}
       {reconnectDebugEnabled && reconnectDiagnostics ? (
@@ -473,6 +474,7 @@ export function MultiplayerScreen({
           <p>
             room={reconnectDiagnostics.roomCode ?? 'n/a'} seat={reconnectDiagnostics.seatId ?? 'n/a'} push={reconnectDiagnostics.pushState}
           </p>
+          <p>transport={reconnectDiagnostics.transportMode}</p>
           <p>
             attempt={reconnectDiagnostics.reconnectAttempt} clientVersion={reconnectDiagnostics.lastClientVersion ?? 'n/a'} serverVersion={reconnectDiagnostics.lastServerVersion ?? 'n/a'}
           </p>

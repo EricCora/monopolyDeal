@@ -1,4 +1,5 @@
 import type { Action } from '../engine';
+import { io, type Socket } from 'socket.io-client';
 import type {
   MultiplayerActionRejectedResponse,
   MultiplayerCheckpointSummary,
@@ -6,6 +7,12 @@ import type {
   MultiplayerResumeRoomResponse,
   MultiplayerRoomEventEnvelope,
   MultiplayerRoomSessionResponse,
+  MultiplayerSocketAck,
+  MultiplayerSocketCommandName,
+  MultiplayerSocketCommandPayloadMap,
+  MultiplayerSocketCommandResponseMap,
+  MultiplayerSocketError,
+  MultiplayerTransportMode,
   MultiplayerRoomView,
   MultiplayerSession,
 } from './multiplayerTypes';
@@ -44,6 +51,258 @@ export interface MultiplayerLanOriginsResponse {
 }
 
 export const MULTIPLAYER_REACTION_OPTIONS: MultiplayerReaction[] = ['nice', 'wow', 'gg', 'oops'];
+
+const SOCKET_ACK_TIMEOUT_MS = 3_500;
+const SOCKET_CONNECT_TIMEOUT_MS = 3_500;
+const SOCKET_TRANSPORT_ENABLED = import.meta.env.MODE !== 'test'
+  && import.meta.env.VITE_MULTIPLAYER_SOCKET_ENABLED !== 'false';
+
+type MultiplayerTransportError = Error & {
+  details?: MultiplayerActionRejectedResponse | Record<string, unknown>;
+  transportFailure?: boolean;
+};
+
+interface SocketTransportState {
+  socket: Socket | null;
+  sessionKey: string | null;
+}
+
+const socketTransportState: SocketTransportState = {
+  socket: null,
+  sessionKey: null,
+};
+
+let multiplayerTransportMode: MultiplayerTransportMode = 'http_fallback';
+const transportModeListeners = new Set<(mode: MultiplayerTransportMode) => void>();
+
+function setMultiplayerTransportMode(mode: MultiplayerTransportMode): void {
+  if (multiplayerTransportMode === mode) return;
+  multiplayerTransportMode = mode;
+  for (const listener of transportModeListeners) {
+    listener(mode);
+  }
+}
+
+export function getMultiplayerTransportMode(): MultiplayerTransportMode {
+  return multiplayerTransportMode;
+}
+
+export function subscribeMultiplayerTransportMode(
+  listener: (mode: MultiplayerTransportMode) => void,
+): () => void {
+  transportModeListeners.add(listener);
+  listener(multiplayerTransportMode);
+  return () => {
+    transportModeListeners.delete(listener);
+  };
+}
+
+function createTransportError(
+  code: string,
+  options: {
+    details?: MultiplayerActionRejectedResponse | Record<string, unknown>;
+    transportFailure?: boolean;
+  } = {},
+): MultiplayerTransportError {
+  const error = new Error(code) as MultiplayerTransportError;
+  if (options.details) {
+    error.details = options.details;
+  }
+  if (options.transportFailure) {
+    error.transportFailure = true;
+  }
+  return error;
+}
+
+function isTransportFailure(error: unknown): boolean {
+  return Boolean((error as MultiplayerTransportError | undefined)?.transportFailure);
+}
+
+function normalizeSocketError(
+  error: MultiplayerSocketError,
+): MultiplayerTransportError {
+  if (error.code === 'action_rejected') {
+    const reason = error.message === 'stale_state'
+      || error.message === 'not_your_turn'
+      || error.message === 'prompt_mismatch'
+      ? error.message
+      : 'invalid_action';
+    return createTransportError('action_rejected', {
+      details: {
+        error: 'action_rejected',
+        reason,
+        serverStateVersion: Number.isFinite(error.serverStateVersion) ? Number(error.serverStateVersion) : 0,
+        requiresResync: Boolean(error.requiresResync),
+      },
+    });
+  }
+  return createTransportError(error.code || 'request_failed', {
+    details: error.serverStateVersion != null || error.requiresResync != null
+      ? {
+          serverStateVersion: error.serverStateVersion,
+          requiresResync: error.requiresResync,
+        }
+      : undefined,
+  });
+}
+
+function socketSessionKey(session: MultiplayerSession, apiBase: string): string {
+  const seatId = session.seatId ?? session.playerId;
+  const resumeToken = session.resumeToken ?? session.sessionToken;
+  return `${apiBase}|${session.roomCode}|${seatId}|${resumeToken}`;
+}
+
+function clearSocketTransport(): void {
+  socketTransportState.socket?.removeAllListeners();
+  socketTransportState.socket?.disconnect();
+  socketTransportState.socket = null;
+  socketTransportState.sessionKey = null;
+}
+
+export function disconnectMultiplayerSocketTransport(): void {
+  clearSocketTransport();
+  setMultiplayerTransportMode('http_fallback');
+}
+
+function getSocketAuth(session: MultiplayerSession): Record<string, unknown> {
+  return {
+    roomCode: session.roomCode,
+    seatId: session.seatId,
+    resumeToken: session.resumeToken,
+    playerId: session.playerId,
+    sessionToken: session.sessionToken,
+  };
+}
+
+function ensureSocket(
+  session: MultiplayerSession,
+  apiBase: string,
+): Socket {
+  const key = socketSessionKey(session, apiBase);
+  if (socketTransportState.socket && socketTransportState.sessionKey === key) {
+    return socketTransportState.socket;
+  }
+  clearSocketTransport();
+
+  const socket = io(apiBase, {
+    transports: ['websocket', 'polling'],
+    autoConnect: false,
+    timeout: SOCKET_CONNECT_TIMEOUT_MS,
+    auth: getSocketAuth(session),
+  });
+
+  socket.on('connect', () => {
+    setMultiplayerTransportMode('socket_primary');
+  });
+  socket.on('connect_error', () => {
+    setMultiplayerTransportMode('http_fallback');
+  });
+  socket.on('disconnect', () => {
+    setMultiplayerTransportMode('http_fallback');
+  });
+
+  socketTransportState.socket = socket;
+  socketTransportState.sessionKey = key;
+  return socket;
+}
+
+function ensureSocketReady(socket: Socket): Promise<void> {
+  if (socket.connected) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const cleanup = () => {
+      socket.off('connect', onConnect);
+      socket.off('connect_error', onConnectError);
+      if (timeoutId != null) {
+        globalThis.clearTimeout(timeoutId);
+      }
+    };
+    const onConnect = () => {
+      cleanup();
+      resolve();
+    };
+    const onConnectError = (error: unknown) => {
+      cleanup();
+      const code = error instanceof Error ? error.message : 'request_failed';
+      reject(createTransportError(code || 'request_failed', { transportFailure: true }));
+    };
+    timeoutId = globalThis.setTimeout(() => {
+      cleanup();
+      reject(createTransportError('request_failed', { transportFailure: true }));
+    }, SOCKET_CONNECT_TIMEOUT_MS);
+    socket.once('connect', onConnect);
+    socket.once('connect_error', onConnectError);
+    socket.connect();
+  });
+}
+
+async function runSocketCommand<Name extends MultiplayerSocketCommandName>(
+  session: MultiplayerSession,
+  apiBase: string,
+  command: Name,
+  payload: MultiplayerSocketCommandPayloadMap[Name],
+): Promise<MultiplayerSocketCommandResponseMap[Name]> {
+  if (!SOCKET_TRANSPORT_ENABLED) {
+    throw createTransportError('request_failed', { transportFailure: true });
+  }
+  if (typeof window === 'undefined') {
+    throw createTransportError('request_failed', { transportFailure: true });
+  }
+  const socket = ensureSocket(session, apiBase);
+  await ensureSocketReady(socket);
+
+  return new Promise((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const finish = (fn: () => void) => {
+      if (timeoutId != null) {
+        globalThis.clearTimeout(timeoutId);
+      }
+      fn();
+    };
+    timeoutId = globalThis.setTimeout(() => {
+      finish(() => {
+        setMultiplayerTransportMode('http_fallback');
+        reject(createTransportError('request_failed', { transportFailure: true }));
+      });
+    }, SOCKET_ACK_TIMEOUT_MS);
+
+    socket.emit(
+      command,
+      payload,
+      (ack: MultiplayerSocketAck<MultiplayerSocketCommandResponseMap[Name]>) => {
+        finish(() => {
+          if (!ack || typeof ack !== 'object') {
+            setMultiplayerTransportMode('http_fallback');
+            reject(createTransportError('request_failed', { transportFailure: true }));
+            return;
+          }
+          if (!ack.ok) {
+            reject(normalizeSocketError(ack.error));
+            return;
+          }
+          setMultiplayerTransportMode('socket_primary');
+          resolve(ack.payload);
+        });
+      },
+    );
+  });
+}
+
+async function withSocketFallback<T>(
+  runSocket: () => Promise<T>,
+  runHttp: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await runSocket();
+  } catch (error) {
+    if (!isTransportFailure(error)) {
+      throw error;
+    }
+    setMultiplayerTransportMode('http_fallback');
+    return runHttp();
+  }
+}
 
 export function resolveMultiplayerApiBase({ envUrl, hostname, origin }: ResolveMultiplayerApiBaseOptions): string {
   if (typeof envUrl === 'string' && envUrl.trim().length > 0) {
@@ -187,27 +446,30 @@ export async function reconnectMultiplayerRoom(
   expectedRevision?: number,
 ): Promise<MultiplayerRoomSessionResponse | MultiplayerResumeRoomResponse> {
   const useCanonicalIdentity = Boolean(session.seatId && session.resumeToken);
-  return request<MultiplayerRoomSessionResponse>(
-    `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reconnect`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...(useCanonicalIdentity
-          ? {
-              seatId: session.seatId,
-              resumeToken: session.resumeToken,
-            }
-          : {
-              playerId: session.playerId,
-              sessionToken: session.sessionToken,
-            }),
-        // Send compatibility identity fields while the server migration is in-flight.
-        playerId: session.playerId,
-        sessionToken: session.sessionToken,
-        expectedRevision,
-      }),
-    },
+  return withSocketFallback<MultiplayerRoomSessionResponse | MultiplayerResumeRoomResponse>(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:reconnect', { expectedRevision }),
+    () => request<MultiplayerRoomSessionResponse>(
+      `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reconnect`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(useCanonicalIdentity
+            ? {
+                seatId: session.seatId,
+                resumeToken: session.resumeToken,
+              }
+            : {
+                playerId: session.playerId,
+                sessionToken: session.sessionToken,
+              }),
+          // Send compatibility identity fields while the server migration is in-flight.
+          playerId: session.playerId,
+          sessionToken: session.sessionToken,
+          expectedRevision,
+        }),
+      },
+    ),
   );
 }
 
@@ -217,16 +479,19 @@ export async function leaveMultiplayerRoom(
   keepalive = false,
   expectedRevision?: number,
 ): Promise<void> {
-  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/leave`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      playerId: session.playerId,
-      sessionToken: session.sessionToken,
-      expectedRevision,
-    }),
-    keepalive,
-  });
+  await withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:leave', { expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/leave`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        expectedRevision,
+      }),
+      keepalive,
+    }).then(() => undefined),
+  );
 }
 
 export async function startMultiplayerRoom(
@@ -235,16 +500,19 @@ export async function startMultiplayerRoom(
   expectedRevision?: number,
   checkpointId?: string,
 ): Promise<void> {
-  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/start`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      playerId: session.playerId,
-      sessionToken: session.sessionToken,
-      expectedRevision,
-      checkpointId,
-    }),
-  });
+  await withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:start', { expectedRevision, checkpointId }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        expectedRevision,
+        checkpointId,
+      }),
+    }).then(() => undefined),
+  );
 }
 
 export async function loadMultiplayerRoomState(
@@ -255,8 +523,11 @@ export async function loadMultiplayerRoomState(
     playerId: session.playerId,
     sessionToken: session.sessionToken,
   });
-  return request<MultiplayerRoomView>(
-    `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/state?${params.toString()}`,
+  return withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:state', {}),
+    () => request<MultiplayerRoomView>(
+      `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/state?${params.toString()}`,
+    ),
   );
 }
 
@@ -270,18 +541,26 @@ export async function applyMultiplayerAction(
     actionId?: string;
   },
 ): Promise<void> {
-  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/action`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      playerId: session.playerId,
-      sessionToken: session.sessionToken,
+  await withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:action', {
       action,
       expectedRevision,
       clientStateVersion: options?.clientStateVersion,
       actionId: options?.actionId,
-    }),
-  });
+    }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        action,
+        expectedRevision,
+        clientStateVersion: options?.clientStateVersion,
+        actionId: options?.actionId,
+      }),
+    }).then(() => undefined),
+  );
 }
 
 export async function pauseMultiplayerRoom(
@@ -289,15 +568,18 @@ export async function pauseMultiplayerRoom(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/pause`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      playerId: session.playerId,
-      sessionToken: session.sessionToken,
-      expectedRevision,
-    }),
-  });
+  await withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:pause', { expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/pause`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        expectedRevision,
+      }),
+    }).then(() => undefined),
+  );
 }
 
 export async function resumeMultiplayerRoom(
@@ -305,15 +587,18 @@ export async function resumeMultiplayerRoom(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/resume`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      playerId: session.playerId,
-      sessionToken: session.sessionToken,
-      expectedRevision,
-    }),
-  });
+  await withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:resume', { expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        expectedRevision,
+      }),
+    }).then(() => undefined),
+  );
 }
 
 export async function undoMultiplayerRoomAction(
@@ -321,15 +606,18 @@ export async function undoMultiplayerRoomAction(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/undo`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      playerId: session.playerId,
-      sessionToken: session.sessionToken,
-      expectedRevision,
-    }),
-  });
+  await withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:undo', { expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/undo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        expectedRevision,
+      }),
+    }).then(() => undefined),
+  );
 }
 
 export async function resetMultiplayerRoomTurn(
@@ -337,15 +625,18 @@ export async function resetMultiplayerRoomTurn(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reset-turn`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      playerId: session.playerId,
-      sessionToken: session.sessionToken,
-      expectedRevision,
-    }),
-  });
+  await withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:reset_turn', { expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reset-turn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        expectedRevision,
+      }),
+    }).then(() => undefined),
+  );
 }
 
 export async function listMultiplayerCheckpoints(
@@ -368,20 +659,26 @@ export async function saveMultiplayerCheckpoint(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<MultiplayerCheckpointSummary> {
-  const payload = await request<{ checkpoint: MultiplayerCheckpointSummary }>(
-    `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/checkpoints/save`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        playerId: session.playerId,
-        sessionToken: session.sessionToken,
-        name,
-        expectedRevision,
-      }),
+  return withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:checkpoint_save', { name, expectedRevision })
+      .then((payload) => payload.checkpoint),
+    async () => {
+      const payload = await request<{ checkpoint: MultiplayerCheckpointSummary }>(
+        `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/checkpoints/save`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            playerId: session.playerId,
+            sessionToken: session.sessionToken,
+            name,
+            expectedRevision,
+          }),
+        },
+      );
+      return payload.checkpoint;
     },
   );
-  return payload.checkpoint;
 }
 
 export async function loadMultiplayerCheckpoint(
@@ -390,16 +687,19 @@ export async function loadMultiplayerCheckpoint(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/checkpoints/load`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      playerId: session.playerId,
-      sessionToken: session.sessionToken,
-      checkpointId,
-      expectedRevision,
-    }),
-  });
+  await withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:checkpoint_load', { checkpointId, expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/checkpoints/load`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        checkpointId,
+        expectedRevision,
+      }),
+    }).then(() => undefined),
+  );
 }
 
 export async function deleteMultiplayerCheckpoint(
@@ -408,16 +708,19 @@ export async function deleteMultiplayerCheckpoint(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/checkpoints/delete`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      playerId: session.playerId,
-      sessionToken: session.sessionToken,
-      checkpointId,
-      expectedRevision,
-    }),
-  });
+  await withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:checkpoint_delete', { checkpointId, expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/checkpoints/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        checkpointId,
+        expectedRevision,
+      }),
+    }).then(() => undefined),
+  );
 }
 
 export async function setMultiplayerReady(
@@ -426,16 +729,19 @@ export async function setMultiplayerReady(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/ready`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      playerId: session.playerId,
-      sessionToken: session.sessionToken,
-      ready,
-      expectedRevision,
-    }),
-  });
+  await withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:ready', { ready, expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/ready`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        ready,
+        expectedRevision,
+      }),
+    }).then(() => undefined),
+  );
 }
 
 export async function sendMultiplayerReaction(
@@ -444,16 +750,19 @@ export async function sendMultiplayerReaction(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reaction`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      playerId: session.playerId,
-      sessionToken: session.sessionToken,
-      reaction,
-      expectedRevision,
-    }),
-  });
+  await withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:reaction', { reaction, expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reaction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        reaction,
+        expectedRevision,
+      }),
+    }).then(() => undefined),
+  );
 }
 
 export async function sendMultiplayerChatMessage(
@@ -462,16 +771,19 @@ export async function sendMultiplayerChatMessage(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      playerId: session.playerId,
-      sessionToken: session.sessionToken,
-      text,
-      expectedRevision,
-    }),
-  });
+  await withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:chat', { text, expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        text,
+        expectedRevision,
+      }),
+    }).then(() => undefined),
+  );
 }
 
 export async function setMultiplayerTyping(
@@ -480,16 +792,19 @@ export async function setMultiplayerTyping(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/typing`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      playerId: session.playerId,
-      sessionToken: session.sessionToken,
-      typing,
-      expectedRevision,
-    }),
-  });
+  await withSocketFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:typing', { typing, expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/typing`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        typing,
+        expectedRevision,
+      }),
+    }).then(() => undefined),
+  );
 }
 
 export interface MultiplayerRoomEventSubscription {
@@ -502,10 +817,10 @@ export interface MultiplayerRoomEventHandlers {
   onDisconnect?: () => void;
 }
 
-export function subscribeMultiplayerRoomEvents(
+function subscribeRoomEventsViaEventSource(
   session: MultiplayerSession,
   handlers: MultiplayerRoomEventHandlers,
-  apiBase = getMultiplayerApiBase(),
+  apiBase: string,
   lastEventId?: number,
 ): MultiplayerRoomEventSubscription {
   if (typeof window === 'undefined' || typeof window.EventSource !== 'function') {
@@ -559,6 +874,112 @@ export function subscribeMultiplayerRoomEvents(
     close: () => {
       closed = true;
       source.close();
+    },
+  };
+}
+
+export function subscribeMultiplayerRoomEvents(
+  session: MultiplayerSession,
+  handlers: MultiplayerRoomEventHandlers,
+  apiBase = getMultiplayerApiBase(),
+  lastEventId?: number,
+): MultiplayerRoomEventSubscription {
+  if (!SOCKET_TRANSPORT_ENABLED) {
+    return subscribeRoomEventsViaEventSource(session, handlers, apiBase, lastEventId);
+  }
+  if (typeof window === 'undefined') {
+    throw new Error('push_not_supported');
+  }
+
+  let fallbackSubscription: MultiplayerRoomEventSubscription | null = null;
+  let socket: Socket | null = null;
+  let closed = false;
+  let fallbackActivated = false;
+  let connectedViaSocket = false;
+  let bootstrapTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const handleSocketEvent = (event: MultiplayerRoomEventEnvelope) => {
+    if (!event || typeof event !== 'object') return;
+    if (typeof event.eventId !== 'number' || typeof event.revision !== 'number') return;
+    handlers.onEvent(event);
+  };
+
+  const clearBootstrapTimer = () => {
+    if (bootstrapTimer != null) {
+      globalThis.clearTimeout(bootstrapTimer);
+      bootstrapTimer = null;
+    }
+  };
+
+  const activateFallback = () => {
+    if (closed || fallbackActivated) return;
+    fallbackActivated = true;
+    clearBootstrapTimer();
+    setMultiplayerTransportMode('http_fallback');
+    if (socket) {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect_error', onConnectError);
+      socket.off('room_update', handleSocketEvent);
+    }
+    try {
+      fallbackSubscription = subscribeRoomEventsViaEventSource(session, handlers, apiBase, lastEventId);
+    } catch {
+      handlers.onDisconnect?.();
+    }
+  };
+
+  const onConnect = () => {
+    if (closed || fallbackActivated) return;
+    connectedViaSocket = true;
+    clearBootstrapTimer();
+    setMultiplayerTransportMode('socket_primary');
+    handlers.onOpen?.();
+  };
+
+  const onDisconnect = () => {
+    if (closed) return;
+    if (!connectedViaSocket) {
+      activateFallback();
+      return;
+    }
+    setMultiplayerTransportMode('http_fallback');
+    handlers.onDisconnect?.();
+  };
+
+  const onConnectError = () => {
+    if (closed) return;
+    activateFallback();
+  };
+
+  try {
+    socket = ensureSocket(session, apiBase);
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onConnectError);
+    socket.on('room_update', handleSocketEvent);
+    bootstrapTimer = globalThis.setTimeout(() => {
+      if (connectedViaSocket || closed) return;
+      activateFallback();
+    }, SOCKET_CONNECT_TIMEOUT_MS);
+    socket.connect();
+  } catch {
+    activateFallback();
+  }
+
+  return {
+    close: () => {
+      closed = true;
+      clearBootstrapTimer();
+      if (fallbackSubscription) {
+        fallbackSubscription.close();
+      }
+      if (socket) {
+        socket.off('connect', onConnect);
+        socket.off('disconnect', onDisconnect);
+        socket.off('connect_error', onConnectError);
+        socket.off('room_update', handleSocketEvent);
+      }
     },
   };
 }

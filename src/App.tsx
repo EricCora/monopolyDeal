@@ -384,6 +384,7 @@ function App() {
     connectionState: multiplayerConnectionState,
     connectionUiState: multiplayerConnectionUiState,
     pushState: multiplayerPushState,
+    transportMode: multiplayerTransportMode,
     reconnectDiagnostics: multiplayerReconnectDiagnostics,
     hostChangeNotice: multiplayerHostChangeNotice,
     clearHostChangeNotice: clearMultiplayerHostChangeNotice,
@@ -1916,6 +1917,7 @@ function App() {
             reconnectPolicyActive: true,
             versionGuardActive: true,
             disconnectPausePolicyActive: true,
+            transportMode: multiplayerTransportMode,
             pushState: multiplayerPushState,
             roomRuntimeState: multiplayerRoomView.roomRuntimeState ?? null,
           }}

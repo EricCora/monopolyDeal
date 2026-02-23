@@ -63,6 +63,7 @@ interface GameTableScreenProps {
     reconnectPolicyActive: boolean;
     versionGuardActive: boolean;
     disconnectPausePolicyActive: boolean;
+    transportMode: 'socket_primary' | 'http_fallback';
     pushState: 'disabled' | 'unsupported' | 'connecting' | 'connected' | 'fallback';
     roomRuntimeState: 'active' | 'paused_disconnect' | 'paused_host_disconnect' | 'ended_timeout' | null;
   };
@@ -801,7 +802,7 @@ export function GameTableScreen({
           <>
             {showDevStatusChip ? (
               <p>
-                Dev: reconnect {devStatus?.reconnectPolicyActive ? 'on' : 'off'} | version guard {devStatus?.versionGuardActive ? 'on' : 'off'} | pause policy {devStatus?.disconnectPausePolicyActive ? 'on' : 'off'} | push {devStatus?.pushState ?? 'n/a'} | runtime {devStatus?.roomRuntimeState ?? 'n/a'}
+                Dev: reconnect {devStatus?.reconnectPolicyActive ? 'on' : 'off'} | version guard {devStatus?.versionGuardActive ? 'on' : 'off'} | pause policy {devStatus?.disconnectPausePolicyActive ? 'on' : 'off'} | transport {devStatus?.transportMode ?? 'http_fallback'} | push {devStatus?.pushState ?? 'n/a'} | runtime {devStatus?.roomRuntimeState ?? 'n/a'}
               </p>
             ) : null}
             <p>
