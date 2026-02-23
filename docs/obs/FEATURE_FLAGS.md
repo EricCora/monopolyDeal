@@ -10,10 +10,12 @@
   - custom rules
   - multiplayer push and reactions
 - Server env flags:
+  - `MULTIPLAYER_SOCKET_ENABLED`
   - `MULTIPLAYER_PUSH_ENABLED`
   - `MULTIPLAYER_REACTIONS_ENABLED`
   - `MP_RECONNECT_GRACE_MS`
 - Client env flags:
+  - `VITE_MULTIPLAYER_SOCKET_ENABLED`
   - `VITE_MULTIPLAYER_PUSH_ENABLED`
   - `VITE_MULTIPLAYER_REACTIONS_ENABLED`
   - `VITE_MP_RECONNECT_DEBUG`
@@ -27,6 +29,7 @@ The following multiplayer hardening features are graduated and no longer rollout
 - stale-action rejection + auto-resync recovery
 - disconnect pause/resume runtime policy + host-timeout room ending
 - reconnect UI-state scaffolding (handshake/resync/terminal states)
+- Socket.IO-first transport policy with SSE/HTTP fallback
 
 ## Debug visibility
 
@@ -38,3 +41,7 @@ The following multiplayer hardening features are graduated and no longer rollout
 1. New risky features should still launch behind explicit flags.
 2. Remove stale flags once behavior is graduated.
 3. Keep each remaining flag mapped to a concrete fallback behavior.
+
+Current emergency transport fallback:
+
+- Set `MULTIPLAYER_SOCKET_ENABLED=false` and/or `VITE_MULTIPLAYER_SOCKET_ENABLED=false` to force HTTP/SSE-only behavior during incident mitigation.

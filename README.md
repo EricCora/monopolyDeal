@@ -54,7 +54,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Multiplayer reconnect recovery UX that auto-clears stale sessions and avoids endless syncing states
 - UNO-style quick reactions via chat tray with transient per-player reaction bursts on lobby/table surfaces
 - Flagship lobby presentation refresh with structured roster table, clearer status pills, and stronger action hierarchy
-- Hybrid live updates: server push notifications with polling fallback
+- Hybrid live updates: Socket.IO transport (primary) with SSE/polling fallback
 - Multiplayer `Exit Match` (keeps reconnect session) and `Forget Room` (permanent disconnect) actions
 - Multiplayer undo/reset-turn controls for the active player with server-authoritative snapshots
 - In-match per-player connection pills and richer lobby disconnect timing labels
@@ -210,6 +210,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Multiplayer state mutations are revision-guarded to prevent stale updates.
 - Multiplayer activity feed and host-change notices are surfaced in lobby/in-match UI.
 - In local/dev contexts, multiplayer screens show a status chip that explicitly reports reconnect/version/pause policy activation, live-update transport state, and room runtime state.
+- Dev status now includes explicit transport mode (`socket_primary` or `http_fallback`) so hidden rollout state is never ambiguous during local testing.
 - Lobby disconnect policy: leaving in `lobby` removes your seat immediately; reconnect windows remain for `active`/`finished` matches only.
 - Lobby stale-heartbeat policy: connected lobby seats are pruned after a 90s inactivity window to reduce false disconnects during tab/device switching in local beta testing.
 - Active/finished stale-heartbeat policy: seats are marked disconnected after ~20s of missed heartbeat to keep in-match presence accurate when browser unload signals are dropped.
@@ -219,17 +220,21 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 
 Set `VITE_MULTIPLAYER_API_URL` to your deployed multiplayer API origin.
 See `.env.example` for the expected variable.
+Production realtime requires a persistent Node multiplayer service (Socket.IO + HTTP API). Host the frontend separately (for example on Vercel) and point `VITE_MULTIPLAYER_API_URL` at that Node service.
 For reconnect/resume implementation details and execution tracking, see `docs/multiplayer-reconnect-contract.md` and `docs/IMPLEMENTATION_TRACKER.md` (Epic C section).
 Final closure artifact and acceptance mapping: `docs/PROGRAM_CLOSURE.md`.
 
 Optional multiplayer behavior flags:
 
+- `VITE_MULTIPLAYER_SOCKET_ENABLED` (`true` by default) to allow client Socket.IO realtime transport.
 - `VITE_MULTIPLAYER_PUSH_ENABLED` (`true` by default) to enable client push subscriptions.
-  - Server sends an immediate stream bootstrap event so healthy live-updates connections confirm quickly (especially in LAN/Safari paths).
-  - Client push bootstrap has a 5s open-timeout guard; if live updates still do not establish, UI falls back to polling automatically.
+  - Socket.IO is attempted first for room events.
+  - SSE remains as fallback push transport, with an immediate bootstrap event and a 5s open-timeout guard.
+  - If neither push transport establishes, UI falls back to polling automatically.
 - `VITE_MULTIPLAYER_REACTIONS_ENABLED` (`true` by default) to enable quick reactions.
 - Reconnect handshake, bounded reconnect retry/backoff, reconnect UI states, stale-action rejection, and disconnect pause/end policy are always active.
 - `VITE_MP_RECONNECT_DEBUG` (`false` by default) to show reconnect diagnostics panel in multiplayer UI (dev-focused).
+- `MULTIPLAYER_SOCKET_ENABLED` (`true` by default) emergency server-side kill switch for Socket.IO transport.
 - `MULTIPLAYER_PUSH_ENABLED` (`true` by default) to enable server event stream endpoint.
 - `MULTIPLAYER_REACTIONS_ENABLED` (`true` by default) to enable server reaction endpoint.
 - `MP_RECONNECT_GRACE_MS` (`90000` default) to configure reconnect grace duration.

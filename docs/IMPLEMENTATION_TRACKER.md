@@ -10,7 +10,7 @@ This tracker supersedes the prior deep-research execution tracker and follows:
 - Architecture defaults: pure engine, UI consumer, server-authoritative multiplayer
 - Compatibility: keep persistence payloads `version: 1` backward-readable
 
-## Status Snapshot (2026-02-22)
+## Status Snapshot (2026-02-23)
 
 - Program status: `complete` (all staged closure gates passed).
 - Completed recently:
@@ -20,6 +20,7 @@ This tracker supersedes the prior deep-research execution tracker and follows:
   - Host disconnect runtime pause/resume/end policy with terminal host-timeout handling.
   - Reconnect diagnostics/debug panel and server logging redaction utility.
   - LAN live-update bootstrap reliability patch (`stream_bootstrap` frame) with polling fallback safety.
+  - Socket.IO dual-stack transport migration (socket-primary realtime + SSE/HTTP fallback) with dev transport visibility chip.
 - Rules/replay/determinism artifacts and tests in place.
 - Remaining to close full program:
   - None. Program closure package published.
@@ -50,6 +51,7 @@ This tracker supersedes the prior deep-research execution tracker and follows:
 - `2026-02-22`: SSE live-updates now emit immediate `stream_bootstrap` frame on subscribe open to reduce false polling fallback on LAN/Safari.
 - `2026-02-22`: Disconnect runtime policy = pause on active/finished disconnect and end room on host timeout (always-on policy).
 - `2026-02-22`: AI stage closure requires deterministic tier-matrix coverage plus difficulty verification doc references.
+- `2026-02-23`: Realtime transport migrated to Socket.IO primary with dual-stack SSE/HTTP fallback; transport mode surfaced in multiplayer dev status chips.
 
 ## Stage Checklist
 

@@ -47,6 +47,8 @@ Server-side counters/log markers:
   - `[mp][disconnect_timeout]`
   - `[mp][room_runtime]`
   - `[mp][action_rejected]`
+  - `[mp][transport]` (socket connect/disconnect markers)
+  - `[mp][transport_cmd]` (socket command status + latency)
 
 `[mp][resume_result]` status taxonomy:
 
@@ -64,11 +66,17 @@ Redaction rule:
 
 Push bootstrap fallback note:
 
-- Client applies a 5s SSE-open timeout guard.
-- Server now emits an immediate `room_update` bootstrap frame (`reason=stream_bootstrap`) at stream open to avoid false idle-connect timeouts.
+- Client applies a 5s push-bootstrap timeout guard.
+- Socket.IO is attempted first; SSE bootstrap remains fallback.
+- Server emits an immediate `room_update` bootstrap frame (`reason=stream_bootstrap`) at SSE stream open to avoid false idle-connect timeouts.
 - If push stream bootstrap does not open in time, client transitions to polling fallback and emits:
   - `multiplayer_push_disconnected`
   - `multiplayer_push_fallback` (once per session fallback entry)
+
+Transport mode visibility:
+
+- Client exposes transport mode as `socket_primary` or `http_fallback`.
+- Dev status chips in multiplayer screens surface the current transport mode directly.
 
 Disconnect pause/end runtime markers:
 

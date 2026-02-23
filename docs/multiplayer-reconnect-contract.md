@@ -1,6 +1,6 @@
 # Multiplayer Reconnect Contract (MD-C01)
 
-Status: Active v1 contract (implemented through MD-C12 baseline slices)
+Status: Active v1 contract (implemented through MD-C12 baseline slices, Socket.IO dual-stack rollout active)
 
 Related:
 - `docs/IMPLEMENTATION_TRACKER.md` (`Epic C — Reconnect/Resume Program`)
@@ -69,11 +69,22 @@ stateDiagram-v2
 - Stale terminal failures (`room_not_found`, `reconnect_expired`) clear session state and stop retry.
 - Budget exhaustion transitions client UI to `resume_failed` and stops auto-retry until a successful refresh/join/host flow resets state.
 
+## Transport Contract (Dual-Stack)
+
+- Primary realtime transport: Socket.IO (`room_update` event stream + typed command acks).
+- Fallback realtime transport: SSE `/events` stream (same `room_update` envelope).
+- Fallback mutation transport: HTTP REST endpoints (same request/response semantics).
+- Client transport mode is observable as:
+  - `socket_primary`
+  - `http_fallback`
+
 ## Push Bootstrap Fallback (LAN/Safari hardening)
 
-- Client enters `pushState='connecting'` while opening the SSE room stream.
+- Client enters `pushState='connecting'` while opening realtime updates.
+- Client attempts Socket.IO push first.
+- If socket push bootstrap is not established quickly, client falls back to SSE.
 - Server emits an immediate `room_update` bootstrap frame (`reason='stream_bootstrap'`) when SSE opens.
-- If SSE does not emit `onOpen` within `5_000ms`, client closes that stream and switches to polling fallback.
+- If push does not establish within `5_000ms`, client switches to polling fallback.
 - Lobby status pill must settle to either:
   - `Live updates active`, or
   - `Live updates unavailable, using polling`.
@@ -166,6 +177,30 @@ MD-C03 implementation note:
   - `mp:player_reconnected`
   - `mp:player_timed_out`
 - Optional envelope fields (`seatId`, `displayName`, `graceExpiresAt`) are included when available.
+
+### Socket Command Envelope
+
+```ts
+{
+  ok: true,
+  transport: 'socket',
+  serverStateVersion?: number,
+  payload: T
+}
+```
+
+```ts
+{
+  ok: false,
+  transport: 'socket',
+  error: {
+    code: string,
+    message?: string,
+    serverStateVersion?: number,
+    requiresResync?: boolean
+  }
+}
+```
 
 ### Room Runtime Events (MD-C10)
 
