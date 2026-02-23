@@ -27,7 +27,9 @@ import type {
 const RECONNECT_WINDOW_V1_DEFAULT_MS = 90_000;
 const RECONNECT_WINDOW_MS = resolveReconnectWindowMs(process.env.MP_RECONNECT_GRACE_MS);
 // Keep lobby heartbeat grace long enough for frequent tab switching during local beta sessions.
-const STALE_CONNECTION_MS = 1.5 * 60 * 1000;
+const STALE_CONNECTION_LOBBY_MS = 1.5 * 60 * 1000;
+// Active/finished matches should reflect disconnect presence quickly even if unload signals are dropped.
+const STALE_CONNECTION_MATCH_MS = 20 * 1000;
 const MAX_CHECKPOINTS = 5;
 const MAX_ACTIVITY_FEED = 24;
 const MAX_CHAT_MESSAGES = 150;
@@ -1255,8 +1257,9 @@ export function pruneInactiveRooms(rooms: Map<string, MultiplayerRoom>, now = no
   const removedRoomCodes: string[] = [];
   for (const [code, room] of rooms) {
     pruneExpiredTyping(room, now);
+    const staleConnectionMs = room.status === 'lobby' ? STALE_CONNECTION_LOBBY_MS : STALE_CONNECTION_MATCH_MS;
     const staleConnectedPlayers = room.players.filter((player) => (
-      player.connected && now - player.lastSeenAt > STALE_CONNECTION_MS
+      player.connected && now - player.lastSeenAt > staleConnectionMs
     ));
     for (const player of staleConnectedPlayers) {
       if (room.status === 'lobby') {

@@ -705,6 +705,25 @@ function App() {
       {},
     );
   }, [multiplayerRoomView]);
+  const multiplayerDisconnectDeadlineMs = useMemo<number | null>(() => {
+    if (!multiplayerRoomView) return null;
+    if (
+      multiplayerRoomView.roomRuntimeState !== 'paused_host_disconnect'
+      && multiplayerRoomView.roomRuntimeState !== 'paused_disconnect'
+    ) {
+      return null;
+    }
+    if (multiplayerRoomView.roomRuntimeState === 'paused_host_disconnect') {
+      const host = multiplayerRoomView.players.find((player) => player.id === multiplayerRoomView.hostPlayerId);
+      if (host && !host.connected) return host.reconnectDeadlineMs;
+    }
+    const disconnectedDeadlines = multiplayerRoomView.players
+      .filter((player) => !player.connected)
+      .map((player) => player.reconnectDeadlineMs)
+      .filter((deadline) => Number.isFinite(deadline));
+    if (disconnectedDeadlines.length === 0) return null;
+    return Math.min(...disconnectedDeadlines);
+  }, [multiplayerRoomView]);
   const multiplayerTypingNames = useMemo(() => {
     if (!multiplayerRoomView) return [] as string[];
     const nameById = new Map(multiplayerRoomView.players.map((player) => [player.id, player.name]));
@@ -1887,6 +1906,7 @@ function App() {
                     ? `Gameplay is paused by ${multiplayerGame.players.find((player) => player.id === multiplayerRoomView.pausedByPlayerId)?.name ?? multiplayerRoomView.pausedByPlayerId}.`
                     : 'Gameplay is paused by the host.'
           }
+          disconnectDeadlineMs={multiplayerDisconnectDeadlineMs}
           connectionStatusLabel={multiplayerConnectionLabel(multiplayerConnectionState, multiplayerPushState)}
           multiplayerConnectionState={multiplayerConnectionState}
           multiplayerConnectionUiState={multiplayerConnectionUiState}

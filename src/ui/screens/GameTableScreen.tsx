@@ -53,6 +53,7 @@ interface GameTableScreenProps {
   prompt: TurnPrompt;
   isPaused: boolean;
   pauseReasonText?: string;
+  disconnectDeadlineMs?: number | null;
   connectionStatusLabel?: string;
   multiplayerConnectionState?: MultiplayerConnectionState;
   multiplayerConnectionUiState?: MultiplayerConnectionUiState;
@@ -383,6 +384,7 @@ export function GameTableScreen({
   prompt,
   isPaused,
   pauseReasonText,
+  disconnectDeadlineMs = null,
   connectionStatusLabel,
   multiplayerConnectionState,
   multiplayerConnectionUiState,
@@ -572,10 +574,17 @@ export function GameTableScreen({
     return colors;
   }, [activeMoveWildCardId, moveWildActionsByCard]);
   const turnPriorityNotice = useMemo<TablePriorityNotice | null>(() => {
+    const hasDisconnectDeadline = Number.isFinite(disconnectDeadlineMs) && Number(disconnectDeadlineMs) > clockNow;
+    const disconnectSecondsRemaining = hasDisconnectDeadline
+      ? Math.max(0, Math.ceil((Number(disconnectDeadlineMs) - clockNow) / 1000))
+      : 0;
+    const disconnectCountdownText = hasDisconnectDeadline
+      ? ` Timeout in ${disconnectSecondsRemaining}s.`
+      : '';
     if (isPaused) {
       return {
         title: 'Match Paused',
-        detail: pauseReasonText ?? 'Gameplay is paused. Resume when ready.',
+        detail: `${pauseReasonText ?? 'Gameplay is paused. Resume when ready.'}${disconnectCountdownText}`,
         tone: 'warning',
       };
     }
@@ -636,6 +645,8 @@ export function GameTableScreen({
       tone: 'info',
     };
   }, [
+    clockNow,
+    disconnectDeadlineMs,
     activePlayerName,
     discardOverLimitCount,
     game.players,
@@ -754,6 +765,13 @@ export function GameTableScreen({
   })();
 
   const reconnectOverlayDetail = (() => {
+    const hasDisconnectDeadline = Number.isFinite(disconnectDeadlineMs) && Number(disconnectDeadlineMs) > clockNow;
+    const disconnectSecondsRemaining = hasDisconnectDeadline
+      ? Math.max(0, Math.ceil((Number(disconnectDeadlineMs) - clockNow) / 1000))
+      : 0;
+    const disconnectCountdownText = hasDisconnectDeadline
+      ? ` Timeout in ${disconnectSecondsRemaining}s.`
+      : '';
     if (multiplayerUiState === 'room_ended') {
       return pauseReasonText ?? 'This room is no longer available. Create or join a new room to continue.';
     }
@@ -771,7 +789,7 @@ export function GameTableScreen({
     }
     return multiplayerConnectionState === 'reconnecting'
       ? 'Trying to restore your room session. You can wait here while reconnect attempts continue.'
-      : 'Unable to reconnect automatically. Refresh room state or exit the match.';
+      : `Unable to reconnect automatically. Refresh room state or exit the match.${disconnectCountdownText}`;
   })();
 
   return (

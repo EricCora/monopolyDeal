@@ -212,6 +212,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - In local/dev contexts, multiplayer screens show a status chip that explicitly reports reconnect/version/pause policy activation, live-update transport state, and room runtime state.
 - Lobby disconnect policy: leaving in `lobby` removes your seat immediately; reconnect windows remain for `active`/`finished` matches only.
 - Lobby stale-heartbeat policy: connected lobby seats are pruned after a 90s inactivity window to reduce false disconnects during tab/device switching in local beta testing.
+- Active/finished stale-heartbeat policy: seats are marked disconnected after ~20s of missed heartbeat to keep in-match presence accurate when browser unload signals are dropped.
 - Disconnect runtime policy is always active: active/finished rooms pause on disconnect and end if the host times out before reconnect.
 
 ## Multiplayer Deployment Notes
