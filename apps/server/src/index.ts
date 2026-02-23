@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { parse } from 'node:url';
+import { Server as SocketIOServer, type Socket } from 'socket.io';
 import {
   applyRoomAction,
   createRoom,
@@ -35,6 +36,12 @@ import type { PlayerId } from '../../../src/engine/index.ts';
 import type {
   ActionRejectedReason,
   ActionRejectedResponse,
+  MultiplayerSocketAck,
+  MultiplayerSocketAuthPayload,
+  MultiplayerSocketCommandName,
+  MultiplayerSocketCommandPayloadMap,
+  MultiplayerSocketCommandResponseMap,
+  MultiplayerSocketError,
   MultiplayerReaction,
   MultiplayerRoomEventEnvelope,
   ResumeResultStatus,
@@ -51,6 +58,7 @@ import {
 const PORT = Number(process.env.PORT ?? 8787);
 const MULTIPLAYER_PUSH_ENABLED = process.env.MULTIPLAYER_PUSH_ENABLED !== 'false';
 const MULTIPLAYER_REACTIONS_ENABLED = process.env.MULTIPLAYER_REACTIONS_ENABLED !== 'false';
+const MULTIPLAYER_SOCKET_ENABLED = process.env.MULTIPLAYER_SOCKET_ENABLED !== 'false';
 const SSE_HEARTBEAT_MS = 25_000;
 
 const rooms = new Map<string, MultiplayerRoom>();
@@ -65,6 +73,8 @@ type EventStreamClient = {
 };
 
 const roomEventStreams = new Map<string, Set<EventStreamClient>>();
+const roomSocketBindings = new Map<string, string>();
+const socketSeatBindings = new Map<string, { roomCode: string; seatId: PlayerId; sessionToken: string }>();
 const reconnectCounters = {
   resume_request_total: 0,
   resume_success_total: 0,
@@ -72,11 +82,22 @@ const reconnectCounters = {
   disconnect_timeout_total: 0,
   stale_action_reject_total: 0,
 };
+let io: SocketIOServer | null = null;
 
 type SessionIdentity = {
   playerId: PlayerId;
   sessionToken: string;
 };
+
+type SocketSeatBinding = {
+  roomCode: string;
+  seatId: PlayerId;
+  sessionToken: string;
+};
+
+type SocketCommandPayload<Name extends MultiplayerSocketCommandName> = MultiplayerSocketCommandPayloadMap[Name];
+type SocketCommandResponse<Name extends MultiplayerSocketCommandName> = MultiplayerSocketCommandResponseMap[Name];
+type SocketAckCallback<Name extends MultiplayerSocketCommandName> = (ack: MultiplayerSocketAck<SocketCommandResponse<Name>>) => void;
 
 function resolveSessionIdentity(
   input: {
@@ -106,6 +127,76 @@ function resolveSessionIdentity(
   }
 
   return null;
+}
+
+function roomSeatKey(roomCode: string, seatId: PlayerId): string {
+  return `${roomCode}:${seatId}`;
+}
+
+function resolveSocketAuthPayload(socket: Socket): {
+  roomCode: string;
+  identity: SessionIdentity;
+} | null {
+  const raw = (socket.handshake.auth ?? {}) as MultiplayerSocketAuthPayload & { roomCode?: unknown };
+  const roomCode = optionalTrimmedString(raw.roomCode)?.toUpperCase();
+  if (!roomCode) return null;
+  const identity = resolveSessionIdentity(raw);
+  if (!identity) return null;
+  return { roomCode, identity };
+}
+
+function socketAckSuccess<TPayload>(payload: TPayload, serverStateVersion?: number): MultiplayerSocketAck<TPayload> {
+  return {
+    ok: true,
+    transport: 'socket',
+    serverStateVersion,
+    payload,
+  };
+}
+
+function socketAckFailure(error: MultiplayerSocketError): MultiplayerSocketAck<never> {
+  return {
+    ok: false,
+    transport: 'socket',
+    error,
+  };
+}
+
+function bindSocketToSeat(socket: Socket, binding: SocketSeatBinding): string | null {
+  const key = roomSeatKey(binding.roomCode, binding.seatId);
+  const previousSocketId = roomSocketBindings.get(key) ?? null;
+  roomSocketBindings.set(key, socket.id);
+  socketSeatBindings.set(socket.id, binding);
+  return previousSocketId && previousSocketId !== socket.id ? previousSocketId : null;
+}
+
+function unbindSocket(socketId: string): SocketSeatBinding | null {
+  const binding = socketSeatBindings.get(socketId);
+  if (!binding) return null;
+  socketSeatBindings.delete(socketId);
+  const key = roomSeatKey(binding.roomCode, binding.seatId);
+  if (roomSocketBindings.get(key) === socketId) {
+    roomSocketBindings.delete(key);
+  }
+  return binding;
+}
+
+function clearSocketBindingsForRoom(roomCode: string): void {
+  for (const [key, socketId] of roomSocketBindings) {
+    if (!key.startsWith(`${roomCode}:`)) continue;
+    roomSocketBindings.delete(key);
+    socketSeatBindings.delete(socketId);
+  }
+}
+
+function disconnectSocketForSeat(roomCode: string, seatId: PlayerId, reason: string, exceptSocketId?: string): void {
+  const key = roomSeatKey(roomCode, seatId);
+  const socketId = roomSocketBindings.get(key);
+  if (!socketId || socketId === exceptSocketId) return;
+  const existing = io?.sockets.sockets.get(socketId);
+  if (!existing) return;
+  existing.emit('mp:evt:session_replaced', { reason });
+  existing.disconnect(true);
 }
 
 function mapReconnectErrorToStatus(code: string): ResumeResultStatus {
@@ -214,9 +305,6 @@ function broadcastRoomEvent(
   reason: string,
   details?: { seatId?: PlayerId; displayName?: string; graceExpiresAt?: number },
 ): void {
-  if (!MULTIPLAYER_PUSH_ENABLED) return;
-  const clients = roomEventStreams.get(room.code);
-  if (!clients || clients.size === 0) return;
   const event: MultiplayerRoomEventEnvelope = {
     roomCode: room.code,
     revision: room.revision,
@@ -228,11 +316,17 @@ function broadcastRoomEvent(
     graceExpiresAt: details?.graceExpiresAt,
   };
 
-  for (const client of clients) {
-    try {
-      writeSseEvent(client, event);
-    } catch {
-      removeEventStreamClient(room.code, client);
+  io?.to(room.code).emit('room_update', event);
+
+  if (MULTIPLAYER_PUSH_ENABLED) {
+    const clients = roomEventStreams.get(room.code);
+    if (!clients || clients.size === 0) return;
+    for (const client of clients) {
+      try {
+        writeSseEvent(client, event);
+      } catch {
+        removeEventStreamClient(room.code, client);
+      }
     }
   }
 }
@@ -377,6 +471,389 @@ function openEventStream(
   res.on('close', cleanup);
 }
 
+function getActiveSocketBinding(socket: Socket): SocketSeatBinding | null {
+  const binding = socketSeatBindings.get(socket.id);
+  if (!binding) return null;
+  const key = roomSeatKey(binding.roomCode, binding.seatId);
+  if (roomSocketBindings.get(key) !== socket.id) {
+    socketSeatBindings.delete(socket.id);
+    return null;
+  }
+  return binding;
+}
+
+async function handleSocketDisconnect(socket: Socket, reason?: string): Promise<void> {
+  const binding = unbindSocket(socket.id);
+  if (!binding) return;
+
+  const room = rooms.get(binding.roomCode);
+  if (!room) return;
+  console.info(
+    `[mp][transport] mode=socket event=disconnect room=${binding.roomCode} seat=${binding.seatId} reason=${reason ?? 'unknown'}`,
+  );
+
+  const previousRuntimeState = room.roomRuntimeState;
+  const preStatus = room.status;
+  try {
+    leaveRoom(room, binding.seatId, binding.sessionToken);
+  } catch {
+    return;
+  }
+  const seat = getSeatConnectionSnapshot(room, binding.seatId);
+  syncDisconnectTimersForRoom(room);
+  snapshotAll();
+  if (preStatus !== 'lobby' && seat && !seat.connected) {
+    broadcastRoomEvent(room, 'mp:player_disconnected', {
+      seatId: seat.seatId,
+      displayName: seat.displayName,
+      graceExpiresAt: seat.reconnectDeadlineMs,
+    });
+  } else {
+    broadcastRoomEvent(room, 'leave');
+  }
+  emitRoomRuntimeTransition(room, previousRuntimeState);
+}
+
+function registerSocketCommand<Name extends MultiplayerSocketCommandName>(
+  socket: Socket,
+  commandName: Name,
+  handler: (
+    room: MultiplayerRoom,
+    binding: SocketSeatBinding,
+    payload: SocketCommandPayload<Name>,
+  ) => Promise<SocketCommandResponse<Name>> | SocketCommandResponse<Name>,
+): void {
+  socket.on(commandName, async (payload: SocketCommandPayload<Name>, ack?: SocketAckCallback<Name>) => {
+    const commandStartedAt = Date.now();
+    const respond = typeof ack === 'function' ? ack : null;
+    if (!respond) return;
+    const binding = getActiveSocketBinding(socket);
+    if (!binding) {
+      respond(socketAckFailure({ code: 'invalid_session' }) as MultiplayerSocketAck<SocketCommandResponse<Name>>);
+      return;
+    }
+    const room = rooms.get(binding.roomCode);
+    if (!room) {
+      respond(socketAckFailure({ code: 'room_not_found' }) as MultiplayerSocketAck<SocketCommandResponse<Name>>);
+      return;
+    }
+    try {
+      const payloadResult = await handler(room, binding, payload);
+      console.info(
+        `[mp][transport_cmd] mode=socket command=${commandName} room=${room.code} seat=${binding.seatId} status=ok latencyMs=${Date.now() - commandStartedAt}`,
+      );
+      respond(socketAckSuccess(payloadResult, room.revision));
+      if (commandName === 'mp:cmd:leave') {
+        unbindSocket(socket.id);
+        socket.disconnect(true);
+      }
+    } catch (error) {
+      const code = error instanceof Error ? error.message : 'server_error';
+      if (commandName === 'mp:cmd:action' && isActionRejectionCandidate(code)) {
+        const reason = mapActionErrorToRejectedReason(code);
+        if (reason === 'stale_state') {
+          reconnectCounters.stale_action_reject_total += 1;
+        }
+        console.info(
+          `[mp][transport_cmd] mode=socket command=${commandName} room=${room.code} seat=${binding.seatId} status=error code=action_rejected reason=${reason} latencyMs=${Date.now() - commandStartedAt}`,
+        );
+        respond(socketAckFailure({
+          code: 'action_rejected',
+          message: reason,
+          serverStateVersion: room.revision,
+          requiresResync: reason === 'stale_state',
+        }) as MultiplayerSocketAck<SocketCommandResponse<Name>>);
+        return;
+      }
+      console.info(
+        `[mp][transport_cmd] mode=socket command=${commandName} room=${room.code} seat=${binding.seatId} status=error code=${code} latencyMs=${Date.now() - commandStartedAt}`,
+      );
+      respond(socketAckFailure({
+        code,
+        serverStateVersion: room.revision,
+      }) as MultiplayerSocketAck<SocketCommandResponse<Name>>);
+    }
+  });
+}
+
+function registerSocketCommands(socket: Socket): void {
+  registerSocketCommand(socket, 'mp:cmd:state', (room, binding) => {
+    const snapshot = roomView(room, binding.seatId, binding.sessionToken);
+    return snapshot;
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:reconnect', (room, binding, payload) => {
+    reconnectCounters.resume_request_total += 1;
+    const previousRuntimeState = room.roomRuntimeState;
+    const session = reconnectRoom(room, binding.seatId, binding.sessionToken, payload?.expectedRevision);
+    const snapshot = roomView(room, session.playerId, session.sessionToken);
+    const seat = getSeatConnectionSnapshot(room, session.playerId);
+    syncDisconnectTimersForRoom(room);
+    snapshotAll();
+    broadcastRoomEvent(room, 'mp:player_reconnected', {
+      seatId: seat?.seatId ?? session.playerId,
+      displayName: seat?.displayName,
+      graceExpiresAt: seat?.reconnectDeadlineMs,
+    });
+    emitRoomRuntimeTransition(room, previousRuntimeState);
+    reconnectCounters.resume_success_total += 1;
+    const response: ResumeRoomResponse = {
+      status: 'ok',
+      roomCode: session.roomCode,
+      seatId: session.seatId,
+      resumeToken: session.resumeToken,
+      playerId: session.playerId,
+      sessionToken: session.sessionToken,
+      reconnectDeadlineMs: session.reconnectDeadlineMs,
+      requiresFullResync: true,
+      serverStateVersion: snapshot.revision,
+      snapshot,
+    };
+    return response;
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:start', (room, binding, payload) => {
+    const previousRuntimeState = room.roomRuntimeState;
+    startRoom(room, binding.seatId, binding.sessionToken, payload?.seed, payload?.expectedRevision, payload?.checkpointId);
+    snapshotAll();
+    broadcastRoomEvent(room, payload?.checkpointId ? 'start_from_checkpoint' : 'start');
+    emitRoomRuntimeTransition(room, previousRuntimeState);
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:leave', (room, binding, payload) => {
+    const preStatus = room.status;
+    const previousRuntimeState = room.roomRuntimeState;
+    leaveRoom(room, binding.seatId, binding.sessionToken, payload?.expectedRevision);
+    const seat = getSeatConnectionSnapshot(room, binding.seatId);
+    syncDisconnectTimersForRoom(room);
+    snapshotAll();
+    if (preStatus !== 'lobby' && seat && !seat.connected) {
+      broadcastRoomEvent(room, 'mp:player_disconnected', {
+        seatId: seat.seatId,
+        displayName: seat.displayName,
+        graceExpiresAt: seat.reconnectDeadlineMs,
+      });
+    } else {
+      broadcastRoomEvent(room, 'leave');
+    }
+    emitRoomRuntimeTransition(room, previousRuntimeState);
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:pause', (room, binding, payload) => {
+    const previousRuntimeState = room.roomRuntimeState;
+    pauseRoom(room, binding.seatId, binding.sessionToken, payload?.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'pause');
+    emitRoomRuntimeTransition(room, previousRuntimeState);
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:resume', (room, binding, payload) => {
+    const previousRuntimeState = room.roomRuntimeState;
+    resumeRoom(room, binding.seatId, binding.sessionToken, payload?.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'resume');
+    emitRoomRuntimeTransition(room, previousRuntimeState);
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:undo', (room, binding, payload) => {
+    undoRoomAction(room, binding.seatId, binding.sessionToken, payload?.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'undo');
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:reset_turn', (room, binding, payload) => {
+    resetTurnRoomActions(room, binding.seatId, binding.sessionToken, payload?.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'reset_turn');
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:ready', (room, binding, payload) => {
+    if (typeof payload?.ready !== 'boolean') {
+      throw new Error('invalid_payload');
+    }
+    setRoomReady(room, binding.seatId, binding.sessionToken, payload.ready, payload.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'ready_changed');
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:action', (room, binding, payload) => {
+    if (!payload || !isValidMultiplayerAction(payload.action)) {
+      throw new Error('invalid_payload');
+    }
+    applyRoomAction(room, binding.seatId, binding.sessionToken, payload.action, payload.expectedRevision, {
+      clientStateVersion: payload.clientStateVersion,
+      actionId: optionalTrimmedString(payload.actionId),
+    });
+    snapshotAll();
+    broadcastRoomEvent(room, 'action');
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:reaction', (room, binding, payload) => {
+    if (!MULTIPLAYER_REACTIONS_ENABLED) {
+      throw new Error('reactions_disabled');
+    }
+    const reaction = optionalTrimmedString(payload?.reaction);
+    if (!reaction || !ROOM_REACTION_OPTIONS.includes(reaction as MultiplayerReaction)) {
+      throw new Error('invalid_payload');
+    }
+    sendRoomReaction(room, binding.seatId, binding.sessionToken, reaction as MultiplayerReaction, payload?.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'reaction');
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:chat', (room, binding, payload) => {
+    const text = optionalTrimmedString(payload?.text);
+    if (!text) {
+      throw new Error('invalid_payload');
+    }
+    sendRoomChat(room, binding.seatId, binding.sessionToken, text, payload?.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'chat');
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:typing', (room, binding, payload) => {
+    if (typeof payload?.typing !== 'boolean') {
+      throw new Error('invalid_payload');
+    }
+    setRoomTyping(room, binding.seatId, binding.sessionToken, payload.typing, payload.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'typing');
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:checkpoint_save', (room, binding, payload) => {
+    const name = optionalTrimmedString(payload?.name);
+    if (!name) {
+      throw new Error('invalid_payload');
+    }
+    const checkpoint = saveRoomCheckpoint(room, binding.seatId, binding.sessionToken, name, payload?.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'checkpoint_saved');
+    return { checkpoint };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:checkpoint_load', (room, binding, payload) => {
+    const checkpointId = optionalTrimmedString(payload?.checkpointId);
+    if (!checkpointId) {
+      throw new Error('invalid_payload');
+    }
+    loadRoomCheckpoint(room, binding.seatId, binding.sessionToken, checkpointId, payload?.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'checkpoint_loaded');
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:checkpoint_delete', (room, binding, payload) => {
+    const checkpointId = optionalTrimmedString(payload?.checkpointId);
+    if (!checkpointId) {
+      throw new Error('invalid_payload');
+    }
+    deleteRoomCheckpoint(room, binding.seatId, binding.sessionToken, checkpointId, payload?.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'checkpoint_deleted');
+    return { ok: true };
+  });
+}
+
+function registerSocketTransport(server: ReturnType<typeof createServer>): void {
+  io = new SocketIOServer(server, {
+    cors: {
+      origin: '*',
+      methods: ['GET', 'POST'],
+    },
+  });
+
+  io.on('connection', (socket) => {
+    const resolved = resolveSocketAuthPayload(socket);
+    if (!resolved) {
+      socket.emit('mp:evt:session_replaced', { reason: 'invalid_payload' });
+      socket.disconnect(true);
+      return;
+    }
+    const room = rooms.get(resolved.roomCode);
+    if (!room) {
+      socket.emit('mp:evt:session_replaced', { reason: 'room_not_found' });
+      socket.disconnect(true);
+      return;
+    }
+    const seatBefore = getSeatConnectionSnapshot(room, resolved.identity.playerId);
+    const wasDisconnected = seatBefore ? !seatBefore.connected : false;
+    const previousRuntimeState = room.roomRuntimeState;
+
+    try {
+      if (wasDisconnected) {
+        reconnectRoom(room, resolved.identity.playerId, resolved.identity.sessionToken);
+      } else {
+        roomView(room, resolved.identity.playerId, resolved.identity.sessionToken);
+      }
+    } catch (error) {
+      const code = error instanceof Error ? error.message : 'invalid_session';
+      socket.emit('mp:evt:session_replaced', { reason: code });
+      socket.disconnect(true);
+      return;
+    }
+
+    const seat = getSeatConnectionSnapshot(room, resolved.identity.playerId);
+    if (!seat) {
+      socket.emit('mp:evt:session_replaced', { reason: 'seat_not_found' });
+      socket.disconnect(true);
+      return;
+    }
+    const previousSocketId = bindSocketToSeat(socket, {
+      roomCode: resolved.roomCode,
+      seatId: resolved.identity.playerId,
+      sessionToken: resolved.identity.sessionToken,
+    });
+    console.info(
+      `[mp][transport] mode=socket event=connect room=${resolved.roomCode} seat=${resolved.identity.playerId} replaced=${Boolean(previousSocketId)}`,
+    );
+    socket.join(resolved.roomCode);
+    if (previousSocketId) {
+      io?.sockets.sockets.get(previousSocketId)?.emit('mp:evt:session_replaced', { reason: 'newest_socket_wins' });
+      io?.sockets.sockets.get(previousSocketId)?.disconnect(true);
+    }
+
+    syncDisconnectTimersForRoom(room);
+    snapshotAll();
+    if (wasDisconnected) {
+      broadcastRoomEvent(room, 'mp:player_reconnected', {
+        seatId: seat.seatId,
+        displayName: seat.displayName,
+        graceExpiresAt: seat.reconnectDeadlineMs,
+      });
+      emitRoomRuntimeTransition(room, previousRuntimeState);
+    }
+    socket.emit('mp:evt:connected', {
+      roomCode: room.code,
+      seatId: seat.seatId,
+      revision: room.revision,
+      serverTime: Date.now(),
+    });
+    socket.emit('room_update', {
+      roomCode: room.code,
+      revision: room.revision,
+      reason: 'stream_bootstrap',
+      serverTime: Date.now(),
+      eventId: room.revision,
+    } satisfies MultiplayerRoomEventEnvelope);
+
+    registerSocketCommands(socket);
+    socket.on('disconnect', (reason) => {
+      void handleSocketDisconnect(socket, reason);
+    });
+  });
+}
+
 setInterval(() => {
   const pruneResult = pruneInactiveRooms(rooms);
   for (const disconnected of pruneResult.disconnectedSeats) {
@@ -388,11 +865,15 @@ setInterval(() => {
       graceExpiresAt: disconnected.graceExpiresAt,
     });
   }
+  for (const removedRoomCode of pruneResult.removedRoomCodes) {
+    disconnectTimers.cancelRoom(removedRoomCode);
+    clearSocketBindingsForRoom(removedRoomCode);
+  }
   syncDisconnectTimersForAllRooms();
   snapshotAll();
 }, 60_000);
 
-createServer(async (req, res) => {
+const httpServer = createServer(async (req, res) => {
   if (!req.url || !req.method) {
     writeJson(res, 400, { error: 'bad_request' });
     return;
@@ -415,6 +896,10 @@ createServer(async (req, res) => {
       graceExpiresAt: disconnected.graceExpiresAt,
     });
   }
+  for (const removedRoomCode of pruneResult.removedRoomCodes) {
+    disconnectTimers.cancelRoom(removedRoomCode);
+    clearSocketBindingsForRoom(removedRoomCode);
+  }
   syncDisconnectTimersForAllRooms();
 
   try {
@@ -423,6 +908,7 @@ createServer(async (req, res) => {
         ok: true,
         pushEnabled: MULTIPLAYER_PUSH_ENABLED,
         reactionsEnabled: MULTIPLAYER_REACTIONS_ENABLED,
+        socketEnabled: MULTIPLAYER_SOCKET_ENABLED,
       });
       return;
     }
@@ -503,6 +989,7 @@ createServer(async (req, res) => {
       try {
         const previousRuntimeState = room.roomRuntimeState;
         const session = reconnectRoom(room, playerId, sessionToken, expectedRevision);
+        disconnectSocketForSeat(room.code, session.playerId, 'http_reconnect_newest_wins');
         const snapshot = roomView(room, session.playerId, session.sessionToken);
         reconnectCounters.resume_success_total += 1;
         console.info(
@@ -676,6 +1163,7 @@ createServer(async (req, res) => {
     }
 
     if (operation === 'leave') {
+      disconnectSocketForSeat(room.code, playerId, 'session_left_room');
       const preStatus = room.status;
       const previousRuntimeState = room.roomRuntimeState;
       leaveRoom(room, playerId, sessionToken, expectedRevision);
@@ -882,6 +1370,12 @@ createServer(async (req, res) => {
     const message = error instanceof Error ? error.message : 'server_error';
     writeJson(res, 400, { error: message });
   }
-}).listen(PORT, () => {
+});
+
+if (MULTIPLAYER_SOCKET_ENABLED) {
+  registerSocketTransport(httpServer);
+}
+
+httpServer.listen(PORT, () => {
   console.log(`Multiplayer server listening on http://0.0.0.0:${PORT}`);
 });

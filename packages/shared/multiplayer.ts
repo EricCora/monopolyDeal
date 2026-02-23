@@ -188,3 +188,97 @@ export interface MultiplayerRoomEventEnvelope {
   displayName?: string;
   graceExpiresAt?: number;
 }
+
+export interface MultiplayerSocketAuthPayload {
+  roomCode: string;
+  seatId?: PlayerId;
+  resumeToken?: string;
+  // Deprecated compatibility fields; remove after alias cleanup ticket lands.
+  playerId?: PlayerId;
+  sessionToken?: string;
+}
+
+export type MultiplayerSocketCommandName =
+  | 'mp:cmd:reconnect'
+  | 'mp:cmd:state'
+  | 'mp:cmd:start'
+  | 'mp:cmd:action'
+  | 'mp:cmd:leave'
+  | 'mp:cmd:pause'
+  | 'mp:cmd:resume'
+  | 'mp:cmd:undo'
+  | 'mp:cmd:reset_turn'
+  | 'mp:cmd:ready'
+  | 'mp:cmd:reaction'
+  | 'mp:cmd:chat'
+  | 'mp:cmd:typing'
+  | 'mp:cmd:checkpoint_save'
+  | 'mp:cmd:checkpoint_load'
+  | 'mp:cmd:checkpoint_delete';
+
+export type MultiplayerSocketEventName =
+  | 'mp:evt:connected'
+  | 'mp:evt:session_replaced'
+  | 'room_update';
+
+export interface MultiplayerSocketError {
+  code: string;
+  message?: string;
+  serverStateVersion?: number;
+  requiresResync?: boolean;
+}
+
+export interface MultiplayerSocketAckSuccess<TPayload> {
+  ok: true;
+  transport: 'socket';
+  serverStateVersion?: number;
+  payload: TPayload;
+}
+
+export interface MultiplayerSocketAckFailure {
+  ok: false;
+  transport: 'socket';
+  error: MultiplayerSocketError;
+}
+
+export type MultiplayerSocketAck<TPayload> =
+  | MultiplayerSocketAckSuccess<TPayload>
+  | MultiplayerSocketAckFailure;
+
+export interface MultiplayerSocketCommandPayloadMap {
+  'mp:cmd:reconnect': { expectedRevision?: number };
+  'mp:cmd:state': { expectedRevision?: number };
+  'mp:cmd:start': { seed?: number; checkpointId?: string; expectedRevision?: number };
+  'mp:cmd:action': { action: Action; expectedRevision?: number; clientStateVersion?: number; actionId?: string };
+  'mp:cmd:leave': { expectedRevision?: number };
+  'mp:cmd:pause': { expectedRevision?: number };
+  'mp:cmd:resume': { expectedRevision?: number };
+  'mp:cmd:undo': { expectedRevision?: number };
+  'mp:cmd:reset_turn': { expectedRevision?: number };
+  'mp:cmd:ready': { ready: boolean; expectedRevision?: number };
+  'mp:cmd:reaction': { reaction: MultiplayerReaction; expectedRevision?: number };
+  'mp:cmd:chat': { text: string; expectedRevision?: number };
+  'mp:cmd:typing': { typing: boolean; expectedRevision?: number };
+  'mp:cmd:checkpoint_save': { name: string; expectedRevision?: number };
+  'mp:cmd:checkpoint_load': { checkpointId: string; expectedRevision?: number };
+  'mp:cmd:checkpoint_delete': { checkpointId: string; expectedRevision?: number };
+}
+
+export interface MultiplayerSocketCommandResponseMap {
+  'mp:cmd:reconnect': ResumeRoomResponse;
+  'mp:cmd:state': MultiplayerRoomView;
+  'mp:cmd:start': { ok: true };
+  'mp:cmd:action': { ok: true };
+  'mp:cmd:leave': { ok: true };
+  'mp:cmd:pause': { ok: true };
+  'mp:cmd:resume': { ok: true };
+  'mp:cmd:undo': { ok: true };
+  'mp:cmd:reset_turn': { ok: true };
+  'mp:cmd:ready': { ok: true };
+  'mp:cmd:reaction': { ok: true };
+  'mp:cmd:chat': { ok: true };
+  'mp:cmd:typing': { ok: true };
+  'mp:cmd:checkpoint_save': { checkpoint: MultiplayerCheckpointSummary };
+  'mp:cmd:checkpoint_load': { ok: true };
+  'mp:cmd:checkpoint_delete': { ok: true };
+}

@@ -45,6 +45,13 @@ export class DisconnectTimerRegistry {
     return this.timers.has(disconnectTimerKey(roomCode, seatId));
   }
 
+  cancelRoom(roomCode: string): void {
+    for (const key of this.timers.keys()) {
+      if (!key.startsWith(`${roomCode}:`)) continue;
+      this.cancelByKey(key);
+    }
+  }
+
   size(): number {
     return this.timers.size;
   }
