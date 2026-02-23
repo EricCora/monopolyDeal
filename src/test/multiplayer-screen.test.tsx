@@ -405,6 +405,7 @@ describe('MultiplayerScreen', () => {
       roomCode: 'HRCWM',
       seatId: 'p1',
       pushState: 'connected' as const,
+      transportMode: 'socket_primary' as const,
       reconnectAttempt: 2,
       lastClientVersion: 5,
       lastServerVersion: 6,

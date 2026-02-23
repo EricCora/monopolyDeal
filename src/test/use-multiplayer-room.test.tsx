@@ -9,7 +9,9 @@ const clientMocks = vi.hoisted(() => ({
   checkMultiplayerHealth: vi.fn(async () => true),
   createMultiplayerRoom: vi.fn(),
   deleteMultiplayerCheckpoint: vi.fn(async () => undefined),
+  disconnectMultiplayerSocketTransport: vi.fn(() => undefined),
   getMultiplayerApiBase: vi.fn(() => 'http://localhost:8787'),
+  getMultiplayerTransportMode: vi.fn(() => 'http_fallback' as const),
   joinMultiplayerRoom: vi.fn(async () => {
     throw new Error('not_implemented');
   }),
@@ -28,6 +30,10 @@ const clientMocks = vi.hoisted(() => ({
   setMultiplayerTyping: vi.fn(async () => undefined),
   setMultiplayerReady: vi.fn(async () => undefined),
   startMultiplayerRoom: vi.fn(async () => undefined),
+  subscribeMultiplayerTransportMode: vi.fn((listener: (mode: 'socket_primary' | 'http_fallback') => void) => {
+    listener('http_fallback');
+    return () => undefined;
+  }),
   subscribeMultiplayerRoomEvents: vi.fn(),
   undoMultiplayerRoomAction: vi.fn(async () => undefined),
 }));
@@ -37,7 +43,9 @@ vi.mock('../network/multiplayerClient', () => ({
   checkMultiplayerHealth: clientMocks.checkMultiplayerHealth,
   createMultiplayerRoom: clientMocks.createMultiplayerRoom,
   deleteMultiplayerCheckpoint: clientMocks.deleteMultiplayerCheckpoint,
+  disconnectMultiplayerSocketTransport: clientMocks.disconnectMultiplayerSocketTransport,
   getMultiplayerApiBase: clientMocks.getMultiplayerApiBase,
+  getMultiplayerTransportMode: clientMocks.getMultiplayerTransportMode,
   joinMultiplayerRoom: clientMocks.joinMultiplayerRoom,
   leaveMultiplayerRoom: clientMocks.leaveMultiplayerRoom,
   listMultiplayerCheckpoints: clientMocks.listMultiplayerCheckpoints,
@@ -54,6 +62,7 @@ vi.mock('../network/multiplayerClient', () => ({
   setMultiplayerTyping: clientMocks.setMultiplayerTyping,
   setMultiplayerReady: clientMocks.setMultiplayerReady,
   startMultiplayerRoom: clientMocks.startMultiplayerRoom,
+  subscribeMultiplayerTransportMode: clientMocks.subscribeMultiplayerTransportMode,
   subscribeMultiplayerRoomEvents: clientMocks.subscribeMultiplayerRoomEvents,
   undoMultiplayerRoomAction: clientMocks.undoMultiplayerRoomAction,
 }));
