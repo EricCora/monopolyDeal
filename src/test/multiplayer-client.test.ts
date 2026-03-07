@@ -1,10 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   applyMultiplayerAction,
+  getSocketProbeCooldownRemainingMs,
   isLanResolvableHost,
   listMultiplayerLanOrigins,
   multiplayerErrorMessage,
   reconnectMultiplayerRoom,
+  resetMultiplayerTransportState,
+  runWithTransportFallback,
+  SOCKET_PROBE_COOLDOWN_MS,
   resolveMultiplayerApiBase,
 } from '../network/multiplayerClient';
 
@@ -225,5 +229,76 @@ describe('applyMultiplayerAction action_rejected error details', () => {
           requiresResync: true,
         },
       });
+  });
+});
+
+describe('transport fallback cooldown', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-23T10:00:00.000Z'));
+    resetMultiplayerTransportState();
+  });
+
+  afterEach(() => {
+    resetMultiplayerTransportState();
+    vi.useRealTimers();
+  });
+
+  it('enters cooldown after transport failure and skips repeated socket attempts during cooldown', async () => {
+    let socketCalls = 0;
+    let httpCalls = 0;
+    const runSocket = async () => {
+      socketCalls += 1;
+      const error = new Error('request_failed') as Error & { transportFailure?: boolean };
+      error.transportFailure = true;
+      throw error;
+    };
+    const runHttp = async () => {
+      httpCalls += 1;
+      return 'ok';
+    };
+
+    await expect(runWithTransportFallback(runSocket, runHttp, { ignoreTransportGate: true })).resolves.toBe('ok');
+    expect(socketCalls).toBe(1);
+    expect(httpCalls).toBe(1);
+    expect(getSocketProbeCooldownRemainingMs()).toBeGreaterThan(0);
+
+    await expect(runWithTransportFallback(runSocket, runHttp)).resolves.toBe('ok');
+    expect(socketCalls).toBe(1);
+    expect(httpCalls).toBe(2);
+  });
+
+  it('allows probe retry after cooldown expiry and restores socket-first path on success', async () => {
+    let socketCalls = 0;
+    let httpCalls = 0;
+    let failSocket = true;
+    const runSocket = async () => {
+      socketCalls += 1;
+      if (failSocket) {
+        const error = new Error('request_failed') as Error & { transportFailure?: boolean };
+        error.transportFailure = true;
+        throw error;
+      }
+      return 'socket_ok';
+    };
+    const runHttp = async () => {
+      httpCalls += 1;
+      return 'http_ok';
+    };
+
+    await expect(runWithTransportFallback(runSocket, runHttp, { ignoreTransportGate: true })).resolves.toBe('http_ok');
+    expect(socketCalls).toBe(1);
+    expect(httpCalls).toBe(1);
+
+    vi.advanceTimersByTime(SOCKET_PROBE_COOLDOWN_MS + 1);
+    failSocket = false;
+    await expect(runWithTransportFallback(runSocket, runHttp, { ignoreTransportGate: true })).resolves.toBe('socket_ok');
+    expect(socketCalls).toBe(2);
+    expect(httpCalls).toBe(1);
+    expect(getSocketProbeCooldownRemainingMs()).toBe(0);
+
+    await expect(runWithTransportFallback(runSocket, runHttp, { ignoreTransportGate: true })).resolves.toBe('socket_ok');
+    expect(socketCalls).toBe(3);
+    expect(httpCalls).toBe(1);
   });
 });

@@ -108,6 +108,10 @@ function sanitizeRoomCode(input: string): string {
   return input.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
 }
 
+function hasExplicitJoinPath(pathname: string): boolean {
+  return /^\/join\/[A-Za-z0-9]{4,8}\/?$/.test(pathname);
+}
+
 function createClientActionId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -1160,6 +1164,7 @@ export function useMultiplayerRoom({
   useEffect(() => {
     if (!enabled || autoReconnectAttemptedRef.current) return;
     autoReconnectAttemptedRef.current = true;
+    if (typeof window !== 'undefined' && hasExplicitJoinPath(window.location.pathname)) return;
     const stored = loadStoredSession();
     if (!stored) return;
     setPlayerName(stored.playerName);

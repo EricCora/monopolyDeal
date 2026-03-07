@@ -460,6 +460,13 @@ export function GameTableScreen({
   const visibleHandZoneByPlayerIdRef = useRef<Record<string, HTMLDivElement | null>>({});
   const handledDrawEventKeyRef = useRef<string | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
+  const hasDisconnectDeadline = Number.isFinite(disconnectDeadlineMs) && Number(disconnectDeadlineMs) > clockNow;
+  const disconnectSecondsRemaining = hasDisconnectDeadline
+    ? Math.max(0, Math.ceil((Number(disconnectDeadlineMs) - clockNow) / 1000))
+    : 0;
+  const disconnectCountdownText = hasDisconnectDeadline
+    ? ` Timeout in ${disconnectSecondsRemaining}s.`
+    : '';
   const [drawGhostCards, setDrawGhostCards] = useState<DrawGhostCard[]>([]);
   const [narrowLayout, setNarrowLayout] = useState(() => (
     typeof window !== 'undefined' ? window.innerWidth <= 980 : false
@@ -575,13 +582,6 @@ export function GameTableScreen({
     return colors;
   }, [activeMoveWildCardId, moveWildActionsByCard]);
   const turnPriorityNotice = useMemo<TablePriorityNotice | null>(() => {
-    const hasDisconnectDeadline = Number.isFinite(disconnectDeadlineMs) && Number(disconnectDeadlineMs) > clockNow;
-    const disconnectSecondsRemaining = hasDisconnectDeadline
-      ? Math.max(0, Math.ceil((Number(disconnectDeadlineMs) - clockNow) / 1000))
-      : 0;
-    const disconnectCountdownText = hasDisconnectDeadline
-      ? ` Timeout in ${disconnectSecondsRemaining}s.`
-      : '';
     if (isPaused) {
       return {
         title: 'Match Paused',
@@ -646,8 +646,7 @@ export function GameTableScreen({
       tone: 'info',
     };
   }, [
-    clockNow,
-    disconnectDeadlineMs,
+    disconnectCountdownText,
     activePlayerName,
     discardOverLimitCount,
     game.players,
@@ -766,13 +765,6 @@ export function GameTableScreen({
   })();
 
   const reconnectOverlayDetail = (() => {
-    const hasDisconnectDeadline = Number.isFinite(disconnectDeadlineMs) && Number(disconnectDeadlineMs) > clockNow;
-    const disconnectSecondsRemaining = hasDisconnectDeadline
-      ? Math.max(0, Math.ceil((Number(disconnectDeadlineMs) - clockNow) / 1000))
-      : 0;
-    const disconnectCountdownText = hasDisconnectDeadline
-      ? ` Timeout in ${disconnectSecondsRemaining}s.`
-      : '';
     if (multiplayerUiState === 'room_ended') {
       return pauseReasonText ?? 'This room is no longer available. Create or join a new room to continue.';
     }
@@ -1430,7 +1422,7 @@ export function GameTableScreen({
         <div className="paused-overlay" role="dialog" aria-modal="true" aria-label="Game paused">
           <div className="paused-card card-enter">
             <h3>Game Paused</h3>
-            <p>{pauseReasonText ?? 'Gameplay is locked until you press Resume in the top bar.'}</p>
+            <p>{`${pauseReasonText ?? 'Gameplay is locked until you press Resume in the top bar.'}${disconnectCountdownText}`}</p>
           </div>
         </div>
       ) : null}

@@ -5,6 +5,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      '/socket.io': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+        ws: true,
+      },
       '/api/multiplayer': {
         target: 'http://localhost:8787',
         changeOrigin: true,

@@ -1,5 +1,7 @@
 # Next Codex Session: Multiplayer Hosted UX Follow-Through
 
+Status note: this handoff is preserved for historical context. Invite-link flow and Socket.IO transport migration have both shipped since this note was written.
+
 Purpose: build on shipped multiplayer gameplay parity by reducing onboarding friction for non-technical players.
 
 ## Current State (as of latest commits)
@@ -90,11 +92,11 @@ Verification commands:
 6. Player 2 enters name and joins.
 7. Host starts match and parity controls still function.
 
-## Non-Goals (for this next session)
+## Non-Goals (historical)
 
 - Matchmaking/lobbies beyond private invites.
 - Accounts/authentication.
-- Websocket transport migration (still deferred from parity release).
+- Websocket transport migration (was deferred at the time of this handoff; now complete).
 
 ## Definition of Done
 

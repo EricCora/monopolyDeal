@@ -3,14 +3,15 @@
 ## Current architecture
 
 - Authority: server-authoritative room lifecycle in `apps/server/src/gameService.ts`.
-- API transport: HTTP JSON endpoints + SSE room update stream (`apps/server/src/index.ts`).
+- API transport: Socket.IO command/event transport (primary) with HTTP JSON + SSE fallback (`apps/server/src/index.ts`).
 - Client orchestration: `src/app/useMultiplayerRoom.ts`.
 
 ## Sync model
 
 - State pull: `/state` returns full `MultiplayerRoomView`.
-- Push hint: SSE `room_update` envelope with `eventId` and `revision`.
+- Push hint: Socket.IO `room_update` envelope with `eventId` and `revision` (SSE fallback).
 - Fallback: client polling remains active.
+- Outage behavior: client enters a short socket cooldown after transport failure, uses HTTP fallback immediately during cooldown, then probes socket-primary again.
 
 ## Reconnect flow
 
@@ -26,7 +27,7 @@
 - Session mismatch or expiration (`invalid_session`, `reconnect_expired`).
 - Room lifecycle terminal errors (`room_not_found`, `room_started` in join context).
 - Structured action rejection for guarded stale writes (`action_rejected` with reason taxonomy).
-- SSE push bootstrap timeout degrades to polling without blocking gameplay.
+- Push bootstrap timeout (socket or SSE) degrades to polling without blocking gameplay.
 
 ## Runtime disconnect policy (MD-C10)
 
@@ -43,7 +44,7 @@
 - Added request-validation regression tests (`src/test/server-validation.test.ts`).
 - Added stale-action rejection + auto-resync path with always-on version guarding.
 - Added server-room regression tests for host disconnect runtime policy and stale-action idempotency.
-- Added SSE bootstrap frame (`reason=stream_bootstrap`) to reduce false live-update fallback on LAN/Safari.
+- Added immediate stream bootstrap (`reason=stream_bootstrap`) and socket cooldown fallback to reduce false live-update degradation and command lag in LAN/dev paths.
 
 ## Stage-4 closure notes
 

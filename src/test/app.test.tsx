@@ -1835,6 +1835,8 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getAllByText(/host disconnected\. room is paused until reconnect or timeout/i).length).toBeGreaterThan(0);
     });
+    const pausedDialog = screen.getByRole('dialog', { name: /game paused/i });
+    expect(within(pausedDialog).getByText(/timeout in \d+s/i)).toBeInTheDocument();
     const enabledRefreshButton = screen.getAllByRole('button', { name: /refresh/i })
       .find((button) => !button.hasAttribute('disabled'));
     expect(enabledRefreshButton).toBeDefined();

@@ -54,6 +54,7 @@ export const MULTIPLAYER_REACTION_OPTIONS: MultiplayerReaction[] = ['nice', 'wow
 
 const SOCKET_ACK_TIMEOUT_MS = 3_500;
 const SOCKET_CONNECT_TIMEOUT_MS = 3_500;
+export const SOCKET_PROBE_COOLDOWN_MS = 12_000;
 const SOCKET_TRANSPORT_ENABLED = import.meta.env.MODE !== 'test'
   && import.meta.env.VITE_MULTIPLAYER_SOCKET_ENABLED !== 'false';
 
@@ -73,6 +74,7 @@ const socketTransportState: SocketTransportState = {
 };
 
 let multiplayerTransportMode: MultiplayerTransportMode = 'http_fallback';
+let socketProbeCooldownUntilMs = 0;
 const transportModeListeners = new Set<(mode: MultiplayerTransportMode) => void>();
 
 function setMultiplayerTransportMode(mode: MultiplayerTransportMode): void {
@@ -81,6 +83,33 @@ function setMultiplayerTransportMode(mode: MultiplayerTransportMode): void {
   for (const listener of transportModeListeners) {
     listener(mode);
   }
+}
+
+function canAttemptSocketTransport(nowMs = Date.now()): boolean {
+  if (!SOCKET_TRANSPORT_ENABLED) return false;
+  return nowMs >= socketProbeCooldownUntilMs;
+}
+
+function clearSocketProbeCooldown(): void {
+  socketProbeCooldownUntilMs = 0;
+}
+
+function enterSocketProbeCooldown(reason: string): void {
+  const nowMs = Date.now();
+  const nextUntilMs = nowMs + SOCKET_PROBE_COOLDOWN_MS;
+  const wasCoolingDown = socketProbeCooldownUntilMs > nowMs;
+  socketProbeCooldownUntilMs = Math.max(socketProbeCooldownUntilMs, nextUntilMs);
+  setMultiplayerTransportMode('http_fallback');
+  if (!wasCoolingDown) {
+    console.info(
+      `[mp][transport_client] mode=http_fallback reason=${reason} cooldownMs=${SOCKET_PROBE_COOLDOWN_MS}`,
+    );
+  }
+}
+
+export function getSocketProbeCooldownRemainingMs(nowMs = Date.now()): number {
+  if (socketProbeCooldownUntilMs <= nowMs) return 0;
+  return socketProbeCooldownUntilMs - nowMs;
 }
 
 export function getMultiplayerTransportMode(): MultiplayerTransportMode {
@@ -161,6 +190,13 @@ function clearSocketTransport(): void {
 
 export function disconnectMultiplayerSocketTransport(): void {
   clearSocketTransport();
+  clearSocketProbeCooldown();
+  setMultiplayerTransportMode('http_fallback');
+}
+
+export function resetMultiplayerTransportState(): void {
+  clearSocketTransport();
+  clearSocketProbeCooldown();
   setMultiplayerTransportMode('http_fallback');
 }
 
@@ -192,13 +228,14 @@ function ensureSocket(
   });
 
   socket.on('connect', () => {
+    clearSocketProbeCooldown();
     setMultiplayerTransportMode('socket_primary');
   });
   socket.on('connect_error', () => {
-    setMultiplayerTransportMode('http_fallback');
+    enterSocketProbeCooldown('connect_error');
   });
   socket.on('disconnect', () => {
-    setMultiplayerTransportMode('http_fallback');
+    enterSocketProbeCooldown('disconnect');
   });
 
   socketTransportState.socket = socket;
@@ -243,7 +280,7 @@ async function runSocketCommand<Name extends MultiplayerSocketCommandName>(
   command: Name,
   payload: MultiplayerSocketCommandPayloadMap[Name],
 ): Promise<MultiplayerSocketCommandResponseMap[Name]> {
-  if (!SOCKET_TRANSPORT_ENABLED) {
+  if (!canAttemptSocketTransport()) {
     throw createTransportError('request_failed', { transportFailure: true });
   }
   if (typeof window === 'undefined') {
@@ -289,17 +326,25 @@ async function runSocketCommand<Name extends MultiplayerSocketCommandName>(
   });
 }
 
-async function withSocketFallback<T>(
+export async function runWithTransportFallback<T>(
   runSocket: () => Promise<T>,
   runHttp: () => Promise<T>,
+  options?: { ignoreTransportGate?: boolean },
 ): Promise<T> {
+  if (!options?.ignoreTransportGate && !canAttemptSocketTransport()) {
+    return runHttp();
+  }
   try {
-    return await runSocket();
+    const response = await runSocket();
+    clearSocketProbeCooldown();
+    setMultiplayerTransportMode('socket_primary');
+    return response;
   } catch (error) {
     if (!isTransportFailure(error)) {
       throw error;
     }
-    setMultiplayerTransportMode('http_fallback');
+    const code = error instanceof Error ? error.message : 'request_failed';
+    enterSocketProbeCooldown(code || 'request_failed');
     return runHttp();
   }
 }
@@ -446,7 +491,7 @@ export async function reconnectMultiplayerRoom(
   expectedRevision?: number,
 ): Promise<MultiplayerRoomSessionResponse | MultiplayerResumeRoomResponse> {
   const useCanonicalIdentity = Boolean(session.seatId && session.resumeToken);
-  return withSocketFallback<MultiplayerRoomSessionResponse | MultiplayerResumeRoomResponse>(
+  return runWithTransportFallback<MultiplayerRoomSessionResponse | MultiplayerResumeRoomResponse>(
     () => runSocketCommand(session, apiBase, 'mp:cmd:reconnect', { expectedRevision }),
     () => request<MultiplayerRoomSessionResponse>(
       `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reconnect`,
@@ -479,7 +524,7 @@ export async function leaveMultiplayerRoom(
   keepalive = false,
   expectedRevision?: number,
 ): Promise<void> {
-  await withSocketFallback(
+  await runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:leave', { expectedRevision }).then(() => undefined),
     () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/leave`, {
       method: 'POST',
@@ -500,7 +545,7 @@ export async function startMultiplayerRoom(
   expectedRevision?: number,
   checkpointId?: string,
 ): Promise<void> {
-  await withSocketFallback(
+  await runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:start', { expectedRevision, checkpointId }).then(() => undefined),
     () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/start`, {
       method: 'POST',
@@ -523,7 +568,7 @@ export async function loadMultiplayerRoomState(
     playerId: session.playerId,
     sessionToken: session.sessionToken,
   });
-  return withSocketFallback(
+  return runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:state', {}),
     () => request<MultiplayerRoomView>(
       `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/state?${params.toString()}`,
@@ -541,7 +586,7 @@ export async function applyMultiplayerAction(
     actionId?: string;
   },
 ): Promise<void> {
-  await withSocketFallback(
+  await runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:action', {
       action,
       expectedRevision,
@@ -568,7 +613,7 @@ export async function pauseMultiplayerRoom(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await withSocketFallback(
+  await runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:pause', { expectedRevision }).then(() => undefined),
     () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/pause`, {
       method: 'POST',
@@ -587,7 +632,7 @@ export async function resumeMultiplayerRoom(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await withSocketFallback(
+  await runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:resume', { expectedRevision }).then(() => undefined),
     () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/resume`, {
       method: 'POST',
@@ -606,7 +651,7 @@ export async function undoMultiplayerRoomAction(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await withSocketFallback(
+  await runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:undo', { expectedRevision }).then(() => undefined),
     () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/undo`, {
       method: 'POST',
@@ -625,7 +670,7 @@ export async function resetMultiplayerRoomTurn(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await withSocketFallback(
+  await runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:reset_turn', { expectedRevision }).then(() => undefined),
     () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reset-turn`, {
       method: 'POST',
@@ -659,7 +704,7 @@ export async function saveMultiplayerCheckpoint(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<MultiplayerCheckpointSummary> {
-  return withSocketFallback(
+  return runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:checkpoint_save', { name, expectedRevision })
       .then((payload) => payload.checkpoint),
     async () => {
@@ -687,7 +732,7 @@ export async function loadMultiplayerCheckpoint(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await withSocketFallback(
+  await runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:checkpoint_load', { checkpointId, expectedRevision }).then(() => undefined),
     () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/checkpoints/load`, {
       method: 'POST',
@@ -708,7 +753,7 @@ export async function deleteMultiplayerCheckpoint(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await withSocketFallback(
+  await runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:checkpoint_delete', { checkpointId, expectedRevision }).then(() => undefined),
     () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/checkpoints/delete`, {
       method: 'POST',
@@ -729,7 +774,7 @@ export async function setMultiplayerReady(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await withSocketFallback(
+  await runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:ready', { ready, expectedRevision }).then(() => undefined),
     () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/ready`, {
       method: 'POST',
@@ -750,7 +795,7 @@ export async function sendMultiplayerReaction(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await withSocketFallback(
+  await runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:reaction', { reaction, expectedRevision }).then(() => undefined),
     () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/reaction`, {
       method: 'POST',
@@ -771,7 +816,7 @@ export async function sendMultiplayerChatMessage(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await withSocketFallback(
+  await runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:chat', { text, expectedRevision }).then(() => undefined),
     () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/chat`, {
       method: 'POST',
@@ -792,7 +837,7 @@ export async function setMultiplayerTyping(
   apiBase = getMultiplayerApiBase(),
   expectedRevision?: number,
 ): Promise<void> {
-  await withSocketFallback(
+  await runWithTransportFallback(
     () => runSocketCommand(session, apiBase, 'mp:cmd:typing', { typing, expectedRevision }).then(() => undefined),
     () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/typing`, {
       method: 'POST',
@@ -884,7 +929,7 @@ export function subscribeMultiplayerRoomEvents(
   apiBase = getMultiplayerApiBase(),
   lastEventId?: number,
 ): MultiplayerRoomEventSubscription {
-  if (!SOCKET_TRANSPORT_ENABLED) {
+  if (!canAttemptSocketTransport()) {
     return subscribeRoomEventsViaEventSource(session, handlers, apiBase, lastEventId);
   }
   if (typeof window === 'undefined') {
@@ -901,6 +946,8 @@ export function subscribeMultiplayerRoomEvents(
   const handleSocketEvent = (event: MultiplayerRoomEventEnvelope) => {
     if (!event || typeof event !== 'object') return;
     if (typeof event.eventId !== 'number' || typeof event.revision !== 'number') return;
+    clearSocketProbeCooldown();
+    setMultiplayerTransportMode('socket_primary');
     handlers.onEvent(event);
   };
 
@@ -915,7 +962,7 @@ export function subscribeMultiplayerRoomEvents(
     if (closed || fallbackActivated) return;
     fallbackActivated = true;
     clearBootstrapTimer();
-    setMultiplayerTransportMode('http_fallback');
+    enterSocketProbeCooldown('push_fallback');
     if (socket) {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
@@ -933,6 +980,7 @@ export function subscribeMultiplayerRoomEvents(
     if (closed || fallbackActivated) return;
     connectedViaSocket = true;
     clearBootstrapTimer();
+    clearSocketProbeCooldown();
     setMultiplayerTransportMode('socket_primary');
     handlers.onOpen?.();
   };
@@ -943,7 +991,7 @@ export function subscribeMultiplayerRoomEvents(
       activateFallback();
       return;
     }
-    setMultiplayerTransportMode('http_fallback');
+    enterSocketProbeCooldown('push_disconnect');
     handlers.onDisconnect?.();
   };
 

@@ -203,6 +203,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Lobby host controls include `Start Match` and `Start From Checkpoint` (when checkpoint data exists).
 - Lobby includes `Copy Room Code` and `Copy Invite Link` actions.
 - `Copy Invite Link` resolves a LAN-shareable URL when hosting from `localhost`; if LAN origin discovery fails, room code is copied instead.
+- Opening an explicit `/join/:roomCode` invite link now prefers join intent over silently auto-resuming an unrelated stored room session from the same browser profile.
 - Both copy actions show a short-lived in-UI notice and auto-dismiss after a moment.
 - Lobby includes player-ready status, room chat, and chat-tray quick reactions.
 - Player session controls: `Exit Match` (retain reconnect) and `Forget Room` (clear session).
@@ -227,6 +228,8 @@ Final closure artifact and acceptance mapping: `docs/PROGRAM_CLOSURE.md`.
 Optional multiplayer behavior flags:
 
 - `VITE_MULTIPLAYER_SOCKET_ENABLED` (`true` by default) to allow client Socket.IO realtime transport.
+  - In local/LAN dev, Vite must proxy both `/api/multiplayer` and `/socket.io` to the multiplayer server (`:8787`) so socket commands do not stall before fallback.
+  - Client transport now uses a short socket-failure cooldown (`12s`): after a socket failure it routes commands directly to HTTP fallback, then probes socket-primary again after cooldown.
 - `VITE_MULTIPLAYER_PUSH_ENABLED` (`true` by default) to enable client push subscriptions.
   - Socket.IO is attempted first for room events.
   - SSE remains as fallback push transport, with an immediate bootstrap event and a 5s open-timeout guard.

@@ -317,6 +317,7 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    window.history.pushState({}, '', '/');
   });
 
   it('switches to fallback push mode and emits fallback metric only once per session', async () => {
@@ -559,6 +560,32 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
       sessionToken: 'legacy-token',
     });
     expect(reconnectArgs).toHaveLength(3);
+  });
+
+  it('does not auto-reconnect a stored session when the app was opened from an explicit join link', async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    window.history.pushState({}, '', '/join/ABCDE');
+    localStorage.setItem('monopolyDeal.multiplayerSession.v1', JSON.stringify({
+      version: 1,
+      roomCode: 'ZZZZZ',
+      seatId: 'p9',
+      resumeToken: 'token-9',
+      playerId: 'p9',
+      sessionToken: 'token-9',
+      playerName: 'Existing Player',
+      reconnectDeadlineMs: now + 30_000,
+    }));
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+    }));
+
+    await advanceAndFlush(0, 4);
+    expect(clientMocks.reconnectMultiplayerRoom).not.toHaveBeenCalled();
+    expect(result.current.session).toBeNull();
+    expect(result.current.joinCode).toBe('');
   });
 
   it('hydrates from reconnect handshake snapshot without issuing extra /state fetch', async () => {
