@@ -30,6 +30,7 @@ import {
   type MultiplayerRoom,
 } from './gameService.ts';
 import { DisconnectTimerRegistry, disconnectTimerKey } from './disconnectTimers.ts';
+import { SocketSessionRegistry, type SocketSeatBinding } from './socketSessionRegistry.ts';
 import { loadSnapshots, saveSnapshots } from './persistence/snapshots.ts';
 import { redactSensitiveToken } from './logging.ts';
 import type { PlayerId } from '../../../src/engine/index.ts';
@@ -73,8 +74,7 @@ type EventStreamClient = {
 };
 
 const roomEventStreams = new Map<string, Set<EventStreamClient>>();
-const roomSocketBindings = new Map<string, string>();
-const socketSeatBindings = new Map<string, { roomCode: string; seatId: PlayerId; sessionToken: string }>();
+const socketSessions = new SocketSessionRegistry();
 const reconnectCounters = {
   resume_request_total: 0,
   resume_success_total: 0,
@@ -86,12 +86,6 @@ let io: SocketIOServer | null = null;
 
 type SessionIdentity = {
   playerId: PlayerId;
-  sessionToken: string;
-};
-
-type SocketSeatBinding = {
-  roomCode: string;
-  seatId: PlayerId;
   sessionToken: string;
 };
 
@@ -129,10 +123,6 @@ function resolveSessionIdentity(
   return null;
 }
 
-function roomSeatKey(roomCode: string, seatId: PlayerId): string {
-  return `${roomCode}:${seatId}`;
-}
-
 function resolveSocketAuthPayload(socket: Socket): {
   roomCode: string;
   identity: SessionIdentity;
@@ -163,38 +153,23 @@ function socketAckFailure(error: MultiplayerSocketError): MultiplayerSocketAck<n
 }
 
 function bindSocketToSeat(socket: Socket, binding: SocketSeatBinding): string | null {
-  const key = roomSeatKey(binding.roomCode, binding.seatId);
-  const previousSocketId = roomSocketBindings.get(key) ?? null;
-  roomSocketBindings.set(key, socket.id);
-  socketSeatBindings.set(socket.id, binding);
-  return previousSocketId && previousSocketId !== socket.id ? previousSocketId : null;
+  return socketSessions.bind(socket.id, binding);
 }
 
 function unbindSocket(socketId: string): SocketSeatBinding | null {
-  const binding = socketSeatBindings.get(socketId);
-  if (!binding) return null;
-  socketSeatBindings.delete(socketId);
-  const key = roomSeatKey(binding.roomCode, binding.seatId);
-  if (roomSocketBindings.get(key) === socketId) {
-    roomSocketBindings.delete(key);
-  }
-  return binding;
+  return socketSessions.unbind(socketId);
 }
 
 function clearSocketBindingsForRoom(roomCode: string): void {
-  for (const [key, socketId] of roomSocketBindings) {
-    if (!key.startsWith(`${roomCode}:`)) continue;
-    roomSocketBindings.delete(key);
-    socketSeatBindings.delete(socketId);
-  }
+  socketSessions.clearRoom(roomCode);
 }
 
 function disconnectSocketForSeat(roomCode: string, seatId: PlayerId, reason: string, exceptSocketId?: string): void {
-  const key = roomSeatKey(roomCode, seatId);
-  const socketId = roomSocketBindings.get(key);
+  const socketId = socketSessions.getActiveSocketId(roomCode, seatId);
   if (!socketId || socketId === exceptSocketId) return;
   const existing = io?.sockets.sockets.get(socketId);
   if (!existing) return;
+  socketSessions.markServerInitiatedDisconnect(socketId);
   existing.emit('mp:evt:session_replaced', { reason });
   existing.disconnect(true);
 }
@@ -472,17 +447,14 @@ function openEventStream(
 }
 
 function getActiveSocketBinding(socket: Socket): SocketSeatBinding | null {
-  const binding = socketSeatBindings.get(socket.id);
-  if (!binding) return null;
-  const key = roomSeatKey(binding.roomCode, binding.seatId);
-  if (roomSocketBindings.get(key) !== socket.id) {
-    socketSeatBindings.delete(socket.id);
-    return null;
-  }
-  return binding;
+  return socketSessions.getBinding(socket.id);
 }
 
 async function handleSocketDisconnect(socket: Socket, reason?: string): Promise<void> {
+  if (socketSessions.consumeServerInitiatedDisconnect(socket.id)) {
+    unbindSocket(socket.id);
+    return;
+  }
   const binding = unbindSocket(socket.id);
   if (!binding) return;
 
@@ -788,6 +760,11 @@ function registerSocketTransport(server: ReturnType<typeof createServer>): void 
     }
     const seatBefore = getSeatConnectionSnapshot(room, resolved.identity.playerId);
     const wasDisconnected = seatBefore ? !seatBefore.connected : false;
+    if (!wasDisconnected && socketSessions.hasActiveConflict(resolved.roomCode, resolved.identity.playerId, socket.id)) {
+      socket.emit('mp:evt:session_replaced', { reason: 'seat_already_connected' });
+      socket.disconnect(true);
+      return;
+    }
     const previousRuntimeState = room.roomRuntimeState;
 
     try {
@@ -819,6 +796,7 @@ function registerSocketTransport(server: ReturnType<typeof createServer>): void 
     );
     socket.join(resolved.roomCode);
     if (previousSocketId) {
+      socketSessions.markServerInitiatedDisconnect(previousSocketId);
       io?.sockets.sockets.get(previousSocketId)?.emit('mp:evt:session_replaced', { reason: 'newest_socket_wins' });
       io?.sockets.sockets.get(previousSocketId)?.disconnect(true);
     }
@@ -1163,10 +1141,10 @@ const httpServer = createServer(async (req, res) => {
     }
 
     if (operation === 'leave') {
-      disconnectSocketForSeat(room.code, playerId, 'session_left_room');
       const preStatus = room.status;
       const previousRuntimeState = room.roomRuntimeState;
       leaveRoom(room, playerId, sessionToken, expectedRevision);
+      disconnectSocketForSeat(room.code, playerId, 'session_left_room');
       const seat = getSeatConnectionSnapshot(room, playerId);
       syncDisconnectTimersForRoom(room);
       snapshotAll();

@@ -93,14 +93,15 @@ stateDiagram-v2
 ## Duplicate Reconnect Policy
 
 - If two active clients attempt reconnect for the same seat:
-- Server accepts the newest valid request.
-- Prior connection is invalidated and must reconnect again.
+- Server accepts the newest valid request only after reconnect auth and revision checks succeed.
+- A plain duplicate socket connection does not steal an already-connected seat; it is rejected until a valid reconnect handshake replaces the active binding.
+- Prior connection is invalidated only after the replacement reconnect succeeds.
 - Server emits presence/update event reflecting latest binding.
 
 ## Version Mismatch Policy
 
 - Client sends `clientLastKnownStateVersion` (or equivalent revision) when resuming.
-- If version diverges or client revision is stale, server requires full snapshot resync.
+- If version diverges or client revision is stale, reconnect fails with `protocol_mismatch` and the active seat binding remains unchanged.
 - Client must not accept gameplay input until snapshot is applied.
 
 ## Message Schemas
@@ -229,6 +230,7 @@ Policy behavior:
 - Active/finished room disconnect pauses gameplay.
 - Host disconnect enters `paused_host_disconnect`.
 - Host reconnect before timeout resumes to `active` when no unresolved disconnect remains.
+- If the match was already manually paused before the disconnect pause overlay, that manual pause is restored after the last disconnect resolves.
 - Host timeout transitions room to `ended_timeout` with `endedReason='host_timeout'`.
 - No host migration after match start (lobby-only migration behavior).
 

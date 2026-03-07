@@ -72,17 +72,19 @@ describe('multiplayer room service lifecycle', () => {
     expect(resumed.resumeToken).toBe(resumed.sessionToken);
   });
 
-  it('allows reconnect even when expected revision is stale', () => {
+  it('rejects stale expected revision during reconnect without mutating seat state', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     const joined = joinRoom(room, 'Player 2');
     startRoom(room, session.playerId, session.sessionToken);
     leaveRoom(room, joined.playerId, joined.sessionToken);
 
-    expect(() => reconnectRoom(room, joined.playerId, joined.sessionToken, room.revision - 5)).not.toThrow();
+    const revisionBefore = room.revision;
+    expect(() => reconnectRoom(room, joined.playerId, joined.sessionToken, room.revision - 5)).toThrowError('revision_conflict');
     const participant = findParticipant(room, joined.playerId);
-    expect(participant.connected).toBe(true);
-    expect(participant.connectionState).toBe('connected');
+    expect(participant.connected).toBe(false);
+    expect(participant.connectionState).toBe('disconnected');
+    expect(room.revision).toBe(revisionBefore);
   });
 
   it('uses 90s reconnect grace default and respects configured override', () => {
@@ -355,6 +357,48 @@ describe('multiplayer room service lifecycle', () => {
       expect(room.roomRuntimeState).toBe('active');
       expect(room.pausedReason).toBeUndefined();
       expect(room.paused).toBe(false);
+    });
+  });
+
+  it('restores manual host pause after a disconnected player reconnects', () => {
+    withPauseOnDisconnectPolicy(() => {
+      const rooms = new Map<string, MultiplayerRoom>();
+      const { room, session } = createRoom(rooms, 'Host');
+      const playerTwo = joinRoom(room, 'Player 2');
+      startRoom(room, session.playerId, session.sessionToken);
+
+      pauseRoom(room, session.playerId, session.sessionToken);
+      leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+      reconnectRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+
+      expect(room.roomRuntimeState).toBe('active');
+      expect(room.paused).toBe(true);
+      expect(room.pausedReason).toBe('manual');
+      expect(room.pausedByPlayerId).toBe(session.playerId);
+      expect(room.disconnectPauseRestore).toBeUndefined();
+    });
+  });
+
+  it('restores manual host pause after a disconnected non-host seat times out', () => {
+    withPauseOnDisconnectPolicy(() => {
+      const rooms = new Map<string, MultiplayerRoom>();
+      const { room, session } = createRoom(rooms, 'Host');
+      const playerTwo = joinRoom(room, 'Player 2');
+      startRoom(room, session.playerId, session.sessionToken);
+
+      pauseRoom(room, session.playerId, session.sessionToken);
+      leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+
+      const disconnected = findParticipant(room, playerTwo.playerId);
+      disconnected.reconnectDeadlineMs = Date.now() - 1;
+      const timeoutResult = markSeatTimedOutIfExpired(room, playerTwo.playerId, Date.now());
+
+      expect(timeoutResult.transitioned).toBe(true);
+      expect(room.roomRuntimeState).toBe('active');
+      expect(room.paused).toBe(true);
+      expect(room.pausedReason).toBe('manual');
+      expect(room.pausedByPlayerId).toBe(session.playerId);
+      expect(room.disconnectPauseRestore).toBeUndefined();
     });
   });
 
@@ -642,6 +686,24 @@ describe('multiplayer room service lifecycle', () => {
     expect(normalized.players.every((player) => Number.isFinite(player.lastChatAt))).toBe(true);
   });
 
+  it('normalizes persisted disconnect pause restore state', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room } = createRoom(rooms, 'Host');
+    const legacy = {
+      ...structuredClone(room),
+      disconnectPauseRestore: {
+        paused: true,
+        pausedByPlayerId: 'p1',
+      },
+    } as MultiplayerRoom;
+
+    const normalized = normalizeRoomForRuntime(legacy);
+    expect(normalized.disconnectPauseRestore).toEqual({
+      paused: true,
+      pausedByPlayerId: 'p1',
+    });
+  });
+
   it('starts a lobby match from a compatible checkpoint when requested', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
@@ -679,17 +741,17 @@ describe('multiplayer room service lifecycle', () => {
     );
   });
 
-  it('allows leave with stale expected revision for valid session cleanup', () => {
+  it('rejects stale expected revision on leave without disconnecting the seat', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     const playerTwo = joinRoom(room, 'Player 2');
     startRoom(room, session.playerId, session.sessionToken);
     const staleRevision = room.revision - 1;
 
-    leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken, staleRevision);
+    expect(() => leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken, staleRevision)).toThrowError('revision_conflict');
 
-    const disconnected = findParticipant(room, playerTwo.playerId);
-    expect(disconnected.connected).toBe(false);
+    const participant = findParticipant(room, playerTwo.playerId);
+    expect(participant.connected).toBe(true);
   });
 
   it('accepts manual pay_request card order when cards are otherwise legal', () => {

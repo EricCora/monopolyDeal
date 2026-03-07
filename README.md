@@ -208,7 +208,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Lobby includes player-ready status, room chat, and chat-tray quick reactions.
 - Player session controls: `Exit Match` (retain reconnect) and `Forget Room` (clear session).
 - Active-turn controls: `Undo Last Play`, `Reset Turn Plays` (when snapshot history exists).
-- Multiplayer state mutations are revision-guarded to prevent stale updates.
+- Multiplayer state mutations and reconnect ownership are revision-guarded to prevent stale updates and stale seat takeovers.
 - Multiplayer activity feed and host-change notices are surfaced in lobby/in-match UI.
 - In local/dev contexts, multiplayer screens show a status chip that explicitly reports reconnect/version/pause policy activation, live-update transport state, and room runtime state.
 - Dev status now includes explicit transport mode (`socket_primary` or `http_fallback`) so hidden rollout state is never ambiguous during local testing.
