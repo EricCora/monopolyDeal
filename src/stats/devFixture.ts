@@ -17,6 +17,8 @@ function mediumFixture(): DevStatsFixture {
       turnCount: 16,
       durationSec: 600,
       actionsByType: { action: 8, pay: 3, draw: 5 },
+      mode: 'hot_seat',
+      surface: 'local',
     },
     {
       id: 'm-2',
@@ -28,6 +30,10 @@ function mediumFixture(): DevStatsFixture {
       turnCount: 12,
       durationSec: 300,
       actionsByType: { action: 7, pay: 2, draw: 4 },
+      mode: 'live_online',
+      surface: 'multiplayer',
+      presetId: 'teaching',
+      roomCode: 'ROOM2',
     },
     {
       id: 'm-1',
@@ -39,6 +45,8 @@ function mediumFixture(): DevStatsFixture {
       turnCount: 24,
       durationSec: 700,
       actionsByType: { action: 11, pay: 4, draw: 6 },
+      mode: 'practice',
+      surface: 'local',
     },
   ];
 

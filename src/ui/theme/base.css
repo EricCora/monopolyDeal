@@ -13,9 +13,9 @@ body {
   color: var(--text-main);
   font-family: var(--font-body);
   background:
-    radial-gradient(circle at 14% 10%, rgba(107, 161, 96, 0.16), transparent 42%),
-    radial-gradient(circle at 84% 0%, rgba(239, 194, 90, 0.2), transparent 36%),
-    linear-gradient(180deg, #070d08, #0c1710 50%, #09120c);
+    radial-gradient(circle at 14% 10%, rgba(163, 106, 80, 0.16), transparent 42%),
+    radial-gradient(circle at 84% 0%, rgba(200, 165, 107, 0.2), transparent 36%),
+    linear-gradient(180deg, #120f0e, #191412 48%, #0f0c0b);
 }
 
 .game-shell {
@@ -24,11 +24,42 @@ body {
   color: var(--text-main);
 }
 
+.game-shell.table-style-premium-tabletop {
+  --surface-0: #161210;
+  --surface-1: #211a17;
+  --surface-2: #2d241f;
+  --surface-3: #382d27;
+}
+
 .game-shell.table-style-classic-green {
   --surface-0: #0d160f;
   --surface-1: #152219;
   --surface-2: #1e3124;
   --surface-3: #294036;
+  --surface-panel: rgba(15, 28, 19, 0.9);
+  --surface-card: linear-gradient(160deg, #f7f5ef, #eae7db);
+  --line-strong: #68805c;
+  --line-soft: #3a533f;
+  --text-main: #f2f7ef;
+  --text-muted: #c6d4c2;
+  --text-subtle: #96aa94;
+  --text-dark: #18241c;
+  --accent: #cb4a3a;
+  --accent-strong: #a93226;
+  --accent-alt: #efc45a;
+  --danger: #e37d6d;
+  --success: #76ca8f;
+  --table-felt-base: radial-gradient(circle at 12% 12%, rgba(126, 187, 112, 0.2), transparent 30%), linear-gradient(180deg, #12321c, #0e2516);
+  --table-felt-pattern: linear-gradient(30deg, rgba(255, 255, 255, 0.05) 0 8%, transparent 8% 50%, rgba(0, 0, 0, 0.08) 50% 58%, transparent 58% 100%);
+  --table-felt-glow: radial-gradient(circle at 50% 22%, rgba(255, 219, 144, 0.2), transparent 46%);
+  --table-felt-border: rgba(112, 150, 96, 0.72);
+  --table-seat-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -10px 16px rgba(0, 0, 0, 0.28);
+  --table-seat-highlight: rgba(243, 196, 90, 0.16);
+  --field-bg: rgba(15, 31, 19, 0.82);
+  --button-bg: linear-gradient(140deg, #325d30, #234420);
+  --button-border: rgba(239, 196, 90, 0.46);
+  --button-text: #f7fff4;
+  --button-shadow: 0 8px 16px rgba(3, 10, 5, 0.28);
 }
 
 .game-shell.table-style-neon-arcade {
@@ -54,6 +85,11 @@ body {
   --table-felt-border: rgba(114, 103, 187, 0.8);
   --table-seat-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -10px 16px rgba(0, 0, 0, 0.38);
   --table-seat-highlight: rgba(255, 80, 127, 0.2);
+  --field-bg: rgba(20, 14, 39, 0.9);
+  --button-bg: linear-gradient(145deg, #ff507f, #8b2c7a);
+  --button-border: rgba(147, 216, 255, 0.56);
+  --button-text: #fff4fb;
+  --button-shadow: 0 10px 18px rgba(16, 8, 34, 0.34);
 }
 
 .game-shell.text-scale-large {
@@ -70,6 +106,10 @@ body {
   --accent: #ff8f80;
   --accent-strong: #ff7567;
   --accent-alt: #ffe08a;
+  --field-bg: #111915;
+  --button-bg: linear-gradient(145deg, #ffe08a, #d6b65d);
+  --button-border: rgba(255, 255, 255, 0.76);
+  --button-text: #0f130f;
 }
 
 .game-shell-inner {
@@ -90,7 +130,9 @@ body {
   overflow: hidden;
   border-radius: var(--radius-lg);
   border: 1px solid var(--line-soft);
-  background: var(--surface-panel);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
+    var(--surface-panel);
   box-shadow: var(--shadow-md);
   padding: var(--space-5);
   backdrop-filter: blur(4px);
@@ -149,18 +191,19 @@ select {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   padding: 0.62rem 0.75rem;
-  background: rgba(15, 31, 19, 0.82);
+  background: var(--field-bg);
   color: var(--text-main);
   min-height: 44px;
 }
 
 button {
-  border: 1px solid rgba(239, 196, 90, 0.46);
+  border: 1px solid var(--button-border);
   border-radius: var(--radius-pill);
   padding: 0.62rem 1rem;
   min-height: 44px;
-  background: linear-gradient(140deg, #325d30, #234420);
-  color: #f7fff4;
+  background: var(--button-bg);
+  color: var(--button-text);
+  box-shadow: var(--button-shadow);
   cursor: pointer;
   transition:
     transform var(--motion-micro) var(--ease-emphasis),

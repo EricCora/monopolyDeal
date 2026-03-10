@@ -70,6 +70,10 @@ import { GameShell } from './ui/layout/GameShell';
 import { ActionConfirmDialog } from './ui/components/ActionConfirmDialog';
 import { MultiplayerChatDock } from './ui/components/MultiplayerChatDock';
 import { RulesDrawer } from './ui/components/RulesDrawer';
+import {
+  getMultiplayerSessionPresetDefinition,
+  type MatchMode,
+} from './ui/experience';
 import { GameTableScreen } from './ui/screens/GameTableScreen';
 import { HomeScreen } from './ui/screens/HomeScreen';
 import { PostGameScreen } from './ui/screens/PostGameScreen';
@@ -246,6 +250,7 @@ function App() {
   const [game, setGame] = useState<GameState | null>(null);
   const [postGameSummary, setPostGameSummary] = useState<PostGameSummary | null>(null);
   const [setup, setSetup] = useState<SetupViewModel>(initialSetup);
+  const [localMatchMode, setLocalMatchMode] = useState<MatchMode>('hot_seat');
   const [error, setError] = useState<string | null>(null);
   const [revealedPlayerId, setRevealedPlayerId] = useState<string | null>(null);
   const [history, setHistory] = useState<MatchRecordV1[]>(() => loadMatchHistory());
@@ -277,6 +282,7 @@ function App() {
   const botTurnSignatureRef = useRef<string | null>(null);
   const coachHintMetricRef = useRef<string | null>(null);
   const multiplayerFinishedMetricRef = useRef<string | null>(null);
+  const multiplayerRecordedMatchRef = useRef<string | null>(null);
   const multiplayerChatLastSeenRef = useRef(0);
   const multiplayerTypingSentRef = useRef(false);
   const multiplayerPromptContextRef = useRef<{ revision: number; signature: string } | null>(null);
@@ -286,10 +292,10 @@ function App() {
   useEffect(() => {
     if (!game || isGameOver(game).done) return;
     const handle = window.setTimeout(() => {
-      saveActiveGame(game);
+      saveActiveGame(game, localMatchMode);
     }, 220);
     return () => window.clearTimeout(handle);
-  }, [game]);
+  }, [game, localMatchMode]);
 
   useEffect(() => {
     saveUiPreferences(uiPreferences);
@@ -343,6 +349,16 @@ function App() {
     setGrowthMetrics(next);
   }, []);
 
+  const appendMatchRecord = useCallback((matchRecord: MatchRecordV1) => {
+    const nextHistory = [matchRecord, ...loadMatchHistory()].slice(0, 50);
+    saveMatchHistory(nextHistory);
+    setHistory(nextHistory);
+    const nextLifetime = applyMatchToLifetime(loadLifetimeStats(), matchRecord);
+    saveLifetimeStats(nextLifetime);
+    setLifetime(nextLifetime);
+    return nextLifetime;
+  }, []);
+
   useEffect(() => {
     if (!uiPreferences.devModeEnabled) {
       devAutoSeedAttemptedRef.current = false;
@@ -381,6 +397,7 @@ function App() {
     error: multiplayerError,
     errorCode: multiplayerErrorCode,
     recoveryNotice: multiplayerRecoveryNotice,
+    recoveryEntry: multiplayerRecoveryEntry,
     connectionState: multiplayerConnectionState,
     connectionUiState: multiplayerConnectionUiState,
     pushState: multiplayerPushState,
@@ -396,6 +413,8 @@ function App() {
     startMatch: startMultiplayerMatch,
     runAction: runMultiplayerAction,
     setReady: setMultiplayerReadyState,
+    setRoomPreset: setMultiplayerRoomPreset,
+    rematchMatch: rematchMultiplayerMatch,
     sendReaction: sendMultiplayerReactionAction,
     sendChatMessage: sendMultiplayerChatMessageAction,
     setTyping: setMultiplayerTypingIndicator,
@@ -409,6 +428,8 @@ function App() {
     exitRoom: exitMultiplayerRoom,
     leaveRoom: leaveMultiplayerRoom,
     refreshRoom: refreshMultiplayerRoom,
+    resumeStoredRoom: resumeStoredMultiplayerRoom,
+    forgetStoredRoom: forgetStoredMultiplayerRoom,
     setError: setMultiplayerError,
   } = useMultiplayerRoom({
     enabled: screen === 'multiplayer',
@@ -733,6 +754,21 @@ function App() {
       .map((playerId) => nameById.get(playerId))
       .filter((name): name is string => Boolean(name));
   }, [multiplayerRoomView]);
+  const multiplayerRematchStatusText = useMemo(() => {
+    if (!multiplayerRoomView || multiplayerRoomView.status !== 'finished') return null;
+    if (multiplayerRoomView.canRematch) {
+      return `Everyone is ready for ${getMultiplayerSessionPresetDefinition(multiplayerRoomView.presetId).label}.`;
+    }
+    const disconnectedPlayers = multiplayerRoomView.players.filter((player) => !player.connected);
+    if (disconnectedPlayers.length > 0) {
+      return `Waiting for ${disconnectedPlayers.map((player) => player.name).join(', ')} to reconnect before rematch.`;
+    }
+    const unreadyPlayers = multiplayerRoomView.players.filter((player) => !player.ready);
+    if (unreadyPlayers.length > 0) {
+      return `Waiting for ${unreadyPlayers.map((player) => player.name).join(', ')} to mark ready for the next match.`;
+    }
+    return 'Rematch unavailable right now.';
+  }, [multiplayerRoomView]);
 
   useEffect(() => {
     if (screen !== 'multiplayer' || !multiplayerRoomView) return;
@@ -843,7 +879,15 @@ function App() {
     if (multiplayerFinishedMetricRef.current === signature) return;
     multiplayerFinishedMetricRef.current = signature;
     recordGrowthMetric('multiplayer_match_completed');
-  }, [multiplayerGame, multiplayerRoomView, recordGrowthMetric, screen]);
+    if (multiplayerRecordedMatchRef.current === signature) return;
+    multiplayerRecordedMatchRef.current = signature;
+    appendMatchRecord(buildMatchRecord(multiplayerGame, {
+      mode: 'live_online',
+      surface: 'multiplayer',
+      presetId: multiplayerRoomView.presetId,
+      roomCode: multiplayerRoomView.roomCode,
+    }));
+  }, [appendMatchRecord, multiplayerGame, multiplayerRoomView, recordGrowthMetric, screen]);
 
   useEffect(() => {
     const yourPlayerId = multiplayerRoomView?.yourPlayerId;
@@ -1063,12 +1107,13 @@ function App() {
     setTurnSnapshots([]);
   }, []);
 
-  const startGameWithPlayers = useCallback((players: PlayerConfig[], options?: { seed?: number; ruleset?: GameConfig['ruleset'] }) => {
+  const startGameWithPlayers = useCallback((players: PlayerConfig[], options?: { seed?: number; ruleset?: GameConfig['ruleset']; mode?: MatchMode }) => {
     const config: GameConfig = { players, deckVersion: 'v1' };
     if (typeof options?.seed === 'number') config.seed = options.seed;
     if (options?.ruleset) config.ruleset = options.ruleset;
     const nextGame = createGame(config);
     setUiPreferences((prev) => ({ ...prev, gamePaused: false, pausedGameId: null }));
+    setLocalMatchMode(options?.mode ?? 'hot_seat');
     setRecentAchievementUnlocks([]);
     openGame(nextGame);
     recordGrowthMetric('game_started');
@@ -1085,6 +1130,26 @@ function App() {
       ruleset: uiPreferences.experimental.customRules ? sanitizeRuleset(setup.customRules) : undefined,
     });
   };
+
+  const openHotSeatSetup = useCallback(() => {
+    setLocalMatchMode('hot_seat');
+    setScreen('setup');
+    setError(null);
+  }, []);
+
+  const startPracticeGame = useCallback(() => {
+    setSetup((prev) => ({
+      ...prev,
+      playerCount: 2,
+      playerNames: ['You', 'House Bot', prev.playerNames[2] ?? 'Player 3', prev.playerNames[3] ?? 'Player 4'],
+      playerControllers: ['human', 'bot', prev.playerControllers[2] ?? 'human', prev.playerControllers[3] ?? 'human'],
+      botDifficulties: ['easy', 'easy', prev.botDifficulties[2] ?? 'easy', prev.botDifficulties[3] ?? 'easy'],
+    }));
+    startGameWithPlayers([
+      { id: 'p1', name: 'You', controller: 'human', botDifficulty: 'easy' },
+      { id: 'p2', name: 'House Bot', controller: 'bot', botDifficulty: 'easy' },
+    ], { mode: 'practice' });
+  }, [startGameWithPlayers]);
 
   const startDailyChallengeMatch = useCallback(() => {
     const players: PlayerConfig[] = [
@@ -1103,6 +1168,7 @@ function App() {
     ];
     startGameWithPlayers(players, {
       seed: dailyChallenge.seed,
+      mode: 'daily_challenge',
       ruleset: uiPreferences.experimental.customRules ? sanitizeRuleset(setup.customRules) : undefined,
     });
   }, [
@@ -1131,6 +1197,7 @@ function App() {
       clearActiveGame();
       return;
     }
+    setLocalMatchMode(saved.matchMode ?? 'hot_seat');
     openGame(saved.gameState);
   };
 
@@ -1149,6 +1216,7 @@ function App() {
       setError(null);
       return;
     }
+    setLocalMatchMode(slot.matchMode ?? 'hot_seat');
     openGame(slot.gameState);
   };
 
@@ -1158,6 +1226,7 @@ function App() {
       const next = upsertSavedGameSlot({
         name: autoSlotName(game),
         gameState: game,
+        matchMode: localMatchMode,
       });
       setSavedSlots(next.slots);
       setError(null);
@@ -1181,6 +1250,7 @@ function App() {
       id: slotId,
       name: existing?.name ?? autoSlotName(game),
       gameState: game,
+      matchMode: localMatchMode,
     });
     setSavedSlots(next.slots);
     setError(null);
@@ -1212,13 +1282,11 @@ function App() {
     const matchId = `${nextState.createdAt}-${nextState.updatedAt}`;
     if (finalizedMatchRef.current === `final:${matchId}`) return;
     finalizedMatchRef.current = `final:${matchId}`;
-    const matchRecord = buildMatchRecord(nextState);
-    const nextHistory = [matchRecord, ...loadMatchHistory()].slice(0, 50);
-    saveMatchHistory(nextHistory);
-    setHistory(nextHistory);
-    const nextLifetime = applyMatchToLifetime(loadLifetimeStats(), matchRecord);
-    saveLifetimeStats(nextLifetime);
-    setLifetime(nextLifetime);
+    const matchRecord = buildMatchRecord(nextState, {
+      mode: localMatchMode,
+      surface: 'local',
+    });
+    const nextLifetime = appendMatchRecord(matchRecord);
     const previousAchievementState = loadAchievementState();
     const nextAchievementState = applyMatchToAchievementState(previousAchievementState, matchRecord);
     saveAchievementState(nextAchievementState);
@@ -1237,7 +1305,7 @@ function App() {
     setScreen('game_over');
     clearActiveGame();
     recordGrowthMetric('game_completed');
-  }, [recordGrowthMetric]);
+  }, [appendMatchRecord, localMatchMode, recordGrowthMetric]);
 
   const runAction = useCallback((action: Action) => {
     if (!game || isPaused) return;
@@ -1696,13 +1764,14 @@ function App() {
         botDifficulty: player.botDifficulty ?? 'easy',
       })),
       {
+        mode: localMatchMode === 'daily_challenge' ? 'hot_seat' : localMatchMode,
         ruleset: uiPreferences.experimental.customRules ? game.ruleset : undefined,
       },
     );
     setIsSharing(false);
     setShareStatus(null);
     recordGrowthMetric('rematch_started');
-  }, [game, recordGrowthMetric, startGameWithPlayers, syncSetupPlayerNames, uiPreferences.experimental.customRules]);
+  }, [game, localMatchMode, recordGrowthMetric, startGameWithPlayers, syncSetupPlayerNames, uiPreferences.experimental.customRules]);
 
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -1770,7 +1839,8 @@ function App() {
           showAchievements={uiPreferences.experimental.achievements}
           achievementSummary={{ unlocked: unlockedAchievements.length, total: 4 }}
           showMultiplayer={true}
-          onNewGame={() => setScreen('setup')}
+          onNewGame={openHotSeatSetup}
+          onStartPracticeGame={startPracticeGame}
           onStartDailyChallenge={startDailyChallengeMatch}
           onResumeGame={resumeGame}
           onOpenSavedGames={() => openSavedGames('home')}
@@ -1826,6 +1896,7 @@ function App() {
 
       {screen === 'game' && game && prompt ? (
         <GameTableScreen
+          matchMode={localMatchMode}
           game={game}
           prompt={prompt}
           isPaused={isPaused}
@@ -1890,6 +1961,7 @@ function App() {
       {screen === 'multiplayer' && multiplayerRoomView?.started && multiplayerGame && multiplayerPrompt ? (
         <GameTableScreen
           mode="multiplayer"
+          matchMode="live_online"
           game={multiplayerGame}
           prompt={multiplayerPrompt}
           isPaused={multiplayerRoomView.paused}
@@ -1925,6 +1997,9 @@ function App() {
           isMultiplayerHost={multiplayerIsHost}
           checkpointSlots={multiplayerRoomView.checkpointSlots}
           activityFeed={multiplayerRoomView.activityFeed}
+          multiplayerPresetId={multiplayerRoomView.presetId}
+          canRematchMultiplayer={multiplayerRoomView.canRematch}
+          rematchStatusText={multiplayerRematchStatusText}
           hostChangeNotice={multiplayerHostChangeNotice}
           onDismissHostChangeNotice={clearMultiplayerHostChangeNotice}
           checkpointLoading={multiplayerCheckpointLoading}
@@ -1966,6 +2041,12 @@ function App() {
           onRefreshMultiplayer={() => {
             void refreshMultiplayerRoom();
           }}
+          onSetMultiplayerPreset={multiplayerIsHost ? (presetId) => {
+            void setMultiplayerRoomPreset(presetId);
+          } : undefined}
+          onRematchMultiplayer={multiplayerIsHost ? () => {
+            void rematchMultiplayerMatch();
+          } : undefined}
           onExitMultiplayer={() => {
             void exitMultiplayerRoom();
             setScreen('home');
@@ -2033,6 +2114,7 @@ function App() {
           error={multiplayerError}
           errorCode={multiplayerErrorCode}
           recoveryNotice={multiplayerRecoveryNotice}
+          recoveryEntry={multiplayerRecoveryEntry}
           connectionState={multiplayerConnectionState}
           connectionUiState={multiplayerConnectionUiState}
           reconnectDebugEnabled={multiplayerReconnectDebugEnabled}
@@ -2049,11 +2131,18 @@ function App() {
           onSetReady={(ready) => {
             void setMultiplayerReadyState(ready);
           }}
+          onSetRoomPreset={(presetId) => {
+            void setMultiplayerRoomPreset(presetId);
+          }}
           onCopyInviteLink={() => {
             recordGrowthMetric('multiplayer_invite_copied');
           }}
           onRefresh={refreshMultiplayerRoom}
           onLeaveRoom={leaveMultiplayerRoom}
+          onResumeStoredRoom={() => {
+            void resumeStoredMultiplayerRoom();
+          }}
+          onForgetStoredRoom={forgetStoredMultiplayerRoom}
           onClearRecoveryNotice={clearMultiplayerRecoveryNotice}
           onBack={() => setScreen('home')}
         />

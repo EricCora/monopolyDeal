@@ -1,4 +1,5 @@
-import type { GrowthMetricsV1, LifetimeStatsV1, MatchRecordV1 } from './types';
+import type { GrowthMetricsV1, LifetimeStatsV1, MatchRecordV1, MatchSurface } from './types';
+import type { MatchMode, MultiplayerSessionPresetId } from '../ui/experience';
 
 export interface LifetimeRowView {
   name: string;
@@ -21,6 +22,10 @@ export interface MatchRowView {
   turnCount: number;
   durationSec: number;
   totalEvents: number;
+  mode: MatchMode;
+  surface: MatchSurface;
+  presetId?: MultiplayerSessionPresetId;
+  roomCode?: string;
 }
 
 export interface StatsKpis {
@@ -62,6 +67,8 @@ export interface StatsDashboardModel {
 export interface StatsFilters {
   playerName?: string;
   winnerName?: string;
+  mode?: MatchMode;
+  surface?: MatchSurface;
   fromDay?: string;
   toDay?: string;
 }
@@ -139,6 +146,10 @@ export function buildMatchRows(history: MatchRecordV1[]): MatchRowView[] {
       turnCount: match.turnCount,
       durationSec: match.durationSec,
       totalEvents: sumActionsByType(match.actionsByType),
+      mode: match.mode,
+      surface: match.surface,
+      presetId: match.presetId,
+      roomCode: match.roomCode,
     }))
     .sort((left, right) => right.endedAt - left.endedAt);
 }
@@ -148,6 +159,8 @@ function applyStatsFilters(history: MatchRecordV1[], filters?: StatsFilters): Ma
   return history.filter((match) => {
     if (filters.playerName && !match.players.includes(filters.playerName)) return false;
     if (filters.winnerName && match.winnerName !== filters.winnerName) return false;
+    if (filters.mode && match.mode !== filters.mode) return false;
+    if (filters.surface && match.surface !== filters.surface) return false;
     const day = dayLabel(match.endedAt);
     if (filters.fromDay && day < filters.fromDay) return false;
     if (filters.toDay && day > filters.toDay) return false;

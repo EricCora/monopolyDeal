@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
+import { DEFAULT_TABLE_STYLE, type TableStylePreset } from '../experience';
 
 interface GameShellProps {
   children: ReactNode;
   screenClassName?: string;
   textScale?: 'normal' | 'large';
   highContrast?: boolean;
-  tableStyle?: 'classic_green' | 'neon_arcade';
+  tableStyle?: TableStylePreset;
 }
 
 export function GameShell({
@@ -13,7 +14,7 @@ export function GameShell({
   screenClassName,
   textScale = 'normal',
   highContrast = false,
-  tableStyle = 'classic_green',
+  tableStyle = DEFAULT_TABLE_STYLE,
 }: GameShellProps) {
   return (
     <main

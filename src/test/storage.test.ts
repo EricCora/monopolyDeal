@@ -5,14 +5,17 @@ import {
   clearMatchHistory,
   deleteSavedGameSlot,
   incrementGrowthMetric,
+  loadActiveGame,
   loadAchievementState,
   loadDailyChallenge,
   loadGrowthMetrics,
+  loadMatchHistory,
   loadSavedGameSlot,
   loadSavedGames,
   loadUiPreferences,
   renameSavedGameSlot,
   saveAchievementState,
+  saveActiveGame,
   saveDailyChallenge,
   saveGrowthMetrics,
   saveUiPreferences,
@@ -193,7 +196,7 @@ describe('ui preferences storage', () => {
       version: 1,
       reducedEffects: true,
       tableDensity: 'compact',
-      tableStyle: 'classic_green',
+      tableStyle: 'premium_tabletop',
       textScale: 'large',
       confirmRiskyActions: true,
       showRulesDrawerHints: true,
@@ -238,7 +241,7 @@ describe('ui preferences storage', () => {
       version: 1,
       reducedEffects: true,
       tableDensity: 'cozy',
-      tableStyle: 'classic_green',
+      tableStyle: 'premium_tabletop',
       textScale: 'normal',
       confirmRiskyActions: true,
       showRulesDrawerHints: true,
@@ -373,15 +376,29 @@ describe('saved game slots storage', () => {
     expect(deleted.slots).toHaveLength(0);
   });
 
+  it('persists local match mode in active autosaves and backfills legacy saves', () => {
+    saveActiveGame(sampleGame(7), 'practice');
+    expect(loadActiveGame()?.matchMode).toBe('practice');
+
+    localStorage.setItem('monopolyDeal.activeGame.v1', JSON.stringify({
+      version: 1,
+      timestamp: 1,
+      gameState: sampleGame(8),
+    }));
+
+    expect(loadActiveGame()?.matchMode).toBe('hot_seat');
+  });
+
   it('upserts an existing slot and updates its game state', () => {
-    const created = upsertSavedGameSlot({ gameState: sampleGame(2), name: 'Session A' });
+    const created = upsertSavedGameSlot({ gameState: sampleGame(2), name: 'Session A', matchMode: 'practice' });
     const slotId = created.slots[0].id;
     const nextGame = sampleGame(3);
     nextGame.turnCount = 9;
 
-    const updated = upsertSavedGameSlot({ id: slotId, gameState: nextGame, name: 'Session A' });
+    const updated = upsertSavedGameSlot({ id: slotId, gameState: nextGame, name: 'Session A', matchMode: 'practice' });
     expect(updated.slots).toHaveLength(1);
     expect(updated.slots[0].gameState.turnCount).toBe(9);
+    expect(updated.slots[0].matchMode).toBe('practice');
   });
 
   it('enforces max of 5 slots for new saves', () => {
@@ -390,6 +407,44 @@ describe('saved game slots storage', () => {
     }
     expect(loadSavedGames().slots).toHaveLength(5);
     expect(() => upsertSavedGameSlot({ gameState: sampleGame(999), name: 'Overflow' })).toThrowError('save_slots_full');
+  });
+});
+
+describe('match history storage', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('normalizes legacy match history entries with default surface and mode', () => {
+    localStorage.setItem(
+      'monopolyDeal.matchHistory.v1',
+      JSON.stringify([{
+        id: 'legacy-1',
+        startedAt: 1_700_000_000_000,
+        endedAt: 1_700_000_005_000,
+        players: ['Alpha', 'Beta'],
+        winnerName: 'Alpha',
+        turnCount: 9,
+        durationSec: 42,
+        actionsByType: { draw: 2 },
+      }]),
+    );
+
+    expect(loadMatchHistory()).toEqual([{
+      id: 'legacy-1',
+      startedAt: 1_700_000_000_000,
+      endedAt: 1_700_000_005_000,
+      players: ['Alpha', 'Beta'],
+      winnerId: undefined,
+      winnerName: 'Alpha',
+      turnCount: 9,
+      durationSec: 42,
+      actionsByType: { draw: 2 },
+      mode: 'hot_seat',
+      surface: 'local',
+      presetId: undefined,
+      roomCode: undefined,
+    }]);
   });
 });
 

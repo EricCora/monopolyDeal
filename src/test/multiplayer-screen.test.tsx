@@ -29,6 +29,7 @@ function makeProps(overrides: Partial<MultiplayerScreenProps> = {}): Multiplayer
     onStartMatch: vi.fn(),
     onRunAction: vi.fn(),
     onSetReady: vi.fn(),
+    onSetRoomPreset: vi.fn(),
     onCopyInviteLink: vi.fn(),
     onRefresh: vi.fn(),
     onLeaveRoom: vi.fn(),
@@ -55,6 +56,7 @@ function makeLobbyView() {
     roomCode: 'HRCWM',
     status: 'lobby' as const,
     started: false,
+    presetId: 'standard' as const,
     hostPlayerId: 'p1' as const,
     yourPlayerId: 'p1' as const,
     players: [
@@ -81,6 +83,7 @@ function makeLobbyView() {
     turnSnapshotCount: 0,
     checkpointSlots: [],
     canStart: false,
+    canRematch: false,
     reconnectDeadlineMs: now + 30_000,
     serverTime: now,
     activityFeed: [],
@@ -212,6 +215,60 @@ describe('MultiplayerScreen', () => {
     expect(screen.getByText(/previous room unavailable/i)).toBeInTheDocument();
     expect(screen.getByDisplayValue('HRCWM')).toBeInTheDocument();
     expect(screen.getByText(/reconnect window expired/i)).toBeInTheDocument();
+  });
+
+  it('renders a Resume Your Room card with resume and forget actions', () => {
+    const onResumeStoredRoom = vi.fn();
+    const onForgetStoredRoom = vi.fn();
+
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          recoveryEntry: {
+            roomCode: 'HRCWM',
+            playerName: 'Guest',
+            seatId: 'p2',
+            resumeToken: 'token-2',
+            playerId: 'p2',
+            sessionToken: 'token-2',
+            reconnectDeadlineMs: Date.now() + 30_000,
+            lastKnownStatus: 'active',
+            lastKnownRuntimeState: 'paused_disconnect',
+            recoveryState: 'resumable',
+            lastSeenAt: Date.now(),
+          },
+          onResumeStoredRoom,
+          onForgetStoredRoom,
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/resume your room/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/resume your room/i)).toHaveTextContent(/room\s+hrcwm\s+as\s+guest/i);
+    fireEvent.click(screen.getByRole('button', { name: /resume room/i }));
+    fireEvent.click(screen.getByRole('button', { name: /forget this room/i }));
+
+    expect(onResumeStoredRoom).toHaveBeenCalledTimes(1);
+    expect(onForgetStoredRoom).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables resume for terminal recovery entries', () => {
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          recoveryEntry: {
+            roomCode: 'HRCWM',
+            playerName: 'Guest',
+            reconnectDeadlineMs: Date.now() - 1_000,
+            recoveryState: 'expired',
+            lastSeenAt: Date.now(),
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /resume room/i })).toBeDisabled();
+    expect(screen.getByText(/reconnect expired/i)).toBeInTheDocument();
   });
 
   it('keeps syncing placeholder only for live reconnecting/loading states', () => {
@@ -398,6 +455,54 @@ describe('MultiplayerScreen', () => {
     );
 
     expect(screen.getByText(/live updates active/i)).toBeInTheDocument();
+  });
+
+  it('shows preset cards and ready-gated host controls in the lobby', () => {
+    const now = Date.now();
+    render(
+      <MultiplayerScreen
+        {...makeProps({
+          session: makeSession(),
+          roomView: {
+            ...makeLobbyView(),
+            players: [
+              {
+                id: 'p1',
+                name: 'Host',
+                handCount: 0,
+                bankCount: 0,
+                completeSets: 0,
+                connected: true,
+                lastSeenAt: now,
+                reconnectDeadlineMs: now + 30_000,
+                isHost: true,
+                ready: true,
+              },
+              {
+                id: 'p2',
+                name: 'Guest',
+                handCount: 0,
+                bankCount: 0,
+                completeSets: 0,
+                connected: true,
+                lastSeenAt: now,
+                reconnectDeadlineMs: now + 30_000,
+                isHost: false,
+                ready: false,
+              },
+            ],
+          },
+          isHost: true,
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/session: live online · standard/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /standard/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /fast/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /teaching/i })).toBeInTheDocument();
+    expect(screen.getByText(/waiting on ready check for guest/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /start match/i })).toBeDisabled();
   });
 
   it('renders reconnect debug panel only when reconnect debug is enabled', async () => {

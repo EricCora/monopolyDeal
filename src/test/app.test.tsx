@@ -823,7 +823,7 @@ describe('App', () => {
     });
     const ascMatchRows = within(matchSection as HTMLElement).getAllByRole('row');
     const firstMatchCells = ascMatchRows[1].querySelectorAll('td');
-    expect(firstMatchCells[3]?.textContent).toBe('16');
+    expect(firstMatchCells[6]?.textContent).toBe('16');
   });
 
   it('seeds stats and history when dev mode is enabled and local data is empty', async () => {
@@ -1041,6 +1041,21 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: /saved games/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
     expect(screen.getByRole('heading', { name: /monopoly deal local/i })).toBeInTheDocument();
+  });
+
+  it('starts a quick practice match from home with a bot seat', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /practice vs bots/i }));
+
+    expect(screen.getByRole('heading', { name: /game table/i })).toBeInTheDocument();
+    expect(screen.getByText(/^practice$/i)).toBeInTheDocument();
+    expect(mockedCreateGame).toHaveBeenCalledWith(expect.objectContaining({
+      players: [
+        expect.objectContaining({ name: 'You', controller: 'human' }),
+        expect.objectContaining({ name: 'House Bot', controller: 'bot', botDifficulty: 'easy' }),
+      ],
+    }));
   });
 
   it('opens multiplayer screen with one-click controls and no server url field', async () => {
@@ -1906,14 +1921,14 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /exit match/i }));
     expect(await screen.findByRole('heading', { name: /monopoly deal local/i })).toBeInTheDocument();
-    expect(localStorage.getItem('monopolyDeal.multiplayerSession.v1')).toContain('ABCDE');
+    expect(localStorage.getItem('monopolyDeal.multiplayerRecovery.v1')).toContain('ABCDE');
 
     fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
     expect(await screen.findByRole('heading', { name: /multiplayer/i })).toBeInTheDocument();
     expect(screen.getByText(/room abcde/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /forget room/i }));
     expect(await screen.findByRole('button', { name: /host multiplayer game/i })).toBeInTheDocument();
-    expect(localStorage.getItem('monopolyDeal.multiplayerSession.v1')).toBeNull();
+    expect(localStorage.getItem('monopolyDeal.multiplayerRecovery.v1')).toBeNull();
 
     fetchSpy.mockRestore();
   });
@@ -2018,7 +2033,7 @@ describe('App', () => {
       expect(screen.getByRole('button', { name: /host multiplayer game/i })).toBeInTheDocument();
     });
     expect(screen.queryByRole('heading', { name: /room abcde/i })).not.toBeInTheDocument();
-    expect(localStorage.getItem('monopolyDeal.multiplayerSession.v1')).toBeNull();
+    expect(localStorage.getItem('monopolyDeal.multiplayerRecovery.v1')).toBeNull();
 
     fetchSpy.mockRestore();
   });
@@ -2115,6 +2130,7 @@ describe('App', () => {
   it('keeps experimental settings collapsed by default and applies table style class changes', () => {
     render(<App />);
 
+    expect(document.querySelector('.game-shell')).toHaveClass('table-style-premium-tabletop');
     fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
     const accordion = screen.getByRole('button', { name: /experimental features/i });
     expect(accordion).toHaveAttribute('aria-expanded', 'false');

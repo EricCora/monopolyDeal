@@ -16,12 +16,14 @@ import {
   pauseRoom,
   pruneInactiveRooms,
   reconnectRoom,
+  rematchRoom,
   resetTurnRoomActions,
   roomView,
   ROOM_REACTION_OPTIONS,
   saveRoomCheckpoint,
   sendRoomChat,
   sendRoomReaction,
+  setRoomPreset,
   setRoomTyping,
   setRoomReady,
   startRoom,
@@ -38,6 +40,7 @@ import type {
   ActionRejectedReason,
   ActionRejectedResponse,
   MultiplayerSocketAck,
+  MultiplayerSessionPresetId,
   MultiplayerSocketAuthPayload,
   MultiplayerSocketCommandName,
   MultiplayerSocketCommandPayloadMap,
@@ -593,6 +596,26 @@ function registerSocketCommands(socket: Socket): void {
     return { ok: true };
   });
 
+  registerSocketCommand(socket, 'mp:cmd:preset', (room, binding, payload) => {
+    const presetId = optionalTrimmedString(payload?.presetId);
+    if (!presetId) {
+      throw new Error('invalid_payload');
+    }
+    setRoomPreset(room, binding.seatId, binding.sessionToken, presetId as MultiplayerSessionPresetId, payload?.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'preset_changed');
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:rematch', (room, binding, payload) => {
+    const previousRuntimeState = room.roomRuntimeState;
+    rematchRoom(room, binding.seatId, binding.sessionToken, payload?.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'rematch');
+    emitRoomRuntimeTransition(room, previousRuntimeState);
+    return { ok: true };
+  });
+
   registerSocketCommand(socket, 'mp:cmd:leave', (room, binding, payload) => {
     const preStatus = room.status;
     const previousRuntimeState = room.roomRuntimeState;
@@ -909,7 +932,7 @@ const httpServer = createServer(async (req, res) => {
     }
 
     const match = path.match(
-      /^\/api\/multiplayer\/rooms\/([^/]+)(?:\/(join|reconnect|start|action|leave|state|pause|resume|undo|reset-turn|checkpoints|events|ready|reaction|chat|typing))?(?:\/(save|load|delete))?$/,
+      /^\/api\/multiplayer\/rooms\/([^/]+)(?:\/(join|reconnect|start|preset|rematch|action|leave|state|pause|resume|undo|reset-turn|checkpoints|events|ready|reaction|chat|typing))?(?:\/(save|load|delete))?$/,
     );
     if (!match) {
       writeJson(res, 404, { error: 'not_found' });
@@ -1089,6 +1112,7 @@ const httpServer = createServer(async (req, res) => {
       name?: unknown;
       checkpointId?: unknown;
       expectedRevision?: unknown;
+      presetId?: unknown;
       ready?: unknown;
       reaction?: unknown;
       text?: unknown;
@@ -1135,6 +1159,29 @@ const httpServer = createServer(async (req, res) => {
       startRoom(room, playerId, sessionToken, payload.seed, expectedRevision, checkpointId);
       snapshotAll();
       broadcastRoomEvent(room, checkpointId ? 'start_from_checkpoint' : 'start');
+      emitRoomRuntimeTransition(room, previousRuntimeState);
+      writeJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (operation === 'preset') {
+      const presetId = optionalTrimmedString(payload.presetId);
+      if (!presetId) {
+        writeJson(res, 400, { error: 'invalid_payload' });
+        return;
+      }
+      setRoomPreset(room, playerId, sessionToken, presetId as MultiplayerSessionPresetId, expectedRevision);
+      snapshotAll();
+      broadcastRoomEvent(room, 'preset_changed');
+      writeJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (operation === 'rematch') {
+      const previousRuntimeState = room.roomRuntimeState;
+      rematchRoom(room, playerId, sessionToken, expectedRevision);
+      snapshotAll();
+      broadcastRoomEvent(room, 'rematch');
       emitRoomRuntimeTransition(room, previousRuntimeState);
       writeJson(res, 200, { ok: true });
       return;

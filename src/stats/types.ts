@@ -1,3 +1,7 @@
+import type { MatchMode, MultiplayerSessionPresetId } from '../ui/experience';
+
+export type MatchSurface = 'local' | 'multiplayer';
+
 export interface MatchRecordV1 {
   id: string;
   startedAt: number;
@@ -8,6 +12,10 @@ export interface MatchRecordV1 {
   turnCount: number;
   durationSec: number;
   actionsByType: Record<string, number>;
+  mode: MatchMode;
+  surface: MatchSurface;
+  presetId?: MultiplayerSessionPresetId;
+  roomCode?: string;
 }
 
 export interface LifetimePlayerStats {

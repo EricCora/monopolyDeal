@@ -16,6 +16,8 @@ function edgeFixture(): StatsFixture {
         turnCount: 5,
         durationSec: 5,
         actionsByType: {},
+        mode: 'hot_seat',
+        surface: 'local',
       },
     ],
     lifetime: {

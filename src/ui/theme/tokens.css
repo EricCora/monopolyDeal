@@ -1,28 +1,33 @@
 :root {
-  /* Base flagship palette (classic felt baseline) */
-  --surface-0: #0d160f;
-  --surface-1: #152219;
-  --surface-2: #1e3124;
-  --surface-3: #294036;
-  --surface-panel: rgba(15, 28, 19, 0.9);
-  --surface-card: linear-gradient(160deg, #f7f5ef, #eae7db);
-  --line-strong: #68805c;
-  --line-soft: #3a533f;
-  --text-main: #f2f7ef;
-  --text-muted: #c6d4c2;
-  --text-subtle: #96aa94;
-  --text-dark: #18241c;
-  --accent: #cb4a3a;
-  --accent-strong: #a93226;
-  --accent-alt: #efc45a;
-  --danger: #e37d6d;
-  --success: #76ca8f;
-  --table-felt-base: radial-gradient(circle at 12% 12%, rgba(126, 187, 112, 0.2), transparent 30%), linear-gradient(180deg, #12321c, #0e2516);
-  --table-felt-pattern: linear-gradient(30deg, rgba(255, 255, 255, 0.05) 0 8%, transparent 8% 50%, rgba(0, 0, 0, 0.08) 50% 58%, transparent 58% 100%);
-  --table-felt-glow: radial-gradient(circle at 50% 22%, rgba(255, 219, 144, 0.2), transparent 46%);
-  --table-felt-border: rgba(112, 150, 96, 0.72);
-  --table-seat-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -10px 16px rgba(0, 0, 0, 0.28);
-  --table-seat-highlight: rgba(243, 196, 90, 0.16);
+  /* Base flagship palette (premium tabletop baseline) */
+  --surface-0: #161210;
+  --surface-1: #211a17;
+  --surface-2: #2d241f;
+  --surface-3: #382d27;
+  --surface-panel: rgba(24, 19, 17, 0.9);
+  --surface-card: linear-gradient(160deg, #f5efe5, #e8ddd0);
+  --line-strong: #8a7563;
+  --line-soft: #52443a;
+  --text-main: #f5efe5;
+  --text-muted: #d2c2b3;
+  --text-subtle: #a59080;
+  --text-dark: #201812;
+  --accent: #a34840;
+  --accent-strong: #83322c;
+  --accent-alt: #c8a56c;
+  --danger: #db8d73;
+  --success: #86b186;
+  --table-felt-base: radial-gradient(circle at 12% 12%, rgba(151, 109, 71, 0.18), transparent 32%), linear-gradient(180deg, #2b2220, #1a1412 58%, #120f0e);
+  --table-felt-pattern: linear-gradient(30deg, rgba(255, 255, 255, 0.035) 0 8%, transparent 8% 50%, rgba(0, 0, 0, 0.12) 50% 58%, transparent 58% 100%);
+  --table-felt-glow: radial-gradient(circle at 50% 22%, rgba(200, 165, 107, 0.18), transparent 46%);
+  --table-felt-border: rgba(140, 110, 82, 0.72);
+  --table-seat-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 -10px 16px rgba(0, 0, 0, 0.34);
+  --table-seat-highlight: rgba(200, 165, 107, 0.14);
+  --field-bg: rgba(41, 32, 28, 0.92);
+  --button-bg: linear-gradient(145deg, #c4a06d, #8e6b42);
+  --button-border: rgba(226, 203, 166, 0.58);
+  --button-text: #1f1712;
+  --button-shadow: 0 10px 18px rgba(8, 6, 5, 0.24);
 
   --radius-sm: 10px;
   --radius-md: 14px;

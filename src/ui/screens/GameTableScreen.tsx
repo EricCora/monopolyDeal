@@ -16,6 +16,13 @@ import { PlayChooser, type ActionVariantView } from '../components/PlayChooser';
 import { RecentEvents } from '../components/RecentEvents';
 import { ActionRail } from '../layout/ActionRail';
 import { TopBar } from '../layout/TopBar';
+import {
+  MULTIPLAYER_SESSION_PRESET_OPTIONS,
+  getMatchModeDefinition,
+  getMultiplayerSessionPresetDefinition,
+  type MatchMode,
+  type MultiplayerSessionPresetId,
+} from '../experience';
 import type {
   MultiplayerActivityFeedItem,
   MultiplayerConnectionState,
@@ -49,6 +56,7 @@ interface TablePriorityNotice {
 
 interface GameTableScreenProps {
   mode?: 'local' | 'multiplayer';
+  matchMode?: MatchMode;
   game: GameState;
   prompt: TurnPrompt;
   isPaused: boolean;
@@ -71,6 +79,9 @@ interface GameTableScreenProps {
   isMultiplayerHost?: boolean;
   checkpointSlots?: { id: string; name: string; savedAt: number }[];
   activityFeed?: MultiplayerActivityFeedItem[];
+  multiplayerPresetId?: MultiplayerSessionPresetId;
+  canRematchMultiplayer?: boolean;
+  rematchStatusText?: string | null;
   hostChangeNotice?: string | null;
   onDismissHostChangeNotice?: () => void;
   reducedMotion?: boolean;
@@ -107,6 +118,8 @@ interface GameTableScreenProps {
   onRefreshMultiplayer?: () => void;
   onExitMultiplayer?: () => void;
   onForgetMultiplayer?: () => void;
+  onSetMultiplayerPreset?: (presetId: MultiplayerSessionPresetId) => void;
+  onRematchMultiplayer?: () => void;
   onSaveCheckpoint?: (name: string) => void;
   onLoadCheckpoint?: (checkpointId: string) => void;
   onDeleteCheckpoint?: (checkpointId: string) => void;
@@ -381,6 +394,7 @@ function DiscardPileCard({ discardCount, discardPreviewCardIds, discardBrowserCa
 
 export function GameTableScreen({
   mode = 'local',
+  matchMode = mode === 'multiplayer' ? 'live_online' : 'hot_seat',
   game,
   prompt,
   isPaused,
@@ -396,6 +410,9 @@ export function GameTableScreen({
   isMultiplayerHost = false,
   checkpointSlots = [],
   activityFeed = [],
+  multiplayerPresetId = undefined,
+  canRematchMultiplayer = false,
+  rematchStatusText = null,
   hostChangeNotice = null,
   onDismissHostChangeNotice,
   reducedMotion = false,
@@ -427,6 +444,8 @@ export function GameTableScreen({
   onRefreshMultiplayer,
   onExitMultiplayer,
   onForgetMultiplayer,
+  onSetMultiplayerPreset,
+  onRematchMultiplayer,
   onSaveCheckpoint,
   onLoadCheckpoint,
   onDeleteCheckpoint,
@@ -508,6 +527,9 @@ export function GameTableScreen({
     return map;
   }, [activityFeed, clockNow, isMultiplayer]);
   const selectionPendingKind = prompt.kind === 'selection' ? game.pending?.kind ?? null : null;
+  const multiplayerPreset = isMultiplayer && multiplayerPresetId
+    ? getMultiplayerSessionPresetDefinition(multiplayerPresetId)
+    : null;
   const selectionTargetCardIds = useMemo(() => {
     const targets = new Set<string>();
     if (prompt.kind !== 'selection') return targets;
@@ -659,6 +681,9 @@ export function GameTableScreen({
     prompt.kind,
     winnerName,
   ]);
+  const matchModeLabel = getMatchModeDefinition(matchMode).tableKicker;
+  const matchHeaderTitle = isMultiplayer ? 'Multiplayer Table' : 'Game Table';
+  const matchHeaderSubtitle = turnPriorityNotice?.detail ?? turnStatusText;
 
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(Date.now()), 450);
@@ -788,35 +813,92 @@ export function GameTableScreen({
   return (
     <section className={`game-table-screen ${isPaused ? 'is-paused' : ''}`}>
       <TopBar
-        title={isMultiplayer ? 'Multiplayer Table' : 'Game Table'}
-        subtitle={prompt.text}
+        kicker={matchModeLabel}
+        title={matchHeaderTitle}
+        subtitle={matchHeaderSubtitle}
         meta={(
-          <>
+          <div className="table-match-meta">
+            <article className="table-match-chip">
+              <p className="table-match-chip-label">Turn</p>
+              <p className="table-match-chip-value">{activePlayerName}</p>
+            </article>
+            <article className="table-match-chip">
+              <p className="table-match-chip-label">Step</p>
+              <p className="table-match-chip-value">{promptKindLabel(prompt.kind)}</p>
+            </article>
+            <article className="table-match-chip">
+              <p className="table-match-chip-label">Pressure</p>
+              <p className="table-match-chip-value">
+                {prompt.kind === 'discard'
+                  ? `${Math.max(discardOverLimitCount, 0)} discard needed`
+                  : `${playsRemaining} plays left`}
+              </p>
+            </article>
+            <article className="table-match-chip">
+              <p className="table-match-chip-label">Pending</p>
+              <p className="table-match-chip-value">{pendingLabel}</p>
+            </article>
+            <article className="table-match-chip">
+              <p className="table-match-chip-label">Table</p>
+              <p className="table-match-chip-value">Turn {game.turnCount} | Draw {game.drawPile.length} | Discard {game.discardPile.length}</p>
+            </article>
+            {multiplayerPreset ? (
+              <article className="table-match-chip">
+                <p className="table-match-chip-label">Preset</p>
+                <p className="table-match-chip-value">{multiplayerPreset.tableSummary}</p>
+              </article>
+            ) : null}
+            {isMultiplayer && connectionStatusLabel ? (
+              <article className="table-match-chip">
+                <p className="table-match-chip-label">Connection</p>
+                <p className="table-match-chip-value">{connectionStatusLabel}</p>
+              </article>
+            ) : null}
+            {isMultiplayer && checkpointSlots.length > 0 ? (
+              <article className="table-match-chip">
+                <p className="table-match-chip-label">Checkpoints</p>
+                <p className="table-match-chip-value">{checkpointSlots.length} saved</p>
+              </article>
+            ) : null}
+            {isMultiplayer && connectionStatusLabel ? (
+              <p className="table-match-summary">Connection: {connectionStatusLabel}</p>
+            ) : null}
+            {multiplayerPreset?.supportHints ? (
+              <p className="table-match-summary">Teaching preset: standard rules with clearer setup and support copy.</p>
+            ) : null}
             {showDevStatusChip ? (
-              <p>
+              <p className="table-match-debug">
                 Dev: reconnect {devStatus?.reconnectPolicyActive ? 'on' : 'off'} | version guard {devStatus?.versionGuardActive ? 'on' : 'off'} | pause policy {devStatus?.disconnectPausePolicyActive ? 'on' : 'off'} | transport {devStatus?.transportMode ?? 'http_fallback'} | push {devStatus?.pushState ?? 'n/a'} | runtime {devStatus?.roomRuntimeState ?? 'n/a'}
               </p>
             ) : null}
-            <p>
-              Turn {game.turnCount} | Draw pile: {game.drawPile.length} | Discard: {game.discardPile.length}
-            </p>
-            {game.turn.phase === 'action' ? <p>Plays used: {game.turn.playsUsed}/3</p> : null}
-            {isMultiplayer && connectionStatusLabel ? (
-              <p>Connection: {connectionStatusLabel}</p>
-            ) : null}
-            {isMultiplayer && checkpointSlots.length > 0 ? (
-              <p>Checkpoints: {checkpointSlots.length}</p>
-            ) : null}
-          </>
+          </div>
         )}
         actions={(
           <div className="table-top-actions">
             <div className="table-top-group">
-              <p className="table-top-group-label">Navigation</p>
+              <p className="table-top-group-label">Table</p>
               <button onClick={onNavigateHome}>Home</button>
               {!isMultiplayer ? <button onClick={onOpenSavedGames}>Save Game</button> : null}
               <button onClick={onOpenRules}>Rules Reference</button>
               <button onClick={onOpenSettings}>Settings</button>
+            </div>
+            <div className="table-top-group">
+              <p className="table-top-group-label">Match</p>
+              <button onClick={onPauseToggle}>{isPaused ? 'Resume' : 'Pause'}</button>
+              <button
+                type="button"
+                onClick={() => setTimelineExpanded((open) => !open)}
+              >
+                {timelineExpanded ? 'Hide History' : 'Show History'}
+              </button>
+              {hasInsightsPanels ? (
+                <button
+                  type="button"
+                  onClick={() => setInsightsExpanded((open) => !open)}
+                >
+                  {insightsExpanded ? 'Hide Social' : 'Show Social'}
+                </button>
+              ) : null}
             </div>
             {isMultiplayer ? (
               <div className="table-top-group">
@@ -828,8 +910,7 @@ export function GameTableScreen({
             ) : null}
             {(isMultiplayer ? isMultiplayerHost : true) ? (
               <div className="table-top-group">
-                <p className="table-top-group-label">Flow</p>
-                <button onClick={onPauseToggle}>{isPaused ? 'Resume' : 'Pause'}</button>
+                <p className="table-top-group-label">Host Tools</p>
                 {isMultiplayer && isMultiplayerHost ? (
                   <>
                     <button onClick={saveCheckpointInteractive} disabled={checkpointLoading || isPaused}>Save Checkpoint</button>
@@ -925,57 +1006,6 @@ export function GameTableScreen({
         </div>
 
         <div className="game-table-main">
-          <section className="table-command-strip panel card-enter" aria-label="Turn command strip">
-            <div className="table-command-grid">
-              <article className="table-command-chip">
-                <p className="table-command-label">Active Player</p>
-                <p className="table-command-value">{activePlayerName}</p>
-              </article>
-              <article className="table-command-chip">
-                <p className="table-command-label">Step</p>
-                <p className="table-command-value">{promptKindLabel(prompt.kind)}</p>
-              </article>
-              <article className="table-command-chip">
-                <p className="table-command-label">Pressure</p>
-                <p className="table-command-value">
-                  {prompt.kind === 'discard'
-                    ? `${Math.max(discardOverLimitCount, 0)} discard needed`
-                    : `${playsRemaining} plays left`}
-                </p>
-              </article>
-              <article className="table-command-chip">
-                <p className="table-command-label">Pending</p>
-                <p className="table-command-value">{pendingLabel}</p>
-              </article>
-            </div>
-            <div className="table-command-actions">
-              <button
-                type="button"
-                className="table-command-toggle"
-                aria-expanded={timelineExpanded}
-                onClick={() => setTimelineExpanded((open) => !open)}
-              >
-                {timelineExpanded ? 'Hide Timeline' : 'Show Timeline'}
-              </button>
-              {hasInsightsPanels ? (
-                <button
-                  type="button"
-                  className="table-command-toggle"
-                  aria-expanded={insightsExpanded}
-                  onClick={() => setInsightsExpanded((open) => !open)}
-                >
-                  {insightsExpanded ? 'Hide Insights' : 'Show Insights'}
-                </button>
-              ) : null}
-            </div>
-          </section>
-          {turnPriorityNotice ? (
-            <section className={`table-priority-banner tone-${turnPriorityNotice.tone}`} role="status" aria-live="polite">
-              <p className="table-priority-title">{turnPriorityNotice.title}</p>
-              <p className="table-priority-detail">{turnPriorityNotice.detail}</p>
-            </section>
-          ) : null}
-
           <div className="table-main-layout">
             <div className="table-play-column">
               <section className="table-surface" aria-label="Table surface">
@@ -1034,18 +1064,26 @@ export function GameTableScreen({
                   && activeMoveWildCardId !== null
                   && moveWildDestinationColors.has(color);
               });
+              const hasSelectionTarget = selectionCardPickingEnabled && propertyColors.some((color) => (
+                selectionPendingKind === 'deal_breaker'
+                  ? selectionTargetColors.has(color)
+                  : player.properties[color].some((entry) => selectionTargetCardIds.has(entry.cardId))
+              ));
+              const playerStatusSummary = (() => {
+                if (isPromptPlayer && !over.done && !inputBlocked) return 'Acting now';
+                if (isPaymentPayer) return 'Payment requested';
+                if (isCurrent) return 'Current turn seat';
+                if (hasSelectionTarget) return 'Valid target for this effect';
+                if (isMultiplayer) {
+                  return playerConnectionById[player.id]?.connected ? 'Connected to room' : 'Reconnect pending';
+                }
+                return 'Waiting for the next turn window';
+              })();
               const playerStatusTags: string[] = [];
-              if (isPromptPlayer && !over.done && !inputBlocked) playerStatusTags.push('Acting');
-              if (isCurrent) playerStatusTags.push('Turn Seat');
+              if (isPromptPlayer && !over.done && !inputBlocked) playerStatusTags.push('Priority');
+              if (isCurrent && playerStatusSummary !== 'Current turn seat') playerStatusTags.push('Turn Seat');
               if (isPaymentPayer) playerStatusTags.push('Payment Requested');
-              if (selectionCardPickingEnabled) {
-                const hasSelectionTarget = propertyColors.some((color) => (
-                  selectionPendingKind === 'deal_breaker'
-                    ? selectionTargetColors.has(color)
-                    : player.properties[color].some((entry) => selectionTargetCardIds.has(entry.cardId))
-                ));
-                if (hasSelectionTarget) playerStatusTags.push('Valid Target');
-              }
+              if (hasSelectionTarget && playerStatusSummary !== 'Valid target for this effect') playerStatusTags.push('Valid Target');
 
               return (
                 <article
@@ -1055,6 +1093,7 @@ export function GameTableScreen({
                   <header>
                     <h3>{player.name}</h3>
                     <p>{getSetCompletionCount(player)} complete sets</p>
+                    <p className="player-status-summary">{playerStatusSummary}</p>
                     {playerStatusTags.length > 0 ? (
                       <ul className="player-status-tags" aria-label={`${player.name} status`}>
                         {playerStatusTags.map((tag) => (
@@ -1434,8 +1473,29 @@ export function GameTableScreen({
             <p>
               Winner: <strong>{winnerName ?? 'Unknown player'}</strong>
             </p>
+            {multiplayerPreset ? <p>Selected preset: <strong>{multiplayerPreset.label}</strong>. {multiplayerPreset.readySummary}</p> : null}
             <p>Use Exit Match to leave and keep reconnect access, or Forget Room to disconnect permanently.</p>
+            {onSetMultiplayerPreset ? (
+              <div className="winner-actions">
+                {MULTIPLAYER_SESSION_PRESET_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onSetMultiplayerPreset(option.value)}
+                    disabled={checkpointLoading}
+                  >
+                    {getMultiplayerSessionPresetDefinition(option.value).label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {rematchStatusText ? <p>{rematchStatusText}</p> : null}
             <div className="winner-actions">
+              {onRematchMultiplayer ? (
+                <button type="button" onClick={onRematchMultiplayer} disabled={checkpointLoading || !canRematchMultiplayer}>
+                  Play Rematch
+                </button>
+              ) : null}
               <button type="button" onClick={onExitMultiplayer} disabled={checkpointLoading}>
                 Exit Match
               </button>

@@ -1,7 +1,15 @@
 import type { GameState } from '../engine';
-import type { LifetimePlayerStats, LifetimeStatsV1, MatchRecordV1 } from './types';
+import type { LifetimePlayerStats, LifetimeStatsV1, MatchRecordV1, MatchSurface } from './types';
+import type { MatchMode, MultiplayerSessionPresetId } from '../ui/experience';
 
-export function buildMatchRecord(state: GameState): MatchRecordV1 {
+interface MatchRecordMetadata {
+  mode: MatchMode;
+  surface: MatchSurface;
+  presetId?: MultiplayerSessionPresetId;
+  roomCode?: string;
+}
+
+export function buildMatchRecord(state: GameState, metadata: MatchRecordMetadata): MatchRecordV1 {
   const actionsByType: Record<string, number> = {};
   for (const event of state.history) {
     actionsByType[event.type] = (actionsByType[event.type] ?? 0) + 1;
@@ -19,6 +27,10 @@ export function buildMatchRecord(state: GameState): MatchRecordV1 {
     turnCount: state.turnCount,
     durationSec: Math.max(1, Math.floor((state.updatedAt - state.createdAt) / 1000)),
     actionsByType,
+    mode: metadata.mode,
+    surface: metadata.surface,
+    presetId: metadata.presetId,
+    roomCode: metadata.roomCode,
   };
 }
 

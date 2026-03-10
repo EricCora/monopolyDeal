@@ -28,8 +28,8 @@ export function SetupScreen({
 }: SetupScreenProps) {
   return (
     <section className="panel setup-screen card-enter">
-      <h2>New Local Game</h2>
-      <p className="setup-subtitle">Set your table and lock in each player before the first draw.</p>
+      <h2>Hot Seat Setup</h2>
+      <p className="setup-subtitle">Build your local pass-and-play table, then lock the seats before the first draw.</p>
 
       <label>
         Total Players

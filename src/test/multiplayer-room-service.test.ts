@@ -12,9 +12,11 @@ import {
   reconnectRoom,
   resetTurnRoomActions,
   resolveReconnectWindowMs,
+  rematchRoom,
   resumeRoom,
   sendRoomChat,
   sendRoomReaction,
+  setRoomPreset,
   setRoomTyping,
   setRoomReady,
   roomView,
@@ -43,6 +45,23 @@ function fillLobby(room: MultiplayerRoom) {
 
 function withPauseOnDisconnectPolicy<T>(run: () => T): T {
   return run();
+}
+
+function readyAllPlayers(room: MultiplayerRoom): void {
+  room.players.forEach((player) => {
+    setRoomReady(room, player.id, player.sessionToken, true);
+  });
+}
+
+function startReadyRoom(
+  room: MultiplayerRoom,
+  session: { playerId: string; sessionToken: string },
+  seed?: number,
+  expectedRevision?: number,
+  checkpointId?: string,
+) {
+  readyAllPlayers(room);
+  return startRoom(room, session.playerId, session.sessionToken, seed, expectedRevision, checkpointId);
 }
 
 describe('multiplayer room service lifecycle', () => {
@@ -76,7 +95,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     const joined = joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
     leaveRoom(room, joined.playerId, joined.sessionToken);
 
     const revisionBefore = room.revision;
@@ -192,7 +211,7 @@ describe('multiplayer room service lifecycle', () => {
       const rooms = new Map<string, MultiplayerRoom>();
       const { room, session } = createRoom(rooms, 'Host');
       const playerTwo = joinRoom(room, 'Player 2');
-      startRoom(room, session.playerId, session.sessionToken);
+      startReadyRoom(room, session);
 
       leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
       const disconnected = findParticipant(room, playerTwo.playerId);
@@ -219,7 +238,7 @@ describe('multiplayer room service lifecycle', () => {
       const rooms = new Map<string, MultiplayerRoom>();
       const { room, session } = createRoom(rooms, 'Host');
       const playerTwo = joinRoom(room, 'Player 2');
-      startRoom(room, session.playerId, session.sessionToken);
+      startReadyRoom(room, session);
       if (!room.game) throw new Error('expected active game');
       room.game.currentPlayerIndex = 0;
       room.game.turn.phase = 'action';
@@ -241,7 +260,7 @@ describe('multiplayer room service lifecycle', () => {
       const rooms = new Map<string, MultiplayerRoom>();
       const { room, session } = createRoom(rooms, 'Host');
       const playerTwo = joinRoom(room, 'Player 2');
-      startRoom(room, session.playerId, session.sessionToken);
+      startReadyRoom(room, session);
       if (!room.game) throw new Error('expected active game');
 
       room.game.currentPlayerIndex = 0;
@@ -277,7 +296,7 @@ describe('multiplayer room service lifecycle', () => {
       const rooms = new Map<string, MultiplayerRoom>();
       const { room, session } = createRoom(rooms, 'Host');
       joinRoom(room, 'Player 2');
-      startRoom(room, session.playerId, session.sessionToken);
+      startReadyRoom(room, session);
       if (!room.game) throw new Error('expected active game');
 
       room.game.currentPlayerIndex = 0;
@@ -316,7 +335,7 @@ describe('multiplayer room service lifecycle', () => {
       const rooms = new Map<string, MultiplayerRoom>();
       const { room, session } = createRoom(rooms, 'Host');
       joinRoom(room, 'Player 2');
-      startRoom(room, session.playerId, session.sessionToken);
+      startReadyRoom(room, session);
 
       leaveRoom(room, session.playerId, session.sessionToken);
       if (room.roomRuntimeState !== 'paused_host_disconnect') {
@@ -348,7 +367,7 @@ describe('multiplayer room service lifecycle', () => {
       const rooms = new Map<string, MultiplayerRoom>();
       const { room, session } = createRoom(rooms, 'Host');
       joinRoom(room, 'Player 2');
-      startRoom(room, session.playerId, session.sessionToken);
+      startReadyRoom(room, session);
 
       leaveRoom(room, session.playerId, session.sessionToken);
       expect(room.roomRuntimeState).toBe('paused_host_disconnect');
@@ -365,7 +384,7 @@ describe('multiplayer room service lifecycle', () => {
       const rooms = new Map<string, MultiplayerRoom>();
       const { room, session } = createRoom(rooms, 'Host');
       const playerTwo = joinRoom(room, 'Player 2');
-      startRoom(room, session.playerId, session.sessionToken);
+      startReadyRoom(room, session);
 
       pauseRoom(room, session.playerId, session.sessionToken);
       leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
@@ -384,7 +403,7 @@ describe('multiplayer room service lifecycle', () => {
       const rooms = new Map<string, MultiplayerRoom>();
       const { room, session } = createRoom(rooms, 'Host');
       const playerTwo = joinRoom(room, 'Player 2');
-      startRoom(room, session.playerId, session.sessionToken);
+      startReadyRoom(room, session);
 
       pauseRoom(room, session.playerId, session.sessionToken);
       leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
@@ -406,7 +425,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     const playerTwo = joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
     leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
     const disconnected = findParticipant(room, playerTwo.playerId);
     disconnected.reconnectDeadlineMs = Date.now() - 1;
@@ -419,7 +438,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     const playerTwo = joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
     leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
     const disconnected = findParticipant(room, playerTwo.playerId);
     disconnected.reconnectDeadlineMs = Date.now() + 60_000;
@@ -437,7 +456,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     const playerTwo = joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
     leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
 
     const beforeDeadline = markSeatTimedOutIfExpired(room, playerTwo.playerId, Date.now());
@@ -454,7 +473,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     const playerTwo = joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
 
     expect(() => pauseRoom(room, playerTwo.playerId, playerTwo.sessionToken)).toThrowError('host_required');
 
@@ -469,7 +488,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
 
     const initialView = roomView(room, session.playerId, session.sessionToken);
     const firstAction = initialView.legalActions.find((entry) => entry.action.type === 'draw_cards')?.action ?? initialView.legalActions[0]?.action;
@@ -495,7 +514,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
 
     const checkpoint = saveRoomCheckpoint(room, session.playerId, session.sessionToken, 'Start');
     expect(checkpoint.name).toBe('Start');
@@ -516,7 +535,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
     const staleRevision = room.revision - 1;
 
     expect(() => pauseRoom(room, session.playerId, session.sessionToken, staleRevision)).toThrowError('revision_conflict');
@@ -526,7 +545,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
 
     const currentView = roomView(room, session.playerId, session.sessionToken);
     const nextAction = currentView.legalActions.find((entry) => entry.action.type === 'draw_cards')?.action ?? currentView.legalActions[0]?.action;
@@ -546,7 +565,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
 
     const currentView = roomView(room, session.playerId, session.sessionToken);
     const nextAction = currentView.legalActions.find((entry) => entry.action.type === 'draw_cards')?.action ?? currentView.legalActions[0]?.action;
@@ -567,7 +586,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
 
     const currentView = roomView(room, session.playerId, session.sessionToken);
     const nextAction = currentView.legalActions.find((entry) => entry.action.type === 'draw_cards')?.action ?? currentView.legalActions[0]?.action;
@@ -594,7 +613,7 @@ describe('multiplayer room service lifecycle', () => {
       const rooms = new Map<string, MultiplayerRoom>();
       const { room, session } = createRoom(rooms, 'Host');
       const playerTwo = joinRoom(room, 'Player 2');
-      startRoom(room, session.playerId, session.sessionToken);
+      startReadyRoom(room, session);
 
       leaveRoom(room, session.playerId, session.sessionToken);
       expect(room.hostPlayerId).toBe(session.playerId);
@@ -618,17 +637,79 @@ describe('multiplayer room service lifecycle', () => {
     expect(view.activityFeed.some((entry) => /is ready/i.test(entry.message))).toBe(true);
   });
 
+  it('defaults rooms to the standard preset and only enables canStart once everyone is ready', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+
+    expect(room.presetId).toBe('standard');
+    expect(roomView(room, session.playerId, session.sessionToken).canStart).toBe(false);
+
+    setRoomReady(room, session.playerId, session.sessionToken, true);
+    expect(roomView(room, session.playerId, session.sessionToken).canStart).toBe(false);
+
+    setRoomReady(room, playerTwo.playerId, playerTwo.sessionToken, true);
+    const view = roomView(room, session.playerId, session.sessionToken);
+    expect(view.presetId).toBe('standard');
+    expect(view.canStart).toBe(true);
+  });
+
+  it('changes the room preset and clears ready state for the whole lobby', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+
+    setRoomReady(room, session.playerId, session.sessionToken, true);
+    setRoomReady(room, playerTwo.playerId, playerTwo.sessionToken, true);
+    setRoomPreset(room, session.playerId, session.sessionToken, 'fast');
+
+    const view = roomView(room, session.playerId, session.sessionToken);
+    expect(view.presetId).toBe('fast');
+    expect(view.canStart).toBe(false);
+    expect(view.players.every((player) => !player.ready)).toBe(true);
+  });
+
   it('records reactions and enforces reaction cooldown', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
 
     sendRoomReaction(room, session.playerId, session.sessionToken, 'gg');
     expect(room.activityFeed[0]?.kind).toBe('reaction');
     expect(room.activityFeed[0]?.reaction).toBe('gg');
 
     expect(() => sendRoomReaction(room, session.playerId, session.sessionToken, 'wow')).toThrowError('reaction_rate_limited');
+  });
+
+  it('starts a rematch with the selected preset and clears finished-room state', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+
+    setRoomPreset(room, session.playerId, session.sessionToken, 'fast');
+    startReadyRoom(room, session);
+
+    room.game!.winnerId = 'p1';
+    room.status = 'finished';
+    room.players.forEach((player) => {
+      player.ready = true;
+    });
+    room.turnSnapshots = [structuredClone(room.game!)];
+    room.recentActionIds = ['dup-1'];
+    room.paused = true;
+    room.pausedReason = 'manual';
+
+    rematchRoom(room, session.playerId, session.sessionToken);
+
+    expect(room.status).toBe('active');
+    expect(room.game?.winnerId).toBeUndefined();
+    expect(room.game?.ruleset?.winCompleteSets).toBe(2);
+    expect(room.turnSnapshots).toHaveLength(0);
+    expect(room.recentActionIds).toHaveLength(0);
+    expect(room.players.every((player) => !player.ready)).toBe(true);
+    expect(roomView(room, session.playerId, session.sessionToken).canRematch).toBe(false);
+    expect(findParticipant(room, playerTwo.playerId).connected).toBe(true);
   });
 
   it('stores chat messages and returns them in room view', () => {
@@ -708,7 +789,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     const playerTwo = joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
     const checkpoint = saveRoomCheckpoint(room, session.playerId, session.sessionToken, 'Resume');
     const checkpointGame = structuredClone(room.checkpoints[room.checkpoints.length - 1].game);
 
@@ -716,7 +797,7 @@ describe('multiplayer room service lifecycle', () => {
     room.game = null;
     room.status = 'lobby';
 
-    const resumedRoom = startRoom(room, session.playerId, session.sessionToken, undefined, undefined, checkpoint.id);
+    const resumedRoom = startReadyRoom(room, session, undefined, undefined, checkpoint.id);
     const resumedGame = resumedRoom.game;
     if (!resumedGame) throw new Error('expected resumed game');
     expect(resumedGame.players.map((player) => player.id)).toEqual(checkpointGame.players.map((player) => player.id));
@@ -728,7 +809,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
     const checkpoint = saveRoomCheckpoint(room, session.playerId, session.sessionToken, 'Resume');
 
     room.game = null;
@@ -736,8 +817,28 @@ describe('multiplayer room service lifecycle', () => {
     room.players = room.players.filter((entry) => entry.id !== 'p2');
     joinRoom(room, 'Replacement');
 
+    readyAllPlayers(room);
     expect(() => startRoom(room, session.playerId, session.sessionToken, undefined, undefined, checkpoint.id)).toThrowError(
       'checkpoint_player_mismatch',
+    );
+  });
+
+  it('rejects checkpoint start when checkpoint rules do not match the selected preset', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    joinRoom(room, 'Player 2');
+    startReadyRoom(room, session);
+    const checkpoint = saveRoomCheckpoint(room, session.playerId, session.sessionToken, 'Resume');
+
+    room.game = null;
+    room.status = 'lobby';
+    room.roomRuntimeState = undefined;
+
+    setRoomPreset(room, session.playerId, session.sessionToken, 'fast');
+    readyAllPlayers(room);
+
+    expect(() => startRoom(room, session.playerId, session.sessionToken, undefined, undefined, checkpoint.id)).toThrowError(
+      'checkpoint_preset_mismatch',
     );
   });
 
@@ -745,7 +846,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     const playerTwo = joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
     const staleRevision = room.revision - 1;
 
     expect(() => leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken, staleRevision)).toThrowError('revision_conflict');
@@ -758,7 +859,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     const playerTwo = joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
 
     if (!room.game) throw new Error('expected game');
     const payer = room.game.players.find((player) => player.id === playerTwo.playerId);
@@ -803,7 +904,7 @@ describe('multiplayer room service lifecycle', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     const playerTwo = joinRoom(room, 'Player 2');
-    startRoom(room, session.playerId, session.sessionToken);
+    startReadyRoom(room, session);
 
     if (!room.game) throw new Error('expected game');
     const payer = room.game.players.find((player) => player.id === playerTwo.playerId);

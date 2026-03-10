@@ -6,8 +6,10 @@ import {
   listMultiplayerLanOrigins,
   multiplayerErrorMessage,
   reconnectMultiplayerRoom,
+  rematchMultiplayerRoom,
   resetMultiplayerTransportState,
   runWithTransportFallback,
+  setMultiplayerRoomPreset,
   SOCKET_PROBE_COOLDOWN_MS,
   resolveMultiplayerApiBase,
 } from '../network/multiplayerClient';
@@ -229,6 +231,79 @@ describe('applyMultiplayerAction action_rejected error details', () => {
           requiresResync: true,
         },
       });
+  });
+});
+
+describe('preset and rematch multiplayer mutations', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('posts room preset updates to the preset endpoint', async () => {
+    const session = {
+      version: 1 as const,
+      roomCode: 'ABCDE',
+      seatId: 'p1',
+      resumeToken: 'token-1',
+      playerId: 'p1',
+      sessionToken: 'token-1',
+      playerName: 'Host',
+      reconnectDeadlineMs: Date.now() + 30_000,
+    };
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await setMultiplayerRoomPreset(session, 'fast', 'http://localhost:8787', 9);
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://localhost:8787/api/multiplayer/rooms/ABCDE/preset',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          playerId: 'p1',
+          sessionToken: 'token-1',
+          presetId: 'fast',
+          expectedRevision: 9,
+        }),
+      }),
+    );
+  });
+
+  it('posts rematch requests to the rematch endpoint', async () => {
+    const session = {
+      version: 1 as const,
+      roomCode: 'ABCDE',
+      seatId: 'p1',
+      resumeToken: 'token-1',
+      playerId: 'p1',
+      sessionToken: 'token-1',
+      playerName: 'Host',
+      reconnectDeadlineMs: Date.now() + 30_000,
+    };
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await rematchMultiplayerRoom(session, 'http://localhost:8787', 11);
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://localhost:8787/api/multiplayer/rooms/ABCDE/rematch',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          playerId: 'p1',
+          sessionToken: 'token-1',
+          expectedRevision: 11,
+        }),
+      }),
+    );
   });
 });
 

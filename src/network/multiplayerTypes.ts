@@ -1,4 +1,5 @@
 import type { Action, GameState, LegalAction } from '../engine';
+import type { MultiplayerSessionPresetId } from '../ui/experience';
 
 export type MultiplayerRoomStatus = 'lobby' | 'active' | 'finished';
 export type MultiplayerRoomRuntimeState = 'active' | 'paused_disconnect' | 'paused_host_disconnect' | 'ended_timeout';
@@ -56,6 +57,7 @@ export interface MultiplayerRoomView {
   status: MultiplayerRoomStatus;
   started: boolean;
   winnerId?: string;
+  presetId: MultiplayerSessionPresetId;
   hostPlayerId: string;
   yourPlayerId: string;
   players: MultiplayerPlayerSummary[];
@@ -71,6 +73,7 @@ export interface MultiplayerRoomView {
   turnSnapshotCount: number;
   checkpointSlots: MultiplayerCheckpointSummary[];
   canStart: boolean;
+  canRematch: boolean;
   reconnectDeadlineMs: number;
   serverTime: number;
   activityFeed: MultiplayerActivityFeedItem[];
@@ -180,6 +183,8 @@ export type MultiplayerSocketCommandName =
   | 'mp:cmd:reconnect'
   | 'mp:cmd:state'
   | 'mp:cmd:start'
+  | 'mp:cmd:preset'
+  | 'mp:cmd:rematch'
   | 'mp:cmd:action'
   | 'mp:cmd:leave'
   | 'mp:cmd:pause'
@@ -227,6 +232,8 @@ export interface MultiplayerSocketCommandPayloadMap {
   'mp:cmd:reconnect': { expectedRevision?: number };
   'mp:cmd:state': { expectedRevision?: number };
   'mp:cmd:start': { seed?: number; checkpointId?: string; expectedRevision?: number };
+  'mp:cmd:preset': { presetId: MultiplayerSessionPresetId; expectedRevision?: number };
+  'mp:cmd:rematch': { expectedRevision?: number };
   'mp:cmd:action': { action: Action; expectedRevision?: number; clientStateVersion?: number; actionId?: string };
   'mp:cmd:leave': { expectedRevision?: number };
   'mp:cmd:pause': { expectedRevision?: number };
@@ -246,6 +253,8 @@ export interface MultiplayerSocketCommandResponseMap {
   'mp:cmd:reconnect': MultiplayerResumeRoomResponse;
   'mp:cmd:state': MultiplayerRoomView;
   'mp:cmd:start': { ok: true };
+  'mp:cmd:preset': { ok: true };
+  'mp:cmd:rematch': { ok: true };
   'mp:cmd:action': { ok: true };
   'mp:cmd:leave': { ok: true };
   'mp:cmd:pause': { ok: true };

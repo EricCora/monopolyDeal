@@ -1,6 +1,7 @@
 import {
   applyAction,
   createGame,
+  DEFAULT_RULESET,
   getLegalActions,
   getNextPrompt,
   getSetCompletionCount,
@@ -10,6 +11,14 @@ import {
   type PlayerConfig,
   type PlayerId,
 } from '../../../src/engine/index.ts';
+import {
+  DEFAULT_MULTIPLAYER_SESSION_PRESET,
+  getMultiplayerSessionPresetDefinition,
+  getMultiplayerSessionPresetRuleset,
+  multiplayerSessionPresetRulesMatch,
+  normalizeMultiplayerSessionPreset,
+  type MultiplayerSessionPresetId,
+} from '../../../src/ui/experience.ts';
 import type {
   MultiplayerActivityFeedItem,
   MultiplayerChatMessage,
@@ -90,6 +99,7 @@ export interface MultiplayerRoom {
   originalHostPlayerId: PlayerId;
   hostPlayerId: PlayerId;
   status: MultiplayerRoomStatus;
+  presetId: MultiplayerSessionPresetId;
   players: RoomParticipant[];
   game: GameState | null;
   paused: boolean;
@@ -136,6 +146,7 @@ export interface PruneInactiveRoomsResult {
 }
 
 export function normalizeRoomForRuntime(room: MultiplayerRoom): MultiplayerRoom {
+  room.presetId = normalizeMultiplayerSessionPreset(room.presetId, DEFAULT_MULTIPLAYER_SESSION_PRESET);
   room.activityFeed = Array.isArray(room.activityFeed) ? room.activityFeed : [];
   room.nextActivityId = Number.isFinite(room.nextActivityId)
     ? Math.max(Number(room.nextActivityId), room.activityFeed.length + 1)
@@ -557,6 +568,53 @@ function connectedLobbyPlayers(room: MultiplayerRoom): RoomParticipant[] {
   return room.players.filter((player) => player.connected);
 }
 
+function allConnectedPlayersReady(room: MultiplayerRoom): boolean {
+  const connectedPlayers = connectedLobbyPlayers(room);
+  return connectedPlayers.length >= 2 && connectedPlayers.every((player) => player.ready);
+}
+
+function allRoomPlayersConnectedAndReady(room: MultiplayerRoom): boolean {
+  return room.players.length >= 2 && room.players.every((player) => player.connected && player.ready);
+}
+
+function allRoomPlayersConnected(room: MultiplayerRoom): boolean {
+  return room.players.length >= 2 && room.players.every((player) => player.connected);
+}
+
+function clearAllReadyStates(room: MultiplayerRoom): void {
+  room.players.forEach((player) => {
+    player.ready = false;
+  });
+}
+
+function canViewerStartRoom(room: MultiplayerRoom, viewerId: PlayerId): boolean {
+  return room.status === 'lobby'
+    && room.hostPlayerId === viewerId
+    && allConnectedPlayersReady(room);
+}
+
+function canViewerRematchRoom(room: MultiplayerRoom, viewerId: PlayerId): boolean {
+  return room.status === 'finished'
+    && room.hostPlayerId === viewerId
+    && allRoomPlayersConnectedAndReady(room);
+}
+
+function checkpointRulesMatchPreset(room: MultiplayerRoom, checkpoint: RoomCheckpoint): boolean {
+  return multiplayerSessionPresetRulesMatch(room.presetId, checkpoint.game.ruleset ?? DEFAULT_RULESET);
+}
+
+function resetRoomForFreshMatch(room: MultiplayerRoom): void {
+  room.paused = false;
+  room.pausedByPlayerId = undefined;
+  room.roomRuntimeState = 'active';
+  room.pausedReason = undefined;
+  room.endedReason = undefined;
+  clearDisconnectPauseRestore(room);
+  room.turnSnapshots = [];
+  room.recentActionIds = [];
+  clearAllReadyStates(room);
+}
+
 function removeLobbyParticipant(room: MultiplayerRoom, playerId: PlayerId): boolean {
   if (room.status !== 'lobby') return false;
   const player = findPlayer(room, playerId);
@@ -723,6 +781,7 @@ export function createRoom(
     originalHostPlayerId: playerId,
     hostPlayerId: playerId,
     status: 'lobby',
+    presetId: DEFAULT_MULTIPLAYER_SESSION_PRESET,
     players: [{
       id: playerId,
       name: sanitizeName(hostName, 'Host'),
@@ -863,6 +922,9 @@ export function startRoom(
   if (activePlayers.length < 2) {
     throw new Error('minimum_players_required');
   }
+  if (!allConnectedPlayersReady(room)) {
+    throw new Error('players_not_ready');
+  }
   const players: PlayerConfig[] = activePlayers.map((player) => ({ id: player.id, name: player.name }));
   if (checkpointId) {
     const checkpoint = findCheckpoint(room, checkpointId);
@@ -872,26 +934,25 @@ export function startRoom(
     if (!sameParticipants) {
       throw new Error('checkpoint_player_mismatch');
     }
+    if (!checkpointRulesMatchPreset(room, checkpoint)) {
+      throw new Error('checkpoint_preset_mismatch');
+    }
     room.game = structuredClone(checkpoint.game);
   } else {
     room.game = createGame({
       players,
       deckVersion: 'v1',
       seed,
+      ruleset: getMultiplayerSessionPresetRuleset(room.presetId),
     });
   }
-  room.paused = false;
-  room.pausedByPlayerId = undefined;
-  room.roomRuntimeState = 'active';
-  room.pausedReason = undefined;
-  room.endedReason = undefined;
-  clearDisconnectPauseRestore(room);
-  room.turnSnapshots = [];
-  room.recentActionIds = [];
-  room.players.forEach((entry) => {
-    entry.ready = false;
-  });
-  appendActivity(room, 'match', checkpointId ? 'Match started from checkpoint.' : 'Match started.');
+  resetRoomForFreshMatch(room);
+  const presetLabel = getMultiplayerSessionPresetDefinition(room.presetId).label;
+  appendActivity(
+    room,
+    'match',
+    checkpointId ? `Match started from checkpoint with ${presetLabel}.` : `Match started with ${presetLabel}.`,
+  );
   updateStatusFromGame(room);
   commitMutation(room);
   return room;
@@ -1132,6 +1193,37 @@ export function deleteRoomCheckpoint(
   commitMutation(room);
 }
 
+export function setRoomPreset(
+  room: MultiplayerRoom,
+  playerId: PlayerId,
+  sessionToken: string,
+  presetId: MultiplayerSessionPresetId,
+  expectedRevision?: number,
+): MultiplayerRoom {
+  ensureExpectedRevision(room, expectedRevision);
+  const player = requireSession(room, playerId, sessionToken);
+  assertReconnectWindowOpen(player);
+  requireConnectedPlayer(player);
+  requireHost(room, playerId);
+  if (room.status === 'active') {
+    throw new Error('room_started');
+  }
+  const nextPresetId = normalizeMultiplayerSessionPreset(presetId, room.presetId);
+  if (room.presetId === nextPresetId) {
+    return room;
+  }
+  room.presetId = nextPresetId;
+  clearAllReadyStates(room);
+  appendActivity(
+    room,
+    'lobby',
+    `${player.name} switched the room preset to ${getMultiplayerSessionPresetDefinition(nextPresetId).label}.`,
+    { playerId },
+  );
+  commitMutation(room);
+  return room;
+}
+
 export function setRoomReady(
   room: MultiplayerRoom,
   playerId: PlayerId,
@@ -1140,7 +1232,7 @@ export function setRoomReady(
   expectedRevision?: number,
 ): MultiplayerRoom {
   ensureExpectedRevision(room, expectedRevision);
-  if (room.status !== 'lobby' || room.game) {
+  if (room.status === 'active') {
     throw new Error('room_started');
   }
   const player = requireSession(room, playerId, sessionToken);
@@ -1148,7 +1240,46 @@ export function setRoomReady(
   touchPlayer(player);
   if (player.ready === ready) return room;
   player.ready = ready;
-  appendActivity(room, 'ready', ready ? `${player.name} is ready.` : `${player.name} is not ready.`, { playerId });
+  appendActivity(
+    room,
+    'ready',
+    ready
+      ? `${player.name} is ready for ${getMultiplayerSessionPresetDefinition(room.presetId).label}.`
+      : `${player.name} is not ready.`,
+    { playerId },
+  );
+  commitMutation(room);
+  return room;
+}
+
+export function rematchRoom(
+  room: MultiplayerRoom,
+  playerId: PlayerId,
+  sessionToken: string,
+  expectedRevision?: number,
+): MultiplayerRoom {
+  ensureExpectedRevision(room, expectedRevision);
+  const player = requireSession(room, playerId, sessionToken);
+  assertReconnectWindowOpen(player);
+  requireConnectedPlayer(player);
+  requireHost(room, playerId);
+  if (room.status !== 'finished') {
+    throw new Error('room_not_finished');
+  }
+  if (!allRoomPlayersConnected(room)) {
+    throw new Error('rematch_requires_connected_players');
+  }
+  if (!allRoomPlayersConnectedAndReady(room)) {
+    throw new Error('players_not_ready');
+  }
+  room.game = createGame({
+    players: room.players.map((entry) => ({ id: entry.id, name: entry.name })),
+    deckVersion: 'v1',
+    ruleset: getMultiplayerSessionPresetRuleset(room.presetId),
+  });
+  resetRoomForFreshMatch(room);
+  appendActivity(room, 'match', `Rematch started with ${getMultiplayerSessionPresetDefinition(room.presetId).label}.`);
+  updateStatusFromGame(room);
   commitMutation(room);
   return room;
 }
@@ -1269,6 +1400,7 @@ export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken
     status: room.status,
     started,
     winnerId: status.done ? status.winnerId : undefined,
+    presetId: room.presetId,
     hostPlayerId: room.hostPlayerId,
     yourPlayerId: viewerId,
     players: roomPlayerSummary(room),
@@ -1283,7 +1415,8 @@ export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken
     revision: room.revision,
     turnSnapshotCount: room.turnSnapshots.length,
     checkpointSlots: room.checkpoints.map(checkpointSummary),
-    canStart: room.status === 'lobby' && room.hostPlayerId === viewerId && connectedLobbyPlayers(room).length >= 2,
+    canStart: canViewerStartRoom(room, viewerId),
+    canRematch: canViewerRematchRoom(room, viewerId),
     reconnectDeadlineMs,
     serverTime,
     activityFeed: room.activityFeed,

@@ -64,6 +64,20 @@ describe('stats dashboard helpers', () => {
     expect(model.matchTrends).toHaveLength(model.matchRows.length);
   });
 
+  it('filters match rows by session mode and surface metadata', () => {
+    const fixture = createStatsFixture('medium');
+    const model = buildStatsDashboardModel(fixture.history, fixture.lifetime, {
+      mode: 'live_online',
+      surface: 'multiplayer',
+    });
+
+    expect(model.matchRows).toHaveLength(1);
+    expect(model.matchRows[0].mode).toBe('live_online');
+    expect(model.matchRows[0].surface).toBe('multiplayer');
+    expect(model.matchRows[0].presetId).toBe('teaching');
+    expect(model.matchRows[0].roomCode).toBe('ROOM2');
+  });
+
   it('derives growth telemetry kpis and event series when metrics are provided', () => {
     const fixture = createStatsFixture('medium');
     const metrics = {

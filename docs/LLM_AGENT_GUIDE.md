@@ -18,9 +18,11 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Card catalog, set sizes, rent scales, display helpers.
 - `src/persistence/`
   - `localStorage` read/write wrappers for active game, manual saved slots, stats, and UI preferences.
-  - `UiPreferencesV1` includes additive `tableStyle` (`classic_green` | `neon_arcade`) with backward-compatible defaulting.
+  - `UiPreferencesV1` includes additive `tableStyle` (`premium_tabletop` | `classic_green` | `neon_arcade`) with backward-compatible defaulting to the premium tabletop preset.
+  - `src/persistence/multiplayerRecovery.ts` owns browser-local multiplayer recovery entries. The v1 UI shows a single resumable room, but the storage API is intentionally registry-style (`load/save/remove/clear`) so later recent-room or multi-room recovery can extend the same model.
 - `src/stats/`
   - Match record creation, lifetime aggregation, and dev fixture data.
+  - Match records now carry additive session metadata (`mode`, `surface`, optional `presetId`, optional `roomCode`) so multiplayer completions appear in the shared history dashboard.
   - Retention helpers (`src/stats/retention.ts`) for achievements and daily challenge progression.
 - `src/ai/`
   - Heuristic and rollout decision helpers plus explainable coach hint generation.
@@ -28,6 +30,7 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Deterministic replay normalization + fingerprint helper (`src/replay/serialize.ts`) used by replay tests and verification script.
 - `src/network/`
   - Hosted multiplayer client API wrappers (`src/network/multiplayerClient.ts`) for room create/join/reconnect/start/state/action/leave plus pause/resume/undo/reset-turn/checkpoint flows.
+  - Adds preset selection (`/preset`) and same-room rematch (`/rematch`) helpers; stale revisions still map to structured client errors.
   - Adds lobby-ready (`/ready`) and quick-reaction (`/reaction`) helpers.
   - Adds multiplayer chat (`/chat`) and typing heartbeat (`/typing`) helpers with user-facing error mappings (`chat_rate_limited`, `chat_too_long`, `chat_empty`).
   - Adds live room event subscription (`/events`) with polling fallback behavior.
@@ -36,6 +39,8 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Legacy LAN wrappers remain for development fallback.
 - `apps/server/`
   - Multiplayer API server scaffold with room lifecycle, reconnect windows, host migration, revision-guarded mutations, turn snapshots, checkpoints, and best-effort snapshot persistence.
+  - Room state now includes additive session metadata for `presetId`, ready-gated `canStart`, and ready-gated `canRematch`.
+  - Match start/rematch both derive rules from the selected multiplayer preset through the existing engine `GameConfig.ruleset` path.
   - Adds server push event stream endpoint (`GET /api/multiplayer/rooms/:roomCode/events`) for hybrid push updates.
   - Adds dev LAN origin endpoint (`GET /api/multiplayer/dev/lan-origins?uiPort=...`) for invite-link generation.
   - Room state now includes player-ready state and bounded activity feed entries.
@@ -46,14 +51,18 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Recommended two-device startup command: `npm run dev:lan:all` (LAN UI + multiplayer server with stale port cleanup for `5173`/`8787`).
 - `src/ui/` + `src/App.tsx`
   - `App.tsx` owns state/actions and passes typed props to screen containers.
+  - `src/ui/experience.ts` is the shared source of truth for table-style presets and match-mode definitions used by Home, Settings, and table-shell screens.
+  - The same file now defines multiplayer session presets (`standard`, `fast`, `teaching`) so lobby UI, rematch behavior, and server ruleset selection stay aligned.
   - `src/app/useFeedback.ts` encapsulates sound/haptic emission.
   - `src/app/useMultiplayerRoom.ts` encapsulates multiplayer room state, actions, live-push subscription + polling fallback, reconnect lifecycle, and host/player controls (pause/undo/checkpoints/ready/reactions/chat/typing) plus `Exit Match` (retain reconnect session) vs `Forget Room` (clear session).
+  - Preset selection and same-room rematch now flow through this hook so lobby and finished-room surfaces stay server-authoritative.
+  - Recovery decisions (bootstrap auto-resume, explicit `Resume Room`, and manual join with matching room code) now flow through the same hook path so reconnect UX does not fork into inconsistent behaviors.
   - Reconnect compatibility path now supports canonical `seatId`/`resumeToken` aliases while preserving legacy `playerId`/`sessionToken` payloads during migration.
   - Reconnect UI scaffolding is always active and exposes explicit connection UI phases (handshake, resync, recovered, terminal failure states).
   - `Forget Room` uses operation-version invalidation so stale in-flight refresh/reconnect responses cannot silently restore cleared sessions.
   - Stale reconnect terminal states (`room_not_found`, `reconnect_expired`) now auto-clear persisted session and expose explicit recovery notice state for UI.
   - Multiplayer lobby copy affordances (`Copy Room Code`, `Copy Invite Link`) now share a temporary, auto-dismissing status notice for consistent UX.
-  - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition.
+  - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition; Home now surfaces primary mode cards for hot-seat, practice, and live-online entry points.
   - `src/ui/screens/SavedGamesScreen.tsx` manages manual save slots (load/save-over/rename/delete).
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
   - `src/ui/components/ActionConfirmDialog.tsx` handles risky-action confirmation flow.
@@ -62,12 +71,14 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Selection pending flows now support property-card click interactions for deal actions; keep action-button fallback intact.
   - Main-phase wild repositioning supports direct table clicks (select movable wild card, then choose highlighted destination lane); keep legal-action fallback intact.
   - Game table panels include explicit request-state banners (payment/selection/response) so required actions are visible without opening the event log.
-  - `GameTableScreen` now exposes a command-strip (active player, step, turn pressure, pending state), a priority turn banner, and collapsible timeline/insight panels to reduce clutter on narrow layouts.
+  - `GameTableScreen` now centers a condensed match header (mode, active seat, prompt state, table counts) and moves history/social toggles into the top action groups to keep the play surface calmer.
   - Discard pile UI supports both quick-stack preview and an expandable horizontal browser (newest-to-oldest) for turn-by-turn inspection.
   - `MultiplayerScreen` room controls are grouped by task area (invite/session/host), recent activity is user-collapsible, and the lobby includes snapshot cards plus current-turn tagging.
+  - Lobby and finished-room UX now center the selected preset, explicit ready-blocking copy, and host rematch availability instead of exposing dead buttons.
+  - When a recovery entry exists, `MultiplayerScreen` shows a dedicated `Resume Your Room` card above host/join forms; this is the v1 recovery surface for the browser-local registry and should be extended into recent/joined rooms rather than replaced with ad hoc state later.
   - `MultiplayerChatDock` now keeps auto-follow behavior only while the user is near the latest messages; if they scroll up, a `Jump to Recent` control appears.
   - `src/ui/theme/` contains tokenized CSS split by base/components/screens.
-  - `GameShell` applies root table style classes (`table-style-classic-green`, `table-style-neon-arcade`) to drive felt/theme variants.
+  - `GameShell` applies root table style classes (`table-style-premium-tabletop`, `table-style-classic-green`, `table-style-neon-arcade`) to drive felt/theme variants.
   - `SettingsScreen` now uses compact grouped cards, custom switch UI, and a collapsed-by-default Experimental accordion.
 
 ## Data Model Cheat Sheet
@@ -230,10 +241,12 @@ When card rendering, responsive layout, or modal/prompt orchestration changes:
 - In multiplayer mode, `GameTableScreen` is reused for active matches; server room state remains authoritative for pause/snapshots/checkpoints.
 - Host migration now includes original-host re-preference after reconnect; preserve this when modifying reconnect/migration logic.
 - Lobby `Start From Checkpoint` uses checkpoint participant compatibility checks (id + name) before starting from saved state.
+- Checkpoint starts must also match the selected preset ruleset; `standard` and `teaching` are compatible, while `fast` requires a 2-set checkpoint ruleset.
 - Multiplayer legality matching must treat `pay_request.cards` as order-insensitive to avoid false `illegal_action` rejects for manual payment selection order.
 - Multiplayer rules drawer is available in both local and multiplayer game screens; when changing screen gate logic, preserve this parity.
 - Growth telemetry uses `monopolyDeal.growthMetrics.v1` and is surfaced in `StatsDashboard`.
 - Multiplayer growth telemetry now includes funnel + push health counters; keep additive compatibility for v1 payload readers.
+- Multiplayer match completion history is deduped by room/revision so reconnect refreshes do not double-write the same finished result.
 - Room push dedupe depends on `lastEventId`/`revision`; avoid duplicating refresh storms when touching event subscription logic.
 - Multiplayer chat unread/typing state is maintained in `App.tsx`; keep best-effort typing behavior non-blocking.
 - Multiplayer stale-session recovery UI is split between `useMultiplayerRoom` and `MultiplayerScreen`; avoid reintroducing `session && !roomView` infinite loading loops.

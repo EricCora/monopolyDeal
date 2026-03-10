@@ -7,6 +7,13 @@ import type {
   MultiplayerRoomView,
   MultiplayerSession,
 } from '../../network/multiplayerTypes';
+import type { MultiplayerRecoveryEntry } from '../../persistence/multiplayerRecovery';
+import {
+  MULTIPLAYER_SESSION_PRESET_OPTIONS,
+  getMultiplayerSessionPresetDefinition,
+  normalizeMultiplayerSessionPreset,
+  type MultiplayerSessionPresetId,
+} from '../experience';
 
 const COPY_NOTICE_TIMEOUT_MS = 2_200;
 
@@ -22,6 +29,7 @@ interface MultiplayerScreenProps {
   error: string | null;
   errorCode?: string | null;
   recoveryNotice?: { roomCode: string; reason: 'room_not_found' | 'reconnect_expired' } | null;
+  recoveryEntry?: MultiplayerRecoveryEntry | null;
   connectionState: MultiplayerConnectionState;
   connectionUiState?: MultiplayerConnectionUiState;
   reconnectDebugEnabled?: boolean;
@@ -48,9 +56,12 @@ interface MultiplayerScreenProps {
   onStartMatch: (checkpointId?: string) => void;
   onRunAction: (index: number) => void;
   onSetReady: (ready: boolean) => void;
+  onSetRoomPreset?: (presetId: MultiplayerSessionPresetId) => void;
   onCopyInviteLink: () => void;
   onRefresh: () => void;
   onLeaveRoom: () => void;
+  onResumeStoredRoom?: () => void;
+  onForgetStoredRoom?: () => void;
   onClearRecoveryNotice?: () => void;
   onBack: () => void;
 }
@@ -137,6 +148,36 @@ function recoveryReasonText(reason: 'room_not_found' | 'reconnect_expired'): str
   return 'That room no longer exists on the server.';
 }
 
+function recoveryStateLabel(entry: MultiplayerRecoveryEntry): string {
+  if (entry.recoveryState === 'reconnecting') return 'Reconnecting';
+  if (entry.recoveryState === 'expired') return 'Reconnect expired';
+  if (entry.recoveryState === 'room_closed') return 'Room closed';
+  if (entry.recoveryState === 'resume_failed') return 'Resume needs attention';
+  return 'Waiting to reconnect';
+}
+
+function recoveryStateDescription(entry: MultiplayerRecoveryEntry): string {
+  if (entry.recoveryState === 'expired') {
+    return 'The reconnect window expired for this room. Keep the code if you still need to coordinate with the host.';
+  }
+  if (entry.recoveryState === 'room_closed') {
+    return 'This room is no longer available on the server. You can forget it or join another room.';
+  }
+  if (entry.recoveryState === 'resume_failed') {
+    return 'Automatic resume did not complete, but this browser still remembers the room details.';
+  }
+  if (entry.recoveryState === 'reconnecting') {
+    return 'A reconnect attempt is already in progress for this room.';
+  }
+  return 'This browser still has the stored seat details for this live room.';
+}
+
+function canResumeRecoveryEntry(entry: MultiplayerRecoveryEntry | null | undefined): boolean {
+  if (!entry) return false;
+  if (entry.recoveryState === 'expired' || entry.recoveryState === 'room_closed') return false;
+  return Boolean((entry.seatId ?? entry.playerId) && (entry.resumeToken ?? entry.sessionToken));
+}
+
 async function copyTextToClipboard(text: string): Promise<boolean> {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     try {
@@ -180,6 +221,7 @@ export function MultiplayerScreen({
   error,
   errorCode = null,
   recoveryNotice = null,
+  recoveryEntry = null,
   connectionState,
   connectionUiState = 'connected',
   reconnectDebugEnabled = false,
@@ -194,9 +236,12 @@ export function MultiplayerScreen({
   onStartMatch,
   onRunAction,
   onSetReady,
+  onSetRoomPreset,
   onCopyInviteLink,
   onRefresh,
   onLeaveRoom,
+  onResumeStoredRoom,
+  onForgetStoredRoom,
   onClearRecoveryNotice,
   onBack,
 }: MultiplayerScreenProps) {
@@ -290,6 +335,7 @@ export function MultiplayerScreen({
   const activeInviteResolution = session && inviteResolution?.roomCode === session.roomCode
     ? inviteResolution
     : null;
+  const canResumeRecovery = canResumeRecoveryEntry(recoveryEntry);
 
   const copyInviteLink = () => {
     if (!session) return;
@@ -452,15 +498,31 @@ export function MultiplayerScreen({
     connectionState === 'reconnecting'
     || reconnectUiBlocking
   );
+  const selectedPreset = useMemo(
+    () => roomView ? getMultiplayerSessionPresetDefinition(normalizeMultiplayerSessionPreset(roomView.presetId)) : null,
+    [roomView],
+  );
+  const readyBlockingText = useMemo(() => {
+    if (!roomView || roomView.started) return null;
+    const connectedUnready = roomView.players.filter((player) => player.connected && !player.ready);
+    if (connectedUnready.length === 0) {
+      return roomView.canStart
+        ? `Everyone is ready for ${selectedPreset?.label ?? 'the selected preset'}.`
+        : 'Need at least two connected players to start.';
+    }
+    const names = connectedUnready.map((player) => player.name).join(', ');
+    return `Waiting on ready check for ${names}.`;
+  }, [roomView, selectedPreset]);
 
   return (
     <section className="panel setup-screen multiplayer-screen card-enter">
-      <h2>Multiplayer</h2>
+      <h2>Multiplayer Live Room</h2>
       <p className="setup-subtitle">
         {isLocalDevApi
-          ? 'Local testing uses a local multiplayer service.'
-          : 'Create or join with a private room code or invite link.'}
+          ? 'Local testing uses a local multiplayer service for live room sessions.'
+          : 'Create or join a private live room with a room code or invite link.'}
       </p>
+      <p className="setup-subtitle">Async online rooms and watch seats are planned separately; this screen stays focused on fast private live matches.</p>
       {reconnectUiBannerText ? <p className="setup-subtitle">{reconnectUiBannerText}</p> : null}
       {runtimeStateBannerText ? <p className="setup-subtitle">{runtimeStateBannerText}</p> : null}
       {showDevStatusChip ? (
@@ -496,7 +558,37 @@ export function MultiplayerScreen({
 
       {!session ? (
         <>
-          {staleRoomNotice ? (
+          {recoveryEntry ? (
+            <section className="multiplayer-recovery-shell" aria-label="Resume your room">
+              <h3>Resume Your Room</h3>
+              <p>
+                Room <strong>{recoveryEntry.roomCode}</strong> as <strong>{recoveryEntry.playerName}</strong>.
+              </p>
+              <p>Status: {recoveryStateLabel(recoveryEntry)}.</p>
+              <p>{recoveryStateDescription(recoveryEntry)}</p>
+              {typeof recoveryEntry.reconnectDeadlineMs === 'number' ? (
+                <p>Reconnect window: {deadlineLabel(recoveryEntry.reconnectDeadlineMs)}</p>
+              ) : null}
+              {recoveryEntry.lastKnownStatus ? (
+                <p>Last known room state: {recoveryEntry.lastKnownStatus}{recoveryEntry.lastKnownRuntimeState ? ` · ${recoveryEntry.lastKnownRuntimeState}` : ''}</p>
+              ) : null}
+              <div className="actions multiplayer-primary-actions">
+                <button
+                  type="button"
+                  className="cta-primary"
+                  onClick={onResumeStoredRoom}
+                  disabled={loading || !canResumeRecovery || !onResumeStoredRoom}
+                >
+                  Resume Room
+                </button>
+                <button type="button" onClick={onForgetStoredRoom} disabled={loading || !onForgetStoredRoom}>
+                  Forget This Room
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {!recoveryEntry && staleRoomNotice ? (
             <section className="multiplayer-recovery-shell" aria-label="Previous room recovery">
               <h3>Previous Room Unavailable</h3>
               <p>
@@ -515,7 +607,7 @@ export function MultiplayerScreen({
 
           <div className="multiplayer-entry-grid">
             <section className="multiplayer-entry-card" aria-label="Host room">
-              <h3>Host Room</h3>
+              <h3>Host Live Room</h3>
               <p>Create a private table and share the invite link with your group.</p>
               <label>
                 Your Name
@@ -523,13 +615,13 @@ export function MultiplayerScreen({
               </label>
               <div className="actions multiplayer-primary-actions">
                 <button type="button" className="cta-primary" onClick={onHostRoom} disabled={loading}>
-                  Host Multiplayer Game
+                  Host Multiplayer Game (Live Online)
                 </button>
               </div>
             </section>
 
             <section className="multiplayer-entry-card" aria-label="Join room">
-              <h3>Join Room</h3>
+              <h3>Join Live Room</h3>
               <p>Use a room code or invite URL to jump straight into the lobby.</p>
               <label>
                 Join Code
@@ -541,7 +633,7 @@ export function MultiplayerScreen({
               </label>
               <div className="actions multiplayer-primary-actions">
                 <button type="button" onClick={onJoinRoom} disabled={loading || joinCode.trim().length < 4}>
-                  Join Multiplayer Game
+                  Join Multiplayer Game (Live Online)
                 </button>
               </div>
             </section>
@@ -564,6 +656,9 @@ export function MultiplayerScreen({
                 </span>
               </div>
             </div>
+            <p className="multiplayer-room-rejoin">
+              Session: Live Online{selectedPreset ? ` · ${selectedPreset.label}` : ''}
+            </p>
             <p className="multiplayer-room-rejoin">
               Rejoin window: {deadlineLabel(roomView?.reconnectDeadlineMs ?? session.reconnectDeadlineMs)}
             </p>
@@ -590,15 +685,15 @@ export function MultiplayerScreen({
                   </button>
                 </div>
               </div>
-              {roomView && roomView.canStart && isHost ? (
+              {roomView && !roomView.started && isHost ? (
                 <div className="multiplayer-room-action-group">
                   <p className="multiplayer-room-action-label">Host Match</p>
                   <div className="actions multiplayer-room-actions">
-                    <button type="button" onClick={() => onStartMatch()} disabled={loading || actionBlocked}>
+                    <button type="button" onClick={() => onStartMatch()} disabled={loading || actionBlocked || !roomView.canStart}>
                       Start Match
                     </button>
                     {roomView.checkpointSlots.length > 0 ? (
-                      <button type="button" onClick={startFromCheckpoint} disabled={loading || actionBlocked}>
+                      <button type="button" onClick={startFromCheckpoint} disabled={loading || actionBlocked || !roomView.canStart}>
                         Start From Checkpoint
                       </button>
                     ) : null}
@@ -621,12 +716,38 @@ export function MultiplayerScreen({
                       : 'Waiting for players.'}
                 </p>
               </header>
+              {selectedPreset ? (
+                <section className="multiplayer-entry-card" aria-label="Room preset">
+                  <h4>{selectedPreset.label}</h4>
+                  <p>{selectedPreset.shortDescription}</p>
+                  <p className="multiplayer-lobby-status">{selectedPreset.readySummary}</p>
+                  <div className="actions multiplayer-primary-actions">
+                    {MULTIPLAYER_SESSION_PRESET_OPTIONS.map((option) => {
+                      const definition = getMultiplayerSessionPresetDefinition(option.value);
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={roomView.presetId === option.value ? 'cta-primary' : undefined}
+                          onClick={() => onSetRoomPreset?.(option.value)}
+                          disabled={loading || actionBlocked || !isHost || roomView.started || !onSetRoomPreset}
+                        >
+                          {definition.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
               {!roomView.started && you ? (
                 <div className="actions multiplayer-ready-actions">
                   <button type="button" className="cta-primary" onClick={() => onSetReady(!you.ready)} disabled={loading || actionBlocked}>
                     {you.ready ? 'Mark Not Ready' : 'Mark Ready'}
                   </button>
                 </div>
+              ) : null}
+              {!roomView.started && readyBlockingText ? (
+                <p className="multiplayer-lobby-waiting">{readyBlockingText}</p>
               ) : null}
               {lobbySnapshot ? (
                 <section className="multiplayer-lobby-snapshot" aria-label="Lobby snapshot">

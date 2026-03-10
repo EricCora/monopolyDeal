@@ -28,6 +28,12 @@ import {
   type MatchRowView,
   type StatsFilters,
 } from '../../stats';
+import {
+  getMatchModeDefinition,
+  getMultiplayerSessionPresetDefinition,
+  MATCH_MODE_DEFINITIONS,
+  type MatchMode,
+} from '../experience';
 
 interface StatsDashboardProps {
   history: MatchRecordV1[];
@@ -70,6 +76,10 @@ export function StatsDashboard({ history, lifetime, growthMetrics, onBack }: Sta
     Object.keys(lifetime.players).forEach((name) => names.add(name));
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [history, lifetime.players]);
+  const filterModes = useMemo(
+    () => Object.keys(MATCH_MODE_DEFINITIONS),
+    [],
+  );
 
   const lifetimeColumnHelper = createColumnHelper<LifetimeRowView>();
   const matchColumnHelper = createColumnHelper<MatchRowView>();
@@ -103,6 +113,21 @@ export function StatsDashboard({ history, lifetime, growthMetrics, onBack }: Sta
         cell: (info) => new Date(info.getValue()).toLocaleString(),
       }),
       matchColumnHelper.accessor('winnerName', { header: 'Winner' }),
+      matchColumnHelper.accessor('mode', {
+        header: 'Mode',
+        cell: (info) => getMatchModeDefinition(info.getValue()).badge,
+      }),
+      matchColumnHelper.accessor('surface', {
+        header: 'Surface',
+        cell: (info) => info.getValue() === 'multiplayer' ? 'Multiplayer' : 'Local',
+      }),
+      matchColumnHelper.accessor('presetId', {
+        header: 'Preset',
+        cell: (info) => {
+          const presetId = info.getValue();
+          return presetId ? getMultiplayerSessionPresetDefinition(presetId).label : 'N/A';
+        },
+      }),
       matchColumnHelper.accessor('playersCount', { header: 'Players' }),
       matchColumnHelper.accessor('turnCount', { header: 'Turns' }),
       matchColumnHelper.accessor('durationSec', {
@@ -168,6 +193,31 @@ export function StatsDashboard({ history, lifetime, growthMetrics, onBack }: Sta
                 {name}
               </option>
             ))}
+          </select>
+        </label>
+        <label>
+          Mode
+          <select
+            value={filters.mode ?? ''}
+            onChange={(event) => setFilters((prev) => ({ ...prev, mode: (event.target.value || undefined) as MatchMode | undefined }))}
+          >
+            <option value="">All modes</option>
+            {filterModes.map((mode) => (
+              <option key={`mode-${mode}`} value={mode}>
+                {getMatchModeDefinition(mode as keyof typeof MATCH_MODE_DEFINITIONS).badge}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Surface
+          <select
+            value={filters.surface ?? ''}
+            onChange={(event) => setFilters((prev) => ({ ...prev, surface: (event.target.value || undefined) as StatsFilters['surface'] }))}
+          >
+            <option value="">All surfaces</option>
+            <option value="local">Local</option>
+            <option value="multiplayer">Multiplayer</option>
           </select>
         </label>
         <label>

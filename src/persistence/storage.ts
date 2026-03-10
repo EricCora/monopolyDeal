@@ -1,6 +1,16 @@
 import type { GameState } from '../engine';
 import { defaultAchievementState, defaultDailyChallenge, ensureTodayDailyChallenge } from '../stats/retention';
 import type { AchievementStateV1, DailyChallengeV1, GrowthMetricEvent, GrowthMetricsV1, LifetimeStatsV1, MatchRecordV1 } from '../stats/types';
+import {
+  DEFAULT_TABLE_STYLE,
+  normalizeMultiplayerSessionPreset,
+  normalizeMatchMode,
+  normalizeTableStyle,
+  type MatchMode,
+  type MultiplayerSessionPresetId,
+  type TableStylePreset,
+} from '../ui/experience';
+import type { MatchSurface } from '../stats/types';
 
 const ACTIVE_GAME_KEY = 'monopolyDeal.activeGame.v1';
 const SAVED_GAMES_KEY = 'monopolyDeal.savedGames.v1';
@@ -16,6 +26,7 @@ export interface SavedGameV1 {
   version: 1;
   timestamp: number;
   gameState: GameState;
+  matchMode?: MatchMode;
 }
 
 export interface SavedGameSlotV1 {
@@ -24,6 +35,7 @@ export interface SavedGameSlotV1 {
   createdAt: number;
   updatedAt: number;
   gameState: GameState;
+  matchMode?: MatchMode;
 }
 
 export interface SavedGamesCollectionV1 {
@@ -35,7 +47,7 @@ export interface UiPreferencesV1 {
   version: 1;
   reducedEffects: boolean;
   tableDensity: 'cozy' | 'compact';
-  tableStyle: 'classic_green' | 'neon_arcade';
+  tableStyle: TableStylePreset;
   textScale: 'normal' | 'large';
   confirmRiskyActions: boolean;
   showRulesDrawerHints: boolean;
@@ -60,11 +72,12 @@ export interface UiPreferencesV1 {
   pausedGameId: string | null;
 }
 
-export function saveActiveGame(state: GameState): void {
+export function saveActiveGame(state: GameState, matchMode: MatchMode = 'hot_seat'): void {
   const snapshot: SavedGameV1 = {
     version: 1,
     timestamp: Date.now(),
     gameState: state,
+    matchMode,
   };
   localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify(snapshot));
 }
@@ -75,7 +88,10 @@ export function loadActiveGame(): SavedGameV1 | null {
   try {
     const parsed = JSON.parse(raw) as SavedGameV1;
     if (parsed.version !== 1) return null;
-    return parsed;
+    return {
+      ...parsed,
+      matchMode: normalizeMatchMode(parsed.matchMode),
+    };
   } catch {
     return null;
   }
@@ -106,6 +122,7 @@ function sanitizeSavedGameSlots(rawSlots: unknown): SavedGameSlotV1[] {
       createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
       updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now(),
       gameState: candidate.gameState as GameState,
+      matchMode: normalizeMatchMode(candidate.matchMode),
     });
   }
   return sanitized
@@ -144,7 +161,7 @@ function nextSlotId(): string {
   return `slot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function upsertSavedGameSlot(input: { id?: string; name?: string; gameState: GameState }): SavedGamesCollectionV1 {
+export function upsertSavedGameSlot(input: { id?: string; name?: string; gameState: GameState; matchMode?: MatchMode }): SavedGamesCollectionV1 {
   const current = loadSavedGames();
   const now = Date.now();
   if (input.id) {
@@ -158,6 +175,7 @@ export function upsertSavedGameSlot(input: { id?: string; name?: string; gameSta
               name: input.name?.trim() || slot.name,
               updatedAt: now,
               gameState: input.gameState,
+              matchMode: normalizeMatchMode(input.matchMode, slot.matchMode ?? 'hot_seat'),
             }
           : slot)),
       };
@@ -176,6 +194,7 @@ export function upsertSavedGameSlot(input: { id?: string; name?: string; gameSta
     createdAt: now,
     updatedAt: now,
     gameState: input.gameState,
+    matchMode: normalizeMatchMode(input.matchMode),
   };
 
   const next: SavedGamesCollectionV1 = {
@@ -218,7 +237,44 @@ export function loadMatchHistory(): MatchRecordV1[] {
   const raw = localStorage.getItem(MATCH_HISTORY_KEY);
   if (!raw) return [];
   try {
-    return JSON.parse(raw) as MatchRecordV1[];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') return [];
+      const candidate = entry as Partial<MatchRecordV1>;
+      if (typeof candidate.id !== 'string' || candidate.id.length === 0) return [];
+      if (!Array.isArray(candidate.players) || candidate.players.some((player) => typeof player !== 'string')) return [];
+      const startedAt = Number(candidate.startedAt);
+      const endedAt = Number(candidate.endedAt);
+      const turnCount = Number(candidate.turnCount);
+      const durationSec = Number(candidate.durationSec);
+      const actionsByType = candidate.actionsByType && typeof candidate.actionsByType === 'object'
+        ? Object.fromEntries(
+            Object.entries(candidate.actionsByType)
+              .filter(([key, value]) => typeof key === 'string' && Number.isFinite(Number(value)))
+              .map(([key, value]) => [key, Number(value)]),
+          )
+        : {};
+      const surface = candidate.surface === 'multiplayer' ? 'multiplayer' : 'local';
+      const presetId = candidate.presetId == null
+        ? undefined
+        : normalizeMultiplayerSessionPreset(candidate.presetId as MultiplayerSessionPresetId);
+      return [{
+        id: candidate.id,
+        startedAt: Number.isFinite(startedAt) ? startedAt : Date.now(),
+        endedAt: Number.isFinite(endedAt) ? endedAt : Date.now(),
+        players: candidate.players,
+        winnerId: typeof candidate.winnerId === 'string' ? candidate.winnerId : undefined,
+        winnerName: typeof candidate.winnerName === 'string' ? candidate.winnerName : undefined,
+        turnCount: Number.isFinite(turnCount) ? turnCount : 0,
+        durationSec: Number.isFinite(durationSec) ? durationSec : 0,
+        actionsByType,
+        mode: normalizeMatchMode(candidate.mode),
+        surface: surface as MatchSurface,
+        presetId,
+        roomCode: typeof candidate.roomCode === 'string' ? candidate.roomCode : undefined,
+      }];
+    });
   } catch {
     return [];
   }
@@ -404,7 +460,7 @@ function defaultUiPreferences(): UiPreferencesV1 {
     version: 1,
     reducedEffects: false,
     tableDensity: 'cozy',
-    tableStyle: 'classic_green',
+    tableStyle: DEFAULT_TABLE_STYLE,
     textScale: 'normal',
     confirmRiskyActions: true,
     showRulesDrawerHints: true,
@@ -437,7 +493,7 @@ export function loadUiPreferences(): UiPreferencesV1 {
     const parsed = JSON.parse(raw) as Partial<UiPreferencesV1>;
     if (parsed.version !== 1) return defaultUiPreferences();
     const density = parsed.tableDensity === 'compact' ? 'compact' : 'cozy';
-    const tableStyle = parsed.tableStyle === 'neon_arcade' ? 'neon_arcade' : 'classic_green';
+    const tableStyle = normalizeTableStyle(parsed.tableStyle);
     const textScale = parsed.textScale === 'large' ? 'large' : 'normal';
     const experimentalParsed = parsed.experimental;
     return {

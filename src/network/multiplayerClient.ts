@@ -16,6 +16,7 @@ import type {
   MultiplayerRoomView,
   MultiplayerSession,
 } from './multiplayerTypes';
+import type { MultiplayerSessionPresetId } from '../ui/experience';
 
 function normalizeApiBase(input: string): string {
   return input.endsWith('/') ? input.slice(0, -1) : input;
@@ -393,7 +394,11 @@ export function multiplayerErrorMessage(code: string): string {
   if (code === 'seat_timed_out') return 'Your reconnect window expired. Rejoin with the room code.';
   if (code === 'protocol_mismatch') return 'Reconnect protocol mismatch. Please refresh and try again.';
   if (code === 'minimum_players_required') return 'At least 2 players are required to start.';
+  if (code === 'players_not_ready') return 'Everyone currently in the room must mark ready before the match can start.';
   if (code === 'host_required') return 'Only the host can start this room.';
+  if (code === 'room_not_finished') return 'Rematch is only available after the current match finishes.';
+  if (code === 'rematch_requires_connected_players') return 'Everyone from the finished room must be connected before a rematch can start.';
+  if (code === 'checkpoint_preset_mismatch') return 'That checkpoint does not match the currently selected preset.';
   if (code === 'room_paused') return 'The host paused this match.';
   if (code === 'revision_conflict') return 'Room state changed. Refreshing now.';
   if (code === 'action_rejected') return 'Action no longer applies to the latest room state. Syncing now.';
@@ -555,6 +560,46 @@ export async function startMultiplayerRoom(
         sessionToken: session.sessionToken,
         expectedRevision,
         checkpointId,
+      }),
+    }).then(() => undefined),
+  );
+}
+
+export async function setMultiplayerRoomPreset(
+  session: MultiplayerSession,
+  presetId: MultiplayerSessionPresetId,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<void> {
+  await runWithTransportFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:preset', { presetId, expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/preset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        presetId,
+        expectedRevision,
+      }),
+    }).then(() => undefined),
+  );
+}
+
+export async function rematchMultiplayerRoom(
+  session: MultiplayerSession,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<void> {
+  await runWithTransportFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:rematch', { expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/rematch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        expectedRevision,
       }),
     }).then(() => undefined),
   );

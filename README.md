@@ -46,12 +46,13 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Multiplayer winner overlay with clear winner callout at match end
 - Host-controlled multiplayer pause/resume and checkpoint save/load/delete controls
 - Lobby host can start a match directly from an available checkpoint when lineup is compatible
-- Lobby ready-check state and quick preset reactions
+- Lobby ready-check state, session presets (`Standard`, `Fast`, `Teaching`), and quick preset reactions
 - Multiplayer activity feed (joins/reconnects/host changes/ready/reactions/checkpoints)
 - Collapsible multiplayer activity panels, grouped room/host controls, and lobby snapshot cards with turn tagging for lower clutter on mobile layouts
 - Multiplayer chat dock (bottom-left pill) with unread badge, typing indicators, mention highlighting (`@name`), and aria-log message semantics
 - Chat auto-follows recent messages by default; when reviewing history it shows a `Jump to Recent` shortcut instead of forcing scroll snaps
 - Multiplayer reconnect recovery UX that auto-clears stale sessions and avoids endless syncing states
+- Multiplayer screen now surfaces a browser-local `Resume Your Room` card so refresh/reopen flows can recover the stored live room without re-entering the code
 - UNO-style quick reactions via chat tray with transient per-player reaction bursts on lobby/table surfaces
 - Flagship lobby presentation refresh with structured roster table, clearer status pills, and stronger action hierarchy
 - Hybrid live updates: Socket.IO transport (primary) with SSE/polling fallback
@@ -131,10 +132,11 @@ Use the `Settings` screen from Home (or the in-game top bar) to control:
 - Experimental features toggle section (AI/replay/challenges/achievements/custom rules)
   - Collapsed by default to reduce settings clutter
   - Includes multiplayer rollback toggles for live push updates and reactions
-- Table style selector (`Classic Green` / `Neon Arcade`) persisted in local preferences
+- Table style selector (`Premium Tabletop` / `Classic Felt` / `Neon Arcade`) persisted in local preferences
 
 ## Saved Games
 
+- Home now surfaces primary modes for `New Game (Hot Seat)`, `Practice vs Bots`, and `Play Multiplayer (Live Online)`.
 - `Resume Saved Game` on Home is a quick-resume shortcut for the active autosave.
 - `Saved Games` opens manual slots (up to 5) with `Load`, `Save Here`, `Rename`, and `Delete`.
 - In-game `Save Game` opens the same slot manager and can save the current match to a new or existing slot.
@@ -187,6 +189,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - `monopolyDeal.lifetimeStats.v1`
 - `monopolyDeal.growthMetrics.v1`
 - `monopolyDeal.uiPreferences.v1`
+- `monopolyDeal.multiplayerRecovery.v1`
 
 ## Current Scope
 
@@ -201,14 +204,19 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Rules Reference drawer is available from active multiplayer matches.
 - Host controls: `Pause/Resume`, `Save Checkpoint`, `Load Checkpoint`, `Delete Checkpoint`.
 - Lobby host controls include `Start Match` and `Start From Checkpoint` (when checkpoint data exists).
+- Start/rematch are ready-gated: the host can begin only when every connected room player has marked ready for the selected preset.
+- Room presets are host-selectable in `lobby` and `finished`: `Standard` (default), `Fast` (2 complete sets to win), and `Teaching` (standard rules with clearer support copy).
+- Finished multiplayer matches support same-room `Play Rematch` with the same roster, host, and selected preset.
 - Lobby includes `Copy Room Code` and `Copy Invite Link` actions.
 - `Copy Invite Link` resolves a LAN-shareable URL when hosting from `localhost`; if LAN origin discovery fails, room code is copied instead.
 - Opening an explicit `/join/:roomCode` invite link now prefers join intent over silently auto-resuming an unrelated stored room session from the same browser profile.
+- Multiplayer recovery is browser-local today: the screen shows one resumable live room from this browser profile, backed by a collection-ready recovery registry so recent/joined-room expansion can build on the same model later.
 - Both copy actions show a short-lived in-UI notice and auto-dismiss after a moment.
 - Lobby includes player-ready status, room chat, and chat-tray quick reactions.
 - Player session controls: `Exit Match` (retain reconnect) and `Forget Room` (clear session).
 - Active-turn controls: `Undo Last Play`, `Reset Turn Plays` (when snapshot history exists).
 - Multiplayer state mutations and reconnect ownership are revision-guarded to prevent stale updates and stale seat takeovers.
+- Multiplayer completions are written into Stats & History with session metadata (`mode`, `surface`, preset, room code) so live-online matches appear alongside local results.
 - Multiplayer activity feed and host-change notices are surfaced in lobby/in-match UI.
 - In local/dev contexts, multiplayer screens show a status chip that explicitly reports reconnect/version/pause policy activation, live-update transport state, and room runtime state.
 - Dev status now includes explicit transport mode (`socket_primary` or `http_fallback`) so hidden rollout state is never ambiguous during local testing.
@@ -262,7 +270,7 @@ If you prefer split terminals, you can still run:
 1. App UI: `npm run dev`
 2. Node multiplayer server: `npm run dev:multiplayer-server`
 
-In production, users should only need to press `Play Multiplayer`.
+In production, users should only need to press `Play Multiplayer (Live Online)`.
 
 ## License
 

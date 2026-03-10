@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { UiPreferencesV1 } from '../../persistence/storage';
+import { TABLE_STYLE_OPTIONS } from '../experience';
 
 type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
 
@@ -107,8 +108,9 @@ export function SettingsScreen({
           <label className="settings-field">
             <span>Table Style</span>
             <select value={uiPreferences.tableStyle} onChange={(event) => onChangeTableStyle(event.target.value as UiPreferencesV1['tableStyle'])}>
-              <option value="classic_green">Classic Green</option>
-              <option value="neon_arcade">Neon Arcade</option>
+              {TABLE_STYLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
           </label>
         </div>

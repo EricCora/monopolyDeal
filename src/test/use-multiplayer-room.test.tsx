@@ -111,6 +111,7 @@ function makeRoomView(revision = 1, overrides: Partial<MultiplayerRoomView> = {}
     roomCode: 'ABCDE',
     status: 'lobby',
     started: false,
+    presetId: 'standard',
     hostPlayerId: 'p1',
     yourPlayerId: 'p1',
     players: [
@@ -148,6 +149,7 @@ function makeRoomView(revision = 1, overrides: Partial<MultiplayerRoomView> = {}
     turnSnapshotCount: 0,
     checkpointSlots: [],
     canStart: true,
+    canRematch: false,
     reconnectDeadlineMs: now + 30_000,
     serverTime: now,
     activityFeed: [],
@@ -369,6 +371,26 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     expect(clientMocks.loadMultiplayerRoomState.mock.calls.length).toBeGreaterThan(refreshCountBeforeTick);
   });
 
+  it('does not send an explicit leave during browser unload refresh', async () => {
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: true,
+      pollIntervalMs: 50,
+    }));
+
+    await act(async () => {
+      const ok = await result.current.hostRoom();
+      expect(ok).toBe(true);
+    });
+    await flushMicrotasks();
+
+    act(() => {
+      window.dispatchEvent(new Event('beforeunload'));
+    });
+
+    expect(clientMocks.leaveMultiplayerRoom).not.toHaveBeenCalled();
+  });
+
   it('keeps reconnect single-flight during repeated poll failures', async () => {
     vi.useFakeTimers();
     const reconnectPending = deferred<ReturnType<typeof makeSessionResponse>>();
@@ -586,6 +608,187 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     expect(clientMocks.reconnectMultiplayerRoom).not.toHaveBeenCalled();
     expect(result.current.session).toBeNull();
     expect(result.current.joinCode).toBe('');
+  });
+
+  it('exposes a recovery entry from the registry and resumes it on demand', async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    window.history.pushState({}, '', '/join/ABCDE');
+    localStorage.setItem('monopolyDeal.multiplayerRecovery.v1', JSON.stringify({
+      version: 1,
+      entries: [{
+        roomCode: 'ABCDE',
+        playerName: 'Guest',
+        seatId: 'p2',
+        resumeToken: 'token-2',
+        playerId: 'p2',
+        sessionToken: 'token-2',
+        reconnectDeadlineMs: now + 30_000,
+        lastKnownStatus: 'active',
+        lastKnownRuntimeState: 'paused_disconnect',
+        recoveryState: 'resumable',
+        lastSeenAt: now,
+      }],
+    }));
+    clientMocks.reconnectMultiplayerRoom.mockResolvedValue(makeResumeResponse('ok', {
+      playerId: 'p2',
+      seatId: 'p2',
+      sessionToken: 'token-2',
+      resumeToken: 'token-2',
+      snapshot: makeRoomView(3, { yourPlayerId: 'p2' }),
+    }));
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+    }));
+
+    await advanceAndFlush(0, 4);
+    expect(result.current.recoveryEntry?.roomCode).toBe('ABCDE');
+    expect(result.current.recoveryEntry?.recoveryState).toBe('resumable');
+
+    await act(async () => {
+      const ok = await result.current.resumeStoredRoom();
+      expect(ok).toBe(true);
+    });
+    await flushMicrotasks();
+
+    expect(clientMocks.reconnectMultiplayerRoom).toHaveBeenCalledTimes(1);
+    expect(result.current.session?.playerId).toBe('p2');
+  });
+
+  it('forgets the stored recovery entry without attempting reconnect', async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    window.history.pushState({}, '', '/join/ABCDE');
+    localStorage.setItem('monopolyDeal.multiplayerRecovery.v1', JSON.stringify({
+      version: 1,
+      entries: [{
+        roomCode: 'ABCDE',
+        playerName: 'Guest',
+        seatId: 'p2',
+        resumeToken: 'token-2',
+        playerId: 'p2',
+        sessionToken: 'token-2',
+        reconnectDeadlineMs: now + 30_000,
+        recoveryState: 'resumable',
+        lastSeenAt: now,
+      }],
+    }));
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+    }));
+
+    await advanceAndFlush(0, 4);
+    expect(result.current.recoveryEntry?.roomCode).toBe('ABCDE');
+
+    act(() => {
+      result.current.forgetStoredRoom();
+    });
+
+    expect(result.current.recoveryEntry).toBeNull();
+    expect(localStorage.getItem('monopolyDeal.multiplayerRecovery.v1')).toBeNull();
+    expect(clientMocks.reconnectMultiplayerRoom).not.toHaveBeenCalled();
+  });
+
+  it('keeps terminal recovery entries visible without auto-retrying them', async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    localStorage.setItem('monopolyDeal.multiplayerRecovery.v1', JSON.stringify({
+      version: 1,
+      entries: [{
+        roomCode: 'ABCDE',
+        playerName: 'Guest',
+        reconnectDeadlineMs: now - 1_000,
+        recoveryState: 'expired',
+        lastSeenAt: now,
+      }],
+    }));
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+    }));
+
+    await advanceAndFlush(0, 4);
+
+    expect(clientMocks.reconnectMultiplayerRoom).not.toHaveBeenCalled();
+    expect(result.current.recoveryEntry?.recoveryState).toBe('expired');
+    expect(result.current.joinCode).toBe('ABCDE');
+  });
+
+  it('retries reconnect instead of creating a new join seat when the room code matches stored session', async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    window.history.pushState({}, '', '/join/ABCDE');
+    localStorage.setItem('monopolyDeal.multiplayerSession.v1', JSON.stringify({
+      version: 1,
+      roomCode: 'ABCDE',
+      seatId: 'p2',
+      resumeToken: 'token-2',
+      playerId: 'p2',
+      sessionToken: 'token-2',
+      playerName: 'Guest',
+      reconnectDeadlineMs: now + 30_000,
+    }));
+    clientMocks.reconnectMultiplayerRoom.mockResolvedValue(makeResumeResponse('ok', {
+      playerId: 'p2',
+      seatId: 'p2',
+      sessionToken: 'token-2',
+      resumeToken: 'token-2',
+      snapshot: makeRoomView(3, {
+        yourPlayerId: 'p2',
+        players: [
+          {
+            id: 'p1',
+            name: 'Host',
+            handCount: 0,
+            bankCount: 0,
+            completeSets: 0,
+            connected: true,
+            lastSeenAt: now,
+            reconnectDeadlineMs: now + 30_000,
+            isHost: true,
+            ready: false,
+          },
+          {
+            id: 'p2',
+            name: 'Guest',
+            handCount: 0,
+            bankCount: 0,
+            completeSets: 0,
+            connected: true,
+            lastSeenAt: now,
+            reconnectDeadlineMs: now + 30_000,
+            isHost: false,
+            ready: false,
+          },
+        ],
+      }),
+    }));
+
+    const { result } = renderHook(() => useMultiplayerRoom({
+      enabled: true,
+      pushEnabled: false,
+    }));
+
+    await advanceAndFlush(0, 4);
+    act(() => {
+      result.current.setJoinCode('ABCDE');
+    });
+
+    await act(async () => {
+      const ok = await result.current.joinRoom();
+      expect(ok).toBe(true);
+    });
+    await flushMicrotasks();
+
+    expect(clientMocks.reconnectMultiplayerRoom).toHaveBeenCalledTimes(1);
+    expect(clientMocks.joinMultiplayerRoom).not.toHaveBeenCalled();
+    expect(result.current.session?.playerId).toBe('p2');
+    expect(result.current.roomView?.yourPlayerId).toBe('p2');
   });
 
   it('hydrates from reconnect handshake snapshot without issuing extra /state fetch', async () => {
@@ -948,7 +1151,7 @@ describe('mapConnectionUiState', () => {
   it('maps transport/error states to reconnect ui states', () => {
     expect(mapConnectionUiState('connected', null)).toBe('connected');
     expect(mapConnectionUiState('reconnecting', null)).toBe('reconnecting_attempting');
-    expect(mapConnectionUiState('disconnected', null)).toBe('resume_failed');
+    expect(mapConnectionUiState('disconnected', null)).toBe('connected');
     expect(mapConnectionUiState('connecting', null)).toBe('reconnect_handshake_pending');
     expect(mapConnectionUiState('connected', 'reconnect_expired')).toBe('timed_out');
     expect(mapConnectionUiState('connected', 'seat_timed_out')).toBe('timed_out');

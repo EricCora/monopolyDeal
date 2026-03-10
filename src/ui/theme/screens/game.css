@@ -40,10 +40,10 @@
 }
 
 .table-pile-card {
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 12px;
+  border: 1px solid rgba(202, 177, 143, 0.22);
+  border-radius: 14px;
   padding: 0.52rem 0.65rem;
-  background: rgba(5, 14, 11, 0.58);
+  background: rgba(34, 26, 23, 0.64);
   box-shadow: inset 0 -6px 14px rgba(0, 0, 0, 0.24), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
@@ -55,7 +55,7 @@
 
 .table-pile-card p {
   margin: 0.1rem 0 0;
-  color: #e9efd7;
+  color: var(--text-main);
   font-weight: 700;
 }
 
@@ -93,13 +93,13 @@
 .table-draw-card-bottom {
   transform: translate(7px, -4px);
   opacity: 0.48;
-  background: linear-gradient(155deg, rgba(44, 88, 131, 0.82), rgba(18, 37, 58, 0.88));
+  background: linear-gradient(155deg, rgba(116, 93, 74, 0.82), rgba(56, 44, 37, 0.9));
 }
 
 .table-draw-card-top {
   background:
-    radial-gradient(circle at 22% 18%, rgba(173, 212, 255, 0.3), transparent 42%),
-    linear-gradient(165deg, rgba(63, 117, 168, 0.9), rgba(28, 53, 85, 0.94));
+    radial-gradient(circle at 22% 18%, rgba(227, 211, 183, 0.22), transparent 42%),
+    linear-gradient(165deg, rgba(126, 100, 78, 0.94), rgba(61, 46, 39, 0.95));
   box-shadow: 0 10px 16px rgba(1, 6, 10, 0.35);
 }
 
@@ -140,18 +140,18 @@
 }
 
 .discard-pile-card.is-expanded {
-  background: rgba(8, 19, 15, 0.66);
+  background: rgba(30, 23, 20, 0.7);
 }
 
 .table-discard-browser {
   margin-top: 0.46rem;
-  border-top: 1px solid rgba(126, 153, 113, 0.36);
+  border-top: 1px solid rgba(202, 177, 143, 0.18);
   padding-top: 0.42rem;
 }
 
 .table-discard-browser-caption {
   margin: 0 0 0.35rem;
-  color: #d2e1c8;
+  color: var(--text-subtle);
   font-size: 0.76rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -172,13 +172,13 @@
 }
 
 .table-discard-browser-index {
-  color: #c8d9bc;
+  color: var(--text-subtle);
   font-size: 0.68rem;
 }
 
 .table-discard-empty {
   margin: 0.2rem 0 0;
-  color: #d0dcc9;
+  color: var(--text-muted);
   font-size: 0.82rem;
   font-weight: 500;
 }
