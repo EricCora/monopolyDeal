@@ -25,4 +25,10 @@ describe('mobile/touch layout contracts', () => {
       /@media\s*\(max-width:\s*720px\)\s*{[\s\S]*\.multiplayer-chat-dock\s*{[\s\S]*left:\s*0\.65rem;[\s\S]*right:\s*0\.65rem;[\s\S]*width:\s*auto;/,
     );
   });
+
+  it('brings the main table surface ahead of the sidebar stack on narrow layouts', () => {
+    expect(layoutCss).toMatch(
+      /@media\s*\(max-width:\s*1120px\)\s*{[\s\S]*\.game-table-main\s*{[\s\S]*order:\s*1;[\s\S]*}[\s\S]*\.game-table-left-stack\s*{[\s\S]*order:\s*2;/,
+    );
+  });
 });

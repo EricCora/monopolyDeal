@@ -13,15 +13,18 @@ body {
   color: var(--text-main);
   font-family: var(--font-body);
   background:
-    radial-gradient(circle at 14% 10%, rgba(163, 106, 80, 0.16), transparent 42%),
-    radial-gradient(circle at 84% 0%, rgba(200, 165, 107, 0.2), transparent 36%),
-    linear-gradient(180deg, #120f0e, #191412 48%, #0f0c0b);
+    radial-gradient(circle at 14% 12%, rgba(163, 106, 80, 0.18), transparent 38%),
+    radial-gradient(circle at 82% 0%, rgba(200, 165, 107, 0.16), transparent 34%),
+    linear-gradient(180deg, #120f0e, #171210 50%, #0d0a09);
 }
 
 .game-shell {
   min-height: 100vh;
   padding: var(--space-6);
   color: var(--text-main);
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.03), transparent 38%),
+    transparent;
 }
 
 .game-shell.table-style-premium-tabletop {
@@ -113,14 +116,14 @@ body {
 }
 
 .game-shell-inner {
-  width: min(1340px, 100%);
+  width: min(1380px, 100%);
   margin: 0 auto;
   display: grid;
   gap: var(--space-4);
 }
 
 .game-shell-footer {
-  width: min(1340px, 100%);
+  width: min(1380px, 100%);
   margin: 0.7rem auto 0;
   color: var(--text-subtle);
 }
@@ -131,11 +134,12 @@ body {
   border-radius: var(--radius-lg);
   border: 1px solid var(--line-soft);
   background:
+    var(--panel-glow),
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
     var(--surface-panel);
   box-shadow: var(--shadow-md);
-  padding: var(--space-5);
-  backdrop-filter: blur(4px);
+  padding: clamp(1rem, 1.8vw, 1.35rem);
+  backdrop-filter: blur(10px);
 }
 
 h1,
@@ -209,7 +213,8 @@ button {
     transform var(--motion-micro) var(--ease-emphasis),
     filter var(--motion-fast) var(--ease-standard),
     box-shadow var(--motion-fast) var(--ease-standard),
-    border-color var(--motion-fast) var(--ease-standard);
+    border-color var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard);
 }
 
 button:hover:not(:disabled) {

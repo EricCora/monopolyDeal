@@ -3,6 +3,7 @@ import type { LegalAction } from '../../engine';
 import { ActionLabelText } from '../components/ActionLabelText';
 
 interface ActionRailProps {
+  isMultiplayer?: boolean;
   isMandatoryPrompt: boolean;
   turnStatusText: string;
   turnPhase: TurnPhase;
@@ -17,6 +18,7 @@ interface ActionRailProps {
 }
 
 export function ActionRail({
+  isMultiplayer = false,
   isMandatoryPrompt,
   turnStatusText,
   turnPhase,
@@ -35,7 +37,11 @@ export function ActionRail({
 
   return (
     <aside className="panel action-rail card-enter" aria-label="Turn action rail">
+      <p className="action-rail-kicker">Turn Plan</p>
       <h3>Turn Actions</h3>
+      {isMultiplayer ? (
+        <p className="action-rail-room-note">Live room: remote hands stay hidden and reconnect rules stay active.</p>
+      ) : null}
       <ol className="turn-phase-steps" aria-label="Turn phase progress">
         <li className={`turn-phase-step is-${drawStepState}`}>
           <strong>1.</strong> Draw

@@ -27,6 +27,7 @@ import type {
   MultiplayerActivityFeedItem,
   MultiplayerConnectionState,
   MultiplayerConnectionUiState,
+  MultiplayerPushState,
 } from '../../network/multiplayerTypes';
 
 interface CardActionVariant extends ActionVariantView {
@@ -65,6 +66,9 @@ interface GameTableScreenProps {
   connectionStatusLabel?: string;
   multiplayerConnectionState?: MultiplayerConnectionState;
   multiplayerConnectionUiState?: MultiplayerConnectionUiState;
+  multiplayerPushState?: MultiplayerPushState;
+  multiplayerRoomCode?: string | null;
+  multiplayerSeatPlayerId?: string | null;
   forceInputBlocked?: boolean;
   showDevStatusChip?: boolean;
   devStatus?: {
@@ -283,6 +287,41 @@ function promptKindLabel(kind: TurnPrompt['kind']): string {
   return 'Discard Step';
 }
 
+function promptSpotlightLabel(kind: TurnPrompt['kind']): string {
+  if (kind === 'draw') return 'Draw cards to open the turn';
+  if (kind === 'main') return 'Play cards from the active hand';
+  if (kind === 'response') return 'Resolve the interrupt window';
+  if (kind === 'payment') return 'Pay with bank or property cards';
+  if (kind === 'selection') return 'Choose a valid target on the table';
+  return 'Discard down before passing the turn';
+}
+
+function tableSurfaceFocusLabel(kind: TurnPrompt['kind']): string {
+  if (kind === 'draw') return 'Deck Focus';
+  if (kind === 'main') return 'Hand In Motion';
+  if (kind === 'response') return 'Interrupt Window';
+  if (kind === 'payment') return 'Settlement Pressure';
+  if (kind === 'selection') return 'Target Lock';
+  return 'Hand Cleanup';
+}
+
+function tableSurfaceFocusNote(kind: TurnPrompt['kind']): string {
+  if (kind === 'draw') return 'Open the turn from the deck, then settle the new hand before the table spreads back out.';
+  if (kind === 'main') return 'Card play is open. The active hand should stay louder than the rest of the table.';
+  if (kind === 'response') return 'An interrupt is on the stack. Resolve the counter window before the turn resumes.';
+  if (kind === 'payment') return 'Bank and property lanes now carry the decision weight while the payment total updates.';
+  if (kind === 'selection') return 'Highlighted lanes and cards are the valid targets until this effect resolves.';
+  return 'Trim the hand back to seven cards so the table can hand control to the next seat.';
+}
+
+function multiplayerUpdatesLabel(state: MultiplayerPushState | undefined): string {
+  if (state === 'connected') return 'Live push';
+  if (state === 'connecting') return 'Syncing';
+  if (state === 'fallback') return 'Polling fallback';
+  if (state === 'unsupported') return 'Browser fallback';
+  return 'Manual refresh';
+}
+
 function pendingKindLabel(pending: GameState['pending']): string {
   if (!pending) return 'None';
   if (pending.kind === 'counter') return 'Counter';
@@ -403,6 +442,9 @@ export function GameTableScreen({
   connectionStatusLabel,
   multiplayerConnectionState,
   multiplayerConnectionUiState,
+  multiplayerPushState,
+  multiplayerRoomCode = null,
+  multiplayerSeatPlayerId = null,
   forceInputBlocked = false,
   showDevStatusChip = false,
   devStatus,
@@ -490,6 +532,9 @@ export function GameTableScreen({
   const [narrowLayout, setNarrowLayout] = useState(() => (
     typeof window !== 'undefined' ? window.innerWidth <= 980 : false
   ));
+  const [controlsExpanded, setControlsExpanded] = useState(() => (
+    typeof window !== 'undefined' ? window.innerWidth > 980 : true
+  ));
   const [insightsExpanded, setInsightsExpanded] = useState(() => (
     typeof window !== 'undefined' ? window.innerWidth > 980 : true
   ));
@@ -530,6 +575,12 @@ export function GameTableScreen({
   const multiplayerPreset = isMultiplayer && multiplayerPresetId
     ? getMultiplayerSessionPresetDefinition(multiplayerPresetId)
     : null;
+  const multiplayerSeatPlayer = isMultiplayer && multiplayerSeatPlayerId
+    ? game.players.find((player) => player.id === multiplayerSeatPlayerId) ?? null
+    : null;
+  const multiplayerRemoteSeatCount = isMultiplayer
+    ? Math.max(game.players.length - (multiplayerSeatPlayer ? 1 : 0), 0)
+    : 0;
   const selectionTargetCardIds = useMemo(() => {
     const targets = new Set<string>();
     if (prompt.kind !== 'selection') return targets;
@@ -684,6 +735,9 @@ export function GameTableScreen({
   const matchModeLabel = getMatchModeDefinition(matchMode).tableKicker;
   const matchHeaderTitle = isMultiplayer ? 'Multiplayer Table' : 'Game Table';
   const matchHeaderSubtitle = turnPriorityNotice?.detail ?? turnStatusText;
+  const showControlsPanel = !narrowLayout || controlsExpanded;
+  const showRoomActions = Boolean(isMultiplayer);
+  const showHostTools = Boolean(isMultiplayer && isMultiplayerHost);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(Date.now()), 450);
@@ -696,6 +750,7 @@ export function GameTableScreen({
       const nextIsNarrow = window.innerWidth <= 980;
       setNarrowLayout(nextIsNarrow);
       if (!nextIsNarrow) {
+        setControlsExpanded(true);
         setInsightsExpanded(true);
       }
       if (window.innerWidth > 760) {
@@ -810,56 +865,75 @@ export function GameTableScreen({
       : `Unable to reconnect automatically. Refresh room state or exit the match.${disconnectCountdownText}`;
   })();
 
+  const tableSurfaceModeLabel = isMultiplayer ? 'Live Table' : 'Local Table';
+  const tableSurfaceNote = isMultiplayer
+    ? 'Live room felt with shared turn state and hidden hands for the other seats.'
+    : 'Pass-and-play felt. Reveal only the active hand, then pass the device on.';
+  const rejoinWindowLabel = hasDisconnectDeadline ? `${disconnectSecondsRemaining}s left` : reconnectBlockingState ? 'Recovering' : 'Standing by';
+  const tableSurfaceClassName = [
+    'table-surface',
+    isMultiplayer ? 'is-live-room' : 'is-local-table',
+    `state-${prompt.kind}`,
+  ].join(' ');
+
   return (
-    <section className={`game-table-screen ${isPaused ? 'is-paused' : ''}`}>
+    <section className={`game-table-screen ${isPaused ? 'is-paused' : ''} ${isMultiplayer ? 'is-live-room' : 'is-local-table'}`}>
       <TopBar
         kicker={matchModeLabel}
         title={matchHeaderTitle}
         subtitle={matchHeaderSubtitle}
         meta={(
-          <div className="table-match-meta">
-            <article className="table-match-chip">
-              <p className="table-match-chip-label">Turn</p>
-              <p className="table-match-chip-value">{activePlayerName}</p>
-            </article>
-            <article className="table-match-chip">
-              <p className="table-match-chip-label">Step</p>
-              <p className="table-match-chip-value">{promptKindLabel(prompt.kind)}</p>
-            </article>
-            <article className="table-match-chip">
-              <p className="table-match-chip-label">Pressure</p>
-              <p className="table-match-chip-value">
-                {prompt.kind === 'discard'
-                  ? `${Math.max(discardOverLimitCount, 0)} discard needed`
-                  : `${playsRemaining} plays left`}
-              </p>
-            </article>
-            <article className="table-match-chip">
-              <p className="table-match-chip-label">Pending</p>
-              <p className="table-match-chip-value">{pendingLabel}</p>
-            </article>
-            <article className="table-match-chip">
-              <p className="table-match-chip-label">Table</p>
-              <p className="table-match-chip-value">Turn {game.turnCount} | Draw {game.drawPile.length} | Discard {game.discardPile.length}</p>
-            </article>
-            {multiplayerPreset ? (
-              <article className="table-match-chip">
-                <p className="table-match-chip-label">Preset</p>
-                <p className="table-match-chip-value">{multiplayerPreset.tableSummary}</p>
-              </article>
+          <div className="table-command-strip">
+            {turnPriorityNotice ? (
+              <section className={`table-priority-banner tone-${turnPriorityNotice.tone}`} aria-label="Turn priority">
+                <p className="table-priority-title">{turnPriorityNotice.title}</p>
+                <p className="table-priority-detail">{turnPriorityNotice.detail}</p>
+              </section>
             ) : null}
-            {isMultiplayer && connectionStatusLabel ? (
+            <div className="table-command-grid table-match-meta">
               <article className="table-match-chip">
-                <p className="table-match-chip-label">Connection</p>
-                <p className="table-match-chip-value">{connectionStatusLabel}</p>
+                <p className="table-match-chip-label">Turn</p>
+                <p className="table-match-chip-value">{activePlayerName}</p>
               </article>
-            ) : null}
-            {isMultiplayer && checkpointSlots.length > 0 ? (
               <article className="table-match-chip">
-                <p className="table-match-chip-label">Checkpoints</p>
-                <p className="table-match-chip-value">{checkpointSlots.length} saved</p>
+                <p className="table-match-chip-label">Step</p>
+                <p className="table-match-chip-value">{promptKindLabel(prompt.kind)}</p>
               </article>
-            ) : null}
+              <article className="table-match-chip">
+                <p className="table-match-chip-label">Pressure</p>
+                <p className="table-match-chip-value">
+                  {prompt.kind === 'discard'
+                    ? `${Math.max(discardOverLimitCount, 0)} discard needed`
+                    : `${playsRemaining} plays left`}
+                </p>
+              </article>
+              <article className="table-match-chip">
+                <p className="table-match-chip-label">Pending</p>
+                <p className="table-match-chip-value">{pendingLabel}</p>
+              </article>
+              <article className="table-match-chip">
+                <p className="table-match-chip-label">Table</p>
+                <p className="table-match-chip-value">Turn {game.turnCount} | Draw {game.drawPile.length} | Discard {game.discardPile.length}</p>
+              </article>
+              {multiplayerPreset ? (
+                <article className="table-match-chip">
+                  <p className="table-match-chip-label">Preset</p>
+                  <p className="table-match-chip-value">{multiplayerPreset.tableSummary}</p>
+                </article>
+              ) : null}
+              {isMultiplayer && connectionStatusLabel ? (
+                <article className="table-match-chip">
+                  <p className="table-match-chip-label">Connection</p>
+                  <p className="table-match-chip-value">{connectionStatusLabel}</p>
+                </article>
+              ) : null}
+              {isMultiplayer && checkpointSlots.length > 0 ? (
+                <article className="table-match-chip">
+                  <p className="table-match-chip-label">Checkpoints</p>
+                  <p className="table-match-chip-value">{checkpointSlots.length} saved</p>
+                </article>
+              ) : null}
+            </div>
             {isMultiplayer && connectionStatusLabel ? (
               <p className="table-match-summary">Connection: {connectionStatusLabel}</p>
             ) : null}
@@ -874,16 +948,9 @@ export function GameTableScreen({
           </div>
         )}
         actions={(
-          <div className="table-top-actions">
-            <div className="table-top-group">
-              <p className="table-top-group-label">Table</p>
+          <div className={`table-top-actions ${narrowLayout ? 'is-narrow' : ''}`}>
+            <div className="table-quick-actions">
               <button onClick={onNavigateHome}>Home</button>
-              {!isMultiplayer ? <button onClick={onOpenSavedGames}>Save Game</button> : null}
-              <button onClick={onOpenRules}>Rules Reference</button>
-              <button onClick={onOpenSettings}>Settings</button>
-            </div>
-            <div className="table-top-group">
-              <p className="table-top-group-label">Match</p>
               <button onClick={onPauseToggle}>{isPaused ? 'Resume' : 'Pause'}</button>
               <button
                 type="button"
@@ -891,35 +958,63 @@ export function GameTableScreen({
               >
                 {timelineExpanded ? 'Hide History' : 'Show History'}
               </button>
-              {hasInsightsPanels ? (
+              {narrowLayout ? (
                 <button
                   type="button"
-                  onClick={() => setInsightsExpanded((open) => !open)}
+                  className="table-controls-toggle"
+                  aria-expanded={controlsExpanded}
+                  onClick={() => setControlsExpanded((open) => !open)}
                 >
-                  {insightsExpanded ? 'Hide Social' : 'Show Social'}
+                  {controlsExpanded ? 'Hide Table Tools' : 'More Tools'}
                 </button>
               ) : null}
             </div>
-            {isMultiplayer ? (
+
+            <div className={`table-top-panels ${showControlsPanel ? '' : 'is-hidden'}`}>
               <div className="table-top-group">
-                <p className="table-top-group-label">Room</p>
-                <button onClick={onRefreshMultiplayer} disabled={checkpointLoading}>Refresh</button>
-                <button onClick={onExitMultiplayer} disabled={checkpointLoading}>Exit Match</button>
-                <button onClick={onForgetMultiplayer} disabled={checkpointLoading}>Forget Room</button>
+                <p className="table-top-group-label">Table</p>
+                <div className="table-top-group-actions">
+                  {!isMultiplayer ? <button onClick={onOpenSavedGames}>Save Game</button> : null}
+                  <button onClick={onOpenRules}>Rules Reference</button>
+                  <button onClick={onOpenSettings}>Settings</button>
+                </div>
               </div>
-            ) : null}
-            {(isMultiplayer ? isMultiplayerHost : true) ? (
               <div className="table-top-group">
-                <p className="table-top-group-label">Host Tools</p>
-                {isMultiplayer && isMultiplayerHost ? (
-                  <>
+                <p className="table-top-group-label">Focus</p>
+                <div className="table-top-group-actions">
+                  {hasInsightsPanels ? (
+                    <button
+                      type="button"
+                      onClick={() => setInsightsExpanded((open) => !open)}
+                    >
+                      {insightsExpanded ? 'Hide Social' : 'Show Social'}
+                    </button>
+                  ) : (
+                    <p className="table-top-group-note">No side panels active right now.</p>
+                  )}
+                </div>
+              </div>
+              {showRoomActions ? (
+                <div className="table-top-group">
+                  <p className="table-top-group-label">Room</p>
+                  <div className="table-top-group-actions">
+                    <button onClick={onRefreshMultiplayer} disabled={checkpointLoading}>Refresh</button>
+                    <button onClick={onExitMultiplayer} disabled={checkpointLoading}>Exit Match</button>
+                    <button onClick={onForgetMultiplayer} disabled={checkpointLoading}>Forget Room</button>
+                  </div>
+                </div>
+              ) : null}
+              {showHostTools ? (
+                <div className="table-top-group">
+                  <p className="table-top-group-label">Host Tools</p>
+                  <div className="table-top-group-actions">
                     <button onClick={saveCheckpointInteractive} disabled={checkpointLoading || isPaused}>Save Checkpoint</button>
                     <button onClick={loadCheckpointInteractive} disabled={checkpointLoading || isPaused || checkpointSlots.length === 0}>Load Checkpoint</button>
                     <button onClick={deleteCheckpointInteractive} disabled={checkpointLoading || checkpointSlots.length === 0}>Delete Checkpoint</button>
-                  </>
-                ) : null}
-              </div>
-            ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         )}
       />
@@ -938,6 +1033,7 @@ export function GameTableScreen({
       <div className="game-table-grid">
         <div className="game-table-left-stack">
           <ActionRail
+            isMultiplayer={isMultiplayer}
             isMandatoryPrompt={isMandatoryPrompt}
             turnStatusText={turnStatusText}
             turnPhase={game.turn.phase}
@@ -952,9 +1048,17 @@ export function GameTableScreen({
           />
           {hasInsightsPanels && insightsExpanded ? (
             <aside
-              className={`table-insights-stack ${narrowLayout ? 'is-narrow' : ''}`}
+              className={`table-insights-stack ${narrowLayout ? 'is-narrow' : ''} ${isMultiplayer ? 'is-live-room' : ''}`}
               aria-label="Table insights"
             >
+              {isMultiplayer ? (
+                <div className="table-insights-head">
+                  <p className="table-surface-focus-kicker">Room Activity</p>
+                  <p className="table-insights-note">
+                    Latest action, reactions, and the match log stay grouped here so the live room remains legible.
+                  </p>
+                </div>
+              ) : null}
               {coachHint ? (
                 <section className="panel inline-action-panel" aria-label="AI coach hint">
                   <h3>{coachHint.title}</h3>
@@ -1008,7 +1112,68 @@ export function GameTableScreen({
         <div className="game-table-main">
           <div className="table-main-layout">
             <div className="table-play-column">
-              <section className="table-surface" aria-label="Table surface">
+              <section className={tableSurfaceClassName} aria-label="Table surface">
+            <div className="table-surface-head">
+              <div className="table-surface-copy">
+                <p className="table-surface-kicker">{tableSurfaceModeLabel}</p>
+                <h3>Playable Surface</h3>
+                <p className="table-surface-note">{tableSurfaceNote}</p>
+              </div>
+              <div className="table-surface-glance" aria-label="Table overview">
+                <article className="table-surface-chip">
+                  <p className="table-surface-chip-label">Active</p>
+                  <p className="table-surface-chip-value">{activePlayerName}</p>
+                </article>
+                <article className="table-surface-chip">
+                  <p className="table-surface-chip-label">Seats</p>
+                  <p className="table-surface-chip-value">{game.players.length}</p>
+                </article>
+              </div>
+            </div>
+
+            <div className="table-surface-staging">
+              <article className="table-surface-focus">
+                <p className="table-surface-focus-kicker">Table Focus</p>
+                <h4>{tableSurfaceFocusLabel(prompt.kind)}</h4>
+                <p>{tableSurfaceFocusNote(prompt.kind)}</p>
+              </article>
+              {isMultiplayer ? (
+                <section className="table-live-pulse" aria-label="Live room pulse">
+                  <p className="table-surface-focus-kicker">Live Room Pulse</p>
+                  <div className="table-live-pulse-grid">
+                    {multiplayerRoomCode ? (
+                      <article className="table-live-pulse-item">
+                        <p className="table-live-pulse-label">Room</p>
+                        <p className="table-live-pulse-value">{multiplayerRoomCode}</p>
+                      </article>
+                    ) : null}
+                    {multiplayerSeatPlayer ? (
+                      <article className="table-live-pulse-item">
+                        <p className="table-live-pulse-label">Seat</p>
+                        <p className="table-live-pulse-value">{multiplayerSeatPlayer.name}</p>
+                      </article>
+                    ) : null}
+                    <article className="table-live-pulse-item">
+                      <p className="table-live-pulse-label">Connection</p>
+                      <p className="table-live-pulse-value">{connectionStatusLabel ?? 'Connected'}</p>
+                    </article>
+                    <article className="table-live-pulse-item">
+                      <p className="table-live-pulse-label">Rejoin Window</p>
+                      <p className="table-live-pulse-value">{rejoinWindowLabel}</p>
+                    </article>
+                    <article className="table-live-pulse-item">
+                      <p className="table-live-pulse-label">Updates</p>
+                      <p className="table-live-pulse-value">{multiplayerUpdatesLabel(multiplayerPushState)}</p>
+                    </article>
+                    <article className="table-live-pulse-item">
+                      <p className="table-live-pulse-label">Remote Seats</p>
+                      <p className="table-live-pulse-value">{multiplayerRemoteSeatCount}</p>
+                    </article>
+                  </div>
+                </section>
+              ) : null}
+            </div>
+
             <div className="table-pile-row" aria-label="Card piles">
               <article className="table-pile-card draw-pile-card">
                 <h4>Draw Pile</h4>
@@ -1031,6 +1196,9 @@ export function GameTableScreen({
               const canSeeHand = revealedPlayerId === player.id;
               const isCurrent = game.players[game.currentPlayerIndex].id === player.id;
               const isPromptPlayer = prompt.playerId === player.id;
+              const isSelfSeat = isMultiplayer && multiplayerSeatPlayerId === player.id;
+              const isRemoteSeat = isMultiplayer && !isSelfSeat;
+              const playerConnected = playerConnectionById[player.id]?.connected ?? true;
               const handFitMode = isPromptPlayer && prompt.kind === 'draw' ? 'rail' : 'auto';
               const handInteractive = Boolean(canSeeHand && prompt.playerId === player.id && !over.done && !inputBlocked);
               const isPaymentPayer = pendingPayment?.targetPlayerId === player.id;
@@ -1084,13 +1252,57 @@ export function GameTableScreen({
               if (isCurrent && playerStatusSummary !== 'Current turn seat') playerStatusTags.push('Turn Seat');
               if (isPaymentPayer) playerStatusTags.push('Payment Requested');
               if (hasSelectionTarget && playerStatusSummary !== 'Valid target for this effect') playerStatusTags.push('Valid Target');
+              const seatEyebrow = isPromptPlayer && !over.done && !inputBlocked
+                ? 'Active Seat'
+                : isCurrent
+                  ? 'Current Turn'
+                  : isMultiplayer
+                    ? 'Remote Seat'
+                    : 'Waiting Seat';
+              const seatToplineClassName = isPromptPlayer && !over.done && !inputBlocked
+                ? 'player-seat-topline is-live'
+                : isCurrent
+                  ? 'player-seat-topline is-current'
+                  : 'player-seat-topline';
+              const handZoneSpotlight = isPromptPlayer && canSeeHand && !over.done && (
+                prompt.kind === 'draw'
+                || prompt.kind === 'main'
+                || prompt.kind === 'discard'
+              );
+              const bankZoneSpotlight = isPaymentPayer && !over.done;
+              const propertyZoneSpotlight = !over.done && (
+                selectionCardPickingEnabled
+                || paymentSelectionEnabled
+                || (canDirectWildMove && moveWildSourceCardIds.size > 0)
+              );
+              const handZoneSpotlightText = handZoneSpotlight
+                ? (prompt.kind === 'draw'
+                    ? 'New cards arrive here first as the turn opens.'
+                    : prompt.kind === 'discard'
+                      ? 'Discard from this hand until you return to seven cards.'
+                      : 'Primary plays launch directly from this hand.')
+                : null;
+              const bankZoneSpotlightText = bankZoneSpotlight
+                ? 'Bank cards contribute to the active payment total.'
+                : null;
+              const propertyZoneSpotlightText = propertyZoneSpotlight
+                ? (selectionCardPickingEnabled
+                    ? 'Highlighted lanes are valid targets for the current effect.'
+                    : paymentSelectionEnabled
+                      ? 'Property cards can be tapped to cover the payment request.'
+                      : 'Tap a movable wild card, then choose its destination lane.')
+                : null;
 
               return (
                 <article
-                  className={`player ${isCurrent ? 'active' : ''} ${isPaymentPayer ? 'is-payment-requested' : ''} ${stealAlert?.sourcePlayerId === player.id ? 'is-steal-source' : ''} ${stealAlert?.targetPlayerId === player.id ? 'is-steal-target' : ''}`}
+                  className={`player ${isCurrent ? 'active' : ''} ${isPaymentPayer ? 'is-payment-requested' : ''} ${stealAlert?.sourcePlayerId === player.id ? 'is-steal-source' : ''} ${stealAlert?.targetPlayerId === player.id ? 'is-steal-target' : ''} ${isSelfSeat ? 'is-self-seat' : ''} ${isRemoteSeat ? 'is-remote-seat' : ''} ${isMultiplayer && !playerConnected ? 'is-offline-seat' : ''}`}
                   key={player.id}
                 >
                   <header>
+                    <div className={seatToplineClassName}>
+                      <p className="player-seat-eyebrow">{seatEyebrow}</p>
+                      <p className="player-seat-metrics">{player.hand.length} hand · {player.bank.length} bank · {getSetCompletionCount(player)} sets</p>
+                    </div>
                     <h3>{player.name}</h3>
                     <p>{getSetCompletionCount(player)} complete sets</p>
                     <p className="player-status-summary">{playerStatusSummary}</p>
@@ -1102,8 +1314,8 @@ export function GameTableScreen({
                       </ul>
                     ) : null}
                     {isMultiplayer ? (
-                      <p className={`connection-pill ${playerConnectionById[player.id]?.connected ? 'is-online' : 'is-offline'}`}>
-                        {playerConnectionById[player.id]?.connected ? 'Online' : 'Disconnected'}
+                      <p className={`connection-pill ${playerConnected ? 'is-online' : 'is-offline'}`}>
+                        {isSelfSeat ? 'Your Seat' : playerConnected ? 'Online' : 'Disconnected'}
                       </p>
                     ) : null}
                     {recentReactionsByPlayerId.get(player.id) ? (
@@ -1114,7 +1326,17 @@ export function GameTableScreen({
                   </header>
 
                   {isPromptPlayer && canSeeHand && !over.done ? (
-                    <section className="inline-action-panel">
+                    <section className={`inline-action-panel prompt-tone-${prompt.kind}`}>
+                      <div className="inline-panel-head">
+                        <div className="inline-panel-copy">
+                          <p className="inline-panel-kicker">{promptKindLabel(prompt.kind)}</p>
+                          <h4>{promptSpotlightLabel(prompt.kind)}</h4>
+                        </div>
+                        <div className="inline-panel-status">
+                          {isMandatoryPrompt ? <span className="inline-panel-pill is-required">Required</span> : null}
+                          {mainPhaseExhausted ? <span className="inline-panel-pill">Plays Used</span> : null}
+                        </div>
+                      </div>
                       {isMandatoryPrompt ? <p className="inline-must-act">Required: resolve this step before anything else.</p> : null}
                       {mainPhaseExhausted ? <p className="inline-must-act">3/3 plays used. Pass turn or use non-play actions.</p> : null}
                       {prompt.kind === 'discard' ? (
@@ -1218,8 +1440,12 @@ export function GameTableScreen({
                     </section>
                   ) : null}
 
-                  <section>
-                    <strong>Hand</strong>
+                  <section className={`player-zone ${handZoneSpotlight ? `is-spotlight tone-${prompt.kind}` : ''}`}>
+                    <div className="player-zone-head">
+                      <strong>Hand</strong>
+                      <span className="player-zone-meta">{player.hand.length} cards</span>
+                    </div>
+                    {handZoneSpotlightText ? <p className="player-zone-spotlight">{handZoneSpotlightText}</p> : null}
                     <div
                       className="hand-zone"
                       ref={(node) => {
@@ -1245,11 +1471,15 @@ export function GameTableScreen({
                     </div>
                   </section>
 
-                  <section>
-                    <strong>
-                      Bank
-                      {paymentSelectionEnabled ? <span className="zone-hint">Tap cards to pay</span> : null}
-                    </strong>
+                  <section className={`player-zone ${bankZoneSpotlight ? 'is-spotlight tone-payment' : ''}`}>
+                    <div className="player-zone-head">
+                      <strong>
+                        Bank
+                        {paymentSelectionEnabled ? <span className="zone-hint">Tap cards to pay</span> : null}
+                      </strong>
+                      <span className="player-zone-meta">{player.bank.length} cards</span>
+                    </div>
+                    {bankZoneSpotlightText ? <p className="player-zone-spotlight">{bankZoneSpotlightText}</p> : null}
                     <div className="zone-bank">
                       {player.bank.length > 0 ? (
                         player.bank.map((cardId) => (
@@ -1269,13 +1499,17 @@ export function GameTableScreen({
                     </div>
                   </section>
 
-                  <section>
-                    <strong>
-                      Properties
-                      {paymentSelectionEnabled ? <span className="zone-hint">Tap cards to pay</span> : null}
-                      {selectionCardPickingEnabled ? <span className="zone-hint">Tap highlighted cards</span> : null}
-                      {canDirectWildMove && moveWildSourceCardIds.size > 0 ? <span className="zone-hint">Tap wild, then lane</span> : null}
-                    </strong>
+                  <section className={`player-zone ${propertyZoneSpotlight ? `is-spotlight tone-${prompt.kind === 'payment' ? 'payment' : 'selection'}` : ''}`}>
+                    <div className="player-zone-head">
+                      <strong>
+                        Properties
+                        {paymentSelectionEnabled ? <span className="zone-hint">Tap cards to pay</span> : null}
+                        {selectionCardPickingEnabled ? <span className="zone-hint">Tap highlighted cards</span> : null}
+                        {canDirectWildMove && moveWildSourceCardIds.size > 0 ? <span className="zone-hint">Tap wild, then lane</span> : null}
+                      </strong>
+                      <span className="player-zone-meta">{propertyColors.reduce((total, color) => total + player.properties[color].length, 0)} cards</span>
+                    </div>
+                    {propertyZoneSpotlightText ? <p className="player-zone-spotlight">{propertyZoneSpotlightText}</p> : null}
                     <div className="zone-properties">
                       {visiblePropertyColors.length > 0 ? (
                         visiblePropertyColors.map((color) => {
@@ -1394,9 +1628,15 @@ export function GameTableScreen({
               {timelineExpanded ? (
                 <RecentEvents events={game.history} enhancedGrouping={enhancedEventLog} />
               ) : (
-                <section className="panel timeline-collapsed-panel" aria-label="Event timeline hidden">
-                  <h3>Event Timeline Hidden</h3>
-                  <p>Expand timeline to inspect the full turn-by-turn event history.</p>
+                <section className={`panel timeline-collapsed-panel ${isMultiplayer ? 'is-live-room' : ''}`} aria-label="Event timeline hidden">
+                  <p className="timeline-collapsed-kicker">Match Log</p>
+                  <h3>{isMultiplayer ? 'Room Activity Collapsed' : 'Event Timeline Hidden'}</h3>
+                  <p>
+                    {isMultiplayer
+                      ? 'Expand the log to inspect the live room timeline turn by turn.'
+                      : 'Expand timeline to inspect the full turn-by-turn event history.'}
+                    {latestEvent ? ` Latest: ${latestEvent.message}` : ''}
+                  </p>
                 </section>
               )}
             </div>
@@ -1422,6 +1662,7 @@ export function GameTableScreen({
       {shouldShowShield && !over.done && !inputBlocked ? (
         <div className="shield" role="dialog" aria-modal="true">
           <div className="shield-card card-enter">
+            <p className="overlay-kicker">Pass And Play</p>
             <h3>Pass Device</h3>
             <p>
               Next action: <strong>{game.players.find((player) => player.id === prompt.playerId)?.name ?? prompt.playerId}</strong>
@@ -1434,6 +1675,7 @@ export function GameTableScreen({
       {showReconnectOverlay ? (
         <div className="network-overlay" role="dialog" aria-modal="true" aria-label="Multiplayer connection status">
           <div className="network-card card-enter">
+            <p className="overlay-kicker">Live Room Status</p>
             <h3>{reconnectOverlayTitle}</h3>
             <p>{reconnectOverlayDetail}</p>
             <div className="winner-actions">
@@ -1460,6 +1702,7 @@ export function GameTableScreen({
       {isPaused && !over.done ? (
         <div className="paused-overlay" role="dialog" aria-modal="true" aria-label="Game paused">
           <div className="paused-card card-enter">
+            <p className="overlay-kicker">Table Paused</p>
             <h3>Game Paused</h3>
             <p>{`${pauseReasonText ?? 'Gameplay is locked until you press Resume in the top bar.'}${disconnectCountdownText}`}</p>
           </div>
@@ -1469,6 +1712,7 @@ export function GameTableScreen({
       {isMultiplayer && over.done ? (
         <div className="winner-overlay" role="dialog" aria-modal="true" aria-label="Multiplayer winner">
           <div className="winner-card card-enter">
+            <p className="overlay-kicker">Room Complete</p>
             <h3>Match Complete</h3>
             <p>
               Winner: <strong>{winnerName ?? 'Unknown player'}</strong>

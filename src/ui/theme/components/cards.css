@@ -544,13 +544,57 @@
   top: 0;
 }
 
+.player.is-remote-seat .hidden-hand-card {
+  filter: saturate(0.82) hue-rotate(8deg);
+  opacity: 0.94;
+}
+
 .hand-zone {
   position: relative;
+  margin-top: 0.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 0.5rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 22%),
+    rgba(0, 0, 0, 0.16);
+}
+
+.player-zone.is-spotlight .hand-zone,
+.player-zone.is-spotlight .zone-bank,
+.player-zone.is-spotlight .zone-properties {
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.player-zone.is-spotlight.tone-draw .hand-zone {
+  background:
+    linear-gradient(180deg, rgba(181, 216, 244, 0.12), transparent 28%),
+    rgba(7, 17, 27, 0.26);
+}
+
+.player-zone.is-spotlight.tone-main .hand-zone {
+  background:
+    linear-gradient(180deg, rgba(167, 212, 146, 0.11), transparent 28%),
+    rgba(14, 20, 13, 0.26);
+}
+
+.player-zone.is-spotlight.tone-payment .zone-bank,
+.player-zone.is-spotlight.tone-payment .zone-properties {
+  background:
+    linear-gradient(180deg, rgba(236, 197, 139, 0.12), transparent 28%),
+    rgba(20, 13, 8, 0.24);
+}
+
+.player-zone.is-spotlight.tone-selection .zone-properties {
+  background:
+    linear-gradient(180deg, rgba(165, 220, 183, 0.12), transparent 28%),
+    rgba(10, 19, 13, 0.22);
 }
 
 .zone-bank,
 .zone-properties {
-  margin-top: 0.35rem;
+  margin-top: 0.12rem;
 }
 
 .zone-bank {
@@ -567,8 +611,9 @@
   border: 1px solid #a5b395;
   border-radius: 10px;
   background: rgba(248, 252, 241, 0.88);
-  padding: 0.45rem;
+  padding: 0.5rem;
   margin-top: 0.45rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
 }
 
 .motif-action .card-face::before,
@@ -601,13 +646,17 @@
   margin: 0;
   font-size: 0.84rem;
   color: #4a5968;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
 }
 
 .property-cards {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  margin-top: 0.35rem;
+  margin-top: 0.42rem;
 }
 
 @media (max-width: 980px) {

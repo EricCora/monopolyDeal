@@ -1638,6 +1638,8 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: /multiplayer table/i })).toBeInTheDocument();
     expect(screen.getByText(/connection: connected/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/live room pulse/i)).toBeInTheDocument();
+    expect(screen.getByText(/remote hands stay hidden and reconnect rules stay active/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /exit match/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /forget room/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^nice$/i })).not.toBeInTheDocument();

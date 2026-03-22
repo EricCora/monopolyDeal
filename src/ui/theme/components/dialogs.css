@@ -11,9 +11,19 @@
   width: min(460px, calc(100% - 2rem));
   border-radius: 14px;
   border: 1px solid #3e5b73;
-  background: linear-gradient(180deg, #102133, #0c1b2a);
+  background:
+    radial-gradient(circle at 78% 16%, rgba(187, 219, 248, 0.12), transparent 18%),
+    linear-gradient(180deg, #102133, #0c1b2a);
   padding: 1rem;
   box-shadow: var(--shadow-md);
+}
+
+.play-chooser-kicker {
+  margin: 0 0 0.18rem;
+  color: #d6e6f4;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.68rem;
 }
 
 .play-chooser-head h3 {
@@ -53,6 +63,12 @@
 .play-option small {
   color: var(--text-muted);
   font-size: 0.78rem;
+}
+
+.play-chooser-note {
+  margin: 0.7rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
 }
 
 .play-cancel {

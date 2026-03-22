@@ -516,20 +516,36 @@ export function MultiplayerScreen({
 
   return (
     <section className="panel setup-screen multiplayer-screen card-enter">
-      <h2>Multiplayer Live Room</h2>
-      <p className="setup-subtitle">
-        {isLocalDevApi
-          ? 'Local testing uses a local multiplayer service for live room sessions.'
-          : 'Create or join a private live room with a room code or invite link.'}
-      </p>
-      <p className="setup-subtitle">Async online rooms and watch seats are planned separately; this screen stays focused on fast private live matches.</p>
-      {reconnectUiBannerText ? <p className="setup-subtitle">{reconnectUiBannerText}</p> : null}
-      {runtimeStateBannerText ? <p className="setup-subtitle">{runtimeStateBannerText}</p> : null}
-      {showDevStatusChip ? (
-        <p className="setup-subtitle">
-          Dev status: reconnect policy active | version guard active | disconnect pause policy active | transport {reconnectDiagnostics?.transportMode ?? 'http_fallback'} | live updates {pushState} | room runtime {roomView?.roomRuntimeState ?? 'n/a'}
-        </p>
-      ) : null}
+      <div className="multiplayer-screen-head">
+        <div className="multiplayer-screen-copy">
+          <p className="setup-kicker">Live Online</p>
+          <h2>Multiplayer Live Room</h2>
+          <p className="setup-subtitle">
+            {isLocalDevApi
+              ? 'Local testing uses a local multiplayer service for live room sessions.'
+              : 'Create or join a private live room with a room code or invite link.'}
+          </p>
+          <p className="setup-subtitle">Async online rooms and watch seats are planned separately; this screen stays focused on fast private live matches.</p>
+          {reconnectUiBannerText ? <p className="setup-subtitle">{reconnectUiBannerText}</p> : null}
+          {runtimeStateBannerText ? <p className="setup-subtitle">{runtimeStateBannerText}</p> : null}
+          {showDevStatusChip ? (
+            <p className="setup-subtitle">
+              Dev status: reconnect policy active | version guard active | disconnect pause policy active | transport {reconnectDiagnostics?.transportMode ?? 'http_fallback'} | live updates {pushState} | room runtime {roomView?.roomRuntimeState ?? 'n/a'}
+            </p>
+          ) : null}
+        </div>
+        <aside className="multiplayer-screen-aside" aria-label="Live room overview">
+          <p className="setup-stage-label">Room flow</p>
+          <h3>Host, invite, ready up, deal.</h3>
+          <p>Built for short private rooms with clear reconnect windows and one shared match state.</p>
+          <div className="multiplayer-flow-track" aria-hidden="true">
+            <span>1 Host</span>
+            <span>2 Invite</span>
+            <span>3 Ready</span>
+            <span>4 Deal</span>
+          </div>
+        </aside>
+      </div>
       {reconnectDebugEnabled && reconnectDiagnostics ? (
         <section className="multiplayer-debug-panel" aria-label="Reconnect diagnostics">
           <h3>Reconnect Debug</h3>
@@ -607,6 +623,7 @@ export function MultiplayerScreen({
 
           <div className="multiplayer-entry-grid">
             <section className="multiplayer-entry-card" aria-label="Host room">
+              <p className="setup-stage-label">Start a room</p>
               <h3>Host Live Room</h3>
               <p>Create a private table and share the invite link with your group.</p>
               <label>
@@ -621,6 +638,7 @@ export function MultiplayerScreen({
             </section>
 
             <section className="multiplayer-entry-card" aria-label="Join room">
+              <p className="setup-stage-label">Use a room code</p>
               <h3>Join Live Room</h3>
               <p>Use a room code or invite URL to jump straight into the lobby.</p>
               <label>
@@ -642,26 +660,37 @@ export function MultiplayerScreen({
       ) : (
         <div className="multiplayer-room-shell">
           <section className="multiplayer-room-hero" aria-label="Room session">
-            <div className="multiplayer-room-heading">
-              <h3>Room {session.roomCode}</h3>
-              <div className="multiplayer-status-strip" aria-label="Room connection status">
-                <span className={`multiplayer-status-pill ${connectionTone(connectionState)}`}>
-                  {connectionLabel(connectionState)}
-                </span>
-                <span className={`multiplayer-status-pill ${connectionUiTone(connectionUiState)}`}>
-                  {connectionUiLabel(connectionUiState)}
-                </span>
-                <span className={`multiplayer-status-pill ${pushTone(pushState)}`}>
-                  {pushLabel(pushState)}
-                </span>
+            <div className="multiplayer-room-hero-main">
+              <div className="multiplayer-room-heading">
+                <h3>Room {session.roomCode}</h3>
+                <div className="multiplayer-status-strip" aria-label="Room connection status">
+                  <span className={`multiplayer-status-pill ${connectionTone(connectionState)}`}>
+                    {connectionLabel(connectionState)}
+                  </span>
+                  <span className={`multiplayer-status-pill ${connectionUiTone(connectionUiState)}`}>
+                    {connectionUiLabel(connectionUiState)}
+                  </span>
+                  <span className={`multiplayer-status-pill ${pushTone(pushState)}`}>
+                    {pushLabel(pushState)}
+                  </span>
+                </div>
               </div>
+              <div className="multiplayer-room-summary">
+                <article className="multiplayer-room-summary-item">
+                  <p className="multiplayer-room-summary-label">Session</p>
+                  <p className="multiplayer-room-summary-value">Session: Live Online{selectedPreset ? ` · ${selectedPreset.label}` : ''}</p>
+                </article>
+                <article className="multiplayer-room-summary-item">
+                  <p className="multiplayer-room-summary-label">Rejoin window</p>
+                  <p className="multiplayer-room-summary-value">Rejoin window: {deadlineLabel(roomView?.reconnectDeadlineMs ?? session.reconnectDeadlineMs)}</p>
+                </article>
+                <article className="multiplayer-room-summary-item">
+                  <p className="multiplayer-room-summary-label">Seat</p>
+                  <p className="multiplayer-room-summary-value">{session.playerName}</p>
+                </article>
+              </div>
+              <p className="multiplayer-room-hero-note">One room code, one shared turn state, and reconnect timing always visible from the header.</p>
             </div>
-            <p className="multiplayer-room-rejoin">
-              Session: Live Online{selectedPreset ? ` · ${selectedPreset.label}` : ''}
-            </p>
-            <p className="multiplayer-room-rejoin">
-              Rejoin window: {deadlineLabel(roomView?.reconnectDeadlineMs ?? session.reconnectDeadlineMs)}
-            </p>
             <div className="multiplayer-room-actions-grid">
               <div className="multiplayer-room-action-group">
                 <p className="multiplayer-room-action-label">Invite</p>
@@ -716,65 +745,77 @@ export function MultiplayerScreen({
                       : 'Waiting for players.'}
                 </p>
               </header>
-              {selectedPreset ? (
-                <section className="multiplayer-entry-card" aria-label="Room preset">
-                  <h4>{selectedPreset.label}</h4>
-                  <p>{selectedPreset.shortDescription}</p>
-                  <p className="multiplayer-lobby-status">{selectedPreset.readySummary}</p>
-                  <div className="actions multiplayer-primary-actions">
-                    {MULTIPLAYER_SESSION_PRESET_OPTIONS.map((option) => {
-                      const definition = getMultiplayerSessionPresetDefinition(option.value);
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={roomView.presetId === option.value ? 'cta-primary' : undefined}
-                          onClick={() => onSetRoomPreset?.(option.value)}
-                          disabled={loading || actionBlocked || !isHost || roomView.started || !onSetRoomPreset}
-                        >
-                          {definition.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              ) : null}
-              {!roomView.started && you ? (
-                <div className="actions multiplayer-ready-actions">
-                  <button type="button" className="cta-primary" onClick={() => onSetReady(!you.ready)} disabled={loading || actionBlocked}>
-                    {you.ready ? 'Mark Not Ready' : 'Mark Ready'}
-                  </button>
+              <div className="multiplayer-lobby-top">
+                {selectedPreset ? (
+                  <section className="multiplayer-entry-card multiplayer-preset-card" aria-label="Room preset">
+                    <p className="setup-stage-label">Preset</p>
+                    <h4>{selectedPreset.label}</h4>
+                    <p>{selectedPreset.shortDescription}</p>
+                    <p className="multiplayer-lobby-status">{selectedPreset.readySummary}</p>
+                    <div className="actions multiplayer-primary-actions">
+                      {MULTIPLAYER_SESSION_PRESET_OPTIONS.map((option) => {
+                        const definition = getMultiplayerSessionPresetDefinition(option.value);
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={roomView.presetId === option.value ? 'cta-primary' : undefined}
+                            onClick={() => onSetRoomPreset?.(option.value)}
+                            disabled={loading || actionBlocked || !isHost || roomView.started || !onSetRoomPreset}
+                          >
+                            {definition.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null}
+                <div className="multiplayer-lobby-side">
+                  {!roomView.started && you ? (
+                    <div className="actions multiplayer-ready-actions">
+                      <button type="button" className="cta-primary" onClick={() => onSetReady(!you.ready)} disabled={loading || actionBlocked}>
+                        {you.ready ? 'Mark Not Ready' : 'Mark Ready'}
+                      </button>
+                    </div>
+                  ) : null}
+                  {!roomView.started && readyBlockingText ? (
+                    <p className="multiplayer-lobby-waiting">{readyBlockingText}</p>
+                  ) : null}
+                  {lobbySnapshot ? (
+                    <section className="multiplayer-lobby-snapshot" aria-label="Lobby snapshot">
+                      <article className="multiplayer-lobby-snapshot-item">
+                        <p className="multiplayer-lobby-snapshot-label">Players</p>
+                        <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.totalPlayers}</p>
+                      </article>
+                      <article className="multiplayer-lobby-snapshot-item">
+                        <p className="multiplayer-lobby-snapshot-label">Ready</p>
+                        <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.readyPlayers}/{lobbySnapshot.totalPlayers}</p>
+                      </article>
+                      <article className="multiplayer-lobby-snapshot-item">
+                        <p className="multiplayer-lobby-snapshot-label">Connected</p>
+                        <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.connectedPlayers}/{lobbySnapshot.totalPlayers}</p>
+                      </article>
+                      <article className="multiplayer-lobby-snapshot-item">
+                        <p className="multiplayer-lobby-snapshot-label">Checkpoints</p>
+                        <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.checkpointCount}</p>
+                      </article>
+                      <article className="multiplayer-lobby-snapshot-item">
+                        <p className="multiplayer-lobby-snapshot-label">Your Actions</p>
+                        <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.legalActionCount}</p>
+                      </article>
+                    </section>
+                  ) : null}
                 </div>
-              ) : null}
-              {!roomView.started && readyBlockingText ? (
-                <p className="multiplayer-lobby-waiting">{readyBlockingText}</p>
-              ) : null}
-              {lobbySnapshot ? (
-                <section className="multiplayer-lobby-snapshot" aria-label="Lobby snapshot">
-                  <article className="multiplayer-lobby-snapshot-item">
-                    <p className="multiplayer-lobby-snapshot-label">Players</p>
-                    <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.totalPlayers}</p>
-                  </article>
-                  <article className="multiplayer-lobby-snapshot-item">
-                    <p className="multiplayer-lobby-snapshot-label">Ready</p>
-                    <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.readyPlayers}/{lobbySnapshot.totalPlayers}</p>
-                  </article>
-                  <article className="multiplayer-lobby-snapshot-item">
-                    <p className="multiplayer-lobby-snapshot-label">Connected</p>
-                    <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.connectedPlayers}/{lobbySnapshot.totalPlayers}</p>
-                  </article>
-                  <article className="multiplayer-lobby-snapshot-item">
-                    <p className="multiplayer-lobby-snapshot-label">Checkpoints</p>
-                    <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.checkpointCount}</p>
-                  </article>
-                  <article className="multiplayer-lobby-snapshot-item">
-                    <p className="multiplayer-lobby-snapshot-label">Your Actions</p>
-                    <p className="multiplayer-lobby-snapshot-value">{lobbySnapshot.legalActionCount}</p>
-                  </article>
-                </section>
-              ) : null}
+              </div>
 
               <div className="multiplayer-roster-wrap">
+                <div className="multiplayer-roster-head">
+                  <div className="multiplayer-roster-copy">
+                    <p className="setup-stage-label">Room roster</p>
+                    <h4>Players at the table</h4>
+                  </div>
+                  <p className="multiplayer-roster-note">Ready state, connection health, and turn priority update live.</p>
+                </div>
                 <table className="multiplayer-roster-table">
                   <caption className="sr-only">Room roster</caption>
                   <thead>

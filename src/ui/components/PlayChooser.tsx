@@ -73,6 +73,7 @@ export function PlayChooser({ cardId, cardLabel, options, title = 'Choose Play',
         onClick={(event) => event.stopPropagation()}
       >
         <header className="play-chooser-head">
+          <p className="play-chooser-kicker">Card Choice</p>
           <h3>{title}</h3>
           <p>{cardLabel ?? cardId}</p>
         </header>
@@ -87,6 +88,7 @@ export function PlayChooser({ cardId, cardLabel, options, title = 'Choose Play',
             </button>
           ))}
         </div>
+        <p className="play-chooser-note">Pick the destination that best fits the current turn plan.</p>
         <button type="button" className="play-cancel" onClick={onClose}>
           Cancel
         </button>

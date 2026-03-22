@@ -136,15 +136,17 @@ export function RecentEvents({ events, enhancedGrouping = false }: RecentEventsP
   }, [decoratedDesc, filter]);
 
   const canShowMore = events.length > visibleCount;
+  const visibleEventsCount = grouped.reduce((total, group) => total + group.events.length, 0);
 
   return (
     <section className="events-panel panel card-enter">
       <div className="events-head">
         <div>
+          <p className="events-kicker">Match Log</p>
           <h3>Recent Events</h3>
           <small>Turn-by-turn timeline</small>
         </div>
-        <small>{events.length} total</small>
+        <small>{visibleEventsCount} shown · {events.length} total</small>
       </div>
       <div className="events-filters" role="tablist" aria-label="Filter recent events">
         {FILTERS.map((option) => (

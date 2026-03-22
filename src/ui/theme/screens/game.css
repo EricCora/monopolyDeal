@@ -11,14 +11,112 @@
 .table-surface {
   position: relative;
   border: 1px solid var(--table-felt-border);
-  border-radius: 16px;
-  padding: 0.9rem;
+  border-radius: 18px;
+  padding: 0.95rem;
   background:
+    radial-gradient(circle at 50% 8%, rgba(255, 238, 204, 0.12), transparent 24%),
+    radial-gradient(circle at 50% 118%, rgba(140, 70, 42, 0.16), transparent 34%),
     var(--table-felt-glow),
     var(--table-felt-pattern),
     var(--table-felt-base);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 14px 28px rgba(4, 7, 8, 0.35);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 -24px 36px rgba(7, 5, 4, 0.18),
+    0 18px 34px rgba(4, 7, 8, 0.38);
   overflow: hidden;
+}
+
+.table-surface.is-live-room {
+  border-color: rgba(117, 157, 189, 0.42);
+  background:
+    radial-gradient(circle at 16% 14%, rgba(176, 214, 247, 0.12), transparent 22%),
+    radial-gradient(circle at 84% 12%, rgba(116, 163, 215, 0.12), transparent 24%),
+    radial-gradient(circle at 50% 118%, rgba(33, 78, 120, 0.18), transparent 38%),
+    var(--table-felt-glow),
+    var(--table-felt-pattern),
+    linear-gradient(180deg, rgba(6, 25, 37, 0.76), rgba(9, 36, 52, 0.7));
+}
+
+.table-surface.state-draw {
+  background:
+    radial-gradient(circle at 50% 10%, rgba(214, 234, 255, 0.16), transparent 22%),
+    radial-gradient(circle at 50% 118%, rgba(74, 111, 153, 0.16), transparent 34%),
+    var(--table-felt-glow),
+    var(--table-felt-pattern),
+    var(--table-felt-base);
+}
+
+.table-surface.state-main {
+  background:
+    radial-gradient(circle at 20% 12%, rgba(246, 223, 166, 0.12), transparent 22%),
+    radial-gradient(circle at 80% 18%, rgba(120, 162, 96, 0.12), transparent 24%),
+    radial-gradient(circle at 50% 118%, rgba(140, 70, 42, 0.16), transparent 34%),
+    var(--table-felt-glow),
+    var(--table-felt-pattern),
+    var(--table-felt-base);
+}
+
+.table-surface.state-response,
+.table-surface.state-payment {
+  background:
+    radial-gradient(circle at 50% 10%, rgba(255, 223, 170, 0.15), transparent 22%),
+    radial-gradient(circle at 18% 82%, rgba(126, 65, 29, 0.16), transparent 26%),
+    radial-gradient(circle at 82% 80%, rgba(154, 103, 51, 0.14), transparent 24%),
+    var(--table-felt-glow),
+    var(--table-felt-pattern),
+    var(--table-felt-base);
+}
+
+.table-surface.state-selection,
+.table-surface.state-discard {
+  background:
+    radial-gradient(circle at 50% 10%, rgba(205, 238, 201, 0.15), transparent 22%),
+    radial-gradient(circle at 50% 118%, rgba(68, 121, 74, 0.16), transparent 34%),
+    var(--table-felt-glow),
+    var(--table-felt-pattern),
+    var(--table-felt-base);
+}
+
+.table-surface.is-live-room.state-draw {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(171, 212, 248, 0.14), transparent 20%),
+    radial-gradient(circle at 82% 14%, rgba(123, 169, 227, 0.12), transparent 20%),
+    radial-gradient(circle at 50% 118%, rgba(22, 80, 126, 0.2), transparent 38%),
+    var(--table-felt-glow),
+    var(--table-felt-pattern),
+    linear-gradient(180deg, rgba(7, 25, 38, 0.78), rgba(9, 38, 55, 0.74));
+}
+
+.table-surface.is-live-room.state-main {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(151, 214, 220, 0.13), transparent 22%),
+    radial-gradient(circle at 82% 14%, rgba(184, 214, 242, 0.1), transparent 22%),
+    radial-gradient(circle at 50% 118%, rgba(27, 88, 123, 0.18), transparent 38%),
+    var(--table-felt-glow),
+    var(--table-felt-pattern),
+    linear-gradient(180deg, rgba(8, 28, 40, 0.78), rgba(9, 38, 55, 0.74));
+}
+
+.table-surface.is-live-room.state-response,
+.table-surface.is-live-room.state-payment {
+  background:
+    radial-gradient(circle at 18% 16%, rgba(224, 195, 139, 0.14), transparent 20%),
+    radial-gradient(circle at 82% 14%, rgba(154, 190, 225, 0.12), transparent 20%),
+    radial-gradient(circle at 50% 118%, rgba(21, 74, 111, 0.2), transparent 38%),
+    var(--table-felt-glow),
+    var(--table-felt-pattern),
+    linear-gradient(180deg, rgba(10, 29, 40, 0.8), rgba(10, 37, 51, 0.76));
+}
+
+.table-surface.is-live-room.state-selection,
+.table-surface.is-live-room.state-discard {
+  background:
+    radial-gradient(circle at 18% 14%, rgba(171, 220, 201, 0.12), transparent 22%),
+    radial-gradient(circle at 82% 14%, rgba(129, 184, 205, 0.12), transparent 22%),
+    radial-gradient(circle at 50% 118%, rgba(22, 84, 108, 0.2), transparent 38%),
+    var(--table-felt-glow),
+    var(--table-felt-pattern),
+    linear-gradient(180deg, rgba(8, 27, 39, 0.78), rgba(9, 37, 52, 0.74));
 }
 
 .table-surface::before {
@@ -27,6 +125,15 @@
   inset: -30% -12% auto;
   height: 50%;
   background: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.16), transparent 70%);
+  pointer-events: none;
+}
+
+.table-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.03);
   pointer-events: none;
 }
 
@@ -43,8 +150,11 @@
   border: 1px solid rgba(202, 177, 143, 0.22);
   border-radius: 14px;
   padding: 0.52rem 0.65rem;
-  background: rgba(34, 26, 23, 0.64);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 26%),
+    rgba(34, 26, 23, 0.6);
   box-shadow: inset 0 -6px 14px rgba(0, 0, 0, 0.24), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(6px);
 }
 
 .table-pile-card h4 {

@@ -24,6 +24,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Home hero with animated card-back atmosphere and stronger CTA emphasis
 - Post-game celebration refresh with trophy treatment and richer confetti pulse
 - Guided turn rail with draw/play/end-step progress and clearer required-action cues
+- Prompt-reactive table focus strips and zone spotlights so draw/payment/selection/discard states reshape the active play surface instead of only changing copy
 - New command-strip table header with active-player/step/pressure/pending status, plus one-tap timeline and insight toggles
 - Priority turn banner and player-state chips that keep mandatory flows (payment/response/selection/discard) visible at a glance
 - Discard pile now supports an in-panel browser (newest-to-oldest horizontal scroll) while keeping a compact top-stack preview
@@ -55,6 +56,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Multiplayer screen now surfaces a browser-local `Resume Your Room` card so refresh/reopen flows can recover the stored live room without re-entering the code
 - UNO-style quick reactions via chat tray with transient per-player reaction bursts on lobby/table surfaces
 - Flagship lobby presentation refresh with structured roster table, clearer status pills, and stronger action hierarchy
+- Multiplayer in-match tables now carry a dedicated live-room pulse band with room/seat/rejoin/update context so online play reads differently from local hot-seat
 - Hybrid live updates: Socket.IO transport (primary) with SSE/polling fallback
 - Multiplayer `Exit Match` (keeps reconnect session) and `Forget Room` (permanent disconnect) actions
 - Multiplayer undo/reset-turn controls for the active player with server-authoritative snapshots

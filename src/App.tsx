@@ -1983,6 +1983,9 @@ function App() {
           connectionStatusLabel={multiplayerConnectionLabel(multiplayerConnectionState, multiplayerPushState)}
           multiplayerConnectionState={multiplayerConnectionState}
           multiplayerConnectionUiState={multiplayerConnectionUiState}
+          multiplayerPushState={multiplayerPushState}
+          multiplayerRoomCode={multiplayerRoomView.roomCode}
+          multiplayerSeatPlayerId={multiplayerRoomView.yourPlayerId}
           forceInputBlocked={multiplayerPromptSoftLockActive || multiplayerRoomView.roomRuntimeState === 'ended_timeout'}
           showDevStatusChip={showMultiplayerDevStatus}
           devStatus={{
