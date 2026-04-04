@@ -62,7 +62,7 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - `Forget Room` uses operation-version invalidation so stale in-flight refresh/reconnect responses cannot silently restore cleared sessions.
   - Stale reconnect terminal states (`room_not_found`, `reconnect_expired`) now auto-clear persisted session and expose explicit recovery notice state for UI.
   - Multiplayer lobby copy affordances (`Copy Room Code`, `Copy Invite Link`) now share a temporary, auto-dismissing status notice for consistent UX.
-  - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition; Home now surfaces primary mode cards for hot-seat, practice, and live-online entry points.
+  - `src/ui/screens/` contains home/setup/game/stats/settings/post-game screen composition; Home now surfaces primary mode cards for hot-seat, practice, and live-online entry points plus a quick-facts strip and cleaner decorative hero tableau.
   - `src/ui/screens/SavedGamesScreen.tsx` manages manual save slots (load/save-over/rename/delete).
   - `src/ui/layout/` contains shared shell/top bar/action rail primitives.
   - `src/ui/components/ActionConfirmDialog.tsx` handles risky-action confirmation flow.
@@ -71,7 +71,7 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Selection pending flows now support property-card click interactions for deal actions; keep action-button fallback intact.
   - Main-phase wild repositioning supports direct table clicks (select movable wild card, then choose highlighted destination lane); keep legal-action fallback intact.
   - Game table panels include explicit request-state banners (payment/selection/response) so required actions are visible without opening the event log.
-  - `GameTableScreen` now centers a condensed match header (mode, active seat, prompt state, table counts) and moves history/social toggles into the top action groups to keep the play surface calmer.
+  - `GameTableScreen` now centers a condensed match header (mode, active seat, prompt state, table counts), moves history/social toggles into the top action groups to keep the play surface calmer, and gives the pass-device shield a next-player/step preview before reveal.
   - Discard pile UI supports both quick-stack preview and an expandable horizontal browser (newest-to-oldest) for turn-by-turn inspection.
   - `MultiplayerScreen` room controls are grouped by task area (invite/session/host), recent activity is user-collapsible, and the lobby includes snapshot cards plus current-turn tagging.
   - Lobby and finished-room UX now center the selected preset, explicit ready-blocking copy, and host rematch availability instead of exposing dead buttons.

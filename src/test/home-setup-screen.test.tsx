@@ -32,6 +32,9 @@ describe('Home and setup screens', () => {
     expect(screen.getByText(/premium tabletop match night/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /start hot seat/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /open live room/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/quick match facts/i)).toBeInTheDocument();
+    expect(screen.getByText(/2-4/i)).toBeInTheDocument();
+    expect(screen.getByText(/jump back into active tables/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /resume saved game/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/daily challenge summary/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/achievements summary/i)).toBeInTheDocument();

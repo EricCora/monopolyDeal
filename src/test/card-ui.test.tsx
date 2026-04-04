@@ -7,6 +7,14 @@ import { RulesDrawer } from '../ui/components/RulesDrawer';
 import { getCardVisualModel } from '../ui/cards';
 
 describe('Card UI', () => {
+  function renderHandFanInPlayerZone(cards: string[]) {
+    return (
+      <section className="player-zone">
+        <HandFan cards={cards} playableCardIds={new Set(cards)} selectedCardId={null} onCardClick={() => undefined} interactive fitMode="auto" />
+      </section>
+    );
+  }
+
   it('renders property, action, money, and wild card faces', () => {
     render(
       <>
@@ -131,30 +139,39 @@ describe('Card UI', () => {
   it('uses auto fit mode for fan/rail hand layout based on available width', async () => {
     const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
     const baseRect = { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) };
+    let mockedWidth = 620;
     rectSpy.mockImplementation(function mockRect(this: HTMLElement) {
-      if (this.classList?.contains('hand-fan') && this.childElementCount <= 6) {
-        return { ...baseRect, width: 620, right: 620, bottom: 200, height: 200 } as DOMRect;
-      }
-      if (this.classList?.contains('hand-fan')) {
-        return { ...baseRect, width: 260, right: 260, bottom: 200, height: 200 } as DOMRect;
+      if (this.classList?.contains('player-zone')) {
+        return { ...baseRect, width: mockedWidth, right: mockedWidth, bottom: 200, height: 200 } as DOMRect;
       }
       return { ...baseRect } as DOMRect;
     });
 
     const cards = ['money_1#a', 'money_2#b', 'money_3#c', 'money_4#d', 'money_5#e', 'money_10#f'];
-    const allPlayable = new Set(cards);
-    const { rerender } = render(
-      <HandFan cards={cards} playableCardIds={allPlayable} selectedCardId={null} onCardClick={() => undefined} interactive fitMode="auto" />,
-    );
+    const { rerender } = render(renderHandFanInPlayerZone(cards));
 
     await waitFor(() => {
       expect(screen.getByLabelText(/player hand/i)).toHaveAttribute('data-layout', 'fan');
     });
 
+    mockedWidth = 475;
+    rerender(renderHandFanInPlayerZone([...cards, 'brown_1#g']));
+
+    const settledSevenCardLayout = await waitFor(() => {
+      const layout = screen.getByLabelText(/player hand/i).getAttribute('data-layout');
+      expect(layout === 'fan' || layout === 'rail').toBe(true);
+      return layout;
+    });
+
+    rerender(renderHandFanInPlayerZone([...cards, 'brown_1#g']));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/player hand/i)).toHaveAttribute('data-layout', settledSevenCardLayout ?? 'fan');
+    });
+
+    mockedWidth = 260;
     const moreCards = [...cards, 'brown_1#g', 'light_blue_1#h', 'pink_1#i', 'orange_1#j'];
-    rerender(
-      <HandFan cards={moreCards} playableCardIds={new Set(moreCards)} selectedCardId={null} onCardClick={() => undefined} interactive fitMode="auto" />,
-    );
+    rerender(renderHandFanInPlayerZone(moreCards));
 
     await waitFor(() => {
       expect(screen.getByLabelText(/player hand/i)).toHaveAttribute('data-layout', 'rail');

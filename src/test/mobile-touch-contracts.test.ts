@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 const baseCss = readFileSync(resolve(process.cwd(), 'src/ui/theme/base.css'), 'utf8');
 const setupCss = readFileSync(resolve(process.cwd(), 'src/ui/theme/screens/setup.css'), 'utf8');
 const layoutCss = readFileSync(resolve(process.cwd(), 'src/ui/theme/components/layout.css'), 'utf8');
+const cardsCss = readFileSync(resolve(process.cwd(), 'src/ui/theme/components/cards.css'), 'utf8');
 
 describe('mobile/touch layout contracts', () => {
   it('keeps core form controls at a touch-friendly minimum height', () => {
@@ -22,7 +23,7 @@ describe('mobile/touch layout contracts', () => {
 
   it('keeps chat dock within viewport on phone breakpoints', () => {
     expect(layoutCss).toMatch(
-      /@media\s*\(max-width:\s*720px\)\s*{[\s\S]*\.multiplayer-chat-dock\s*{[\s\S]*left:\s*0\.65rem;[\s\S]*right:\s*0\.65rem;[\s\S]*width:\s*auto;/,
+      /@media\s*\(max-width:\s*720px\)\s*{[\s\S]*\.multiplayer-chat-dock\s*{[\s\S]*left:\s*max\(0\.65rem,\s*env\(safe-area-inset-left\)\);[\s\S]*right:\s*max\(0\.65rem,\s*env\(safe-area-inset-right\)\);[\s\S]*width:\s*auto;/,
     );
   });
 
@@ -30,5 +31,17 @@ describe('mobile/touch layout contracts', () => {
     expect(layoutCss).toMatch(
       /@media\s*\(max-width:\s*1120px\)\s*{[\s\S]*\.game-table-main\s*{[\s\S]*order:\s*1;[\s\S]*}[\s\S]*\.game-table-left-stack\s*{[\s\S]*order:\s*2;/,
     );
+  });
+
+  it('keeps rail-layout hands horizontally pannable on touch devices', () => {
+    expect(cardsCss).toMatch(
+      /\.hand-fan\.is-rail\s*{[\s\S]*overflow-x:\s*auto;[\s\S]*overflow-y:\s*hidden;[\s\S]*overscroll-behavior-x:\s*contain;[\s\S]*-webkit-overflow-scrolling:\s*touch;[\s\S]*touch-action:\s*pan-x;/,
+    );
+  });
+
+  it('keeps the hand lane shrinkable so card overflow becomes scrollable instead of clipped', () => {
+    expect(layoutCss).toMatch(/\.player-zone\s*{[\s\S]*min-width:\s*0;/);
+    expect(cardsCss).toMatch(/\.hand-zone\s*{[\s\S]*min-width:\s*0;/);
+    expect(cardsCss).toMatch(/\.hand-fan\s*{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0;[\s\S]*box-sizing:\s*border-box;/);
   });
 });

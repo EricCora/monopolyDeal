@@ -32,15 +32,29 @@ export function HandFan({
   useEffect(() => {
     const element = containerRef.current;
     if (!element) return;
+    const preferredMeasurementElement = element.closest('.player-zone') as HTMLElement | null;
+    const fallbackMeasurementElement = element.parentElement ?? element;
 
     const syncWidth = () => {
-      const width = element.getBoundingClientRect().width;
-      setContainerWidth(Math.round(width));
+      const candidateElements = [
+        preferredMeasurementElement,
+        fallbackMeasurementElement,
+        element,
+      ].filter((candidate): candidate is HTMLElement => Boolean(candidate));
+      const nextWidth = candidateElements
+        .map((candidate) => candidate.getBoundingClientRect().width)
+        .find((width) => width > 0) ?? 0;
+      setContainerWidth(Math.round(nextWidth));
     };
 
     syncWidth();
     const observer = new ResizeObserver(syncWidth);
-    observer.observe(element);
+    if (preferredMeasurementElement) {
+      observer.observe(preferredMeasurementElement);
+    }
+    if (fallbackMeasurementElement !== preferredMeasurementElement) {
+      observer.observe(fallbackMeasurementElement);
+    }
     return () => observer.disconnect();
   }, []);
 
@@ -58,7 +72,8 @@ export function HandFan({
     } else if (fitMode === 'rail') {
       resolvedLayout = 'rail';
     } else {
-      resolvedLayout = neededFanWidth <= availableWidth * 1.03 || count <= 4 ? 'fan' : 'rail';
+      const roomyFanLayout = count <= 5 || (count <= 7 && availableWidth >= 540);
+      resolvedLayout = roomyFanLayout ? 'fan' : 'rail';
     }
 
     if (resolvedLayout === 'rail') {

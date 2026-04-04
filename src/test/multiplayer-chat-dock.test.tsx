@@ -43,6 +43,34 @@ describe('MultiplayerChatDock', () => {
     const mentionMessage = screen.getByText(/hey @host your turn/i).closest('li');
     expect(mentionMessage).toHaveClass('is-mention');
     expect(screen.getByText(/beta is typing/i)).toBeInTheDocument();
+    expect(screen.getByText(/beta is typing/i).closest('.chat-typing')).toHaveClass('is-active');
+  });
+
+  it('renders recent room activity inside the open dock shell', () => {
+    render(
+      <MultiplayerChatDock
+        messages={[]}
+        activityFeed={[
+          { id: 4, createdAt: 12, kind: 'reaction', message: 'Beta reacted wow', playerId: 'p2', reaction: 'wow' },
+          { id: 5, createdAt: 13, kind: 'system', message: 'Checkpoint saved' },
+        ]}
+        typingNames={[]}
+        yourPlayerId="p1"
+        yourName="Host"
+        isOpen={true}
+        unreadCount={0}
+        shellTone="table-live"
+        onToggle={() => undefined}
+        onSendMessage={() => undefined}
+        onTypingChange={() => undefined}
+      />,
+    );
+
+    expect(screen.getByLabelText(/recent room activity/i)).toBeInTheDocument();
+    expect(screen.getByText(/checkpoint saved/i)).toBeInTheDocument();
+    expect(screen.getByText(/beta reacted wow/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/multiplayer chat/i)).toHaveClass('is-open', 'shell-table-live');
+    expect(screen.getByRole('dialog', { name: /room chat/i })).toHaveClass('shell-table-live');
   });
 
   it('sends messages and clears typing state after submit', () => {

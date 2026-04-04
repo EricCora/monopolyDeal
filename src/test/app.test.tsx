@@ -212,6 +212,8 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /new game/i }));
     fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    expect(screen.getByText(/opening step/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reveal turn for alpha/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
     fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
 
@@ -220,7 +222,58 @@ describe('App', () => {
       playerId: 'p1',
       cardId: 'money_1#a1',
     });
+    expect(document.querySelector('.draw-ghost-card.kind-bank')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /reveal turn/i })).not.toBeInTheDocument();
+  });
+
+  it('renders property-flight choreography when playing a property card from hand', async () => {
+    const propertyState: GameState = {
+      ...structuredClone(baseState),
+      players: [
+        {
+          ...structuredClone(baseState.players[0]),
+          hand: ['brown_1#a1'],
+        },
+        structuredClone(baseState.players[1]),
+      ],
+    };
+    mockedCreateGame.mockImplementationOnce(() => propertyState);
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Play Brown',
+        action: { type: 'play_property', playerId: 'p1', cardId: 'brown_1#a1', color: 'brown' },
+      },
+    ]);
+    mockedApplyAction.mockImplementationOnce((state: GameState) => ({
+      state: {
+        ...state,
+        updatedAt: state.updatedAt + 1,
+        players: [
+          {
+            ...state.players[0],
+            hand: [],
+            properties: {
+              ...state.players[0].properties,
+              brown: [{ cardId: 'brown_1#a1', assignedColor: 'brown' }],
+            },
+          },
+          state.players[1],
+        ],
+      },
+      events: [],
+    }));
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(within(screen.getByLabelText(/player hand/i)).getByRole('button', { name: /brown card/i }));
+
+    await waitFor(() => {
+      expect(document.querySelector('.draw-ghost-card.kind-property')).toBeInTheDocument();
+    });
+    expect(document.querySelector('.property-lane.is-transition-target.transition-tone-property')).toBeInTheDocument();
   });
 
   it('supports payment by selecting cards and confirming', () => {
@@ -471,6 +524,163 @@ describe('App', () => {
       playerId: 'p1',
       cardId: 'money_1#a1',
     });
+  });
+
+  it('renders discard-flight choreography when a discard is required', async () => {
+    const discardState: GameState = {
+      ...structuredClone(baseState),
+      players: [
+        {
+          ...structuredClone(baseState.players[0]),
+          hand: ['money_1#a1', 'money_2#a2', 'money_3#a3', 'money_4#a4', 'money_5#a5', 'pass_go#a6', 'rent_color#a7', 'debt_collector#a8'],
+        },
+        structuredClone(baseState.players[1]),
+      ],
+      turn: { ...baseState.turn, playsUsed: 3 },
+    };
+    mockedCreateGame.mockImplementationOnce(() => discardState);
+    mockedGetNextPrompt.mockImplementation(() => ({
+      playerId: 'p1',
+      text: 'Alpha: discard down to 7 cards to end your turn.',
+      kind: 'discard',
+    }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Discard $1 Money',
+        action: { type: 'discard_card', playerId: 'p1', cardId: 'money_1#a1' },
+      },
+    ]);
+    mockedApplyAction.mockImplementationOnce((state: GameState) => ({
+      state: {
+        ...state,
+        updatedAt: state.updatedAt + 1,
+        discardPile: ['money_1#a1'],
+        players: [
+          {
+            ...state.players[0],
+            hand: state.players[0].hand.filter((cardId) => cardId !== 'money_1#a1'),
+          },
+          state.players[1],
+        ],
+      },
+      events: [],
+    }));
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+
+    await waitFor(() => {
+      expect(document.querySelector('.draw-ghost-card.kind-discard')).toBeInTheDocument();
+    });
+    expect(document.querySelector('.discard-pile-card.is-transition-target.transition-tone-discard')).toBeInTheDocument();
+  });
+
+  it('renders wild-move choreography and highlights the destination lane', async () => {
+    const wildState: GameState = {
+      ...structuredClone(baseState),
+      players: [
+        {
+          ...structuredClone(baseState.players[0]),
+          hand: [],
+          properties: {
+            ...structuredClone(baseState.players[0].properties),
+            railroad: [{ cardId: 'wild_railroad_green#w1', assignedColor: 'railroad' }],
+          },
+        },
+        structuredClone(baseState.players[1]),
+      ],
+    };
+    mockedCreateGame.mockImplementationOnce(() => wildState);
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Move wild to green',
+        action: {
+          type: 'move_wild',
+          playerId: 'p1',
+          cardId: 'wild_railroad_green#w1',
+          fromColor: 'railroad',
+          toColor: 'green',
+        },
+      },
+      {
+        label: 'Pass turn',
+        action: { type: 'pass_turn', playerId: 'p1' },
+      },
+    ]);
+    mockedApplyAction.mockImplementationOnce((state: GameState) => ({
+      state: {
+        ...state,
+        updatedAt: state.updatedAt + 1,
+        players: [
+          {
+            ...state.players[0],
+            properties: {
+              ...state.players[0].properties,
+              railroad: [],
+              green: [{ cardId: 'wild_railroad_green#w1', assignedColor: 'green' }],
+            },
+          },
+          state.players[1],
+        ],
+      },
+      events: [],
+    }));
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(screen.getByRole('button', { name: /wild railroad\/green card/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /move here/i }));
+
+    await waitFor(() => {
+      expect(document.querySelector('.draw-ghost-card.kind-wild')).toBeInTheDocument();
+    });
+    expect(document.querySelector('.property-lane.is-transition-target.transition-tone-wild')).toBeInTheDocument();
+  });
+
+  it('suppresses action-flight polish when reduced motion is enabled', async () => {
+    mockMatchMedia(true);
+    const propertyState: GameState = {
+      ...structuredClone(baseState),
+      players: [
+        {
+          ...structuredClone(baseState.players[0]),
+          hand: ['brown_1#a1'],
+        },
+        structuredClone(baseState.players[1]),
+      ],
+    };
+    mockedCreateGame.mockImplementationOnce(() => propertyState);
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Play Brown',
+        action: { type: 'play_property', playerId: 'p1', cardId: 'brown_1#a1', color: 'brown' },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    fireEvent.click(within(screen.getByLabelText(/player hand/i)).getByRole('button', { name: /brown card/i }));
+
+    await waitFor(() => {
+      expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+        type: 'play_property',
+        playerId: 'p1',
+        cardId: 'brown_1#a1',
+        color: 'brown',
+      });
+    });
+    expect(document.querySelector('.draw-ghost-card')).toBeNull();
+    expect(document.querySelector('.is-transition-target')).toBeNull();
   });
 
   it('shows draw-step guidance and play budget cues in the action rail', () => {
@@ -786,6 +996,9 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /stats & history/i }));
 
     expect(await screen.findByRole('heading', { name: /stats & history/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText(/loading analytics/i)).not.toBeInTheDocument();
+    });
     expect(await screen.findByRole('heading', { name: /wins by player/i })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: /lifetime players/i })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: /match history/i })).toBeInTheDocument();
@@ -1619,6 +1832,7 @@ describe('App', () => {
             reconnectDeadlineMs: Date.now() + 30_000,
             serverTime: Date.now(),
             activityFeed: [
+              { id: 100, createdAt: now + 1, kind: 'checkpoint', message: 'Checkpoint saved' },
               { id: 99, createdAt: now, kind: 'reaction', message: 'Guest: Wow', playerId: 'p2', reaction: 'wow' },
             ],
             chatMessages: [],
@@ -1644,6 +1858,13 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /forget room/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^nice$/i })).not.toBeInTheDocument();
     expect(screen.getByLabelText(/guest sent a reaction/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /chat/i }));
+    expect(screen.getByLabelText(/recent room activity/i)).toBeInTheDocument();
+    expect(screen.getByText(/guest: wow/i)).toBeInTheDocument();
+    expect(within(screen.getByLabelText(/recent room activity/i)).getByText(/checkpoint saved/i)).toBeInTheDocument();
+    expect(screen.getByText(/chat rail is covering live chatter/i)).toBeInTheDocument();
+    expect(within(screen.getByLabelText(/^room watch$/i)).queryByText(/checkpoint saved/i)).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText(/^room watch summary$/i)).getByText(/connection/i)).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByText(/played sly deal on guest/i)).toBeInTheDocument();
     });

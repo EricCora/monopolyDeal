@@ -55,11 +55,19 @@ interface TablePriorityNotice {
   tone: 'required' | 'warning' | 'info' | 'positive';
 }
 
+interface TableActionHint {
+  token: number;
+  action: Extract<Action, { type: 'play_to_bank' | 'play_property' | 'discard_card' | 'move_wild' }>;
+  source: 'local' | 'multiplayer';
+}
+
 interface GameTableScreenProps {
   mode?: 'local' | 'multiplayer';
   matchMode?: MatchMode;
   game: GameState;
   prompt: TurnPrompt;
+  tableActionHint?: TableActionHint | null;
+  isMultiplayerChatOpen?: boolean;
   isPaused: boolean;
   pauseReasonText?: string;
   disconnectDeadlineMs?: number | null;
@@ -243,13 +251,14 @@ interface TableStealAlert {
   cardIds: string[];
 }
 
-interface DrawGhostCard {
+interface TableGhostCard {
   id: string;
   x: number;
   y: number;
   dx: number;
   dy: number;
   delayMs: number;
+  kind: 'draw' | 'bank' | 'property' | 'discard' | 'wild';
 }
 
 function reactionEmoji(reaction: string | undefined): string {
@@ -294,6 +303,15 @@ function promptSpotlightLabel(kind: TurnPrompt['kind']): string {
   if (kind === 'payment') return 'Pay with bank or property cards';
   if (kind === 'selection') return 'Choose a valid target on the table';
   return 'Discard down before passing the turn';
+}
+
+function passShieldNote(kind: TurnPrompt['kind'], playerName: string): string {
+  if (kind === 'draw') return `Keep the hand hidden while passing the device, then let ${playerName} draw to open the turn.`;
+  if (kind === 'main') return `Pass the device before revealing so ${playerName} can make their plays privately.`;
+  if (kind === 'response') return `${playerName} needs to see the table privately before resolving the counter window.`;
+  if (kind === 'payment') return `${playerName} needs a private look at their bank and properties before settling payment.`;
+  if (kind === 'selection') return `${playerName} needs a private look before choosing the highlighted target.`;
+  return `Pass the device before revealing so ${playerName} can discard privately and finish the turn.`;
 }
 
 function tableSurfaceFocusLabel(kind: TurnPrompt['kind']): string {
@@ -376,14 +394,27 @@ interface DiscardPileCardProps {
   discardCount: number;
   discardPreviewCardIds: string[];
   discardBrowserCardIds: string[];
+  surfaceRef?: (node: HTMLElement | null) => void;
+  highlighted?: boolean;
+  highlightTone?: 'discard' | 'bank' | 'property' | 'wild' | null;
 }
 
-function DiscardPileCard({ discardCount, discardPreviewCardIds, discardBrowserCardIds }: DiscardPileCardProps) {
+function DiscardPileCard({
+  discardCount,
+  discardPreviewCardIds,
+  discardBrowserCardIds,
+  surfaceRef,
+  highlighted = false,
+  highlightTone = null,
+}: DiscardPileCardProps) {
   const [discardBrowserOpen, setDiscardBrowserOpen] = useState(false);
   const hasCards = discardCount > 0;
 
   return (
-    <article className={`table-pile-card discard-pile-card ${discardBrowserOpen ? 'is-expanded' : ''}`}>
+    <article
+      ref={surfaceRef}
+      className={`table-pile-card discard-pile-card ${discardBrowserOpen ? 'is-expanded' : ''} ${highlighted ? `is-transition-target transition-tone-${highlightTone ?? 'discard'}` : ''}`}
+    >
       <div className="table-pile-head">
         <div>
           <h4>Discard Pile</h4>
@@ -436,6 +467,8 @@ export function GameTableScreen({
   matchMode = mode === 'multiplayer' ? 'live_online' : 'hot_seat',
   game,
   prompt,
+  tableActionHint = null,
+  isMultiplayerChatOpen = false,
   isPaused,
   pauseReasonText,
   disconnectDeadlineMs = null,
@@ -518,8 +551,12 @@ export function GameTableScreen({
     );
   const inputBlocked = isPaused || reconnectBlockingState || forceInputBlocked;
   const drawPileDeckRef = useRef<HTMLDivElement | null>(null);
+  const discardPileRef = useRef<HTMLElement | null>(null);
   const visibleHandZoneByPlayerIdRef = useRef<Record<string, HTMLDivElement | null>>({});
+  const visibleBankZoneByPlayerIdRef = useRef<Record<string, HTMLDivElement | null>>({});
+  const propertyLaneByKeyRef = useRef<Record<string, HTMLDivElement | null>>({});
   const handledDrawEventKeyRef = useRef<string | null>(null);
+  const handledActionHintTokenRef = useRef<number | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const hasDisconnectDeadline = Number.isFinite(disconnectDeadlineMs) && Number(disconnectDeadlineMs) > clockNow;
   const disconnectSecondsRemaining = hasDisconnectDeadline
@@ -528,7 +565,9 @@ export function GameTableScreen({
   const disconnectCountdownText = hasDisconnectDeadline
     ? ` Timeout in ${disconnectSecondsRemaining}s.`
     : '';
-  const [drawGhostCards, setDrawGhostCards] = useState<DrawGhostCard[]>([]);
+  const [tableGhostCards, setTableGhostCards] = useState<TableGhostCard[]>([]);
+  const [transitionTargetKey, setTransitionTargetKey] = useState<string | null>(null);
+  const [transitionTargetTone, setTransitionTargetTone] = useState<'bank' | 'property' | 'discard' | 'wild' | null>(null);
   const [narrowLayout, setNarrowLayout] = useState(() => (
     typeof window !== 'undefined' ? window.innerWidth <= 980 : false
   ));
@@ -543,12 +582,16 @@ export function GameTableScreen({
   ));
   const stealAlert = resolveStealAlert(game, clockNow);
   const latestEvent = game.history.length > 0 ? game.history[game.history.length - 1] : null;
-  const hasInsightsPanels = Boolean(
-    coachHint
-      || latestEvent
-      || stealAlert
-      || (isMultiplayer && activityFeed.length > 0),
-  );
+  const roomWatchFeed = useMemo(() => {
+    if (!isMultiplayer) return [];
+    const recentDockActivityIds = isMultiplayerChatOpen
+      ? new Set(activityFeed.slice(0, 4).map((item) => item.id))
+      : null;
+    return activityFeed
+      .filter((item) => item.kind !== 'chat' && item.kind !== 'reaction')
+      .filter((item) => !recentDockActivityIds?.has(item.id))
+      .slice(0, isMultiplayerChatOpen ? 2 : 4);
+  }, [activityFeed, isMultiplayer, isMultiplayerChatOpen]);
   const activePlayer = game.players.find((player) => player.id === prompt.playerId) ?? game.players[game.currentPlayerIndex];
   const activePlayerName = activePlayer?.name ?? prompt.playerId;
   const playsRemaining = Math.max(0, 3 - game.turn.playsUsed);
@@ -745,6 +788,15 @@ export function GameTableScreen({
   }, []);
 
   useEffect(() => {
+    if (!transitionTargetKey) return undefined;
+    const clearTimer = window.setTimeout(() => {
+      setTransitionTargetKey((current) => (current === transitionTargetKey ? null : current));
+      setTransitionTargetTone(null);
+    }, 820);
+    return () => window.clearTimeout(clearTimer);
+  }, [transitionTargetKey]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const onResize = () => {
       const nextIsNarrow = window.innerWidth <= 980;
@@ -789,15 +841,80 @@ export function GameTableScreen({
         dx: destinationCenterX - sourceCenterX + ghostIndex * 12,
         dy: destinationCenterY - sourceCenterY - ghostIndex * 8,
         delayMs: ghostIndex * 75,
+        kind: 'draw' as const,
       }));
-      setDrawGhostCards(ghosts);
+      setTableGhostCards(ghosts);
       const clearTimer = window.setTimeout(() => {
-        setDrawGhostCards((existing) => existing.filter((item) => !ghosts.some((ghost) => ghost.id === item.id)));
+        setTableGhostCards((existing) => existing.filter((item) => !ghosts.some((ghost) => ghost.id === item.id)));
       }, 960);
       return () => window.clearTimeout(clearTimer);
     }
     return undefined;
   }, [game.history, reducedMotion, revealedPlayerId]);
+
+  useEffect(() => {
+    if (!tableActionHint || handledActionHintTokenRef.current === tableActionHint.token) return;
+    handledActionHintTokenRef.current = tableActionHint.token;
+    if (reducedMotion) return;
+
+    const action = tableActionHint.action;
+    const handElement = visibleHandZoneByPlayerIdRef.current[action.playerId];
+    let sourceElement: HTMLElement | null = handElement;
+    let destinationElement: HTMLElement | null = null;
+    let nextTargetKey: string | null = null;
+    let kind: TableGhostCard['kind'] = 'bank';
+    let targetTone: 'bank' | 'property' | 'discard' | 'wild' = 'bank';
+
+    if (action.type === 'play_to_bank') {
+      destinationElement = visibleBankZoneByPlayerIdRef.current[action.playerId];
+      nextTargetKey = `bank:${action.playerId}`;
+      kind = 'bank';
+      targetTone = 'bank';
+    } else if (action.type === 'play_property') {
+      destinationElement = propertyLaneByKeyRef.current[`${action.playerId}:${action.color}`];
+      nextTargetKey = `property:${action.playerId}:${action.color}`;
+      kind = 'property';
+      targetTone = 'property';
+    } else if (action.type === 'discard_card') {
+      destinationElement = discardPileRef.current;
+      nextTargetKey = 'discard';
+      kind = 'discard';
+      targetTone = 'discard';
+    } else if (action.type === 'move_wild') {
+      sourceElement = propertyLaneByKeyRef.current[`${action.playerId}:${action.fromColor}`];
+      destinationElement = propertyLaneByKeyRef.current[`${action.playerId}:${action.toColor}`];
+      nextTargetKey = `property:${action.playerId}:${action.toColor}`;
+      kind = 'wild';
+      targetTone = 'wild';
+    }
+
+    if (!sourceElement || !destinationElement) return;
+
+    const sourceRect = sourceElement.getBoundingClientRect();
+    const destinationRect = destinationElement.getBoundingClientRect();
+    const sourceCenterX = sourceRect.left + sourceRect.width / 2;
+    const sourceCenterY = sourceRect.top + sourceRect.height / 2;
+    const destinationCenterX = destinationRect.left + destinationRect.width / 2;
+    const destinationCenterY = destinationRect.top + destinationRect.height / 2;
+    const ghostId = `${tableActionHint.token}:${action.type}:${action.cardId}`;
+    const ghost: TableGhostCard = {
+      id: ghostId,
+      x: sourceCenterX - 34,
+      y: sourceCenterY - 46,
+      dx: destinationCenterX - sourceCenterX,
+      dy: destinationCenterY - sourceCenterY,
+      delayMs: 0,
+      kind,
+    };
+
+    setTransitionTargetKey(nextTargetKey);
+    setTransitionTargetTone(targetTone);
+    setTableGhostCards((existing) => [...existing, ghost]);
+    const clearTimer = window.setTimeout(() => {
+      setTableGhostCards((existing) => existing.filter((item) => item.id !== ghostId));
+    }, 940);
+    return () => window.clearTimeout(clearTimer);
+  }, [reducedMotion, tableActionHint]);
 
   const saveCheckpointInteractive = () => {
     if (!onSaveCheckpoint || !isMultiplayerHost || isPaused) return;
@@ -870,6 +987,20 @@ export function GameTableScreen({
     ? 'Live room felt with shared turn state and hidden hands for the other seats.'
     : 'Pass-and-play felt. Reveal only the active hand, then pass the device on.';
   const rejoinWindowLabel = hasDisconnectDeadline ? `${disconnectSecondsRemaining}s left` : reconnectBlockingState ? 'Recovering' : 'Standing by';
+  const roomWatchSummaryItems = isMultiplayer && isMultiplayerChatOpen
+    ? [
+        { id: 'connection', label: 'Connection', value: connectionStatusLabel ?? 'Connected' },
+        { id: 'remote-seats', label: 'Remote Seats', value: String(multiplayerRemoteSeatCount) },
+        { id: 'rejoin-window', label: 'Rejoin Window', value: rejoinWindowLabel },
+      ]
+    : [];
+  const hasInsightsPanels = Boolean(
+    coachHint
+      || latestEvent
+      || stealAlert
+      || (isMultiplayer && (roomWatchFeed.length > 0 || roomWatchSummaryItems.length > 0)),
+  );
+  const shieldPlayerName = game.players.find((player) => player.id === prompt.playerId)?.name ?? prompt.playerId;
   const tableSurfaceClassName = [
     'table-surface',
     isMultiplayer ? 'is-live-room' : 'is-local-table',
@@ -1092,17 +1223,37 @@ export function GameTableScreen({
                 </section>
               ) : null}
 
-              {isMultiplayer && activityFeed.length > 0 ? (
-                <section className="panel multiplayer-social-panel" aria-label="Multiplayer social">
-                  <h4>Social Pulse</h4>
-                  <ul className="multiplayer-activity-feed">
-                    {activityFeed.slice(0, 6).map((entry) => (
-                      <li key={entry.id} className={entry.kind === 'reaction' ? 'is-reaction' : undefined}>
-                        {entry.kind === 'reaction' ? <span className="multiplayer-activity-emoji">{reactionEmoji(entry.reaction)}</span> : null}
-                        <span>{entry.message}</span>
-                      </li>
-                    ))}
-                  </ul>
+              {isMultiplayer && (roomWatchFeed.length > 0 || roomWatchSummaryItems.length > 0) ? (
+                <section
+                  className={`panel multiplayer-social-panel ${isMultiplayerChatOpen ? 'is-chat-open' : ''}`}
+                  aria-label="Room watch"
+                >
+                  <h4>Room Watch</h4>
+                  {isMultiplayerChatOpen ? (
+                    <p className="multiplayer-social-note">
+                      Chat rail is covering live chatter. Room Watch stays on match-state signals.
+                    </p>
+                  ) : null}
+                  {roomWatchSummaryItems.length > 0 ? (
+                    <div className="multiplayer-social-summary" aria-label="Room watch summary">
+                      {roomWatchSummaryItems.map((item) => (
+                        <article key={item.id} className="multiplayer-social-summary-item">
+                          <p className="multiplayer-social-summary-label">{item.label}</p>
+                          <p className="multiplayer-social-summary-value">{item.value}</p>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
+                  {roomWatchFeed.length > 0 ? (
+                    <ul className={`multiplayer-activity-feed ${isMultiplayerChatOpen ? 'is-compact' : ''}`}>
+                      {roomWatchFeed.map((entry) => (
+                        <li key={entry.id} className={entry.kind === 'reaction' ? 'is-reaction' : undefined}>
+                          {entry.kind === 'reaction' ? <span className="multiplayer-activity-emoji">{reactionEmoji(entry.reaction)}</span> : null}
+                          <span>{entry.message}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </section>
               ) : null}
             </aside>
@@ -1188,6 +1339,11 @@ export function GameTableScreen({
                 discardCount={game.discardPile.length}
                 discardPreviewCardIds={discardPreviewCardIds}
                 discardBrowserCardIds={discardBrowserCardIds}
+                surfaceRef={(node) => {
+                  discardPileRef.current = node;
+                }}
+                highlighted={transitionTargetKey === 'discard'}
+                highlightTone={transitionTargetKey === 'discard' ? transitionTargetTone : null}
               />
             </div>
 
@@ -1225,8 +1381,12 @@ export function GameTableScreen({
                   ]
                 : inlineActions;
               const propertyColors = (Object.keys(player.properties) as PropertyColor[]).filter((color) => player.properties[color].length > 0);
+              const hintedMoveWildAction = tableActionHint?.action.type === 'move_wild' && tableActionHint.action.playerId === player.id
+                ? tableActionHint.action
+                : null;
               const visiblePropertyColors = (Object.keys(player.properties) as PropertyColor[]).filter((color) => {
                 if (player.properties[color].length > 0) return true;
+                if (hintedMoveWildAction && (hintedMoveWildAction.fromColor === color || hintedMoveWildAction.toColor === color)) return true;
                 return canDirectWildMove
                   && player.id === prompt.playerId
                   && activeMoveWildCardId !== null
@@ -1480,7 +1640,12 @@ export function GameTableScreen({
                       <span className="player-zone-meta">{player.bank.length} cards</span>
                     </div>
                     {bankZoneSpotlightText ? <p className="player-zone-spotlight">{bankZoneSpotlightText}</p> : null}
-                    <div className="zone-bank">
+                    <div
+                      className={`zone-bank ${transitionTargetKey === `bank:${player.id}` ? `is-transition-target transition-tone-${transitionTargetTone ?? 'bank'}` : ''}`}
+                      ref={(node) => {
+                        visibleBankZoneByPlayerIdRef.current[player.id] = node;
+                      }}
+                    >
                       {player.bank.length > 0 ? (
                         player.bank.map((cardId) => (
                           <CardView
@@ -1526,8 +1691,11 @@ export function GameTableScreen({
                             && player.properties[color].some((entry) => entry.cardId === activeMoveWildCardId);
                           return (
                             <div
-                              className={`property-lane ${player.properties[color].some((entry) => stealHighlightCardIds.has(entry.cardId)) ? 'is-steal-lane' : ''} ${laneHasSelectionTarget ? 'is-selection-target' : ''} ${laneIsMoveTarget ? 'is-move-target' : ''} ${laneHasMoveSource ? 'is-move-source-lane' : ''}`}
+                              className={`property-lane ${player.properties[color].some((entry) => stealHighlightCardIds.has(entry.cardId)) ? 'is-steal-lane' : ''} ${laneHasSelectionTarget ? 'is-selection-target' : ''} ${laneIsMoveTarget ? 'is-move-target' : ''} ${laneHasMoveSource ? 'is-move-source-lane' : ''} ${transitionTargetKey === `property:${player.id}:${color}` ? `is-transition-target transition-tone-${transitionTargetTone ?? 'property'}` : ''}`}
                               key={`${player.id}-${color}`}
+                              ref={(node) => {
+                                propertyLaneByKeyRef.current[`${player.id}:${color}`] = node;
+                              }}
                             >
                               <p>
                                 <span>{colorLabel(color)}:</span>
@@ -1606,12 +1774,12 @@ export function GameTableScreen({
               );
               })}
             </div>
-            {drawGhostCards.length > 0 ? (
+            {tableGhostCards.length > 0 ? (
               <div className="draw-animation-layer" aria-hidden="true">
-                {drawGhostCards.map((ghost) => (
+                {tableGhostCards.map((ghost) => (
                   <div
                     key={ghost.id}
-                    className="draw-ghost-card"
+                    className={`draw-ghost-card kind-${ghost.kind}`}
                     style={{
                       left: `${ghost.x}px`,
                       top: `${ghost.y}px`,
@@ -1664,10 +1832,23 @@ export function GameTableScreen({
           <div className="shield-card card-enter">
             <p className="overlay-kicker">Pass And Play</p>
             <h3>Pass Device</h3>
-            <p>
-              Next action: <strong>{game.players.find((player) => player.id === prompt.playerId)?.name ?? prompt.playerId}</strong>
-            </p>
-            <button onClick={onRevealTurn}>Reveal Turn</button>
+            <p className="shield-card-intro">{passShieldNote(prompt.kind, shieldPlayerName)}</p>
+            <div className="shield-card-glance" aria-label="Next turn overview">
+              <article className="shield-card-glance-item">
+                <p className="shield-card-glance-label">Next up</p>
+                <p className="shield-card-glance-value">{shieldPlayerName}</p>
+              </article>
+              <article className="shield-card-glance-item">
+                <p className="shield-card-glance-label">Opening step</p>
+                <p className="shield-card-glance-value">{promptKindLabel(prompt.kind)}</p>
+              </article>
+              <article className="shield-card-glance-item">
+                <p className="shield-card-glance-label">Turn</p>
+                <p className="shield-card-glance-value">{game.turnCount}</p>
+              </article>
+            </div>
+            <p className="shield-card-note">{promptSpotlightLabel(prompt.kind)}</p>
+            <button onClick={onRevealTurn}>Reveal Turn for {shieldPlayerName}</button>
           </div>
         </div>
       ) : null}

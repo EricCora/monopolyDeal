@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { MultiplayerChatMessage, MultiplayerReaction } from '../../network/multiplayerTypes';
+import type {
+  MultiplayerActivityFeedItem,
+  MultiplayerChatMessage,
+  MultiplayerReaction,
+} from '../../network/multiplayerTypes';
 
 interface MultiplayerChatDockProps {
   messages: MultiplayerChatMessage[];
+  activityFeed?: MultiplayerActivityFeedItem[];
   typingNames: string[];
   yourPlayerId: string;
   yourName: string;
@@ -10,6 +15,7 @@ interface MultiplayerChatDockProps {
   unreadCount: number;
   disabled?: boolean;
   reactionsEnabled?: boolean;
+  shellTone?: 'table-live' | 'lobby-live';
   onToggle: () => void;
   onSendMessage: (text: string) => void;
   onSendReaction?: (reaction: MultiplayerReaction) => void;
@@ -30,12 +36,14 @@ function isMentioned(message: string, yourName: string): boolean {
 }
 
 interface ChatPanelProps {
+  activityFeed: MultiplayerActivityFeedItem[];
   orderedMessages: MultiplayerChatMessage[];
   typingNames: string[];
   yourPlayerId: string;
   yourName: string;
   disabled: boolean;
   reactionsEnabled: boolean;
+  shellTone: 'table-live' | 'lobby-live';
   onToggle: () => void;
   onSendMessage: (text: string) => void;
   onSendReaction?: (reaction: MultiplayerReaction) => void;
@@ -45,12 +53,14 @@ interface ChatPanelProps {
 }
 
 function ChatPanel({
+  activityFeed,
   orderedMessages,
   typingNames,
   yourPlayerId,
   yourName,
   disabled,
   reactionsEnabled,
+  shellTone,
   onToggle,
   onSendMessage,
   onSendReaction,
@@ -60,6 +70,10 @@ function ChatPanel({
 }: ChatPanelProps) {
   const [pinnedToRecent, setPinnedToRecent] = useState(true);
   const messageListRef = useRef<HTMLUListElement | null>(null);
+  const recentActivity = activityFeed.slice(0, 4);
+  const typingText = typingNames.length > 0
+    ? `${typingNames.join(', ')} ${typingNames.length === 1 ? 'is' : 'are'} typing...`
+    : 'No one typing';
 
   useEffect(() => {
     if (!pinnedToRecent || !messageListRef.current) return;
@@ -72,9 +86,13 @@ function ChatPanel({
   }, [orderedMessages, pinnedToRecent]);
 
   return (
-    <div className="chat-panel panel card-enter" role="dialog" aria-label="Room chat">
+    <div className={`chat-panel panel card-enter shell-${shellTone}`} role="dialog" aria-label="Room chat">
       <header className="chat-panel-head">
-        <h3>Room Chat</h3>
+        <div className="chat-panel-title">
+          <p className="chat-panel-kicker">Live Room Rail</p>
+          <h3>Room Chat</h3>
+          <p className="chat-panel-note">Table talk, reactions, and room activity stay grouped here.</p>
+        </div>
         <button type="button" onClick={onToggle}>Close</button>
       </header>
 
@@ -92,6 +110,22 @@ function ChatPanel({
               <span aria-hidden="true">{reaction.emoji}</span>
               <span>{reaction.label}</span>
             </button>
+          ))}
+        </div>
+      ) : null}
+
+      {recentActivity.length > 0 ? (
+        <div className="chat-activity-strip" aria-label="Recent room activity">
+          {recentActivity.map((entry) => (
+            <div
+              key={entry.id}
+              className={`chat-activity-chip kind-${entry.kind} ${entry.kind === 'reaction' ? 'is-reaction' : ''}`}
+            >
+              {entry.kind === 'reaction' ? (
+                <span className="chat-activity-emoji" aria-hidden="true">{reactionEmoji(entry.reaction)}</span>
+              ) : null}
+              <span>{entry.message}</span>
+            </div>
           ))}
         </div>
       ) : null}
@@ -150,10 +184,6 @@ function ChatPanel({
         </button>
       ) : null}
 
-      <p className="chat-typing" aria-live="polite">
-        {typingNames.length > 0 ? `${typingNames.join(', ')} ${typingNames.length === 1 ? 'is' : 'are'} typing...` : ' '}
-      </p>
-
       <form
         className="chat-compose"
         onSubmit={(event) => {
@@ -181,12 +211,25 @@ function ChatPanel({
         />
         <button type="submit" disabled={disabled || draft.trim().length === 0}>Send</button>
       </form>
+      <p className={`chat-typing ${typingNames.length > 0 ? 'is-active' : ''}`} aria-live="polite">
+        <span className="chat-typing-pulse" aria-hidden="true" />
+        <span>{typingText}</span>
+      </p>
     </div>
   );
 }
 
+function reactionEmoji(reaction: MultiplayerReaction | undefined): string {
+  if (reaction === 'nice') return '👏';
+  if (reaction === 'wow') return '😮';
+  if (reaction === 'gg') return '🏁';
+  if (reaction === 'oops') return '😅';
+  return '•';
+}
+
 export function MultiplayerChatDock({
   messages,
+  activityFeed = [],
   typingNames,
   yourPlayerId,
   yourName,
@@ -194,6 +237,7 @@ export function MultiplayerChatDock({
   unreadCount,
   disabled = false,
   reactionsEnabled = false,
+  shellTone = 'table-live',
   onToggle,
   onSendMessage,
   onSendReaction,
@@ -207,20 +251,23 @@ export function MultiplayerChatDock({
   const unreadLabel = unreadCount > 99 ? '99+' : String(unreadCount);
 
   return (
-    <section className={`multiplayer-chat-dock ${isOpen ? 'is-open' : ''}`} aria-label="Multiplayer chat">
+    <section className={`multiplayer-chat-dock ${isOpen ? 'is-open' : ''} shell-${shellTone}`} aria-label="Multiplayer chat">
       <button type="button" className="chat-pill" onClick={onToggle} aria-expanded={isOpen}>
+        <span className="chat-pill-dot" aria-hidden="true" />
         Chat
         {unreadCount > 0 ? <span className="chat-pill-unread" aria-label={`${unreadCount} unread messages`}>{unreadLabel}</span> : null}
       </button>
 
       {isOpen ? (
         <ChatPanel
+          activityFeed={activityFeed}
           orderedMessages={orderedMessages}
           typingNames={typingNames}
           yourPlayerId={yourPlayerId}
           yourName={yourName}
           disabled={disabled}
           reactionsEnabled={reactionsEnabled}
+          shellTone={shellTone}
           onToggle={onToggle}
           onSendMessage={onSendMessage}
           onSendReaction={onSendReaction}

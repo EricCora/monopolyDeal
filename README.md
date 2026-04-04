@@ -22,11 +22,13 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Property cards with rent ladder cells for faster set-to-rent readability
 - Post-game brag image share (clipboard with download fallback)
 - Home hero with animated card-back atmosphere and stronger CTA emphasis
+- Home hero quick-facts strip and cleaner decorative card tableau so the landing page reads faster without overlapping scene labels
 - Post-game celebration refresh with trophy treatment and richer confetti pulse
 - Guided turn rail with draw/play/end-step progress and clearer required-action cues
 - Prompt-reactive table focus strips and zone spotlights so draw/payment/selection/discard states reshape the active play surface instead of only changing copy
 - New command-strip table header with active-player/step/pressure/pending status, plus one-tap timeline and insight toggles
 - Priority turn banner and player-state chips that keep mandatory flows (payment/response/selection/discard) visible at a glance
+- Pass-and-play reveal overlay now previews the next player, opening step, and turn number before the hand is revealed
 - Discard pile now supports an in-panel browser (newest-to-oldest horizontal scroll) while keeping a compact top-stack preview
 - Explicit pending-action messaging (rent, debt, counter chains, and steals) shown directly in the active UI, not just the event log
 - Pending selection flows now highlight valid property targets directly on the table to reduce trial clicks

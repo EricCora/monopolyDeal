@@ -117,6 +117,14 @@ interface ForcedDealSelectionState {
   color: PropertyColor;
 }
 
+type TableActionHint =
+  | {
+      token: number;
+      action: Extract<Action, { type: 'play_to_bank' | 'play_property' | 'discard_card' | 'move_wild' }>;
+      source: 'local' | 'multiplayer';
+    }
+  | null;
+
 type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
 
 function initialSetup(): SetupViewModel {
@@ -271,6 +279,7 @@ function App() {
   const [shareStatus, setShareStatus] = useState<ShareStatus>(null);
   const [riskyActionConfirmation, setRiskyActionConfirmation] = useState<RiskyActionConfirmation | null>(null);
   const [showRulesDrawer, setShowRulesDrawer] = useState(false);
+  const [tableActionHint, setTableActionHint] = useState<TableActionHint>(null);
   const [multiplayerChatOpen, setMultiplayerChatOpen] = useState(false);
   const [multiplayerChatUnread, setMultiplayerChatUnread] = useState(0);
   const [turnSnapshots, setTurnSnapshots] = useState<GameState[]>([]);
@@ -322,6 +331,14 @@ function App() {
     query.addListener(syncPreference);
     return () => query.removeListener(syncPreference);
   }, []);
+
+  useEffect(() => {
+    if (!tableActionHint) return undefined;
+    const clearTimer = window.setTimeout(() => {
+      setTableActionHint((current) => (current?.token === tableActionHint.token ? null : current));
+    }, 1_120);
+    return () => window.clearTimeout(clearTimer);
+  }, [tableActionHint]);
 
   useEffect(() => {
     if (screen !== 'game_over') return;
@@ -1334,6 +1351,18 @@ function App() {
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
     setRiskyActionConfirmation(null);
+    if (
+      action.type === 'play_to_bank'
+      || action.type === 'play_property'
+      || action.type === 'discard_card'
+      || action.type === 'move_wild'
+    ) {
+      setTableActionHint({
+        token: Date.now(),
+        action,
+        source: 'local',
+      });
+    }
     setGame(result.state);
     finalizeIfGameOver(result.state);
   }, [emitFeedback, finalizeIfGameOver, game, isPaused, prompt]);
@@ -1399,6 +1428,18 @@ function App() {
       setMultiplayerError('That action is no longer legal. Refreshing room state.');
       await refreshMultiplayerRoom();
       return;
+    }
+    if (
+      action.type === 'play_to_bank'
+      || action.type === 'play_property'
+      || action.type === 'discard_card'
+      || action.type === 'move_wild'
+    ) {
+      setTableActionHint({
+        token: Date.now(),
+        action,
+        source: 'multiplayer',
+      });
     }
     await runMultiplayerAction(index);
   }, [multiplayerRoomView, refreshMultiplayerRoom, runMultiplayerAction, setMultiplayerError]);
@@ -1899,6 +1940,7 @@ function App() {
           matchMode={localMatchMode}
           game={game}
           prompt={prompt}
+          tableActionHint={tableActionHint}
           isPaused={isPaused}
           reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
           legalActions={legalActions}
@@ -1964,6 +2006,8 @@ function App() {
           matchMode="live_online"
           game={multiplayerGame}
           prompt={multiplayerPrompt}
+          tableActionHint={tableActionHint}
+          isMultiplayerChatOpen={multiplayerChatOpen}
           isPaused={multiplayerRoomView.paused}
           reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
           pauseReasonText={
@@ -2258,11 +2302,13 @@ function App() {
       {screen === 'multiplayer' && multiplayerRoomView && multiplayerSession ? (
         <MultiplayerChatDock
           messages={multiplayerRoomView.chatMessages}
+          activityFeed={multiplayerRoomView.activityFeed}
           typingNames={multiplayerTypingNames}
           yourPlayerId={multiplayerRoomView.yourPlayerId}
           yourName={multiplayerSession.playerName}
           isOpen={multiplayerChatOpen}
           unreadCount={multiplayerChatUnread}
+          shellTone={multiplayerRoomView.started ? 'table-live' : 'lobby-live'}
           disabled={multiplayerLoading || multiplayerCheckpointLoading}
           reactionsEnabled={multiplayerReactionsEnabled}
           onToggle={() => {

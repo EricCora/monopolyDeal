@@ -64,6 +64,16 @@ export function HomeScreen({
   const heroPrimaryMode = primaryModes[0];
   const heroSecondaryMode = primaryModes.find((mode) => mode.id === 'live_online') ?? primaryModes[1] ?? primaryModes[0];
   const heroSceneModes = primaryModes.slice(0, 3);
+  const heroSceneGlyphs: Record<HomePrimaryMode, string> = {
+    hot_seat: 'HS',
+    practice: 'PR',
+    live_online: 'LO',
+  };
+  const heroQuickFacts = [
+    { value: '2-4', label: 'Seats around one device' },
+    { value: '3', label: 'Card plays each turn' },
+    { value: 'Resume', label: 'Jump back into active tables' },
+  ] as const;
   const modeNotes: Record<HomePrimaryMode, string> = {
     hot_seat: 'Best for one shared screen around the table.',
     practice: 'Fast solo reps for openings and action timing.',
@@ -93,6 +103,14 @@ export function HomeScreen({
               <button className={heroSecondaryMode.buttonClassName} onClick={heroSecondaryMode.onClick}>{heroActionLabels[heroSecondaryMode.id]}</button>
             ) : null}
           </div>
+          <div className="home-hero-stats" aria-label="Quick match facts">
+            {heroQuickFacts.map((fact) => (
+              <article key={fact.label} className="home-hero-stat">
+                <p className="home-hero-stat-value">{fact.value}</p>
+                <p className="home-hero-stat-label">{fact.label}</p>
+              </article>
+            ))}
+          </div>
         </div>
 
         <div className="home-hero-visual">
@@ -100,16 +118,26 @@ export function HomeScreen({
             <div className="home-scene-table">
               <div className="home-scene-hand is-left">
                 {heroSceneModes.map((mode) => (
-                  <span key={`left-${mode.id}`} className="home-scene-card">{mode.badge}</span>
+                  <span key={`left-${mode.id}`} className={`home-scene-card scene-tone-${mode.id}`}>
+                    <span className="home-scene-card-glyph">{heroSceneGlyphs[mode.id]}</span>
+                    <span className="home-scene-card-tag">{mode.badge}</span>
+                  </span>
                 ))}
               </div>
               <div className="home-scene-center">
+                <div className="home-scene-status">
+                  <p className="home-scene-status-label">Table Ready</p>
+                  <p className="home-scene-status-value">{heroPrimaryMode.badge}</p>
+                </div>
                 <span className="home-scene-deck" />
                 <span className="home-scene-discard" />
               </div>
               <div className="home-scene-hand is-right">
                 {heroSceneModes.slice().reverse().map((mode) => (
-                  <span key={`right-${mode.id}`} className="home-scene-card">{mode.homeTitle}</span>
+                  <span key={`right-${mode.id}`} className={`home-scene-card scene-tone-${mode.id}`}>
+                    <span className="home-scene-card-glyph">{heroSceneGlyphs[mode.id]}</span>
+                    <span className="home-scene-card-tag">{mode.badge}</span>
+                  </span>
                 ))}
               </div>
             </div>
