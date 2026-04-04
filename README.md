@@ -258,6 +258,53 @@ For local multiplayer development, the backend service is required.
 Use the one-command startup:
 
 1. Two-device LAN host flow: `npm run dev:lan:all`
+
+## Deploying Online Multiplayer
+
+Recommended production split:
+
+1. Deploy the frontend to Vercel.
+2. Deploy the multiplayer backend to Render using [`render.yaml`](./render.yaml).
+3. In Vercel, set `VITE_MULTIPLAYER_API_URL` to your Render backend origin, for example `https://your-service.onrender.com`.
+4. Redeploy the Vercel frontend after setting or changing that env var.
+
+### Render backend
+
+- The backend service is the persistent Socket.IO + HTTP server in [`apps/server/src/index.ts`](./apps/server/src/index.ts).
+- Render can deploy it directly from this repo using the included Blueprint file [`render.yaml`](./render.yaml).
+- Health check path: `/api/multiplayer/health`
+- Start command: `npm run start:multiplayer-server`
+
+Blueprint import link pattern:
+
+```text
+https://dashboard.render.com/blueprint/new?repo=https://github.com/EricCora/monopolyDeal
+```
+
+After the service is live, copy its public URL and use that as `VITE_MULTIPLAYER_API_URL` in Vercel.
+
+### Vercel frontend
+
+- Vercel builds the Vite app using [`vercel.json`](./vercel.json).
+- Add this environment variable in the Vercel project settings:
+
+```text
+VITE_MULTIPLAYER_API_URL=https://your-render-service.onrender.com
+```
+
+- The frontend can then create rooms, join rooms, and reconnect over the internet using the hosted backend.
+
+### How updates work after setup
+
+For normal app changes, yes, you redeploy.
+
+- Backend changes: push to GitHub and Render will redeploy the multiplayer server from the updated repo.
+- Frontend changes: push to GitHub and Vercel will rebuild and redeploy the web app.
+- If you only change frontend code, only the Vercel deploy needs to update for users to see the change.
+- If you change server gameplay, room logic, reconnect rules, or networking behavior, Render needs a fresh deploy too.
+- If you change `VITE_MULTIPLAYER_API_URL` or any other Vite env var, Vercel needs a redeploy because those values are baked into the frontend build.
+
+If you want, I can handle those redeploys for you whenever you make changes, as long as the deployment access is available in this environment.
 2. Share the Vite `Network` URL (example: `http://192.168.1.123:5173`) with Player 2.
 3. Player 2 opens that URL, goes to `Multiplayer`, enters name + room code, and joins.
 

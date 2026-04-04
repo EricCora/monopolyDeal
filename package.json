@@ -11,6 +11,7 @@
     "dev:lan:all:raw": "concurrently --kill-others --names \"ui,server\" \"npm run dev:lan\" \"npm run dev:multiplayer-server\"",
     "lan": "npm run dev:lan:all",
     "dev:multiplayer-server": "node --import tsx/esm apps/server/src/index.ts",
+    "start:multiplayer-server": "node --import tsx/esm apps/server/src/index.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
