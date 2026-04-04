@@ -2,5 +2,15 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/multiplayer/:path*",
+      "destination": "https://monopolydeal-multiplayer.onrender.com/api/multiplayer/:path*"
+    },
+    {
+      "source": "/socket.io/:path*",
+      "destination": "https://monopolydeal-multiplayer.onrender.com/socket.io/:path*"
+    }
+  ]
 }
