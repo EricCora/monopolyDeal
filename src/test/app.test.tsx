@@ -428,6 +428,48 @@ describe('App', () => {
     expect(screen.queryByRole('dialog', { name: /choose how to play/i })).not.toBeInTheDocument();
   });
 
+  it('uses custom max plays in table prompts and hand click gating', () => {
+    const customRulesState: GameState = {
+      ...structuredClone(baseState),
+      ruleset: {
+        winCompleteSets: 3,
+        maxHandAtEndTurn: 7,
+        maxPlaysPerTurn: 5,
+      },
+      turn: { ...baseState.turn, playsUsed: 4 },
+    };
+    mockedCreateGame.mockImplementationOnce(() => customRulesState);
+    mockedGetNextPrompt.mockImplementation(() => ({ playerId: 'p1', text: 'Alpha turn', kind: 'main' }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Pass turn',
+        action: { type: 'pass_turn', playerId: 'p1' },
+      },
+      {
+        label: 'Bank money',
+        action: { type: 'play_to_bank', playerId: 'p1', cardId: 'money_1#a1' },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+
+    expect(screen.getByText(/play up to 5 cards \(4\/5\)/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/1 play left/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/5\/5 plays used/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /\$1 card/i }));
+
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'play_to_bank',
+      playerId: 'p1',
+      cardId: 'money_1#a1',
+    });
+  });
+
   it('shows and uses undo controls for reversible plays in the same turn', () => {
     render(<App />);
 
@@ -524,6 +566,59 @@ describe('App', () => {
       playerId: 'p1',
       cardId: 'money_1#a1',
     });
+  });
+
+  it('uses custom hand limit in discard prompt counts', () => {
+    const discardState: GameState = {
+      ...structuredClone(baseState),
+      ruleset: {
+        winCompleteSets: 3,
+        maxHandAtEndTurn: 9,
+        maxPlaysPerTurn: 3,
+      },
+      players: [
+        {
+          ...structuredClone(baseState.players[0]),
+          hand: [
+            'money_1#a1',
+            'money_2#a2',
+            'money_3#a3',
+            'money_4#a4',
+            'money_5#a5',
+            'pass_go#a6',
+            'rent_color#a7',
+            'debt_collector#a8',
+            'money_1#a9',
+            'money_2#a10',
+          ],
+        },
+        structuredClone(baseState.players[1]),
+      ],
+      turn: { ...baseState.turn, playsUsed: 3 },
+    };
+    mockedCreateGame.mockImplementationOnce(() => discardState);
+    mockedGetNextPrompt.mockImplementation(() => ({
+      playerId: 'p1',
+      text: 'Alpha: discard down to 9 cards to end your turn.',
+      kind: 'discard',
+    }));
+    mockedGetLegalActions.mockImplementation(() => [
+      {
+        label: 'Discard $1 Money',
+        action: { type: 'discard_card', playerId: 'p1', cardId: 'money_1#a1' },
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+
+    expect(screen.getByText(/end turn \(discard 1\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/discard 1 card to end turn/i)).toBeInTheDocument();
+    expect(screen.getByText((_, element) =>
+      element?.textContent === 'Hand size: 10 | Limit: 9 | Need to discard: 1')).toBeInTheDocument();
   });
 
   it('renders discard-flight choreography when a discard is required', async () => {

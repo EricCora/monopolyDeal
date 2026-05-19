@@ -594,7 +594,10 @@ export function GameTableScreen({
   }, [activityFeed, isMultiplayer, isMultiplayerChatOpen]);
   const activePlayer = game.players.find((player) => player.id === prompt.playerId) ?? game.players[game.currentPlayerIndex];
   const activePlayerName = activePlayer?.name ?? prompt.playerId;
-  const playsRemaining = Math.max(0, 3 - game.turn.playsUsed);
+  const maxPlaysPerTurn = game.ruleset?.maxPlaysPerTurn ?? 3;
+  const maxHandAtEndTurn = game.ruleset?.maxHandAtEndTurn ?? 7;
+  const playsRemaining = Math.max(0, maxPlaysPerTurn - game.turn.playsUsed);
+  const playsRemainingLabel = `${playsRemaining} ${playsRemaining === 1 ? 'play' : 'plays'} left`;
   const pendingLabel = pendingKindLabel(game.pending);
   const discardPreviewCardIds = game.discardPile.slice(-3).reverse();
   const discardBrowserCardIds = useMemo(() => [...game.discardPile].reverse(), [game.discardPile]);
@@ -752,7 +755,7 @@ export function GameTableScreen({
     if (mainPhaseExhausted) {
       return {
         title: 'Play Limit Reached',
-        detail: '3/3 plays used. Pass turn or use non-play options.',
+        detail: `${maxPlaysPerTurn}/${maxPlaysPerTurn} plays used. Pass turn or use non-play options.`,
         tone: 'warning',
       };
     }
@@ -768,6 +771,7 @@ export function GameTableScreen({
     game.players,
     isPaused,
     mainPhaseExhausted,
+    maxPlaysPerTurn,
     over.done,
     pauseReasonText,
     pendingPayment,
@@ -1035,7 +1039,7 @@ export function GameTableScreen({
                 <p className="table-match-chip-value">
                   {prompt.kind === 'discard'
                     ? `${Math.max(discardOverLimitCount, 0)} discard needed`
-                    : `${playsRemaining} plays left`}
+                    : playsRemainingLabel}
                 </p>
               </article>
               <article className="table-match-chip">
@@ -1170,6 +1174,7 @@ export function GameTableScreen({
             turnPhase={game.turn.phase}
             promptKind={prompt.kind}
             playsUsed={game.turn.playsUsed}
+            maxPlaysPerTurn={maxPlaysPerTurn}
             discardOverLimitCount={discardOverLimitCount}
             showRulesHints={showRulesHints}
             legalActions={legalActions}
@@ -1498,11 +1503,15 @@ export function GameTableScreen({
                         </div>
                       </div>
                       {isMandatoryPrompt ? <p className="inline-must-act">Required: resolve this step before anything else.</p> : null}
-                      {mainPhaseExhausted ? <p className="inline-must-act">3/3 plays used. Pass turn or use non-play actions.</p> : null}
+                      {mainPhaseExhausted ? (
+                        <p className="inline-must-act">
+                          {maxPlaysPerTurn}/{maxPlaysPerTurn} plays used. Pass turn or use non-play actions.
+                        </p>
+                      ) : null}
                       {prompt.kind === 'discard' ? (
                         <p className="inline-discard-hint">
-                          Hand size: <strong>{player.hand.length}</strong> | Limit: <strong>7</strong> | Need to discard:{' '}
-                          <strong>{Math.max(player.hand.length - 7, 0)}</strong>
+                          Hand size: <strong>{player.hand.length}</strong> | Limit: <strong>{maxHandAtEndTurn}</strong> | Need to discard:{' '}
+                          <strong>{Math.max(player.hand.length - maxHandAtEndTurn, 0)}</strong>
                         </p>
                       ) : null}
                       {requestBanner ? (

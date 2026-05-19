@@ -72,6 +72,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Draw actions now animate from deck to hand (respects reduced-motion/reduced-effects settings)
 - Post-game recap now highlights winning move, momentum shift, and standout cards
 - Experimental feature flags for AI opponents, AI coach hints, replay timeline, daily challenges, achievements, and custom rules
+- Custom rule limits are reflected in table prompts, discard counts, action rails, and AI pass timing
 - Auto-save + resume via `localStorage`
 
 ## Tech Stack

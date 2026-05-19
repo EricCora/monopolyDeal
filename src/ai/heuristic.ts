@@ -1,5 +1,5 @@
 import { getCardDefinition } from '../cards/catalog';
-import { getSetCompletionCount, type Action, type GameState, type LegalAction, type PlayerId } from '../engine';
+import { DEFAULT_RULESET, getSetCompletionCount, type Action, type GameState, type LegalAction, type PlayerId } from '../engine';
 
 export interface ScoredAction {
   action: Action;
@@ -124,12 +124,14 @@ function actionScore(state: GameState, actorId: PlayerId, item: LegalAction): Sc
   }
 
   if (action.type === 'pass_turn') {
-    const base = state.turn.playsUsed >= 3 ? 210 : 20;
+    const maxPlaysPerTurn = state.ruleset?.maxPlaysPerTurn ?? DEFAULT_RULESET.maxPlaysPerTurn;
+    const playBudgetSpent = state.turn.playsUsed >= maxPlaysPerTurn;
+    const base = playBudgetSpent ? 210 : 20;
     return {
       action,
       label: item.label,
       score: base,
-      reason: state.turn.playsUsed >= 3 ? 'Play budget is spent; passing is efficient.' : 'Passing early can avoid overextending.' ,
+      reason: playBudgetSpent ? 'Play budget is spent; passing is efficient.' : 'Passing early can avoid overextending.' ,
     };
   }
 

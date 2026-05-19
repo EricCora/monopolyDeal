@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildCoachHint, chooseHeuristicAction, chooseMonteCarloAction } from '../ai';
-import { createGame, getLegalActions, type Action, type GameState } from '../engine';
+import { buildCoachHint, chooseHeuristicAction, chooseMonteCarloAction, rankHeuristicActions } from '../ai';
+import { createGame, getLegalActions, type Action, type GameState, type LegalAction } from '../engine';
 
 function sameAction(left: Action, right: Action): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -119,5 +119,26 @@ describe('AI command contract', () => {
     expect(hard.topActionLabel.length).toBeGreaterThan(0);
     expect(legalLabels.has(easy.topActionLabel)).toBe(true);
     expect(legalLabels.has(hard.topActionLabel)).toBe(true);
+  });
+
+  it('scores pass as early when custom play budget is still available', () => {
+    const state = makeAiState();
+    state.ruleset = {
+      winCompleteSets: 3,
+      maxHandAtEndTurn: 7,
+      maxPlaysPerTurn: 5,
+    };
+    state.turn.playsUsed = 3;
+    const legal: LegalAction[] = [
+      {
+        label: 'Pass turn',
+        action: { type: 'pass_turn', playerId: 'p1' },
+      },
+    ];
+
+    const [passScore] = rankHeuristicActions(state, 'p1', legal);
+
+    expect(passScore.score).toBe(20);
+    expect(passScore.reason).toMatch(/passing early/i);
   });
 });

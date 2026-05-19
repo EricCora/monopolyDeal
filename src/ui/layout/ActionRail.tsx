@@ -9,6 +9,7 @@ interface ActionRailProps {
   turnPhase: TurnPhase;
   promptKind: TurnPrompt['kind'];
   playsUsed: number;
+  maxPlaysPerTurn: number;
   discardOverLimitCount: number;
   showRulesHints: boolean;
   legalActions: LegalAction[];
@@ -24,6 +25,7 @@ export function ActionRail({
   turnPhase,
   promptKind,
   playsUsed,
+  maxPlaysPerTurn,
   discardOverLimitCount,
   showRulesHints,
   legalActions,
@@ -47,7 +49,7 @@ export function ActionRail({
           <strong>1.</strong> Draw
         </li>
         <li className={`turn-phase-step is-${actionStepState}`}>
-          <strong>2.</strong> Play up to 3 cards ({Math.min(playsUsed, 3)}/3)
+          <strong>2.</strong> Play up to {maxPlaysPerTurn} cards ({Math.min(playsUsed, maxPlaysPerTurn)}/{maxPlaysPerTurn})
         </li>
         <li className={`turn-phase-step is-${endStepState}`}>
           <strong>3.</strong> End turn{discardOverLimitCount > 0 ? ` (discard ${discardOverLimitCount})` : ''}

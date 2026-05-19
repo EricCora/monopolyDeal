@@ -99,6 +99,14 @@ const DEFAULT_SETUP_RULES = {
   maxPlaysPerTurn: 3,
 } as const;
 
+function maxPlaysPerTurnFor(game: GameState | null | undefined): number {
+  return game?.ruleset?.maxPlaysPerTurn ?? DEFAULT_SETUP_RULES.maxPlaysPerTurn;
+}
+
+function maxHandAtEndTurnFor(game: GameState | null | undefined): number {
+  return game?.ruleset?.maxHandAtEndTurn ?? DEFAULT_SETUP_RULES.maxHandAtEndTurn;
+}
+
 interface CardActionVariant extends ActionVariantView {
   action: Action;
   requiresConfirmation?: boolean;
@@ -584,15 +592,17 @@ function App() {
   const isMandatoryPrompt = Boolean(
     prompt && (prompt.kind === 'payment' || prompt.kind === 'selection' || prompt.kind === 'response' || prompt.kind === 'discard'),
   );
+  const maxPlaysPerTurn = maxPlaysPerTurnFor(game);
+  const maxHandAtEndTurn = maxHandAtEndTurnFor(game);
   const mainPhaseExhausted = Boolean(
-    game && prompt?.kind === 'main' && game.turn.phase === 'action' && game.turn.playsUsed >= 3 && !game.pending,
+    game && prompt?.kind === 'main' && game.turn.phase === 'action' && game.turn.playsUsed >= maxPlaysPerTurn && !game.pending,
   );
   const discardOverLimitCount = useMemo(() => {
     if (!game || !prompt || prompt.kind !== 'discard') return 0;
     const activePlayer = game.players.find((player) => player.id === prompt.playerId);
     if (!activePlayer) return 0;
-    return Math.max(activePlayer.hand.length - 7, 0);
-  }, [game, prompt]);
+    return Math.max(activePlayer.hand.length - maxHandAtEndTurn, 0);
+  }, [game, maxHandAtEndTurn, prompt]);
 
   useEffect(() => {
     if (screen !== 'game') return;
@@ -632,9 +642,9 @@ function App() {
     }
     if (prompt.kind === 'payment' || prompt.kind === 'response' || prompt.kind === 'selection') return prompt.text;
     if (prompt.kind === 'draw') return 'Draw to start the turn.';
-    if (mainPhaseExhausted) return '3/3 plays used. Pass turn or use non-play actions.';
+    if (mainPhaseExhausted) return `${maxPlaysPerTurn}/${maxPlaysPerTurn} plays used. Pass turn or use non-play actions.`;
     return 'Play cards from hand or pass turn.';
-  }, [discardOverLimitCount, game, mainPhaseExhausted, prompt]);
+  }, [discardOverLimitCount, game, mainPhaseExhausted, maxPlaysPerTurn, prompt]);
 
   const multiplayerGame = screen === 'multiplayer' ? (multiplayerRoomView?.gameState ?? null) : null;
   const multiplayerPrompt = useMemo(
@@ -677,19 +687,21 @@ function App() {
         || multiplayerPrompt.kind === 'response'
         || multiplayerPrompt.kind === 'discard'),
   );
+  const multiplayerMaxPlaysPerTurn = maxPlaysPerTurnFor(multiplayerGame);
+  const multiplayerMaxHandAtEndTurn = maxHandAtEndTurnFor(multiplayerGame);
   const multiplayerMainPhaseExhausted = Boolean(
     multiplayerGame
       && multiplayerPrompt?.kind === 'main'
       && multiplayerGame.turn.phase === 'action'
-      && multiplayerGame.turn.playsUsed >= 3
+      && multiplayerGame.turn.playsUsed >= multiplayerMaxPlaysPerTurn
       && !multiplayerGame.pending,
   );
   const multiplayerDiscardOverLimitCount = useMemo(() => {
     if (!multiplayerGame || !multiplayerPrompt || multiplayerPrompt.kind !== 'discard') return 0;
     const activePlayer = multiplayerGame.players.find((player) => player.id === multiplayerPrompt.playerId);
     if (!activePlayer) return 0;
-    return Math.max(activePlayer.hand.length - 7, 0);
-  }, [multiplayerGame, multiplayerPrompt]);
+    return Math.max(activePlayer.hand.length - multiplayerMaxHandAtEndTurn, 0);
+  }, [multiplayerGame, multiplayerMaxHandAtEndTurn, multiplayerPrompt]);
   const multiplayerPromptPlayerName = useMemo(() => {
     if (!multiplayerGame || !multiplayerPrompt) return null;
     return multiplayerGame.players.find((player) => player.id === multiplayerPrompt.playerId)?.name ?? multiplayerPrompt.playerId;
@@ -720,12 +732,13 @@ function App() {
       return multiplayerPrompt.text;
     }
     if (multiplayerPrompt.kind === 'draw') return 'Draw to start the turn.';
-    if (multiplayerMainPhaseExhausted) return '3/3 plays used. Pass turn or use non-play actions.';
+    if (multiplayerMainPhaseExhausted) return `${multiplayerMaxPlaysPerTurn}/${multiplayerMaxPlaysPerTurn} plays used. Pass turn or use non-play actions.`;
     return 'Play cards from hand or pass turn.';
   }, [
     multiplayerDiscardOverLimitCount,
     multiplayerGame,
     multiplayerMainPhaseExhausted,
+    multiplayerMaxPlaysPerTurn,
     multiplayerPrompt,
     multiplayerPromptPlayerName,
     multiplayerRoomView,
