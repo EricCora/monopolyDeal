@@ -88,12 +88,19 @@ export function collectBody(req: IncomingMessage, maxBytes: number): Promise<str
  */
 export class SlidingWindowRateLimiter {
   private readonly attemptsByKey = new Map<string, number[]>();
+  private readonly maxAttempts: number;
+  private readonly windowMs: number;
+  private readonly maxKeys: number;
 
   constructor(
-    private readonly maxAttempts: number,
-    private readonly windowMs: number,
-    private readonly maxKeys = 10_000,
-  ) {}
+    maxAttempts: number,
+    windowMs: number,
+    maxKeys = 10_000,
+  ) {
+    this.maxAttempts = maxAttempts;
+    this.windowMs = windowMs;
+    this.maxKeys = maxKeys;
+  }
 
   tryAcquire(key: string, now = Date.now()): number | null {
     const cutoff = now - this.windowMs;

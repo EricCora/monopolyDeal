@@ -10,6 +10,7 @@ import {
   type PaymentRequest,
   type TurnPrompt,
 } from '../../engine';
+import { propertySets, isCompletePropertySet } from '../../engine/core';
 import { CardView } from '../components/CardView';
 import { HandFan } from '../components/HandFan';
 import { PlayChooser, type ActionVariantView } from '../components/PlayChooser';
@@ -1731,10 +1732,13 @@ export function GameTableScreen({
                                 {player.properties[color].length === 0 && laneIsMoveTarget ? (
                                   <p className="property-lane-empty">Empty lane</p>
                                 ) : null}
-                                {player.properties[color].map((entry) => {
+                                {propertySets(player, color).flatMap((set, setIndex) => set.entries.map((entry) => {
                                   const selectionCardPlayable = selectionCardPickingEnabled && (
                                     selectionPendingKind === 'deal_breaker'
-                                      ? selectionTargetColors.has(color)
+                                      ? legalActions.some((item) => item.action.type === 'deal_breaker_pick'
+                                        && item.action.color === color
+                                        && (!item.action.setId || item.action.setId === set.setId))
+                                        && isCompletePropertySet(set.entries, color)
                                       : selectionTargetCardIds.has(entry.cardId)
                                   );
                                   const moveWildSourcePlayable = canDirectWildMove
@@ -1765,11 +1769,11 @@ export function GameTableScreen({
                                             setSelectedMoveWildCardId((prev) => (prev === entry.cardId ? null : entry.cardId));
                                           }
                                         }}
-                                        annotation={entry.assignedColor !== color ? `as ${colorLabel(entry.assignedColor)}` : undefined}
+                                        annotation={`Set ${setIndex + 1} · ${isCompletePropertySet(set.entries, color) ? 'Complete' : 'Incomplete'}`}
                                       />
                                     </div>
                                   );
-                                })}
+                                }))}
                               </div>
                             </div>
                           );

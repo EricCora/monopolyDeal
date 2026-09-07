@@ -28,6 +28,8 @@ export interface RulesetV1 {
 export interface PropertyCardPlacement {
   cardId: string;
   assignedColor: PropertyColor;
+  /** Stable membership for one physical property set. Omitted in legacy v1 snapshots. */
+  setId?: string;
 }
 
 export interface PlayerState {
@@ -168,15 +170,15 @@ export type Action =
   | { type: 'draw_cards'; playerId: PlayerId }
   | { type: 'pass_turn'; playerId: PlayerId }
   | { type: 'play_to_bank'; playerId: PlayerId; cardId: string }
-  | { type: 'play_property'; playerId: PlayerId; cardId: string; color: PropertyColor }
-  | { type: 'move_wild'; playerId: PlayerId; cardId: string; fromColor: PropertyColor; toColor: PropertyColor }
+  | { type: 'play_property'; playerId: PlayerId; cardId: string; color: PropertyColor; setId?: string }
+  | { type: 'move_wild'; playerId: PlayerId; cardId: string; fromColor: PropertyColor; toColor: PropertyColor; fromSetId?: string; setId?: string }
   | { type: 'play_action'; playerId: PlayerId; cardId: string; targetPlayerId?: PlayerId; color?: PropertyColor }
   | { type: 'discard_card'; playerId: PlayerId; cardId: string }
   | { type: 'counter_response'; playerId: PlayerId; useJustSayNo: boolean; cardId?: string }
   | { type: 'pay_request'; playerId: PlayerId; cards: string[] }
-  | { type: 'sly_deal_pick'; playerId: PlayerId; cardId: string; sourceColor: PropertyColor; destinationColor: PropertyColor }
-  | { type: 'forced_deal_pick'; playerId: PlayerId; giveCardId: string; giveColor: PropertyColor; takeCardId: string; takeColor: PropertyColor; destinationColor: PropertyColor }
-  | { type: 'deal_breaker_pick'; playerId: PlayerId; color: PropertyColor };
+  | { type: 'sly_deal_pick'; playerId: PlayerId; cardId: string; sourceColor: PropertyColor; destinationColor: PropertyColor; sourceSetId?: string; setId?: string }
+  | { type: 'forced_deal_pick'; playerId: PlayerId; giveCardId: string; giveColor: PropertyColor; takeCardId: string; takeColor: PropertyColor; destinationColor: PropertyColor; giveSetId?: string; takeSetId?: string; setId?: string }
+  | { type: 'deal_breaker_pick'; playerId: PlayerId; color: PropertyColor; setId?: string };
 
 export interface LegalAction {
   label: string;

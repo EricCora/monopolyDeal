@@ -33,7 +33,7 @@ describe('Home and setup screens', () => {
     expect(screen.getByRole('button', { name: /start hot seat/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /open live room/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/quick match facts/i)).toBeInTheDocument();
-    expect(screen.getByText(/2-4/i)).toBeInTheDocument();
+    expect(screen.getByText(/2-5/i)).toBeInTheDocument();
     expect(screen.getByText(/jump back into active tables/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /resume saved game/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/daily challenge summary/i)).toBeInTheDocument();
@@ -73,10 +73,10 @@ describe('Home and setup screens', () => {
     expect(screen.getByText(/3 seats · 3 sets to win/i)).toBeInTheDocument();
     expect(screen.getByText(/house rules/i)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText(/total players/i), { target: { value: '4' } });
+    fireEvent.change(screen.getByLabelText(/total players/i), { target: { value: '5' } });
     fireEvent.click(screen.getByRole('button', { name: /start match/i }));
 
-    expect(onPlayerCountChange).toHaveBeenCalledWith(4);
+    expect(onPlayerCountChange).toHaveBeenCalledWith(5);
     expect(onStartMatch).toHaveBeenCalledTimes(1);
   });
 });

@@ -575,7 +575,15 @@ export function markSeatTimedOutIfExpired(
   if (room.status === 'active') {
     const gamePlayerCount = room.game?.players.length ?? 0;
     if (gamePlayerCount <= 2) {
-      endMatchAfterLastOpponentTimeout(room, player.id);
+      // A manually paused match stays paused when its disconnected opponent
+      // times out; the surviving player can still inspect the final board and
+      // resume or leave it deliberately.
+      if (room.disconnectPauseRestore?.paused) {
+        retireTimedOutPlayerFromGame(room, player.id);
+        resolveDisconnectPauseStateAfterTimeout(room);
+      } else {
+        endMatchAfterLastOpponentTimeout(room, player.id);
+      }
     } else {
       retireTimedOutPlayerFromGame(room, player.id);
       // An expired host cannot resume host-only controls. Promote a connected
@@ -753,7 +761,7 @@ function reclaimDisconnectedLobbyParticipants(
 
 function nextAvailableLobbyPlayerId(room: MultiplayerRoom): PlayerId {
   const taken = new Set(room.players.map((player) => player.id));
-  for (let index = 1; index <= 4; index += 1) {
+  for (let index = 1; index <= 5; index += 1) {
     const candidate = `p${index}` as PlayerId;
     if (!taken.has(candidate)) return candidate;
   }
@@ -943,7 +951,7 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
     throw new Error('room_started');
   }
   reclaimDisconnectedLobbyParticipants(room, nowMs(), 'all');
-  if (room.players.length >= 4) {
+  if (room.players.length >= 5) {
     throw new Error('room_full');
   }
   const playerId = nextAvailableLobbyPlayerId(room);
@@ -974,7 +982,8 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
   };
 }
 
-export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, _expectedRevision?: number): RoomSessionResponse {
+export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, expectedRevision?: number): RoomSessionResponse {
+  void expectedRevision;
   const player = requireSession(room, playerId, sessionToken);
   const now = nowMs();
   assertReconnectWindowOpen(player, now);
@@ -1432,8 +1441,9 @@ export function sendRoomChat(
   playerId: PlayerId,
   sessionToken: string,
   text: string,
-  _expectedRevision?: number,
+  expectedRevision?: number,
 ): MultiplayerRoom {
+  void expectedRevision;
   // Chat is a social event and must not invalidate a gameplay action retry.
   const player = requireSession(room, playerId, sessionToken);
   assertReconnectWindowOpen(player);
@@ -1474,8 +1484,9 @@ export function setRoomTyping(
   playerId: PlayerId,
   sessionToken: string,
   typing: boolean,
-  _expectedRevision?: number,
+  expectedRevision?: number,
 ): MultiplayerRoom {
+  void expectedRevision;
   // Typing presence is deliberately outside the gameplay revision stream.
   const player = requireSession(room, playerId, sessionToken);
   assertReconnectWindowOpen(player);

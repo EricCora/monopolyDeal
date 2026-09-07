@@ -123,10 +123,10 @@ UI layers (steal banners/highlights, draw animation) should prefer `details` and
 - Turn play budget is capped at 3 plays.
 - Passing turn with >7 cards is invalid.
 - Win is 3 complete sets.
-- Banking follows official split: regular property cards cannot be banked; money/action/building cards and wild property cards can.
+- Banking follows official split: Property cards and Wild Property cards cannot be banked; money/action/building cards can.
 - `just_say_no` uses counter chain flow (`pending.kind === 'counter'`) before resolving/canceling an effect.
 - Counter windows are opened for counterable targeted effects regardless of whether a `Just Say No` is in-hand, to avoid hidden-hand information leaks.
-- Multi-target payment (`It's My Birthday`) runs a target chain via `remainingTargetPlayerIds`.
+- Multi-target payment (two-color Rent and `It's My Birthday`) runs a target chain via `remainingTargetPlayerIds`.
 - Buildings (`house`, `hotel`) are treated as non-movable for property steal/swap flows.
 - Payment selection must satisfy requested amount when payer can cover; if payer cannot cover, all available bank/property cards must be paid.
 - If payer has no payable bank/property cards, an empty `pay_request.cards` submission is valid and resolves as a shortfall.

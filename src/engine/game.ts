@@ -38,11 +38,14 @@ import {
   getCurrentPlayer,
   getPlayer,
   getRentAmount,
+  isBuildingPlacementLegal,
   initialProperties,
   isCompleteSet,
   movablePropertyCards,
+  normalizePropertySets,
   now,
   pushEvent,
+  propertySets,
   removeFromHand,
   removePropertyCard,
   requiresEndTurnDiscard,
@@ -122,7 +125,7 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
 
       if (card.kind === 'building') {
         for (const color of PROPERTY_COLORS) {
-          if (!isCompleteSet(player, color)) continue;
+          if (!isBuildingPlacementLegal(player, color, card.actionKind as 'house' | 'hotel')) continue;
           actions.push({
             label: `Play ${card.name} on ${colorLabel(color)}`,
             action: { type: 'play_property', playerId: player.id, cardId, color },
@@ -180,13 +183,15 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
         if (actionKind === 'rent' || actionKind === 'rent_wild') {
           const allowedColors = Object.keys(card.rentMatrix ?? {}) as PropertyColor[];
           for (const color of allowedColors) {
-            if (player.properties[color].length === 0) continue;
+            if (getRentAmount(player, color) <= 0) continue;
             actions.push({
               label: `Play ${card.name} for ${colorLabel(color)} rent`,
               action: { type: 'play_action', playerId: player.id, cardId, color },
               requiresConfirmation: true,
               riskLevel: 'medium',
-              previewText: `Charge all opponents for ${colorLabel(color)} rent.`,
+              previewText: actionKind === 'rent_wild'
+                ? `Charge all opponents for ${colorLabel(color)} rent.`
+                : `Charge one opponent for ${colorLabel(color)} rent.`,
             });
           }
         }
@@ -199,16 +204,22 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
       const def = getCardDefinition(placement.cardId);
       if (def.kind !== 'wild') continue;
       for (const targetColor of PROPERTY_COLORS.filter((candidate) => canCardBePlacedInColor(def, candidate) && candidate !== color)) {
-        actions.push({
-          label: `Move ${cardLabel(placement.cardId)} from ${colorLabel(color)} to ${colorLabel(targetColor)}`,
-          action: {
-            type: 'move_wild',
-            playerId: player.id,
-            cardId: placement.cardId,
-            fromColor: color,
-            toColor: targetColor,
-          },
-        });
+        const openSets = propertySets(player, targetColor).filter((set) => !isCompleteSet(player, targetColor, set.setId));
+        const targetSetIds = openSets.length > 0 ? openSets.map((set) => set.setId) : [undefined];
+        for (const setId of targetSetIds) {
+          actions.push({
+            label: `Move ${cardLabel(placement.cardId)} from ${colorLabel(color)} to ${colorLabel(targetColor)}`,
+            action: {
+              type: 'move_wild',
+              playerId: player.id,
+              cardId: placement.cardId,
+              fromColor: color,
+              toColor: targetColor,
+              fromSetId: placement.setId,
+              setId,
+            },
+          });
+        }
       }
     }
   }
@@ -219,8 +230,8 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
 }
 
 export function createGame(config: GameConfig): GameState {
-  if (config.players.length < 2 || config.players.length > 4) {
-    throw new Error('Monopoly Deal supports 2-4 players.');
+  if (config.players.length < 2 || config.players.length > 5) {
+    throw new Error('Monopoly Deal supports 2-5 players.');
   }
 
   const ruleset: RulesetV1 = {
@@ -304,6 +315,7 @@ export function getLegalActions(state: GameState, playerId: PlayerId): LegalActi
 
 export function applyAction(currentState: GameState, action: Action): ApplyResult {
   const state = cloneState(currentState);
+  for (const player of state.players) normalizePropertySets(player);
   const events: GameEvent[] = [];
 
   const player = getPlayer(state, action.playerId);
@@ -362,7 +374,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     }
     const card = getCardDefinition(action.cardId);
     if (!canCardBeBanked(card)) {
-      return setErr(error('invalid_action', 'Only money, action, building, and wild cards can be banked.'));
+      return setErr(error('invalid_action', 'Only money, action, and building cards can be banked.'));
     }
     if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
     player.bank.push(action.cardId);
@@ -377,19 +389,19 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
       return setErr(error('illegal_play_limit', `Already used ${ruleset(state).maxPlaysPerTurn} plays this turn.`));
     }
     const card = getCardDefinition(action.cardId);
-    if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
-
     if (card.kind === 'building') {
-      if (!isCompleteSet(player, action.color)) {
-        player.hand.push(action.cardId);
+      if (!isBuildingPlacementLegal(player, action.color, card.actionKind as 'house' | 'hotel', action.setId)) {
         return setErr(error('invalid_action', 'Building requires a complete property set.'));
       }
     } else if (!canCardBePlacedInColor(card, action.color)) {
-      player.hand.push(action.cardId);
       return setErr(error('invalid_action', 'Card cannot be placed in that color group.'));
+    } else if (action.setId && isCompleteSet(player, action.color, action.setId)) {
+      return setErr(error('invalid_action', 'Cannot place an excess property into a protected complete set.'));
     }
 
-    addToProperty(player, action.cardId, action.color);
+    if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
+
+    addToProperty(player, action.cardId, action.color, action.setId);
     consumePlay(state);
     pushEvent(events, 'property', `${player.name} placed ${cardLabel(action.cardId)} in ${colorLabel(action.color)}.`);
   }
@@ -397,14 +409,15 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
   if (action.type === 'move_wild') {
     if (getCurrentPlayer(state).id !== player.id) return setErr(error('invalid_action', 'Not your turn.'));
     if (state.turn.phase !== 'action') return setErr(error('invalid_phase', 'Cannot move now.'));
-    const moved = removePropertyCard(player, action.fromColor, action.cardId);
+    const moved = removePropertyCard(player, action.fromColor, action.cardId, action.fromSetId);
     if (!moved) return setErr(error('invalid_target', 'Wild card not found in source set.'));
     const def = getCardDefinition(action.cardId);
-    if (def.kind !== 'wild' || !canCardBePlacedInColor(def, action.toColor)) {
-      addToProperty(player, action.cardId, action.fromColor);
+    if (def.kind !== 'wild' || !canCardBePlacedInColor(def, action.toColor)
+      || (action.setId && isCompleteSet(player, action.toColor, action.setId))) {
+      addToProperty(player, action.cardId, action.fromColor, moved.setId);
       return setErr(error('invalid_action', 'Card cannot move to target color.'));
     }
-    addToProperty(player, action.cardId, action.toColor);
+    addToProperty(player, action.cardId, action.toColor, action.setId);
     pushEvent(events, 'wild_move', `${player.name} moved ${cardLabel(action.cardId)} to ${colorLabel(action.toColor)}.`);
   }
 
@@ -415,6 +428,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
       if (!action.targetPlayerId) return setErr(error('invalid_target', 'Rent target required.'));
       const target = getPlayer(state, action.targetPlayerId);
       if (!target) return setErr(error('invalid_target', 'Target player not found.'));
+      if (target.id === player.id) return setErr(error('invalid_target', 'Cannot charge yourself rent.'));
       const effect: PendingEffect = {
         kind: 'payment',
         payload: {
@@ -438,7 +452,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
         return setErr(error('illegal_play_limit', `Already used ${ruleset(state).maxPlaysPerTurn} plays this turn.`));
       }
       const card = getCardDefinition(action.cardId);
-      if (card.kind !== 'action' && card.kind !== 'building') return setErr(error('invalid_action', 'Not an action card.'));
+      if (card.kind !== 'action') return setErr(error('invalid_action', 'Building cards must be placed on a complete property set.'));
       if (card.actionKind === 'just_say_no') return setErr(error('invalid_action', 'Just Say No can only be played as response.'));
       const actionKind = card.actionKind as ActionKind;
       let validatedTarget: PlayerState | null = null;
@@ -475,6 +489,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
         if (!action.color) return setErr(error('invalid_target', 'Rent color required.'));
         const allowedColors = Object.keys(card.rentMatrix ?? {}) as PropertyColor[];
         if (!allowedColors.includes(action.color)) return setErr(error('invalid_target', 'Rent card cannot target that color.'));
+        if (getRentAmount(player, action.color) <= 0) return setErr(error('invalid_action', 'You do not own a standard property for that rent color.'));
       }
 
       if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
@@ -540,15 +555,36 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
         if (!action.color) return setErr(error('invalid_target', 'Rent color required.'));
         const amount = getRentAmount(player, action.color) * state.turn.doubleRentMultiplier;
         state.turn.doubleRentMultiplier = 1;
-        state.pending = {
-          kind: 'rent',
-          payload: {
-            sourcePlayerId: player.id,
-            actionCardId: action.cardId,
-            color: action.color,
-            amount,
-          },
-        };
+        if (actionKind === 'rent') {
+          state.pending = {
+            kind: 'rent',
+            payload: {
+              sourcePlayerId: player.id,
+              actionCardId: action.cardId,
+              color: action.color,
+              amount,
+            },
+          };
+        } else {
+          const targets = state.players.filter((target) => target.id !== player.id).map((target) => target.id);
+          if (targets.length > 0) {
+            const firstTarget = targets[0];
+            const paymentEffect: PendingEffect = {
+              kind: 'payment',
+              payload: {
+                sourcePlayerId: player.id,
+                targetPlayerId: firstTarget,
+                amount,
+                reason: `Rent (${action.color})`,
+                actionCardId: action.cardId,
+                remainingTargetPlayerIds: targets.slice(1),
+              },
+            };
+            if (!maybeOpenCounter(state, player.id, firstTarget, action.cardId, paymentEffect)) {
+              resolveEffect(state, paymentEffect, events);
+            }
+          }
+        }
         pushEvent(events, 'action', `${player.name} played rent for ${colorLabel(action.color)} at $${amount}.`);
       }
 
@@ -680,19 +716,21 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     const source = getPlayer(state, req.sourcePlayerId);
     const target = getPlayer(state, req.targetPlayerId);
     if (!source || !target) return setErr(error('invalid_target', 'Player not found.'));
-    if (isCompleteSet(target, action.sourceColor)) {
+    const sourceSetWasComplete = isCompleteSet(target, action.sourceColor, action.sourceSetId);
+    const removed = removePropertyCard(target, action.sourceColor, action.cardId, action.sourceSetId);
+    if (!removed) return setErr(error('invalid_target', 'Card not found in target set.'));
+    if (sourceSetWasComplete) {
+      addToProperty(target, action.cardId, action.sourceColor, removed.setId);
       return setErr(error('invalid_action', 'Cannot steal cards from a complete set.'));
     }
-
-    const removed = removePropertyCard(target, action.sourceColor, action.cardId);
-    if (!removed) return setErr(error('invalid_target', 'Card not found in target set.'));
     const def = getCardDefinition(action.cardId);
-    if (!canCardBePlacedInColor(def, action.destinationColor)) {
-      addToProperty(target, action.cardId, action.sourceColor);
+    if (!canCardBePlacedInColor(def, action.destinationColor)
+      || (action.setId && isCompleteSet(source, action.destinationColor, action.setId))) {
+      addToProperty(target, action.cardId, action.sourceColor, removed.setId);
       return setErr(error('invalid_action', 'Cannot place card in selected destination.'));
     }
 
-    addToProperty(source, action.cardId, action.destinationColor);
+    addToProperty(source, action.cardId, action.destinationColor, action.setId);
     state.pending = null;
     pushEvent(events, 'sly_deal', `${source.name} took ${cardLabel(action.cardId)} from ${target.name}.`, {
       kind: 'property_steal',
@@ -710,29 +748,34 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     const source = getPlayer(state, req.sourcePlayerId);
     const target = getPlayer(state, req.targetPlayerId);
     if (!source || !target) return setErr(error('invalid_target', 'Player not found.'));
-    if (isCompleteSet(source, action.giveColor) || isCompleteSet(target, action.takeColor)) {
-      return setErr(error('invalid_action', 'Cannot swap cards that are part of a complete set.'));
-    }
-
-    const give = removePropertyCard(source, action.giveColor, action.giveCardId);
-    const take = removePropertyCard(target, action.takeColor, action.takeCardId);
+    const giveSetWasComplete = isCompleteSet(source, action.giveColor, action.giveSetId);
+    const takeSetWasComplete = isCompleteSet(target, action.takeColor, action.takeSetId);
+    const give = removePropertyCard(source, action.giveColor, action.giveCardId, action.giveSetId);
+    const take = removePropertyCard(target, action.takeColor, action.takeCardId, action.takeSetId);
     if (!give || !take) {
-      if (give) addToProperty(source, give.cardId, action.giveColor);
-      if (take) addToProperty(target, take.cardId, action.takeColor);
+      if (give) addToProperty(source, give.cardId, action.giveColor, give.setId);
+      if (take) addToProperty(target, take.cardId, action.takeColor, take.setId);
       return setErr(error('invalid_target', 'Swap card not found.'));
+    }
+    if (giveSetWasComplete || takeSetWasComplete) {
+      addToProperty(source, give.cardId, action.giveColor, give.setId);
+      addToProperty(target, take.cardId, action.takeColor, take.setId);
+      return setErr(error('invalid_action', 'Cannot swap cards that are part of a complete set.'));
     }
 
     const takeDef = getCardDefinition(take.cardId);
     const giveDef = getCardDefinition(give.cardId);
-    if (!canCardBePlacedInColor(takeDef, action.destinationColor)) {
-      addToProperty(source, give.cardId, action.giveColor);
-      addToProperty(target, take.cardId, action.takeColor);
+    const targetDestinationColor = giveDef.kind === 'property' ? giveDef.color! : action.giveColor;
+    if (!canCardBePlacedInColor(takeDef, action.destinationColor)
+      || (action.setId && isCompleteSet(source, action.destinationColor, action.setId))
+      || (giveDef.kind === 'wild' && !canCardBePlacedInColor(giveDef, targetDestinationColor))) {
+      addToProperty(source, give.cardId, action.giveColor, give.setId);
+      addToProperty(target, take.cardId, action.takeColor, take.setId);
       return setErr(error('invalid_action', 'Cannot place taken card in destination.'));
     }
 
-    addToProperty(source, take.cardId, action.destinationColor);
-    const targetDestColor = giveDef.kind === 'property' ? giveDef.color! : action.takeColor;
-    addToProperty(target, give.cardId, targetDestColor);
+    addToProperty(source, take.cardId, action.destinationColor, action.setId);
+    addToProperty(target, give.cardId, targetDestinationColor);
 
     state.pending = null;
     pushEvent(events, 'forced_deal', `${source.name} swapped ${cardLabel(action.giveCardId)} for ${cardLabel(action.takeCardId)}.`, {
@@ -751,14 +794,22 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     const source = getPlayer(state, req.sourcePlayerId);
     const target = getPlayer(state, req.targetPlayerId);
     if (!source || !target) return setErr(error('invalid_target', 'Player not found.'));
-    if (!isCompleteSet(target, action.color)) return setErr(error('invalid_action', 'Target set is not complete.'));
+    const selectedSet = propertySets(target, action.color).find((set) => action.setId ? set.setId === action.setId : isCompleteSet(target, action.color, set.setId));
+    if (!selectedSet || !isCompleteSet(target, action.color, selectedSet.setId)) {
+      return setErr(error('invalid_action', 'Target set is not complete.'));
+    }
 
-    const cards = [...target.properties[action.color]];
-    target.properties[action.color] = [];
+    const cards = [...selectedSet.entries];
+    target.properties[action.color] = target.properties[action.color]
+      .filter((entry) => entry.setId !== selectedSet.setId);
+    let sourceSetId: string | undefined;
     for (const entry of cards) {
       const def = getCardDefinition(entry.cardId);
       const destination = def.kind === 'property' ? def.color! : action.color;
-      addToProperty(source, entry.cardId, destination);
+      addToProperty(source, entry.cardId, destination, sourceSetId);
+      if (!sourceSetId) {
+        sourceSetId = source.properties[destination].find((candidate) => candidate.cardId === entry.cardId)?.setId;
+      }
     }
 
     state.pending = null;

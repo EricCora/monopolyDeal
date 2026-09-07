@@ -46,6 +46,9 @@ export function isValidMultiplayerAction(value: unknown): value is Action {
   if (!isRecord(value)) return false;
   if (typeof value.type !== 'string') return false;
   if (!isNonEmptyTrimmedString(value.playerId)) return false;
+  for (const field of ['setId', 'fromSetId', 'sourceSetId', 'giveSetId', 'takeSetId']) {
+    if (value[field] !== undefined && !isNonEmptyTrimmedString(value[field])) return false;
+  }
 
   if (value.type === 'draw_cards' || value.type === 'pass_turn') {
     return true;

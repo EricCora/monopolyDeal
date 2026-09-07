@@ -109,7 +109,7 @@ function buildSvg(model: PostGameShareModel): string {
   <text x="120" y="534" fill="#2d3d49" font-size="24" font-family="Avenir Next, Segoe UI, sans-serif">Highlight cards: ${highlightCardsLine}</text>
 
   <text x="90" y="580" fill="#1d6b4f" font-size="31" font-family="Avenir Next, Segoe UI, sans-serif" font-weight="700">${xmlEscape(model.appUrl)}</text>
-  <text x="90" y="610" fill="#51606b" font-size="24" font-family="Avenir Next, Segoe UI, sans-serif">Pass-and-play for 2-4 players</text>
+  <text x="90" y="610" fill="#51606b" font-size="24" font-family="Avenir Next, Segoe UI, sans-serif">Pass-and-play for 2-5 players</text>
 </svg>`.trim();
 }
 

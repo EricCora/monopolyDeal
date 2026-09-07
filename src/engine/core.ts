@@ -114,17 +114,203 @@ export function removeFromHand(player: PlayerState, cardId: string): boolean {
   return true;
 }
 
-export function addToProperty(player: PlayerState, cardId: string, color: PropertyColor): void {
-  player.properties[color].push({ cardId, assignedColor: color });
+export interface PropertySetView {
+  setId: string;
+  entries: PropertyCardPlacement[];
+}
+
+function isPropertyCardPlacement(entry: PropertyCardPlacement): boolean {
+  const kind = getCardDefinition(entry.cardId).kind;
+  return kind === 'property' || kind === 'wild';
+}
+
+function isStandardPropertyPlacement(entry: PropertyCardPlacement): boolean {
+  return getCardDefinition(entry.cardId).kind === 'property';
+}
+
+function propertyCount(set: PropertySetView): number {
+  return set.entries.filter(isPropertyCardPlacement).length;
+}
+
+function setHasStandardProperty(set: PropertySetView): boolean {
+  return set.entries.some(isStandardPropertyPlacement);
+}
+
+function setHasBuilding(set: PropertySetView, actionKind: 'house' | 'hotel'): boolean {
+  return set.entries.some((entry) => getCardDefinition(entry.cardId).actionKind === actionKind);
+}
+
+function isRainbowWild(entry: PropertyCardPlacement): boolean {
+  const definition = getCardDefinition(entry.cardId);
+  return definition.kind === 'wild' && (definition.colors?.length ?? 0) >= PROPERTY_COLORS.length;
+}
+
+function generatedSetId(color: PropertyColor, index: number): string {
+  return `${color}:auto-${index}`;
+}
+
+/**
+ * Derive physical property sets from the legacy color lanes. Untagged cards are
+ * assigned deterministically, with standard properties considered before wilds
+ * so a wild-only lane can never become a complete set by accident.
+ */
+export function propertySets(player: PlayerState, color: PropertyColor): PropertySetView[] {
+  const entries = player.properties[color] ?? [];
+  const required = PROPERTY_SET_SIZES[color];
+  const groups: PropertySetView[] = [];
+  const byId = new Map<string, PropertySetView>();
+  const usedIds = new Set<string>();
+
+  for (const entry of entries) {
+    if (!entry.setId) continue;
+    let group = byId.get(entry.setId);
+    if (!group) {
+      group = { setId: entry.setId, entries: [] };
+      byId.set(entry.setId, group);
+      groups.push(group);
+      usedIds.add(entry.setId);
+    }
+    group.entries.push(entry);
+  }
+
+  let nextId = 1;
+  const createGroup = (): PropertySetView => {
+    while (usedIds.has(generatedSetId(color, nextId))) nextId += 1;
+    const group = { setId: generatedSetId(color, nextId), entries: [] };
+    nextId += 1;
+    groups.push(group);
+    usedIds.add(group.setId);
+    byId.set(group.setId, group);
+    return group;
+  };
+
+  const untagged = entries.filter((entry) => !entry.setId);
+  const chooseOpenGroup = (preferStandard: boolean): PropertySetView => {
+    const open = groups.filter((group) => propertyCount(group) < required);
+    if (preferStandard) {
+      const withStandard = open.find(setHasStandardProperty);
+      if (withStandard) return withStandard;
+    }
+    return open[0] ?? createGroup();
+  };
+
+  // Process standard properties first. This makes a legacy [wild, wild,
+  // standard] lane become one standard-backed set plus one excess wild.
+  for (const entry of untagged.filter(isStandardPropertyPlacement)) {
+    chooseOpenGroup(false).entries.push(entry);
+  }
+  for (const entry of untagged.filter((entry) => isPropertyCardPlacement(entry) && !isStandardPropertyPlacement(entry))) {
+    chooseOpenGroup(true).entries.push(entry);
+  }
+  for (const entry of untagged.filter((entry) => !isPropertyCardPlacement(entry))) {
+    const eligible = groups.find((group) =>
+      propertyCount(group) >= required
+      && !setHasBuilding(group, getCardDefinition(entry.cardId).actionKind as 'house' | 'hotel'),
+    );
+    (eligible ?? groups[0] ?? createGroup()).entries.push(entry);
+  }
+
+  return groups;
+}
+
+/** Materialize deterministic IDs for a player before mutating a property lane. */
+export function normalizePropertySets(player: PlayerState): void {
+  for (const color of PROPERTY_COLORS) {
+    for (const set of propertySets(player, color)) {
+      for (const entry of set.entries) entry.setId = set.setId;
+    }
+  }
+}
+
+export function getPropertySetEntries(player: PlayerState, color: PropertyColor, setId?: string): PropertyCardPlacement[] {
+  const sets = propertySets(player, color);
+  if (setId) return sets.find((set) => set.setId === setId)?.entries ?? [];
+  return sets[0]?.entries ?? [];
+}
+
+export function isCompletePropertySet(entries: PropertyCardPlacement[], color: PropertyColor): boolean {
+  const required = PROPERTY_SET_SIZES[color];
+  const properties = entries.filter(isPropertyCardPlacement);
+  return properties.length >= required && properties.some(isStandardPropertyPlacement);
+}
+
+export function isBuildingPlacementLegal(
+  player: PlayerState,
+  color: PropertyColor,
+  actionKind: 'house' | 'hotel',
+  setId?: string,
+): boolean {
+  if (color === 'railroad' || color === 'utility') return false;
+  const sets = propertySets(player, color);
+  const eligible = sets.filter((set) => isCompletePropertySet(set.entries, color));
+  const target = setId
+    ? eligible.find((set) => set.setId === setId)
+    : eligible.find((set) => !setHasBuilding(set, actionKind)
+      && (actionKind !== 'hotel' || setHasBuilding(set, 'house')));
+  if (!target) return false;
+  if (setHasBuilding(target, actionKind)) return false;
+  if (actionKind === 'hotel' && !setHasBuilding(target, 'house')) return false;
+  return true;
+}
+
+export function addToProperty(player: PlayerState, cardId: string, color: PropertyColor, setId?: string): void {
+  normalizePropertySets(player);
+  const card = getCardDefinition(cardId);
+  const required = PROPERTY_SET_SIZES[color];
+  const sets = propertySets(player, color);
+  let target = setId ? sets.find((set) => set.setId === setId) : undefined;
+
+  if (!target && card.kind === 'building') {
+    target = sets.find((set) => isCompletePropertySet(set.entries, color)
+      && color !== 'railroad'
+      && color !== 'utility'
+      && !setHasBuilding(set, card.actionKind as 'house' | 'hotel'));
+  }
+  if (!target && card.kind !== 'building') {
+    const open = sets.filter((set) => propertyCount(set) < required);
+    target = card.kind === 'wild'
+      ? open.find(setHasStandardProperty) ?? open[0]
+      : open[0];
+    if (!target && card.kind === 'property') {
+      // A standard property can complete a wild-only group. Move one excess
+      // wild into its own group first so the original group remains physical.
+      const wildOnly = sets.find((set) => !setHasStandardProperty(set) && propertyCount(set) >= required);
+      let excessWild: PropertyCardPlacement | undefined;
+      for (let index = (wildOnly?.entries.length ?? 0) - 1; index >= 0; index -= 1) {
+        const entry = wildOnly?.entries[index];
+        if (entry && getCardDefinition(entry.cardId).kind === 'wild') {
+          excessWild = entry;
+          break;
+        }
+      }
+      if (wildOnly && excessWild) {
+        const used = new Set(sets.map((set) => set.setId));
+        let index = 1;
+        let nextId = generatedSetId(color, index);
+        while (used.has(nextId)) nextId = generatedSetId(color, ++index);
+        excessWild.setId = nextId;
+        target = wildOnly;
+      }
+    }
+  }
+  if (!target) {
+    const used = new Set(sets.map((set) => set.setId));
+    let index = 1;
+    let nextId = generatedSetId(color, index);
+    while (used.has(nextId)) nextId = generatedSetId(color, ++index);
+    target = { setId: setId ?? nextId, entries: [] };
+  }
+  player.properties[color].push({ cardId, assignedColor: color, setId: target.setId });
 }
 
 export function removePropertyCard(
   player: PlayerState,
   color: PropertyColor,
   cardId: string,
+  setId?: string,
 ): PropertyCardPlacement | null {
   const group = player.properties[color];
-  const idx = group.findIndex((entry) => entry.cardId === cardId);
+  const idx = group.findIndex((entry) => entry.cardId === cardId && (!setId || entry.setId === setId));
   if (idx === -1) return null;
   const [card] = group.splice(idx, 1);
   return card;
@@ -144,44 +330,48 @@ export function colorLabel(color: PropertyColor): string {
 }
 
 export function countCompleteSets(player: PlayerState): number {
-  return PROPERTY_COLORS.filter((color) => isCompleteSet(player, color)).length;
+  return PROPERTY_COLORS.reduce(
+    (count, color) => count + propertySets(player, color).filter((set) => isCompletePropertySet(set.entries, color)).length,
+    0,
+  );
 }
 
-export function isCompleteSet(player: PlayerState, color: PropertyColor): boolean {
-  const required = PROPERTY_SET_SIZES[color];
-  const actual = player.properties[color].filter((item) => {
-    const def = getCardDefinition(item.cardId);
-    return def.kind === 'property' || def.kind === 'wild';
-  }).length;
-  return actual >= required;
+export function isCompleteSet(player: PlayerState, color: PropertyColor, setId?: string): boolean {
+  const sets = propertySets(player, color);
+  if (setId) {
+    const set = sets.find((candidate) => candidate.setId === setId);
+    return set ? isCompletePropertySet(set.entries, color) : false;
+  }
+  return sets.some((set) => isCompletePropertySet(set.entries, color));
 }
 
 export function getRentAmount(player: PlayerState, color: PropertyColor): number {
-  const setCards = player.properties[color];
-  if (setCards.length === 0) return 0;
-
-  const propertyCount = setCards.filter((item) => {
-    const def = getCardDefinition(item.cardId);
-    return def.kind === 'property' || def.kind === 'wild';
-  }).length;
-
   const rentCard = CARD_DEFINITIONS.find((card) => card.actionKind === 'rent' && card.rentMatrix?.[color]);
   const scale = rentCard?.rentMatrix?.[color] ?? [1];
-  const base = scale[Math.min(propertyCount, scale.length) - 1] ?? scale[scale.length - 1] ?? 1;
-
-  const houseBonus = setCards.some((item) => getCardDefinition(item.cardId).actionKind === 'house') ? 3 : 0;
-  const hotelBonus = setCards.some((item) => getCardDefinition(item.cardId).actionKind === 'hotel') ? 4 : 0;
-  return base + houseBonus + hotelBonus;
+  const amounts = propertySets(player, color)
+    .filter((set) => set.entries.some((entry) => isPropertyCardPlacement(entry) && !isRainbowWild(entry)))
+    .map((set) => {
+      const propertyCount = set.entries.filter(isPropertyCardPlacement).length;
+      const base = scale[Math.min(propertyCount, scale.length) - 1] ?? scale[scale.length - 1] ?? 1;
+      const houseBonus = setHasBuilding(set, 'house') ? 3 : 0;
+      const hotelBonus = setHasBuilding(set, 'hotel') ? 4 : 0;
+      return base + houseBonus + hotelBonus;
+    });
+  // A rainbow wild in an otherwise empty color lane has no rent value.
+  return amounts.length > 0 ? Math.max(...amounts) : 0;
 }
 
-export function movablePropertyCards(player: PlayerState): Array<{ color: PropertyColor; cardId: string }> {
-  const options: Array<{ color: PropertyColor; cardId: string }> = [];
+export function movablePropertyCards(player: PlayerState): Array<{ color: PropertyColor; cardId: string; setId?: string }> {
+  const options: Array<{ color: PropertyColor; cardId: string; setId?: string }> = [];
   for (const color of PROPERTY_COLORS) {
-    if (isCompleteSet(player, color)) continue;
-    for (const entry of player.properties[color]) {
-      const def = getCardDefinition(entry.cardId);
-      if (def.actionKind === 'house' || def.actionKind === 'hotel') continue;
-      options.push({ color, cardId: entry.cardId });
+    for (const set of propertySets(player, color)) {
+      const protectedSet = isCompletePropertySet(set.entries, color);
+      for (const entry of set.entries) {
+        const def = getCardDefinition(entry.cardId);
+        if (def.actionKind === 'house' || def.actionKind === 'hotel') continue;
+        if (protectedSet) continue;
+        options.push({ color, cardId: entry.cardId, setId: set.setId });
+      }
     }
   }
   return options;
@@ -279,15 +469,13 @@ export function findPropertyColorByCard(player: PlayerState, cardId: string): Pr
 export function canCardBePlacedInColor(card: CardDefinition, color: PropertyColor): boolean {
   if (card.kind === 'property') return card.color === color;
   if (card.kind === 'wild') return (card.colors ?? []).includes(color);
-  if (card.kind === 'building') return true;
   return false;
 }
 
 export function canCardBeBanked(card: CardDefinition): boolean {
   return card.kind === 'money'
     || card.kind === 'action'
-    || card.kind === 'building'
-    || card.kind === 'wild';
+    || card.kind === 'building';
 }
 
 function hasPlayableRentCard(player: PlayerState, excludedCardId?: string): boolean {
@@ -297,7 +485,7 @@ function hasPlayableRentCard(player: PlayerState, excludedCardId?: string): bool
     if (handCard.kind !== 'action') continue;
     if (handCard.actionKind !== 'rent' && handCard.actionKind !== 'rent_wild') continue;
     const allowedColors = Object.keys(handCard.rentMatrix ?? {}) as PropertyColor[];
-    if (allowedColors.some((color) => player.properties[color].length > 0)) {
+    if (allowedColors.some((color) => getRentAmount(player, color) > 0)) {
       return true;
     }
   }

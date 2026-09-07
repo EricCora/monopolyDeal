@@ -67,7 +67,7 @@ describe('engine basics', () => {
     expect(result.state.players[0].bank).toHaveLength(0);
   });
 
-  it('allows banking wild cards', () => {
+  it('rejects banking Wild Property cards', () => {
     const state = mkState();
     state.players[0].hand = ['wild_red_yellow#w1'];
 
@@ -77,9 +77,84 @@ describe('engine basics', () => {
       cardId: 'wild_red_yellow#w1',
     });
 
-    expect(result.error).toBeUndefined();
-    expect(result.state.players[0].bank).toContain('wild_red_yellow#w1');
-    expect(result.state.players[0].hand).toHaveLength(0);
+    expect(result.error?.code).toBe('invalid_action');
+    expect(result.state.players[0].bank).not.toContain('wild_red_yellow#w1');
+    expect(result.state.players[0].hand).toContain('wild_red_yellow#w1');
+  });
+
+  it('supports the official five-player table size', () => {
+    const state = createGame({
+      seed: 123,
+      players: [1, 2, 3, 4, 5].map((id) => ({ id: `p${id}`, name: `P${id}` })),
+    });
+    expect(state.players).toHaveLength(5);
+  });
+
+  it('uses all-opponent targeting for two-color Rent and one target for any-color Rent', () => {
+    const state = createGame({
+      seed: 124,
+      players: [1, 2, 3, 4].map((id) => ({ id: `p${id}`, name: `P${id}` })),
+    });
+    state.turn.phase = 'action';
+    state.players[0].hand = ['rent_brown_light_blue#r1'];
+    state.players[0].properties.brown = [{ cardId: 'brown_1#p', assignedColor: 'brown' }];
+
+    const splitRent = applyAction(state, {
+      type: 'play_action', playerId: 'p1', cardId: 'rent_brown_light_blue#r1', color: 'brown',
+    });
+    expect(splitRent.error).toBeUndefined();
+    expect(splitRent.state.pending?.kind).toBe('counter');
+    if (splitRent.state.pending?.kind === 'counter') {
+      expect(splitRent.state.pending.payload.effect.kind).toBe('payment');
+      if (splitRent.state.pending.payload.effect.kind === 'payment') {
+        expect(splitRent.state.pending.payload.effect.payload.remainingTargetPlayerIds).toEqual(['p3', 'p4']);
+      }
+    }
+
+    const anyColor = createGame({
+      seed: 125,
+      players: [1, 2, 3].map((id) => ({ id: `p${id}`, name: `P${id}` })),
+    });
+    anyColor.turn.phase = 'action';
+    anyColor.players[0].hand = ['rent_color#r2'];
+    anyColor.players[0].properties.brown = [{ cardId: 'brown_1#p', assignedColor: 'brown' }];
+    const anyRent = applyAction(anyColor, {
+      type: 'play_action', playerId: 'p1', cardId: 'rent_color#r2', color: 'brown',
+    });
+    expect(anyRent.error).toBeUndefined();
+    expect(anyRent.state.pending?.kind).toBe('rent');
+  });
+
+  it('requires a standard property for completion and enforces building rules', () => {
+    const state = mkState();
+    state.players[0].properties.brown = [
+      { cardId: 'wild_brown_light_blue#w1', assignedColor: 'brown' },
+      { cardId: 'wild_all#w2', assignedColor: 'brown' },
+    ];
+    state.players[0].hand = ['house#h1', 'hotel#h1', 'brown_1#b1'];
+
+    const wildOnlyHouse = applyAction(state, { type: 'play_property', playerId: 'p1', cardId: 'house#h1', color: 'brown' });
+    expect(wildOnlyHouse.error?.code).toBe('invalid_action');
+
+    const standard = applyAction(state, { type: 'play_property', playerId: 'p1', cardId: 'brown_1#b1', color: 'brown' });
+    expect(standard.error).toBeUndefined();
+    const withHouse = applyAction(standard.state, { type: 'play_property', playerId: 'p1', cardId: 'house#h1', color: 'brown' });
+    expect(withHouse.error).toBeUndefined();
+    const withHotel = applyAction(withHouse.state, { type: 'play_property', playerId: 'p1', cardId: 'hotel#h1', color: 'brown' });
+    expect(withHotel.error).toBeUndefined();
+
+    withHotel.state.players[0].hand = ['house#rail'];
+    withHotel.state.turn.playsUsed = 0;
+    const railroadHouse = applyAction(withHotel.state, { type: 'play_property', playerId: 'p1', cardId: 'house#rail', color: 'railroad' });
+    expect(railroadHouse.error?.code).toBe('invalid_action');
+  });
+
+  it('does not generate rent from an any-color Wild alone', () => {
+    const state = mkState();
+    state.players[0].hand = ['rent_color#r3'];
+    state.players[0].properties.brown = [{ cardId: 'wild_all#alone', assignedColor: 'brown' }];
+    const result = applyAction(state, { type: 'play_action', playerId: 'p1', cardId: 'rent_color#r3', color: 'brown' });
+    expect(result.error?.code).toBe('invalid_action');
   });
 
   it('applies custom max plays per turn ruleset', () => {

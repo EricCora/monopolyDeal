@@ -70,7 +70,7 @@ export function HomeScreen({
     live_online: 'LO',
   };
   const heroQuickFacts = [
-    { value: '2-4', label: 'Seats around one device' },
+    { value: '2-5', label: 'Seats around one device' },
     { value: '3', label: 'Card plays each turn' },
     { value: 'Resume', label: 'Jump back into active tables' },
   ] as const;

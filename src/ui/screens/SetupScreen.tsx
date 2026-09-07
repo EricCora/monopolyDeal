@@ -63,6 +63,7 @@ export function SetupScreen({
                 <option value={2}>2</option>
                 <option value={3}>3</option>
                 <option value={4}>4</option>
+                <option value={5}>5</option>
               </select>
             </label>
             <p className="setup-stage-helper">Pass one device around the table and reveal only the active seat when it is time to act.</p>

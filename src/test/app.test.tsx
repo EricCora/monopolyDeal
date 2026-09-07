@@ -207,6 +207,20 @@ describe('App', () => {
     });
   });
 
+  it('starts a five-player hot-seat match with all configured names', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.change(screen.getByLabelText(/total players/i), { target: { value: '5' } });
+    expect(screen.getByDisplayValue('Player 5')).toBeInTheDocument();
+    fireEvent.change(screen.getByDisplayValue('Player 5'), { target: { value: 'Fifth seat' } });
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    expect(mockedCreateGame).toHaveBeenCalledWith(expect.objectContaining({
+      players: [1, 2, 3, 4, 5].map((seat) => expect.objectContaining({
+        id: `p${seat}`, name: seat === 5 ? 'Fifth seat' : `Player ${seat}`,
+      })),
+    }));
+  });
+
   it('does not re-prompt reveal for same player after an action', () => {
     render(<App />);
 
@@ -971,6 +985,35 @@ describe('App', () => {
       takeCardId: 'railroad_1#b9',
       takeColor: 'railroad',
       destinationColor: 'railroad',
+    });
+  });
+
+  it('selects the clicked physical set for Deal Breaker and leaves excess cards unselectable', () => {
+    const state = structuredClone(baseState);
+    state.players[1].properties.brown = [
+      { cardId: 'brown_1#set1', assignedColor: 'brown', setId: 'first' },
+      { cardId: 'wild_all#set1', assignedColor: 'brown', setId: 'first' },
+      { cardId: 'brown_1#set2', assignedColor: 'brown', setId: 'second' },
+      { cardId: 'wild_brown_light_blue#set2', assignedColor: 'brown', setId: 'second' },
+      { cardId: 'wild_all#excess', assignedColor: 'brown', setId: 'excess' },
+    ];
+    state.pending = { kind: 'deal_breaker', payload: { sourcePlayerId: 'p1', targetPlayerId: 'p2', actionCardId: 'deal_breaker#1' } };
+    mockedCreateGame.mockReturnValueOnce(state);
+    mockedGetNextPrompt.mockReturnValue({ playerId: 'p1', text: 'Choose a set.', kind: 'selection' });
+    mockedGetLegalActions.mockReturnValue(['first', 'second'].map((setId) => ({
+      label: `Take ${setId} brown set`, action: { type: 'deal_breaker_pick', playerId: 'p1', color: 'brown', setId },
+    })));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /new game/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start match/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reveal turn/i }));
+    const beta = screen.getByRole('heading', { name: 'Beta' }).closest('article')!;
+    expect(within(beta).getByText('Set 3 · Incomplete')).toBeInTheDocument();
+    const wilds = within(beta).getAllByRole('button', { name: /wild/i });
+    expect(wilds[wilds.length - 1]).toBeDisabled();
+    fireEvent.click(within(beta).getAllByRole('button', { name: /brown card/i })[1]);
+    expect(mockedApplyAction).toHaveBeenCalledWith(expect.anything(), {
+      type: 'deal_breaker_pick', playerId: 'p1', color: 'brown', setId: 'second',
     });
   });
 

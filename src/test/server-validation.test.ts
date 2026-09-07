@@ -43,6 +43,14 @@ describe('server validation', () => {
     expect(isOptionalFiniteNumber('5')).toBe(false);
   });
 
+  it('validates optional physical set identifiers while accepting legacy actions', () => {
+    const action = { type: 'deal_breaker_pick', playerId: 'p1', color: 'brown' };
+    expect(isValidMultiplayerAction(action)).toBe(true);
+    expect(isValidMultiplayerAction({ ...action, setId: 'brown:auto-1' })).toBe(true);
+    expect(isValidMultiplayerAction({ ...action, setId: 1 })).toBe(false);
+    expect(isValidMultiplayerAction({ ...action, setId: '' })).toBe(false);
+  });
+
   it('validates multiplayer action payload shapes', () => {
     expect(isValidMultiplayerAction({ type: 'draw_cards', playerId: 'p1' })).toBe(true);
     expect(isValidMultiplayerAction({

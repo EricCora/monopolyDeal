@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatPropertyColor, getCardDefinition, type PropertyColor } from './cards/catalog';
+import { propertySets, isCompletePropertySet } from './engine/core';
 import { buildCoachHint, chooseHeuristicAction, chooseMonteCarloAction } from './ai';
 import {
   applyAction,
@@ -138,9 +139,9 @@ type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'p
 function initialSetup(): SetupViewModel {
   return {
     playerCount: 2,
-    playerNames: ['Player 1', 'Player 2', 'Player 3', 'Player 4'],
-    playerControllers: ['human', 'human', 'human', 'human'],
-    botDifficulties: ['easy', 'easy', 'easy', 'easy'],
+    playerNames: ['Player 1', 'Player 2', 'Player 3', 'Player 4', 'Player 5'],
+    playerControllers: ['human', 'human', 'human', 'human', 'human'],
+    botDifficulties: ['easy', 'easy', 'easy', 'easy', 'easy'],
     customRules: {
       winCompleteSets: DEFAULT_SETUP_RULES.winCompleteSets,
       maxHandAtEndTurn: DEFAULT_SETUP_RULES.maxHandAtEndTurn,
@@ -1171,9 +1172,9 @@ function App() {
     setSetup((prev) => ({
       ...prev,
       playerCount: 2,
-      playerNames: ['You', 'House Bot', prev.playerNames[2] ?? 'Player 3', prev.playerNames[3] ?? 'Player 4'],
-      playerControllers: ['human', 'bot', prev.playerControllers[2] ?? 'human', prev.playerControllers[3] ?? 'human'],
-      botDifficulties: ['easy', 'easy', prev.botDifficulties[2] ?? 'easy', prev.botDifficulties[3] ?? 'easy'],
+      playerNames: ['You', 'House Bot', prev.playerNames[2] ?? 'Player 3', prev.playerNames[3] ?? 'Player 4', prev.playerNames[4] ?? 'Player 5'],
+      playerControllers: ['human', 'bot', prev.playerControllers[2] ?? 'human', prev.playerControllers[3] ?? 'human', prev.playerControllers[4] ?? 'human'],
+      botDifficulties: ['easy', 'easy', prev.botDifficulties[2] ?? 'easy', prev.botDifficulties[3] ?? 'easy', prev.botDifficulties[4] ?? 'easy'],
     }));
     startGameWithPlayers([
       { id: 'p1', name: 'You', controller: 'human', botDifficulty: 'easy' },
@@ -1644,7 +1645,13 @@ function App() {
     }
 
     if (pending.kind === 'deal_breaker') {
-      const selected = legalPool.find((entry) => entry.action.type === 'deal_breaker_pick' && entry.action.color === color);
+      const activeGame = mode === 'multiplayer' ? multiplayerGame : game;
+      const owner = activeGame?.players.find((player) => player.id === ownerPlayerId);
+      const clickedSet = owner && propertySets(owner, color).find((set) => set.entries.some((entry) => entry.cardId === cardId));
+      if (!clickedSet || !isCompletePropertySet(clickedSet.entries, color)) return;
+      const selected = legalPool.find((entry) => entry.action.type === 'deal_breaker_pick'
+        && entry.action.color === color
+        && (!entry.action.setId || entry.action.setId === clickedSet.setId));
       if (!selected) return;
       if (mode === 'multiplayer') {
         runMultiplayerActionWithConfirmation(selected.action, selected);
@@ -1756,7 +1763,7 @@ function App() {
       const nextNames = [...prev.playerNames];
       const nextControllers = [...prev.playerControllers];
       const nextDifficulties = [...prev.botDifficulties];
-      for (let index = 0; index < 4; index += 1) {
+      for (let index = 0; index < 5; index += 1) {
         if (index < names.length) {
           nextNames[index] = names[index];
           nextControllers[index] = controllers?.[index] ?? 'human';
@@ -1769,7 +1776,7 @@ function App() {
       }
       return {
         ...prev,
-        playerCount: Math.min(4, Math.max(2, names.length)),
+        playerCount: Math.min(5, Math.max(2, names.length)),
         playerNames: nextNames,
         playerControllers: nextControllers,
         botDifficulties: nextDifficulties,

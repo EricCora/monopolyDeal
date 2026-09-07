@@ -3,7 +3,7 @@
 ## Baseline From Current Repo
 
 Current implemented scope (from README + source):
-- Local pass-and-play for 2-4 players
+- Local pass-and-play for 2-5 players
 - Core Monopoly Deal action handling (rent, double rent, debt collector, birthday, property steal/swap, deal breaker, Just Say No)
 - Turn enforcement (draw -> action plays <= 3 -> discard to 7 -> pass)
 - Winner detection at 3 complete sets

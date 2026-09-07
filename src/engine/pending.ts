@@ -1,4 +1,4 @@
-import { getCardDefinition } from '../cards/catalog';
+import { getCardDefinition, PROPERTY_SET_SIZES, type PropertyColor } from '../cards/catalog';
 import type {
   GameEvent,
   GameState,
@@ -16,7 +16,9 @@ import {
   completeSetColors,
   generatePaymentOptions,
   getPlayer,
+  isCompleteSet,
   movablePropertyCards,
+  propertySets,
   pushEvent,
   totalBankValue,
   totalPayableValue,
@@ -181,16 +183,21 @@ function legalForSlyDealSelection(state: GameState, player: PlayerState): LegalA
   for (const movable of movablePropertyCards(target)) {
     const def = getCardDefinition(movable.cardId);
     for (const destColor of PROPERTY_COLORS.filter((candidate) => canCardBePlacedInColor(def, candidate))) {
-      choices.push({
-        label: `Take ${cardLabel(movable.cardId)} from ${target.name} to ${colorLabel(destColor)}`,
-        action: {
-          type: 'sly_deal_pick',
-          playerId: player.id,
-          cardId: movable.cardId,
-          sourceColor: movable.color,
-          destinationColor: destColor,
-        },
-      });
+      const setIds = openSetIds(player, destColor);
+      for (const setId of setIds) {
+        choices.push({
+          label: `Take ${cardLabel(movable.cardId)} from ${target.name} to ${colorLabel(destColor)}`,
+          action: {
+            type: 'sly_deal_pick',
+            playerId: player.id,
+            cardId: movable.cardId,
+            sourceColor: movable.color,
+            destinationColor: destColor,
+            sourceSetId: movable.setId,
+            setId,
+          },
+        });
+      }
     }
   }
   return choices;
@@ -209,18 +216,24 @@ function legalForForcedDealSelection(state: GameState, player: PlayerState): Leg
     for (const theirs of movablePropertyCards(target)) {
       const takenCard = getCardDefinition(theirs.cardId);
       for (const destColor of PROPERTY_COLORS.filter((candidate) => canCardBePlacedInColor(takenCard, candidate))) {
-        actions.push({
-          label: `Swap ${cardLabel(own.cardId)} for ${cardLabel(theirs.cardId)}`,
-          action: {
-            type: 'forced_deal_pick',
-            playerId: player.id,
-            giveCardId: own.cardId,
-            giveColor: own.color,
-            takeCardId: theirs.cardId,
-            takeColor: theirs.color,
-            destinationColor: destColor,
-          },
-        });
+        const setIds = openSetIds(source, destColor);
+        for (const setId of setIds) {
+          actions.push({
+            label: `Swap ${cardLabel(own.cardId)} for ${cardLabel(theirs.cardId)}`,
+            action: {
+              type: 'forced_deal_pick',
+              playerId: player.id,
+              giveCardId: own.cardId,
+              giveColor: own.color,
+              takeCardId: theirs.cardId,
+              takeColor: theirs.color,
+              destinationColor: destColor,
+              giveSetId: own.setId,
+              takeSetId: theirs.setId,
+              setId,
+            },
+          });
+        }
       }
     }
   }
@@ -234,10 +247,23 @@ function legalForDealBreakerSelection(state: GameState, player: PlayerState): Le
   const target = getPlayer(state, req.targetPlayerId);
   if (!target) return [];
 
-  return completeSetColors(target).map((color) => ({
-    label: `Take complete ${colorLabel(color)} set`,
-    action: { type: 'deal_breaker_pick', playerId: player.id, color },
-  }));
+  return completeSetColors(target).flatMap((color) => propertySets(target, color)
+    .filter((set) => isCompleteSet(target, color, set.setId))
+    .map((set) => ({
+      label: `Take complete ${colorLabel(color)} set`,
+      action: { type: 'deal_breaker_pick', playerId: player.id, color, setId: set.setId },
+    })));
+}
+
+function openSetIds(player: PlayerState, color: PropertyColor): Array<string | undefined> {
+  const open = propertySets(player, color).filter((set) => {
+    const count = set.entries.filter((entry) => {
+      const kind = getCardDefinition(entry.cardId).kind;
+      return kind === 'property' || kind === 'wild';
+    }).length;
+    return count < PROPERTY_SET_SIZES[color] && !isCompleteSet(player, color, set.setId);
+  });
+  return open.length > 0 ? open.map((set) => set.setId) : [undefined];
 }
 
 export function legalForPending(state: GameState, player: PlayerState): LegalAction[] {

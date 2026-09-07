@@ -40,7 +40,8 @@ function fillLobby(room: MultiplayerRoom) {
   const p2 = joinRoom(room, 'Player 2');
   const p3 = joinRoom(room, 'Player 3');
   const p4 = joinRoom(room, 'Player 4');
-  return [p2, p3, p4];
+  const p5 = joinRoom(room, 'Player 5');
+  return [p2, p3, p4, p5];
 }
 
 function withPauseOnDisconnectPolicy<T>(run: () => T): T {
@@ -65,6 +66,26 @@ function startReadyRoom(
 }
 
 describe('multiplayer room service lifecycle', () => {
+  it('starts five seats and preserves physical sets and presets through checkpoints', () => {
+    const { room, session } = createRoom(new Map<string, MultiplayerRoom>(), 'Host');
+    fillLobby(room);
+    setRoomPreset(room, session.playerId, session.sessionToken, 'fast');
+    startReadyRoom(room, session, 55);
+    expect(room.game?.players).toHaveLength(5);
+    expect(room.game?.ruleset?.winCompleteSets).toBe(2);
+    room.game!.players[0].properties.brown = [
+      { cardId: 'brown_1#saved', assignedColor: 'brown', setId: 'saved-set' },
+      { cardId: 'wild_all#saved', assignedColor: 'brown', setId: 'saved-set' },
+      { cardId: 'house#saved', assignedColor: 'brown', setId: 'saved-set' },
+    ];
+    const checkpoint = saveRoomCheckpoint(room, session.playerId, session.sessionToken, 'Five seats');
+    room.game!.players[0].properties.brown = [];
+    loadRoomCheckpoint(room, session.playerId, session.sessionToken, checkpoint.id);
+    expect(room.game?.players).toHaveLength(5);
+    expect(room.game?.players[0].properties.brown.map((entry) => entry.setId)).toEqual(['saved-set', 'saved-set', 'saved-set']);
+    expect(room.game?.ruleset?.winCompleteSets).toBe(2);
+  });
+
   it('refreshes room activity timestamp on state polls', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
@@ -193,8 +214,8 @@ describe('multiplayer room service lifecycle', () => {
     const joined = joinRoom(room, 'Replacement');
 
     expect(joined.playerId).toBe(playerTwo.playerId);
-    expect(room.players).toHaveLength(4);
-    expect(new Set(room.players.map((player) => player.id)).size).toBe(4);
+    expect(room.players).toHaveLength(5);
+    expect(new Set(room.players.map((player) => player.id)).size).toBe(5);
   });
 
   it('reclaims disconnected lobby seats even when reconnect grace has not expired', () => {
@@ -207,7 +228,7 @@ describe('multiplayer room service lifecycle', () => {
 
     const replacement = joinRoom(room, 'Replacement');
     expect(replacement.playerId).toBe(playerTwo.playerId);
-    expect(room.players).toHaveLength(4);
+    expect(room.players).toHaveLength(5);
   });
 
   it('removes lobby participants immediately when they leave', () => {
@@ -234,6 +255,7 @@ describe('multiplayer room service lifecycle', () => {
     expect(() => joinRoom(room, 'A')).not.toThrow();
     expect(() => joinRoom(room, 'B')).not.toThrow();
     expect(() => joinRoom(room, 'C')).not.toThrow();
+    expect(() => joinRoom(room, 'D')).not.toThrow();
     expect(() => joinRoom(room, 'Overflow')).toThrowError('room_full');
   });
 
@@ -246,7 +268,7 @@ describe('multiplayer room service lifecycle', () => {
 
     expect(() => joinRoom(room, 'Replacement 1')).not.toThrow();
     expect(() => joinRoom(room, 'Replacement 2')).not.toThrow();
-    expect(room.players).toHaveLength(4);
+    expect(room.players).toHaveLength(5);
     expect(room.players.every((entry) => entry.connected)).toBe(true);
   });
 

@@ -6,7 +6,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 
 ## Features
 
-- 2 to 4 player local matches with custom player names
+- 2 to 5 player local and private-room matches with custom player names
 - Turn flow enforcement (draw, up to 3 plays, discard to 7, pass)
 - Play handling for money, properties, wild cards, and action cards
 - Counter flow with `Just Say No` chains
@@ -38,7 +38,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Payment assistant auto-select for pending payment flows
 - Payment validation hardening for manual debt selection (must satisfy amount when possible; shortfall only when total assets are insufficient)
 - Zero-asset debt/payment requests can be confirmed as a valid $0 shortfall so turns never get stuck
-- Official banking split enforced: regular property cards cannot be banked; money/action/building cards and wild property cards can be banked
+- Official banking split enforced: Property cards (including Wilds) cannot be banked; money/action/building cards can be banked
 - In-game rules reference drawer with property set/rent lookup and pending-flow help
 - Stats filters (player/winner/date range) and settings data controls for clearing local stats/history
 - Growth telemetry counters (starts/completions/rematches/share conversion/LAN activity/coach usage + multiplayer funnel/push health) surfaced in Stats & History
@@ -75,6 +75,14 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Experimental feature flags for AI opponents, AI coach hints, replay timeline, daily challenges, achievements, and custom rules
 - Custom rule limits are reflected in table prompts, discard counts, action rails, and AI pass timing
 - Auto-save + resume via `localStorage`
+
+## Classic Rules
+
+- Two-color Rent charges every opponent through separate counter/payment windows; any-color Rent charges one chosen opponent.
+- A complete set needs at least one standard Property card. Excess properties belong to separate sets and are not protected by another complete set of the same color.
+- An any-color Wild on its own earns no rent. Wilds can only occupy supported colors, including after a Forced Deal.
+- Houses and Hotels attach to individual complete sets, excluding Railroads and Utilities. Each set allows one House and one Hotel; a Hotel requires a House.
+- Custom Classic play, hand-limit, and victory presets remain available.
 
 ## Tech Stack
 
