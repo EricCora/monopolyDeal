@@ -545,7 +545,7 @@ function App() {
     }
 
     if (action.type === 'play_property') {
-      return `Play to ${colorLabel(action.color)}`;
+      return `Play to ${colorLabel(action.color)}${action.setId ? ` set ${action.setId}` : ''}`;
     }
 
     if (action.type === 'play_action') {

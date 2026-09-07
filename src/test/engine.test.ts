@@ -8,6 +8,7 @@ import {
   isGameOver,
   type GameState,
 } from '../engine';
+import { propertySets } from '../engine/core';
 
 function mkState(): GameState {
   const state = createGame({
@@ -255,6 +256,106 @@ describe('engine basics', () => {
     const result = applyAction(state, { type: 'pass_turn', playerId: 'p1' });
     expect(isGameOver(result.state).done).toBe(true);
     expect(isGameOver(result.state).winnerId).toBe('p1');
+  });
+
+  it('counts distinct complete colors toward victory, not duplicate physical sets', () => {
+    const state = mkState();
+    state.players[0].properties.brown = [
+      { cardId: 'brown_1#b1', assignedColor: 'brown', setId: 'brown-one' },
+      { cardId: 'brown_1#b2', assignedColor: 'brown', setId: 'brown-one' },
+      { cardId: 'brown_1#b3', assignedColor: 'brown', setId: 'brown-two' },
+      { cardId: 'brown_1#b4', assignedColor: 'brown', setId: 'brown-two' },
+    ];
+    state.players[0].properties.dark_blue = [
+      { cardId: 'dark_blue_1#d1', assignedColor: 'dark_blue' },
+      { cardId: 'dark_blue_1#d2', assignedColor: 'dark_blue' },
+    ];
+
+    expect(isGameOver(state).done).toBe(false);
+  });
+
+  it('keeps a Deal Breaker set and its buildings separate from same-color properties', () => {
+    const state = mkState();
+    state.players[0].properties.brown = [
+      { cardId: 'brown_1#existing', assignedColor: 'brown', setId: 'existing-brown' },
+    ];
+    state.players[1].properties.brown = [
+      { cardId: 'brown_1#stolen-one', assignedColor: 'brown', setId: 'target-brown' },
+      { cardId: 'brown_1#stolen-two', assignedColor: 'brown', setId: 'target-brown' },
+      { cardId: 'house#attached', assignedColor: 'brown', setId: 'target-brown' },
+    ];
+    state.pending = {
+      kind: 'deal_breaker',
+      payload: { sourcePlayerId: 'p1', targetPlayerId: 'p2', actionCardId: 'deal_breaker#db' },
+    };
+
+    const result = applyAction(state, {
+      type: 'deal_breaker_pick', playerId: 'p1', color: 'brown', setId: 'target-brown',
+    });
+    expect(result.error).toBeUndefined();
+    const sets = propertySets(result.state.players[0], 'brown');
+    expect(sets).toHaveLength(2);
+    expect(sets.find((set) => set.setId === 'existing-brown')?.entries).toHaveLength(1);
+    const stolen = sets.find((set) => set.setId !== 'existing-brown');
+    expect(stolen?.entries.map((entry) => entry.cardId)).toEqual(expect.arrayContaining([
+      'brown_1#stolen-one', 'brown_1#stolen-two', 'house#attached',
+    ]));
+  });
+
+  it('generates and applies House placement for the chosen same-color set', () => {
+    const state = mkState();
+    state.players[0].hand = ['house#chosen', 'hotel#chosen'];
+    state.players[0].properties.brown = [
+      { cardId: 'brown_1#one-a', assignedColor: 'brown', setId: 'brown-one' },
+      { cardId: 'brown_1#one-b', assignedColor: 'brown', setId: 'brown-one' },
+      { cardId: 'brown_1#two-a', assignedColor: 'brown', setId: 'brown-two' },
+      { cardId: 'brown_1#two-b', assignedColor: 'brown', setId: 'brown-two' },
+    ];
+    const choices = getLegalActions(state, 'p1').filter((item) => (
+      item.action.type === 'play_property' && item.action.cardId === 'house#chosen'
+    ));
+    expect(choices).toHaveLength(2);
+    const chosen = choices.find((item) => item.action.type === 'play_property' && item.action.setId === 'brown-two');
+    expect(chosen).toBeDefined();
+    if (!chosen) return;
+    const result = applyAction(state, chosen.action);
+    expect(result.error).toBeUndefined();
+    expect(propertySets(result.state.players[0], 'brown').find((set) => set.setId === 'brown-one')?.entries)
+      .toHaveLength(2);
+    expect(propertySets(result.state.players[0], 'brown').find((set) => set.setId === 'brown-two')?.entries)
+      .toHaveLength(3);
+
+    const hotelChoice = getLegalActions(result.state, 'p1').find((item) => (
+      item.action.type === 'play_property' && item.action.cardId === 'hotel#chosen'
+    ));
+    expect(hotelChoice).toBeDefined();
+    if (!hotelChoice) return;
+    const hotelResult = applyAction(result.state, hotelChoice.action);
+    expect(hotelResult.error).toBeUndefined();
+    expect(propertySets(hotelResult.state.players[0], 'brown').find((set) => set.setId === 'brown-two')?.entries)
+      .toHaveLength(4);
+  });
+
+  it('infers a legacy Sly Deal source set from the selected card', () => {
+    const state = mkState();
+    state.pending = {
+      kind: 'sly_deal',
+      payload: { sourcePlayerId: 'p1', targetPlayerId: 'p2', actionCardId: 'sly_deal#legacy' },
+    };
+    state.players[1].properties.brown = [
+      { cardId: 'brown_1#complete-a', assignedColor: 'brown', setId: 'complete-brown' },
+      { cardId: 'brown_1#complete-b', assignedColor: 'brown', setId: 'complete-brown' },
+      { cardId: 'brown_1#loose', assignedColor: 'brown', setId: 'loose-brown' },
+    ];
+
+    const result = applyAction(state, {
+      type: 'sly_deal_pick', playerId: 'p1', cardId: 'brown_1#loose',
+      sourceColor: 'brown', destinationColor: 'brown',
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.state.players[1].properties.brown.map((entry) => entry.cardId)).toEqual([
+      'brown_1#complete-a', 'brown_1#complete-b',
+    ]);
   });
 
   it('honors custom win set target in ruleset', () => {

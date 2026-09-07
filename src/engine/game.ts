@@ -17,6 +17,7 @@ import {
   DEFAULT_RULESET,
   MAX_HAND_AT_END_TURN,
   PROPERTY_COLORS,
+  allocatePropertySetId,
   addToProperty,
   canCardBeBanked,
   canCardBePlacedInColor,
@@ -33,6 +34,7 @@ import {
   drawCards,
   error,
   findPropertyColorByCard,
+  findPropertySetIdByCard,
   finishTurn,
   generatePaymentOptions,
   getCurrentPlayer,
@@ -125,11 +127,23 @@ function legalPlayActions(state: GameState, player: PlayerState): LegalAction[] 
 
       if (card.kind === 'building') {
         for (const color of PROPERTY_COLORS) {
-          if (!isBuildingPlacementLegal(player, color, card.actionKind as 'house' | 'hotel')) continue;
-          actions.push({
-            label: `Play ${card.name} on ${colorLabel(color)}`,
-            action: { type: 'play_property', playerId: player.id, cardId, color },
-          });
+          const eligibleSetIds = propertySets(player, color)
+            .filter((set) => isBuildingPlacementLegal(player, color, card.actionKind as 'house' | 'hotel', set.setId))
+            .map((set) => set.setId);
+          for (const setId of eligibleSetIds) {
+            actions.push({
+              label: eligibleSetIds.length > 1
+                ? `Play ${card.name} on ${colorLabel(color)} set ${setId}`
+                : `Play ${card.name} on ${colorLabel(color)}`,
+              action: {
+                type: 'play_property',
+                playerId: player.id,
+                cardId,
+                color,
+                ...(eligibleSetIds.length > 1 ? { setId } : {}),
+              },
+            });
+          }
         }
       }
 
@@ -389,8 +403,16 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
       return setErr(error('illegal_play_limit', `Already used ${ruleset(state).maxPlaysPerTurn} plays this turn.`));
     }
     const card = getCardDefinition(action.cardId);
+    let placementSetId = action.setId;
     if (card.kind === 'building') {
-      if (!isBuildingPlacementLegal(player, action.color, card.actionKind as 'house' | 'hotel', action.setId)) {
+      const eligibleSetIds = propertySets(player, action.color)
+        .filter((set) => isBuildingPlacementLegal(player, action.color, card.actionKind as 'house' | 'hotel', set.setId))
+        .map((set) => set.setId);
+      if (!action.setId && eligibleSetIds.length > 1) {
+        return setErr(error('invalid_target', 'Choose which physical property set receives this building.'));
+      }
+      placementSetId = action.setId ?? eligibleSetIds[0];
+      if (!isBuildingPlacementLegal(player, action.color, card.actionKind as 'house' | 'hotel', placementSetId)) {
         return setErr(error('invalid_action', 'Building requires a complete property set.'));
       }
     } else if (!canCardBePlacedInColor(card, action.color)) {
@@ -401,7 +423,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
 
     if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
 
-    addToProperty(player, action.cardId, action.color, action.setId);
+    addToProperty(player, action.cardId, action.color, placementSetId);
     consumePlay(state);
     pushEvent(events, 'property', `${player.name} placed ${cardLabel(action.cardId)} in ${colorLabel(action.color)}.`);
   }
@@ -716,8 +738,9 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     const source = getPlayer(state, req.sourcePlayerId);
     const target = getPlayer(state, req.targetPlayerId);
     if (!source || !target) return setErr(error('invalid_target', 'Player not found.'));
-    const sourceSetWasComplete = isCompleteSet(target, action.sourceColor, action.sourceSetId);
-    const removed = removePropertyCard(target, action.sourceColor, action.cardId, action.sourceSetId);
+    const sourceSetId = action.sourceSetId ?? findPropertySetIdByCard(target, action.sourceColor, action.cardId);
+    const sourceSetWasComplete = isCompleteSet(target, action.sourceColor, sourceSetId);
+    const removed = removePropertyCard(target, action.sourceColor, action.cardId, sourceSetId);
     if (!removed) return setErr(error('invalid_target', 'Card not found in target set.'));
     if (sourceSetWasComplete) {
       addToProperty(target, action.cardId, action.sourceColor, removed.setId);
@@ -748,10 +771,12 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     const source = getPlayer(state, req.sourcePlayerId);
     const target = getPlayer(state, req.targetPlayerId);
     if (!source || !target) return setErr(error('invalid_target', 'Player not found.'));
-    const giveSetWasComplete = isCompleteSet(source, action.giveColor, action.giveSetId);
-    const takeSetWasComplete = isCompleteSet(target, action.takeColor, action.takeSetId);
-    const give = removePropertyCard(source, action.giveColor, action.giveCardId, action.giveSetId);
-    const take = removePropertyCard(target, action.takeColor, action.takeCardId, action.takeSetId);
+    const giveSetId = action.giveSetId ?? findPropertySetIdByCard(source, action.giveColor, action.giveCardId);
+    const takeSetId = action.takeSetId ?? findPropertySetIdByCard(target, action.takeColor, action.takeCardId);
+    const giveSetWasComplete = isCompleteSet(source, action.giveColor, giveSetId);
+    const takeSetWasComplete = isCompleteSet(target, action.takeColor, takeSetId);
+    const give = removePropertyCard(source, action.giveColor, action.giveCardId, giveSetId);
+    const take = removePropertyCard(target, action.takeColor, action.takeCardId, takeSetId);
     if (!give || !take) {
       if (give) addToProperty(source, give.cardId, action.giveColor, give.setId);
       if (take) addToProperty(target, take.cardId, action.takeColor, take.setId);
@@ -794,7 +819,13 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     const source = getPlayer(state, req.sourcePlayerId);
     const target = getPlayer(state, req.targetPlayerId);
     if (!source || !target) return setErr(error('invalid_target', 'Player not found.'));
-    const selectedSet = propertySets(target, action.color).find((set) => action.setId ? set.setId === action.setId : isCompleteSet(target, action.color, set.setId));
+    const completeSets = propertySets(target, action.color)
+      .filter((set) => isCompleteSet(target, action.color, set.setId));
+    const selectedSet = action.setId
+      ? completeSets.find((set) => set.setId === action.setId)
+      : completeSets.length === 1
+        ? completeSets[0]
+        : undefined;
     if (!selectedSet || !isCompleteSet(target, action.color, selectedSet.setId)) {
       return setErr(error('invalid_action', 'Target set is not complete.'));
     }
@@ -802,14 +833,11 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     const cards = [...selectedSet.entries];
     target.properties[action.color] = target.properties[action.color]
       .filter((entry) => entry.setId !== selectedSet.setId);
-    let sourceSetId: string | undefined;
+    const stolenSetId = allocatePropertySetId(source, action.color, `${action.color}:stolen-${selectedSet.setId}`);
     for (const entry of cards) {
       const def = getCardDefinition(entry.cardId);
       const destination = def.kind === 'property' ? def.color! : action.color;
-      addToProperty(source, entry.cardId, destination, sourceSetId);
-      if (!sourceSetId) {
-        sourceSetId = source.properties[destination].find((candidate) => candidate.cardId === entry.cardId)?.setId;
-      }
+      addToProperty(source, entry.cardId, destination, stolenSetId);
     }
 
     state.pending = null;

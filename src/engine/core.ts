@@ -149,6 +149,19 @@ function generatedSetId(color: PropertyColor, index: number): string {
   return `${color}:auto-${index}`;
 }
 
+/** Allocate a deterministic set id that cannot merge with an existing lane. */
+export function allocatePropertySetId(
+  player: PlayerState,
+  color: PropertyColor,
+  preferred = `${color}:auto`,
+): string {
+  const used = new Set(propertySets(player, color).map((set) => set.setId));
+  if (!used.has(preferred)) return preferred;
+  let suffix = 2;
+  while (used.has(`${preferred}-${suffix}`)) suffix += 1;
+  return `${preferred}-${suffix}`;
+}
+
 /**
  * Derive physical property sets from the legacy color lanes. Untagged cards are
  * assigned deterministically, with standard properties considered before wilds
@@ -228,6 +241,15 @@ export function getPropertySetEntries(player: PlayerState, color: PropertyColor,
   return sets[0]?.entries ?? [];
 }
 
+export function findPropertySetIdByCard(
+  player: PlayerState,
+  color: PropertyColor,
+  cardId: string,
+): string | undefined {
+  return propertySets(player, color)
+    .find((set) => set.entries.some((entry) => entry.cardId === cardId))?.setId;
+}
+
 export function isCompletePropertySet(entries: PropertyCardPlacement[], color: PropertyColor): boolean {
   const required = PROPERTY_SET_SIZES[color];
   const properties = entries.filter(isPropertyCardPlacement);
@@ -259,6 +281,10 @@ export function addToProperty(player: PlayerState, cardId: string, color: Proper
   const required = PROPERTY_SET_SIZES[color];
   const sets = propertySets(player, color);
   let target = setId ? sets.find((set) => set.setId === setId) : undefined;
+  // An explicit set id is a physical-group instruction. If this is a newly
+  // transferred set, create that group before the normal "first open set"
+  // placement heuristic can merge it into an existing lane.
+  if (!target && setId) target = { setId, entries: [] };
 
   if (!target && card.kind === 'building') {
     target = sets.find((set) => isCompletePropertySet(set.entries, color)
@@ -330,10 +356,10 @@ export function colorLabel(color: PropertyColor): string {
 }
 
 export function countCompleteSets(player: PlayerState): number {
-  return PROPERTY_COLORS.reduce(
-    (count, color) => count + propertySets(player, color).filter((set) => isCompletePropertySet(set.entries, color)).length,
-    0,
-  );
+  // Monopoly Deal's victory condition counts completed color groups. Multiple
+  // physical groups of one color still matter for protection and rent, but
+  // cannot satisfy multiple victory slots.
+  return PROPERTY_COLORS.filter((color) => isCompleteSet(player, color)).length;
 }
 
 export function isCompleteSet(player: PlayerState, color: PropertyColor, setId?: string): boolean {
