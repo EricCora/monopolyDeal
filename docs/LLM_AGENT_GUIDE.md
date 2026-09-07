@@ -38,7 +38,7 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - In local dev, Vite proxies `/api/multiplayer` to `http://localhost:8787` so LAN clients can use same-origin API calls from the UI host URL.
   - Legacy LAN wrappers remain for development fallback.
 - `apps/server/`
-  - Multiplayer API server scaffold with room lifecycle, reconnect windows, host migration, revision-guarded mutations, turn snapshots, checkpoints, and best-effort snapshot persistence.
+  - Multiplayer API server with room lifecycle, reconnect windows, timeout retirement, host migration, gameplay revision guards, turn snapshots, checkpoints, and atomic debounced snapshot persistence.
   - Room state now includes additive session metadata for `presetId`, ready-gated `canStart`, and ready-gated `canRematch`.
   - Match start/rematch both derive rules from the selected multiplayer preset through the existing engine `GameConfig.ruleset` path.
   - Adds server push event stream endpoint (`GET /api/multiplayer/rooms/:roomCode/events`) for hybrid push updates.

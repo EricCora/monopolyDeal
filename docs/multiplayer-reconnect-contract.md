@@ -93,7 +93,7 @@ stateDiagram-v2
 ## Duplicate Reconnect Policy
 
 - If two active clients attempt reconnect for the same seat:
-- Server accepts the newest valid request only after reconnect auth and revision checks succeed.
+- Server accepts the newest valid request after reconnect authentication and grace-window checks succeed.
 - A plain duplicate socket connection does not steal an already-connected seat; it is rejected until a valid reconnect handshake replaces the active binding.
 - Prior connection is invalidated only after the replacement reconnect succeeds.
 - Server emits presence/update event reflecting latest binding.
@@ -101,7 +101,7 @@ stateDiagram-v2
 ## Version Mismatch Policy
 
 - Client sends `clientLastKnownStateVersion` (or equivalent revision) when resuming.
-- If version diverges or client revision is stale, reconnect fails with `protocol_mismatch` and the active seat binding remains unchanged.
+- A stale client revision is accepted and receives the authoritative snapshot; it is not a protocol mismatch.
 - Client must not accept gameplay input until snapshot is applied.
 
 ## Message Schemas
@@ -227,12 +227,13 @@ Runtime-state fields surfaced in `MultiplayerRoomView`:
 
 Policy behavior:
 
-- Active/finished room disconnect pauses gameplay.
+- Active room disconnect pauses gameplay; completed match results are preserved.
 - Host disconnect enters `paused_host_disconnect`.
 - Host reconnect before timeout resumes to `active` when no unresolved disconnect remains.
 - If the match was already manually paused before the disconnect pause overlay, that manual pause is restored after the last disconnect resolves.
-- Host timeout transitions room to `ended_timeout` with `endedReason='host_timeout'`.
-- No host migration after match start (lobby-only migration behavior).
+- An expired competitor retires. With at least two survivors, the match continues and an expired host is replaced. With one survivor, that player wins and the room enters `ended_timeout`.
+- Retirement discards that player's cards and clears undo/checkpoint history. Pending interactions involving the retired seat are resolved or canceled; turn order skips that seat. Manual pause/resume cannot override outstanding disconnects.
+- Gameplay revision is separate from the event sequence used by chat and presence. Authenticated exact retries are checked before gameplay revision validation and are bound to the seat and action payload.
 
 ### Action Submit (Version Guard v1)
 
@@ -275,7 +276,7 @@ MD-C09 implementation note:
 | Invalid token | Reject resume (`invalid_token`) | `resume_failed`, show manual rejoin guidance |
 | Seat timed out | Reject resume (`seat_timed_out`) | `timed_out`, require rejoin |
 | Room closed/not found | Reject resume (`room_closed`/`seat_not_found`) | `room_ended`, route to host/join flow |
-| Host disconnect timeout (`MD-C10`) | Room enters `ended_timeout` | `room_ended`, no further gameplay actions |
+| Competitor timeout (`MD-C10`) | Retire the seat; end only with fewer than two survivors | Continue with remaining competitors or show final result |
 | Retry budget exhausted | No valid resume | `resume_failed`, allow retry/refresh/rejoin |
 | Version mismatch | Resume accepted with resync required | `resync_pending` until snapshot applied |
 | Stale action submit (`MD-C09`) | Reject with `action_rejected(reason=stale_state)` | Client auto-resyncs and resumes without manual rejoin |
@@ -286,7 +287,6 @@ MD-C09 implementation note:
 | --- | --- |
 | `invalid_session` | `invalid_token` |
 | `reconnect_expired` | `seat_timed_out` |
-| `revision_conflict` | `protocol_mismatch` |
 | Room missing | `room_closed` |
 | Other reconnect failures | `invalid_token` |
 
@@ -302,7 +302,7 @@ MD-C09 implementation note:
 ## Host Timeout Policy (MD-C10)
 
 - Room pause/end outcomes are explicit via runtime-state fields and room-runtime events.
-- Host timeout branch is terminal for the room lifecycle (`ended_timeout`) with user-facing room-ended messaging.
+- Host timeout is terminal only when one competitor remains; otherwise a surviving competitor becomes host and play continues.
 
 ## Explicit Decisions (Locked)
 
@@ -310,7 +310,7 @@ MD-C09 implementation note:
 - Reconnect auth: ephemeral `resumeToken`
 - Grace default: `90_000ms` configurable
 - Duplicate reconnect: newest socket/session wins, prior binding invalidated
-- Host timeout behavior: implemented via runtime pause/end policy (`ended_timeout`)
+- Timeout behavior: retire the expired seat; continue with at least two competitors, otherwise finish.
 
 ## Manual Simulation Scenarios (Spike validation)
 

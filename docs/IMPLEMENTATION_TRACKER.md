@@ -49,7 +49,7 @@ This tracker supersedes the prior deep-research execution tracker and follows:
 - `2026-02-21`: C02 API = Additive Alias (`seatId`/`resumeToken` + legacy compatibility fields).
 - `2026-02-21`: Reconnect grace default = `90_000ms` configurable via `MP_RECONNECT_GRACE_MS`.
 - `2026-02-22`: SSE live-updates now emit immediate `stream_bootstrap` frame on subscribe open to reduce false polling fallback on LAN/Safari.
-- `2026-02-22`: Disconnect runtime policy = pause on active/finished disconnect and end room on host timeout (always-on policy).
+- `2026-09-06`: Disconnect runtime policy = pause during reconnect grace; retire expired competitors and continue with two or more survivors. Finish only when one survivor remains; promote a surviving host in larger matches.
 - `2026-02-22`: AI stage closure requires deterministic tier-matrix coverage plus difficulty verification doc references.
 - `2026-02-23`: Realtime transport migrated to Socket.IO primary with dual-stack SSE/HTTP fallback; transport mode surfaced in multiplayer dev status chips.
 

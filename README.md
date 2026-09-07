@@ -60,6 +60,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Flagship lobby presentation refresh with structured roster table, clearer status pills, and stronger action hierarchy
 - Multiplayer in-match tables now carry a dedicated live-room pulse band with room/seat/rejoin/update context so online play reads differently from local hot-seat
 - Hybrid live updates: Socket.IO transport (primary) with SSE/polling fallback
+- Installable iPhone/Android PWA with Home Screen launch and offline app-shell fallback
 - Multiplayer `Exit Match` (keeps reconnect session) and `Forget Room` (permanent disconnect) actions
 - Multiplayer undo/reset-turn controls for the active player with server-authoritative snapshots
 - In-match per-player connection pills and richer lobby disconnect timing labels
@@ -103,6 +104,16 @@ npm run dev
 ```
 
 Open the local URL shown by Vite (usually `http://localhost:5173`).
+
+### Install on iPhone
+
+The deployed HTTPS site can be installed without the App Store:
+
+1. Open the site in Safari.
+2. Tap the Share button.
+3. Tap `Add to Home Screen`, then `Add`.
+
+The installed app opens in its own full-screen window. Local saves and settings remain on that iPhone. The app shell can reopen without a connection after it has been loaded once, while live multiplayer still requires internet access.
 
 ## Scripts
 
@@ -201,6 +212,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Local pass-and-play
 - Private-room multiplayer (hosted API path)
 - Private invite-link multiplayer (`/join/:roomCode`)
+- Installable PWA for iPhone and other modern mobile browsers
 - Legacy LAN scaffold is retained in the repo for development fallback but is not the primary user flow
 
 ### Multiplayer Match Controls
@@ -220,7 +232,8 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Lobby includes player-ready status, room chat, and chat-tray quick reactions.
 - Player session controls: `Exit Match` (retain reconnect) and `Forget Room` (clear session).
 - Active-turn controls: `Undo Last Play`, `Reset Turn Plays` (when snapshot history exists).
-- Multiplayer state mutations and reconnect ownership are revision-guarded to prevent stale updates and stale seat takeovers.
+- Gameplay mutations reject stale game revisions; authenticated reconnects accept an older revision and return a fresh snapshot. Chat and presence use a separate event sequence so they do not invalidate moves. Exact action retries are scoped to the player and payload.
+- Room snapshots expose only opaque deck placeholders (the remaining count), never the ordered draw-pile card identities.
 - Multiplayer completions are written into Stats & History with session metadata (`mode`, `surface`, preset, room code) so live-online matches appear alongside local results.
 - Multiplayer activity feed and host-change notices are surfaced in lobby/in-match UI.
 - In local/dev contexts, multiplayer screens show a status chip that explicitly reports reconnect/version/pause policy activation, live-update transport state, and room runtime state.
@@ -228,9 +241,13 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - Lobby disconnect policy: leaving in `lobby` removes your seat immediately; reconnect windows remain for `active`/`finished` matches only.
 - Lobby stale-heartbeat policy: connected lobby seats are pruned after a 90s inactivity window to reduce false disconnects during tab/device switching in local beta testing.
 - Active/finished stale-heartbeat policy: seats are marked disconnected after ~20s of missed heartbeat to keep in-match presence accurate when browser unload signals are dropped.
-- Disconnect runtime policy is always active: active/finished rooms pause on disconnect and end if the host times out before reconnect.
+- Active matches pause during reconnect grace. When a seat expires, that competitor retires: their cards are discarded, affected interactions are resolved or canceled, and their turn is skipped. Matches continue with two or more remaining competitors; a sole remaining competitor wins. An expired host is replaced by a surviving competitor. Retirement clears undo/checkpoint history so the departed seat cannot be restored. Manual pause/resume cannot bypass a disconnect pause.
 
 ## Multiplayer Deployment Notes
+
+HTTP JSON bodies are limited to 64 KiB (`MULTIPLAYER_MAX_JSON_BODY_BYTES`). Room creation is limited to 10 attempts per minute per socket address (`MULTIPLAYER_ROOM_CREATION_MAX_PER_WINDOW`, `MULTIPLAYER_ROOM_CREATION_WINDOW_MS`) with a 100-room process cap (`MULTIPLAYER_MAX_ACTIVE_ROOMS`). Behind a reverse proxy, clients sharing its socket address share that limit; forwarded headers are not trusted automatically.
+
+Room persistence uses debounced atomic JSON snapshots in `apps/server/.multiplayer-room-snapshots.json`, with a flush on graceful shutdown. Persistence errors are logged; a corrupt/unreadable snapshot stops startup so it cannot silently be replaced with an empty store. Keep this path on a persistent disk. Abrupt process or machine failure can lose the most recent unflushed updates.
 
 Set `VITE_MULTIPLAYER_API_URL` to your deployed multiplayer API origin.
 See `.env.example` for the expected variable.

@@ -33,8 +33,9 @@ import {
 } from './gameService.ts';
 import { DisconnectTimerRegistry, disconnectTimerKey } from './disconnectTimers.ts';
 import { SocketSessionRegistry, type SocketSeatBinding } from './socketSessionRegistry.ts';
-import { loadSnapshots, saveSnapshots } from './persistence/snapshots.ts';
+import { flushSnapshots, loadSnapshots, saveSnapshots } from './persistence/snapshots.ts';
 import { redactSensitiveToken } from './logging.ts';
+import { collectBody, RequestBodyError, SlidingWindowRateLimiter } from './httpSafeguards.ts';
 import type { PlayerId } from '../../../src/engine/index.ts';
 import type {
   ActionRejectedReason,
@@ -64,6 +65,15 @@ const MULTIPLAYER_PUSH_ENABLED = process.env.MULTIPLAYER_PUSH_ENABLED !== 'false
 const MULTIPLAYER_REACTIONS_ENABLED = process.env.MULTIPLAYER_REACTIONS_ENABLED !== 'false';
 const MULTIPLAYER_SOCKET_ENABLED = process.env.MULTIPLAYER_SOCKET_ENABLED !== 'false';
 const SSE_HEARTBEAT_MS = 25_000;
+const MAX_JSON_BODY_BYTES = positiveIntegerEnv('MULTIPLAYER_MAX_JSON_BODY_BYTES', 64 * 1024);
+const MAX_ACTIVE_ROOMS = positiveIntegerEnv('MULTIPLAYER_MAX_ACTIVE_ROOMS', 100);
+const ROOM_CREATION_WINDOW_MS = positiveIntegerEnv('MULTIPLAYER_ROOM_CREATION_WINDOW_MS', 60_000);
+const ROOM_CREATION_MAX_PER_WINDOW = positiveIntegerEnv('MULTIPLAYER_ROOM_CREATION_MAX_PER_WINDOW', 10);
+
+function positiveIntegerEnv(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
 
 const rooms = new Map<string, MultiplayerRoom>();
 
@@ -86,6 +96,10 @@ const reconnectCounters = {
   stale_action_reject_total: 0,
 };
 let io: SocketIOServer | null = null;
+const roomCreationLimiter = new SlidingWindowRateLimiter(
+  ROOM_CREATION_MAX_PER_WINDOW,
+  ROOM_CREATION_WINDOW_MS,
+);
 
 type SessionIdentity = {
   playerId: PlayerId;
@@ -180,7 +194,6 @@ function disconnectSocketForSeat(roomCode: string, seatId: PlayerId, reason: str
 function mapReconnectErrorToStatus(code: string): ResumeResultStatus {
   if (code === 'invalid_session') return 'invalid_token';
   if (code === 'reconnect_expired') return 'seat_timed_out';
-  if (code === 'revision_conflict') return 'protocol_mismatch';
   if (code === 'room_not_found') return 'room_closed';
   return 'invalid_token';
 }
@@ -232,24 +245,16 @@ function writeJson(
   res: { writeHead: (code: number, headers: Record<string, string>) => void; end: (body: string) => void },
   code: number,
   payload: unknown,
+  additionalHeaders: Record<string, string> = {},
 ): void {
   res.writeHead(code, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    ...additionalHeaders,
   });
   res.end(JSON.stringify(payload));
-}
-
-function collectBody(req: { on: (event: string, handler: (chunk?: Buffer) => void) => void }): Promise<string> {
-  return new Promise((resolve) => {
-    const chunks: Buffer[] = [];
-    req.on('data', (chunk?: Buffer) => {
-      if (chunk) chunks.push(chunk);
-    });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-  });
 }
 
 function snapshotAll(): void {
@@ -288,7 +293,7 @@ function broadcastRoomEvent(
     revision: room.revision,
     reason,
     serverTime: Date.now(),
-    eventId: room.revision,
+    eventId: room.eventId,
     seatId: details?.seatId,
     displayName: details?.displayName,
     graceExpiresAt: details?.graceExpiresAt,
@@ -429,16 +434,16 @@ function openEventStream(
     revision: room.revision,
     reason: 'stream_bootstrap',
     serverTime: Date.now(),
-    eventId: room.revision,
+    eventId: room.eventId,
   });
 
-  if (room.revision > lastEventId) {
+  if (room.eventId > lastEventId) {
     writeSseEvent(client, {
       roomCode: room.code,
       revision: room.revision,
       reason: 'sync',
       serverTime: Date.now(),
-      eventId: room.revision,
+      eventId: room.eventId,
     });
   }
 
@@ -845,7 +850,7 @@ function registerSocketTransport(server: ReturnType<typeof createServer>): void 
       revision: room.revision,
       reason: 'stream_bootstrap',
       serverTime: Date.now(),
-      eventId: room.revision,
+      eventId: room.eventId,
     } satisfies MultiplayerRoomEventEnvelope);
 
     registerSocketCommands(socket);
@@ -855,7 +860,7 @@ function registerSocketTransport(server: ReturnType<typeof createServer>): void 
   });
 }
 
-setInterval(() => {
+const pruneInterval = setInterval(() => {
   const pruneResult = pruneInactiveRooms(rooms);
   for (const disconnected of pruneResult.disconnectedSeats) {
     const room = rooms.get(disconnected.roomCode);
@@ -922,8 +927,29 @@ const httpServer = createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && path === '/api/multiplayer/rooms') {
-      const raw = await collectBody(req);
+      if (rooms.size >= MAX_ACTIVE_ROOMS) {
+        writeJson(res, 429, { error: 'room_capacity_reached' });
+        return;
+      }
+      const clientKey = req.socket.remoteAddress ?? 'unknown';
+      const retryAfterMs = roomCreationLimiter.tryAcquire(clientKey);
+      if (retryAfterMs !== null) {
+        const retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+        writeJson(
+          res,
+          429,
+          { error: 'room_creation_rate_limited', retryAfterSeconds },
+          { 'Retry-After': String(retryAfterSeconds) },
+        );
+        return;
+      }
+      const raw = await collectBody(req, MAX_JSON_BODY_BYTES);
       const payload = JSON.parse(raw || '{}') as { playerName?: unknown };
+      // Other requests can create rooms while this request body is arriving.
+      if (rooms.size >= MAX_ACTIVE_ROOMS) {
+        writeJson(res, 429, { error: 'room_capacity_reached' });
+        return;
+      }
       const created = createRoom(rooms, optionalTrimmedString(payload.playerName) ?? 'Host');
       syncDisconnectTimersForRoom(created.room);
       snapshotAll();
@@ -945,7 +971,7 @@ const httpServer = createServer(async (req, res) => {
     const room = rooms.get(roomCode);
 
     if (req.method === 'POST' && operation === 'reconnect') {
-      const raw = await collectBody(req);
+      const raw = await collectBody(req, MAX_JSON_BODY_BYTES);
       const payload = JSON.parse(raw || '{}') as {
         seatId?: unknown;
         resumeToken?: unknown;
@@ -1098,7 +1124,7 @@ const httpServer = createServer(async (req, res) => {
       return;
     }
 
-    const raw = await collectBody(req);
+    const raw = await collectBody(req, MAX_JSON_BODY_BYTES);
     const payload = JSON.parse(raw || '{}') as {
       playerName?: unknown;
       seatId?: unknown;
@@ -1392,6 +1418,13 @@ const httpServer = createServer(async (req, res) => {
 
     writeJson(res, 404, { error: 'not_found' });
   } catch (error) {
+    // A client can disappear while its body is being read. In that case the
+    // response stream is already unusable, so avoid a second write/error.
+    if (res.destroyed || res.writableEnded) return;
+    if (error instanceof RequestBodyError) {
+      writeJson(res, error.statusCode, { error: error.code });
+      return;
+    }
     const message = error instanceof Error ? error.message : 'server_error';
     writeJson(res, 400, { error: message });
   }
@@ -1404,3 +1437,21 @@ if (MULTIPLAYER_SOCKET_ENABLED) {
 httpServer.listen(PORT, () => {
   console.log(`Multiplayer server listening on http://0.0.0.0:${PORT}`);
 });
+
+let shuttingDown = false;
+async function shutdown(): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  clearInterval(pruneInterval);
+  httpServer.close();
+  io?.close();
+  try {
+    await flushSnapshots();
+    process.exit(0);
+  } catch (error) {
+    console.error('Multiplayer shutdown snapshot failed', error);
+    process.exit(1);
+  }
+}
+process.once('SIGTERM', () => { void shutdown(); });
+process.once('SIGINT', () => { void shutdown(); });

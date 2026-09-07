@@ -91,7 +91,7 @@ describe('multiplayer room service lifecycle', () => {
     expect(resumed.resumeToken).toBe(resumed.sessionToken);
   });
 
-  it('rejects stale expected revision during reconnect without mutating seat state', () => {
+  it('accepts stale expected revision during reconnect and refreshes seat state', () => {
     const rooms = new Map<string, MultiplayerRoom>();
     const { room, session } = createRoom(rooms, 'Host');
     const joined = joinRoom(room, 'Player 2');
@@ -99,11 +99,69 @@ describe('multiplayer room service lifecycle', () => {
     leaveRoom(room, joined.playerId, joined.sessionToken);
 
     const revisionBefore = room.revision;
-    expect(() => reconnectRoom(room, joined.playerId, joined.sessionToken, room.revision - 5)).toThrowError('revision_conflict');
+    expect(() => reconnectRoom(room, joined.playerId, joined.sessionToken, room.revision - 5)).not.toThrow();
     const participant = findParticipant(room, joined.playerId);
-    expect(participant.connected).toBe(false);
-    expect(participant.connectionState).toBe('disconnected');
+    expect(participant.connected).toBe(true);
+    expect(participant.connectionState).toBe('connected');
     expect(room.revision).toBe(revisionBefore);
+  });
+
+  it('retires a timed-out seat and continues with two survivors', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    const playerThree = joinRoom(room, 'Player 3');
+    startReadyRoom(room, session);
+    room.game!.currentPlayerIndex = 0;
+    room.turnSnapshots = [structuredClone(room.game!)];
+    room.checkpoints = [{ id: 'stale', name: 'stale', savedAt: Date.now(), game: structuredClone(room.game!) }];
+    leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+    const player = findParticipant(room, playerTwo.playerId);
+    player.reconnectDeadlineMs = Date.now() - 1;
+
+    markSeatTimedOutIfExpired(room, playerTwo.playerId, Date.now());
+
+    expect(room.status).toBe('active');
+    expect(room.game?.players.map((entry) => entry.id)).toEqual([session.playerId, playerThree.playerId]);
+    expect(room.turnSnapshots).toHaveLength(0);
+    expect(room.checkpoints).toHaveLength(0);
+  });
+
+  it('does not rewrite a finished match when a disconnected seat times out later', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    startReadyRoom(room, session);
+    room.status = 'finished';
+    room.game!.winnerId = session.playerId;
+    leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+    const activityCount = room.activityFeed.length;
+    const player = findParticipant(room, playerTwo.playerId);
+    player.reconnectDeadlineMs = Date.now() - 1;
+
+    markSeatTimedOutIfExpired(room, playerTwo.playerId, Date.now());
+
+    expect(room.status).toBe('finished');
+    expect(room.game?.winnerId).toBe(session.playerId);
+    expect(room.activityFeed.length).toBe(activityCount + 1);
+  });
+
+  it('ends a two-player match with the connected survivor as winner', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    startReadyRoom(room, session);
+
+    leaveRoom(room, playerTwo.playerId, playerTwo.sessionToken);
+    const disconnected = findParticipant(room, playerTwo.playerId);
+    disconnected.reconnectDeadlineMs = Date.now() - 1;
+
+    markSeatTimedOutIfExpired(room, playerTwo.playerId, Date.now());
+
+    expect(room.status).toBe('finished');
+    expect(room.roomRuntimeState).toBe('ended_timeout');
+    expect(room.game?.winnerId).toBe(session.playerId);
+    expect(room.game?.turn.phase).toBe('finished');
   });
 
   it('uses 90s reconnect grace default and respects configured override', () => {
@@ -606,6 +664,30 @@ describe('multiplayer room service lifecycle', () => {
     })).not.toThrow();
     expect(room.revision).toBe(revisionAfterFirst);
     expect(JSON.stringify(room.game)).toBe(gameSnapshotAfterFirst);
+  });
+
+  it('keeps chat and typing outside the gameplay revision guard', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const playerTwo = joinRoom(room, 'Player 2');
+    startReadyRoom(room, session);
+    const gameplayRevision = room.revision;
+
+    sendRoomChat(room, playerTwo.playerId, playerTwo.sessionToken, 'hello', gameplayRevision - 1);
+    setRoomTyping(room, playerTwo.playerId, playerTwo.sessionToken, true, gameplayRevision - 1);
+
+    expect(room.revision).toBe(gameplayRevision);
+    expect(room.eventId).toBeGreaterThan(gameplayRevision);
+  });
+
+  it('masks draw pile identities in a viewer snapshot', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    joinRoom(room, 'Player 2');
+    startReadyRoom(room, session);
+
+    const view = roomView(room, session.playerId, session.sessionToken);
+    expect(view.gameState?.drawPile.every((cardId) => cardId === '__hidden__')).toBe(true);
   });
 
   it('does not migrate host seat after match start when host disconnects', () => {

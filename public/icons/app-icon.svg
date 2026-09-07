@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="68" y1="44" x2="438" y2="476" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1f3657"/>
+      <stop offset="1" stop-color="#0a1322"/>
+    </linearGradient>
+    <linearGradient id="card" x1="142" y1="96" x2="380" y2="426" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f7f0dd"/>
+      <stop offset="1" stop-color="#d9c89f"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="92" cy="94" r="62" fill="#d8a936" opacity=".16"/>
+  <circle cx="428" cy="414" r="94" fill="#47b68b" opacity=".12"/>
+  <g transform="rotate(-8 256 256)">
+    <rect x="132" y="76" width="248" height="360" rx="32" fill="#07101d" opacity=".36"/>
+    <rect x="124" y="68" width="248" height="360" rx="32" fill="url(#card)"/>
+    <rect x="144" y="88" width="208" height="320" rx="20" fill="none" stroke="#13243b" stroke-width="8"/>
+    <path d="M144 142h208v88H144z" fill="#cf3039"/>
+    <path d="M144 230h208v16H144z" fill="#a61e2b"/>
+    <text x="248" y="201" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="74" font-weight="900" fill="#fff">DEAL</text>
+    <circle cx="248" cy="320" r="54" fill="#13243b"/>
+    <text x="248" y="339" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="900" fill="#f2c54f">M</text>
+  </g>
+</svg>

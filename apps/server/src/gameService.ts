@@ -109,6 +109,8 @@ export interface MultiplayerRoom {
   endedReason?: MultiplayerEndedReason;
   disconnectPauseRestore?: DisconnectPauseRestoreState;
   revision: number;
+  /** Monotonic stream sequence; unlike revision, social/presence events do not invalidate gameplay clients. */
+  eventId: number;
   recentActionIds: string[];
   turnSnapshots: GameState[];
   checkpoints: RoomCheckpoint[];
@@ -189,6 +191,7 @@ export function normalizeRoomForRuntime(room: MultiplayerRoom): MultiplayerRoom 
   room.recentActionIds = Array.isArray(room.recentActionIds)
     ? room.recentActionIds.filter((entry) => typeof entry === 'string' && entry.trim().length > 0).slice(-MAX_TRACKED_ACTION_IDS)
     : [];
+  room.eventId = Number.isFinite(room.eventId) ? Math.max(Number(room.eventId), room.revision) : room.revision;
   room.roomRuntimeState = room.roomRuntimeState === 'active'
     || room.roomRuntimeState === 'paused_disconnect'
     || room.roomRuntimeState === 'paused_host_disconnect'
@@ -390,6 +393,91 @@ function resolveDisconnectPauseStateAfterTimeout(room: MultiplayerRoom): void {
   restorePauseStateAfterDisconnect(room);
 }
 
+function pendingReferencesPlayer(pending: GameState['pending'], playerId: PlayerId): boolean {
+  if (!pending) return false;
+  const visit = (value: unknown, key?: string): boolean => {
+    if (typeof value === 'string') {
+      return Boolean(key && (
+        key.endsWith('PlayerId')
+        || key === 'awaitingPlayerId'
+        || key === 'remainingTargetPlayerIds'
+      ) && value === playerId);
+    }
+    if (Array.isArray(value)) return value.some((entry) => visit(entry, key));
+    if (!value || typeof value !== 'object') return false;
+    return Object.entries(value).some(([entryKey, entryValue]) => visit(entryValue, entryKey));
+  };
+  return visit(pending);
+}
+
+/**
+ * Remove an expired seat from the engine state while preserving turn order.
+ * Cards held by a retired seat are discarded; an interaction involving that
+ * seat is canceled because its source/target can no longer legally respond.
+ */
+function retireTimedOutPlayerFromGame(room: MultiplayerRoom, playerId: PlayerId): boolean {
+  const game = room.game;
+  if (!game) return false;
+  const playerIndex = game.players.findIndex((player) => player.id === playerId);
+  if (playerIndex < 0) return false;
+  const wasCurrent = playerIndex === game.currentPlayerIndex;
+  const oldCurrentIndex = game.currentPlayerIndex;
+  const retired = game.players[playerIndex];
+
+  game.discardPile.push(
+    ...retired.hand,
+    ...retired.bank,
+    ...Object.values(retired.properties).flat().map((entry) => entry.cardId),
+  );
+  game.players.splice(playerIndex, 1);
+  // A snapshot/checkpoint containing the retired seat must never be restorable.
+  room.turnSnapshots = [];
+  room.checkpoints = [];
+  if (pendingReferencesPlayer(game.pending, playerId)) {
+    game.pending = null;
+  }
+
+  if (game.players.length === 0) {
+    game.currentPlayerIndex = 0;
+    game.turn.phase = 'finished';
+    game.winnerId = undefined;
+  } else if (wasCurrent) {
+    game.currentPlayerIndex = playerIndex >= game.players.length ? 0 : playerIndex;
+    game.turn = { phase: 'draw', playsUsed: 0, doubleRentMultiplier: 1, endingTurn: false };
+    game.turnCount += 1;
+  } else {
+    game.currentPlayerIndex = playerIndex < oldCurrentIndex ? oldCurrentIndex - 1 : oldCurrentIndex;
+    if (game.currentPlayerIndex >= game.players.length) game.currentPlayerIndex = 0;
+  }
+  game.updatedAt = nowMs();
+  return true;
+}
+
+function endMatchAfterLastOpponentTimeout(room: MultiplayerRoom, expiredPlayerId: PlayerId): void {
+  const game = room.game;
+  if (!game || game.players.length > 2) return;
+  retireTimedOutPlayerFromGame(room, expiredPlayerId);
+  const survivor = game.players[0];
+  if (survivor) {
+    game.winnerId = survivor.id;
+  }
+  game.pending = null;
+  game.turn.phase = 'finished';
+  room.status = 'finished';
+  room.paused = false;
+  room.pausedByPlayerId = undefined;
+  room.roomRuntimeState = 'ended_timeout';
+  room.pausedReason = undefined;
+  room.endedReason = isHostSeat(room, expiredPlayerId) ? 'host_timeout' : 'disconnect_timeout';
+  clearDisconnectPauseRestore(room);
+  appendActivity(
+    room,
+    'system',
+    `${playerDisplayName(room, expiredPlayerId)} timed out. Match ended.`,
+    { playerId: expiredPlayerId },
+  );
+}
+
 function migrateHost(room: MultiplayerRoom): { previousHostId: PlayerId; nextHostId: PlayerId } | null {
   if (room.status !== 'lobby') return null;
   const previousHostId = room.hostPlayerId;
@@ -430,6 +518,7 @@ function markDisconnected(room: MultiplayerRoom, player: RoomParticipant): void 
       { playerId: migrated.nextHostId },
     );
   }
+  incrementEventId(room);
   bumpUpdatedAt(room);
 }
 
@@ -483,20 +572,26 @@ export function markSeatTimedOutIfExpired(
   player.connectionState = 'timed_out';
   player.lastSeenAt = now;
   appendActivity(room, 'connection', `${player.name} timed out.`, { playerId: player.id });
-  if (room.status !== 'lobby') {
-    if (isHostSeat(room, player.id)) {
-      room.paused = false;
-      room.pausedByPlayerId = undefined;
-      room.roomRuntimeState = 'ended_timeout';
-      room.pausedReason = undefined;
-      room.endedReason = 'host_timeout';
-      clearDisconnectPauseRestore(room);
-      appendActivity(room, 'system', 'Host timed out. Room ended.', { playerId: player.id });
+  if (room.status === 'active') {
+    const gamePlayerCount = room.game?.players.length ?? 0;
+    if (gamePlayerCount <= 2) {
+      endMatchAfterLastOpponentTimeout(room, player.id);
     } else {
+      retireTimedOutPlayerFromGame(room, player.id);
+      // An expired host cannot resume host-only controls. Promote a connected
+      // survivor so a 3-4 player match remains operable.
+      if (isHostSeat(room, player.id)) {
+        const nextHost = room.players.find((candidate) => candidate.id !== player.id && candidate.connected);
+        if (nextHost) {
+          room.hostPlayerId = nextHost.id;
+          appendActivity(room, 'host', `${nextHost.name} is now host.`, { playerId: nextHost.id });
+        }
+      }
       resolveDisconnectPauseStateAfterTimeout(room);
     }
   }
   incrementRevision(room);
+  incrementEventId(room);
   bumpUpdatedAt(room);
   return {
     transitioned: true,
@@ -561,6 +656,9 @@ function maskForViewer(state: GameState, viewerId: PlayerId): GameState {
     if (player.id === viewerId) continue;
     player.hand = Array.from({ length: player.hand.length }, () => '__hidden__');
   }
+  // The draw pile is ordered hidden information too. Preserve its length for
+  // deck-count UI while never exposing card identities or order to clients.
+  clone.drawPile = Array.from({ length: clone.drawPile.length }, () => '__hidden__');
   return clone;
 }
 
@@ -633,6 +731,7 @@ function removeLobbyParticipant(room: MultiplayerRoom, playerId: PlayerId): bool
     }
   }
   bumpUpdatedAt(room);
+  incrementEventId(room);
   return true;
 }
 
@@ -680,14 +779,19 @@ function shouldRetainTurnSnapshots(nextState: GameState, nextPromptPlayerId: str
     || nextState.pending.kind === 'deal_breaker';
 }
 
-function hasTrackedActionId(room: MultiplayerRoom, actionId: string): boolean {
-  if (!actionId) return false;
-  return room.recentActionIds.includes(actionId);
+function actionDedupeKey(playerId: PlayerId, actionId: string, action: Action): string {
+  return JSON.stringify([playerId, actionId, normalizeActionForComparison(action)]);
 }
 
-function trackActionId(room: MultiplayerRoom, actionId?: string): void {
+function hasTrackedAction(room: MultiplayerRoom, playerId: PlayerId, actionId: string, action: Action): boolean {
+  if (!actionId) return false;
+  return room.recentActionIds.includes(actionDedupeKey(playerId, actionId, action));
+}
+
+function trackActionId(room: MultiplayerRoom, playerId: PlayerId, actionId: string, action: Action): void {
   if (!actionId) return;
-  room.recentActionIds = [...room.recentActionIds.filter((entry) => entry !== actionId), actionId]
+  const key = actionDedupeKey(playerId, actionId, action);
+  room.recentActionIds = [...room.recentActionIds.filter((entry) => entry !== key), key]
     .slice(-MAX_TRACKED_ACTION_IDS);
 }
 
@@ -729,6 +833,12 @@ function ensureNotPaused(room: MultiplayerRoom): void {
 
 function incrementRevision(room: MultiplayerRoom): void {
   room.revision += 1;
+  room.eventId = Math.max(room.eventId, room.revision);
+  room.eventId += 1;
+}
+
+function incrementEventId(room: MultiplayerRoom): void {
+  room.eventId = Math.max(room.eventId, room.revision) + 1;
 }
 
 function bumpUpdatedAt(room: MultiplayerRoom): void {
@@ -738,6 +848,7 @@ function bumpUpdatedAt(room: MultiplayerRoom): void {
 function commitMutation(room: MultiplayerRoom): void {
   incrementRevision(room);
   bumpUpdatedAt(room);
+  incrementEventId(room);
 }
 
 function updateStatusFromGame(room: MultiplayerRoom): void {
@@ -802,6 +913,7 @@ export function createRoom(
     endedReason: undefined,
     disconnectPauseRestore: undefined,
     revision: 0,
+    eventId: 0,
     recentActionIds: [],
     turnSnapshots: [],
     checkpoints: [],
@@ -862,9 +974,8 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
   };
 }
 
-export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, expectedRevision?: number): RoomSessionResponse {
+export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, _expectedRevision?: number): RoomSessionResponse {
   const player = requireSession(room, playerId, sessionToken);
-  ensureExpectedRevision(room, expectedRevision);
   const now = nowMs();
   assertReconnectWindowOpen(player, now);
   const wasConnected = player.connected;
@@ -880,7 +991,10 @@ export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, session
     appendActivity(room, 'host', `${playerDisplayName(room, room.hostPlayerId)} is now host.`, { playerId: room.hostPlayerId });
   }
   resolveDisconnectPauseStateAfterReconnect(room);
-  commitMutation(room);
+  // Reconnect is presence, not a gameplay mutation. A stale client must still
+  // receive the authoritative snapshot without invalidating another player's
+  // in-flight gameplay action.
+  bumpUpdatedAt(room);
   return {
     roomCode: room.code,
     seatId: player.id,
@@ -901,7 +1015,7 @@ export function leaveRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToke
     return;
   }
   markDisconnected(room, player);
-  incrementRevision(room);
+  bumpUpdatedAt(room);
 }
 
 export function startRoom(
@@ -967,6 +1081,12 @@ export function pauseRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToke
   if (room.roomRuntimeState === 'ended_timeout') {
     throw new Error('room_closed');
   }
+  if (hasDisconnectedSeatAwaitingReconnect(room)) {
+    // Keep the disconnect pause as the controlling guard. Otherwise a manual
+    // pause could overwrite its restore state and let the host resume around
+    // an unresolved disconnect.
+    throw new Error('room_paused');
+  }
   room.paused = true;
   room.pausedByPlayerId = playerId;
   room.pausedReason = 'manual';
@@ -987,8 +1107,7 @@ export function resumeRoom(room: MultiplayerRoom, playerId: PlayerId, sessionTok
     throw new Error('room_closed');
   }
   if (
-    (room.pausedReason === 'host_disconnect' || room.pausedReason === 'player_disconnect')
-    && hasDisconnectedSeatAwaitingReconnect(room)
+    hasDisconnectedSeatAwaitingReconnect(room)
   ) {
     throw new Error('room_paused');
   }
@@ -1012,15 +1131,18 @@ export function applyRoomAction(
 ): MultiplayerRoom {
   const actionId = options.actionId?.trim();
   const versionGuardEnabled = true;
-  ensureExpectedRevision(room, expectedRevision);
   const player = requireSession(room, playerId, sessionToken);
+  // Authenticate first, then accept an exact retry before applying any stale
+  // revision guard. Retries are bound to the seat and canonical action payload
+  // so a reused id cannot suppress a different action.
+  if (versionGuardEnabled && actionId && hasTrackedAction(room, playerId, actionId, action)) {
+    return room;
+  }
+  ensureExpectedRevision(room, expectedRevision);
   const game = requireGame(room);
   requireConnectedPlayer(player);
   ensureNotPaused(room);
   touchPlayer(player);
-  if (versionGuardEnabled && actionId && hasTrackedActionId(room, actionId)) {
-    return room;
-  }
   if (
     versionGuardEnabled
     && Number.isFinite(options.clientStateVersion)
@@ -1064,7 +1186,7 @@ export function applyRoomAction(
   updateStatusFromGame(room);
   commitMutation(room);
   if (versionGuardEnabled && actionId) {
-    trackActionId(room, actionId);
+    trackActionId(room, playerId, actionId, action);
   }
   return room;
 }
@@ -1310,9 +1432,9 @@ export function sendRoomChat(
   playerId: PlayerId,
   sessionToken: string,
   text: string,
-  expectedRevision?: number,
+  _expectedRevision?: number,
 ): MultiplayerRoom {
-  ensureExpectedRevision(room, expectedRevision);
+  // Chat is a social event and must not invalidate a gameplay action retry.
   const player = requireSession(room, playerId, sessionToken);
   assertReconnectWindowOpen(player);
   requireConnectedPlayer(player);
@@ -1342,7 +1464,8 @@ export function sendRoomChat(
     },
   ].slice(-MAX_CHAT_MESSAGES);
   room.nextChatId += 1;
-  commitMutation(room);
+  incrementEventId(room);
+  bumpUpdatedAt(room);
   return room;
 }
 
@@ -1351,9 +1474,9 @@ export function setRoomTyping(
   playerId: PlayerId,
   sessionToken: string,
   typing: boolean,
-  expectedRevision?: number,
+  _expectedRevision?: number,
 ): MultiplayerRoom {
-  ensureExpectedRevision(room, expectedRevision);
+  // Typing presence is deliberately outside the gameplay revision stream.
   const player = requireSession(room, playerId, sessionToken);
   assertReconnectWindowOpen(player);
   requireConnectedPlayer(player);
@@ -1363,12 +1486,14 @@ export function setRoomTyping(
   if (!typing) {
     if (!room.typingByPlayerId[player.id]) return room;
     delete room.typingByPlayerId[player.id];
-    commitMutation(room);
+    incrementEventId(room);
+    bumpUpdatedAt(room);
     return room;
   }
 
   room.typingByPlayerId[player.id] = nowMs() + TYPING_TTL_MS;
-  commitMutation(room);
+  incrementEventId(room);
+  bumpUpdatedAt(room);
   return room;
 }
 
@@ -1422,7 +1547,7 @@ export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken
     activityFeed: room.activityFeed,
     chatMessages: room.chatMessages,
     typingPlayerIds: Object.keys(room.typingByPlayerId),
-    lastEventId: room.revision,
+    lastEventId: room.eventId,
   };
 }
 
@@ -1447,7 +1572,8 @@ export function pruneInactiveRooms(rooms: Map<string, MultiplayerRoom>, now = no
           graceExpiresAt: player.reconnectDeadlineMs,
         });
       }
-      incrementRevision(room);
+      if (room.status === 'lobby') incrementRevision(room);
+      else bumpUpdatedAt(room);
     }
     reclaimDisconnectedLobbyParticipants(room, now, room.status === 'lobby' ? 'all' : 'expired');
 
