@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildCoachHint, chooseHeuristicAction, chooseMonteCarloAction, rankHeuristicActions } from '../ai';
 import { getCardDefinition } from '../cards/catalog';
-import { createGame, getLegalActions, type Action, type GameState, type LegalAction } from '../engine';
+import { applyAction, createGame, getLegalActions, getNextPrompt, type Action, type GameState, type LegalAction } from '../engine';
 
 function sameAction(left: Action, right: Action): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -167,5 +167,40 @@ describe('action card scores', () => {
       ]);
       expect(Number.isFinite(scored.score), cardId).toBe(true);
     }
+  });
+});
+
+describe('hard bot and Wilds', () => {
+  /** A position where the hard bot's first choice is to move a Wild, which costs no play. */
+  function wildMovePosition(): { state: GameState; actor: string; legal: LegalAction[] } {
+    let state = createGame({ seed: 1, players: [{ id: 'p1', name: 'A' }, { id: 'p2', name: 'B' }] });
+    for (let step = 0; step < 52; step += 1) {
+      const prompt = getNextPrompt(state);
+      state = applyAction(state, chooseHeuristicAction(state, prompt.playerId, getLegalActions(state, prompt.playerId))!.action).state;
+    }
+    const actor = getNextPrompt(state).playerId;
+    return { state, actor, legal: getLegalActions(state, actor) };
+  }
+
+  const options = { simulations: 6, depth: 8, seed: 7 };
+
+  it('may reposition a Wild early in a turn', () => {
+    const { state, actor, legal } = wildMovePosition();
+    expect(chooseMonteCarloAction(state, actor, legal, options)?.action.type).toBe('move_wild');
+  });
+
+  it('stops moving Wilds after two moves in a turn, so a game cannot freeze', () => {
+    const { state, actor, legal } = wildMovePosition();
+    const moved = { timestamp: 0, type: 'wild_move', message: 'Moved a Wild.' };
+    const pick = chooseMonteCarloAction({ ...state, history: [...state.history, moved, moved] }, actor, legal, options);
+    expect(pick?.action.type).not.toBe('move_wild');
+  });
+
+  it('counts only the current turn', () => {
+    const { state, actor, legal } = wildMovePosition();
+    const moved = { timestamp: 0, type: 'wild_move', message: 'Moved a Wild.' };
+    const passed = { timestamp: 0, type: 'turn_passed', message: 'Ended the turn.' };
+    const history = [...state.history, moved, moved, passed];
+    expect(chooseMonteCarloAction({ ...state, history }, actor, legal, options)?.action.type).toBe('move_wild');
   });
 });
