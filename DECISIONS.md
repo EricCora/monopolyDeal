@@ -31,3 +31,6 @@ Forgetting a room means the player won't return, so the others shouldn't wait ou
 
 ## 2026-10-31: Duplicate names get a suffix
 A second "Ann" joins as "Ann (2)" rather than being refused, so nobody is blocked from joining.
+
+## 2026-11-01: The production backend URL is pinned in `vercel.json`
+Vercel's dashboard held a `VITE_MULTIPLAYER_API_URL` for a suspended Render service, which broke multiplayer for every player. Setting it in the build command keeps the value in the repo and overrides the dashboard. The client connects to Render directly rather than through the rewrites, because Vercel rewrites may not carry WebSockets (assumed, not tested); the server already allows any origin.
