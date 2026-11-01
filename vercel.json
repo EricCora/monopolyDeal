@@ -5,6 +5,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/join/:roomCode",
+      "destination": "/index.html"
+    },
+    {
       "source": "/api/multiplayer/:path*",
       "destination": "https://monopolydeal-multiplayer.onrender.com/api/multiplayer/:path*"
     },
