@@ -147,11 +147,22 @@ public enum MonteCarlo {
         return evaluate(state, root)
     }
 
-    public static func choose(_ state: GameState, actorId: PlayerId, legalActions: [LegalAction], simulations: Int = 16, depth: Int = 10, seed: Int? = nil) -> ScoredAction? {
+    /// `timeBudget` limits how long the search runs. A Forced Deal can offer over 200 moves,
+    /// so under a budget the most promising moves go first, and running out of time only
+    /// drops the weakest. At least one move is always evaluated.
+    public static func choose(_ state: GameState, actorId: PlayerId, legalActions: [LegalAction], simulations: Int = 16, depth: Int = 10, seed: Int? = nil, timeBudget: Duration? = nil) -> ScoredAction? {
         if legalActions.isEmpty { return nil }
         var rand = Engine.SeededRandom(seed: seed ?? state.turnCount + state.history.count + 17)
         var best: ScoredAction?
-        for legal in legalActions {
+        let clock = ContinuousClock()
+        let deadline = timeBudget.map { clock.now.advanced(by: $0) }
+        var candidates = legalActions
+        if deadline != nil {
+            let byAction = Dictionary(legalActions.map { ($0.action, $0) }, uniquingKeysWith: { first, _ in first })
+            candidates = Heuristic.rank(state, actorId: actorId, legalActions: legalActions).compactMap { byAction[$0.action] }
+        }
+        for legal in candidates {
+            if let deadline, best != nil, clock.now >= deadline { break }
             let first = Engine.applyAction(state, legal.action)
             if first.error != nil { continue }
             var total = Heuristic.choose(state, actorId: actorId, legalActions: [legal])?.score ?? 0
@@ -181,7 +192,7 @@ public enum Coach {
         if legalActions.isEmpty { return nil }
         let ranked = Heuristic.rank(state, actorId: playerId, legalActions: legalActions)
         let selected = hard
-            ? MonteCarlo.choose(state, actorId: playerId, legalActions: legalActions, simulations: 12, depth: 9)
+            ? MonteCarlo.choose(state, actorId: playerId, legalActions: legalActions, simulations: 12, depth: 9, timeBudget: .seconds(2))
             : Heuristic.choose(state, actorId: playerId, legalActions: legalActions)
         guard let selected else { return nil }
         return CoachHint(
