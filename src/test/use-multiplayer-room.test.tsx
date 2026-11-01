@@ -610,6 +610,26 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     expect(result.current.joinCode).toBe('');
   });
 
+  it('reconnects on load when the join link matches the stored room', async () => {
+    vi.useFakeTimers();
+    window.history.pushState({}, '', '/join/ABCDE');
+    localStorage.setItem('monopolyDeal.multiplayerSession.v1', JSON.stringify({
+      version: 1,
+      roomCode: 'ABCDE',
+      seatId: 'p1',
+      resumeToken: 'token-1',
+      playerId: 'p1',
+      sessionToken: 'token-1',
+      playerName: 'Existing Player',
+      reconnectDeadlineMs: Date.now() + 30_000,
+    }));
+
+    renderHook(() => useMultiplayerRoom({ enabled: true, pushEnabled: false }));
+
+    await advanceAndFlush(0, 4);
+    expect(clientMocks.reconnectMultiplayerRoom).toHaveBeenCalled();
+  });
+
   it('exposes a recovery entry from the registry and resumes it on demand', async () => {
     vi.useFakeTimers();
     const now = Date.now();
