@@ -43,7 +43,7 @@ function stopServer() {
 async function startServer() {
   server = spawn('node', ['--import', 'tsx/esm', 'apps/server/src/index.ts'], {
     cwd: root,
-    env: { ...process.env, PORT: String(port) },
+    env: { ...process.env, PORT: String(port), MULTIPLAYER_ROOM_CREATION_MAX_PER_WINDOW: '1000' },
     stdio: 'ignore',
   });
   // A folder that syncs to iCloud can take a while to load files it has offloaded.

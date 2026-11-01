@@ -182,7 +182,11 @@ struct OnlineGameView: View {
 
     @ViewBuilder
     private func content(_ view: RoomView) -> some View {
-        if let summary = match.summary, let game = match.game, view.isFinished {
+        if view.hasEnded {
+            RoomEndedView(message: view.endedMessage) {
+                Task { await app.forgetRoom() }
+            }
+        } else if let summary = match.summary, let game = match.game, view.isFinished {
             PostGameView(
                 summary: summary,
                 game: game,
@@ -287,6 +291,36 @@ struct OnlineGameView: View {
             .accessibilityLabel("Forget Room")
             .accessibilityIdentifier("room.forget")
         }
+    }
+}
+
+/// Shown when a room closed because someone didn't return in time.
+struct RoomEndedView: View {
+    @Environment(AppModel.self) private var app
+    var message: String
+    var onClose: () -> Void
+
+    var body: some View {
+        ZStack {
+            TableBackground(style: app.preferences.tableStyle)
+            VStack(spacing: 16) {
+                Image(systemName: "door.left.hand.closed")
+                    .font(.system(size: 56))
+                    .foregroundStyle(.white.opacity(0.85))
+                Text("Match Ended")
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(.white)
+                Text(message)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white.opacity(0.8))
+                Button("Done", action: onClose)
+                    .buttonStyle(PrimaryButtonStyle())
+                    .frame(maxWidth: 220)
+                    .accessibilityIdentifier("room.endedDone")
+            }
+            .padding(30)
+        }
+        .accessibilityIdentifier("room.ended")
     }
 }
 

@@ -26,6 +26,8 @@ public final class RoomConnection {
     private var keepAliveTask: Task<Void, Never>?
     private var refreshInFlight = false
     private var refreshAgain = false
+    private var reclaimingSeat = false
+    private var healedRevision: Int?
 
     public static let pollInterval: Duration = .seconds(2)
     /// The server marks a seat disconnected when it hasn't been seen for a while, and an
@@ -162,7 +164,43 @@ public final class RoomConnection {
             } catch {
                 return
             }
+            if view?.yourSeat?.connected == false, view?.hasEnded == false {
+                await reclaimSeat()
+            }
+            // The web client does this too: if it's our prompt with no moves, the view is
+            // out of date, so look again now instead of waiting for the next check.
+            if let view, view.isAwaitingMissingMoves, healedRevision != view.revision {
+                healedRevision = view.revision
+                try? await Task.sleep(for: .milliseconds(250))
+                refreshAgain = true
+            }
         } while refreshAgain
+    }
+
+    /// Takes the seat back after the server marked it disconnected, which it does after 20
+    /// quiet seconds. A marked seat gets no legal actions and has its commands refused, so
+    /// after a network blip this is what makes the game playable again.
+    @discardableResult
+    private func reclaimSeat() async -> Bool {
+        guard !reclaimingSeat else { return false }
+        reclaimingSeat = true
+        defer { reclaimingSeat = false }
+        do {
+            let next = try await client.reconnect(session, expectedRevision: revision)
+            if next != session {
+                session = next
+                onSessionChange?(next)
+                if streamTask != nil { startStream() }
+            }
+            try await fetch()
+            lastError = nil
+            return true
+        } catch let error as OnlineError {
+            handle(error)
+            return false
+        } catch {
+            return false
+        }
     }
 
     private func handle(_ error: OnlineError) {
@@ -190,11 +228,16 @@ public final class RoomConnection {
             await refresh()
             return true
         } catch let error as OnlineError {
-            guard error.isStale else {
+            if error.code == "invalid_session" {
+                // The server says this for a disconnected seat as well as a bad token, so
+                // the seat isn't lost unless taking it back fails too.
+                guard await reclaimSeat() else { return false }
+            } else if !error.isStale {
                 handle(error)
                 return false
+            } else {
+                await refresh()
             }
-            await refresh()
             guard retryIfStale else { return false }
             do {
                 try await command(client, session, revision)

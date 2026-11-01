@@ -36,7 +36,12 @@ final class OnlineMatch: TableSession {
     var legalActions: [LegalAction] { view?.legalActions ?? [] }
     var viewerId: PlayerId? { view?.yourPlayerId }
     var isPaused: Bool { view?.paused ?? false }
-    var canPause: Bool { view?.isHost ?? false }
+    var canPause: Bool { view?.canHostTogglePause ?? false }
+    var pauseMessage: String? { view?.pauseMessage }
+
+    var pauseDeadline: Date? {
+        view?.secondsUntilRejoinDeadline.map { Date.now.addingTimeInterval($0) }
+    }
     var title: String { "Room \(connection.session.roomCode)" }
     var showsCoach: Bool { preferences().coachEnabled }
 
@@ -47,7 +52,11 @@ final class OnlineMatch: TableSession {
     }
 
     var errorMessage: String? {
-        get { connection.lastError?.isStale == true ? nil : connection.lastError?.errorDescription }
+        get {
+            // The connection pill already shows an outage, so it doesn't need a message too.
+            guard let error = connection.lastError, !error.isStale, error != .networkUnavailable else { return nil }
+            return error.errorDescription
+        }
         set { if newValue == nil { connection.lastError = nil } }
     }
 

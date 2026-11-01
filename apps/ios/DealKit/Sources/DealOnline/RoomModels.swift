@@ -116,6 +116,55 @@ public struct RoomView: Codable, Hashable, Sendable {
     public var isHost: Bool { hostPlayerId == yourPlayerId }
     public var isFinished: Bool { status == "finished" }
     public var hasEnded: Bool { roomRuntimeState == "ended_timeout" }
+    public var yourSeat: RoomPlayer? { players.first { $0.id == yourPlayerId } }
+
+    /// It's this seat's prompt, but the server listed no moves. That means the view is stale.
+    public var isAwaitingMissingMoves: Bool {
+        started && !isFinished && !paused && !hasEnded
+            && yourSeat?.connected == true
+            && promptPlayerId == yourPlayerId
+            && legalActions.isEmpty
+    }
+
+    /// A pause from a dropped player lifts by itself, so only a manual one can be resumed.
+    public var isPausedManually: Bool { paused && (pausedReason == nil || pausedReason == "manual") }
+
+    /// The host can pause a running match, or resume one they paused.
+    public var canHostTogglePause: Bool { isHost && (!paused || isPausedManually) }
+
+    private var droppedPlayers: [RoomPlayer] { players.filter { !$0.connected } }
+
+    /// Why play has stopped, in words for the pause screen.
+    public var pauseMessage: String {
+        let names = droppedPlayers.map(\.name)
+        let list = names.count > 1
+            ? "\(names.dropLast().joined(separator: ", ")) and \(names.last!)"
+            : names.first
+        switch pausedReason {
+        case "host_disconnect":
+            return list.map { "The host, \($0), dropped out. The match continues when they return." }
+                ?? "The host dropped out. The match continues when they return."
+        case "player_disconnect":
+            return list.map { "\($0) dropped out. The match continues when they return." }
+                ?? "A player dropped out. The match continues when they return."
+        default:
+            return "The host paused this match."
+        }
+    }
+
+    /// Seconds until the first dropped player's seat is lost, or nil if nobody is away.
+    public var secondsUntilRejoinDeadline: Double? {
+        guard !isPausedManually else { return nil }
+        let deadlines = droppedPlayers.map(\.reconnectDeadlineMs).filter { $0 > 0 }
+        return deadlines.min().map { max(0, ($0 - serverTime) / 1000) }
+    }
+
+    /// Why the room closed, once it has ended on a timeout.
+    public var endedMessage: String {
+        endedReason == "host_timeout"
+            ? "The host didn't return in time, so this match has ended."
+            : "A player didn't return in time, so this match has ended."
+    }
 }
 
 public struct RoomSession: Codable, Hashable, Sendable {
@@ -195,7 +244,7 @@ public enum OnlineError: Error, Equatable, LocalizedError {
             case "room_started", "match_already_started": return "That match has already started."
             case "invalid_session", "invalid_token", "seat_not_found": return "Your seat in that room is no longer valid."
             case "seat_timed_out": return "Your seat timed out while you were away."
-            case "rate_limited": return "Too many requests. Wait a moment and try again."
+            case "rate_limited", "room_creation_rate_limited": return "Too many requests. Wait a moment and try again."
             default: return message ?? code.replacingOccurrences(of: "_", with: " ").capitalized + "."
             }
         }

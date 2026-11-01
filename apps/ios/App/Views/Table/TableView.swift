@@ -422,9 +422,23 @@ struct TableView: View {
                             .buttonStyle(PrimaryButtonStyle())
                             .frame(maxWidth: 220)
                             .accessibilityIdentifier("pause.resume")
-                    } else {
-                        Text("The host paused this match.")
-                            .foregroundStyle(.white.opacity(0.75))
+                    } else if let message = session.pauseMessage {
+                        Text(message)
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.white.opacity(0.8))
+                            .padding(.horizontal, 28)
+                            .accessibilityIdentifier("pause.message")
+                    }
+                    if let deadline = session.pauseDeadline {
+                        HStack(spacing: 6) {
+                            Text("Seat held for")
+                            Text(timerInterval: Date.now...max(deadline, Date.now), countsDown: true)
+                                .monospacedDigit()
+                                .fontWeight(.bold)
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(Palette.gold)
+                        .accessibilityElement(children: .combine)
                     }
                     Button(session is LocalMatch ? "Back to Menu" : "Exit Match", action: onLeave)
                         .buttonStyle(SecondaryButtonStyle())

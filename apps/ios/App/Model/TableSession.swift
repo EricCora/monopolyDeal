@@ -14,6 +14,10 @@ protocol TableSession: AnyObject {
     var viewerId: PlayerId? { get }
     var isPaused: Bool { get }
     var canPause: Bool { get }
+    /// Why play stopped, when something other than a player's own choice paused it.
+    var pauseMessage: String? { get }
+    /// When a dropped player's seat is lost, for the countdown on the pause screen.
+    var pauseDeadline: Date? { get }
     var canUndo: Bool { get }
     var errorMessage: String? { get set }
     var showsCoach: Bool { get }
@@ -80,6 +84,8 @@ final class LocalMatch: TableSession {
 
     var title: String { mode.label }
     var canPause: Bool { true }
+    var pauseMessage: String? { nil }
+    var pauseDeadline: Date? { nil }
     var canUndo: Bool { !turnSnapshots.isEmpty && !isPaused }
 
     var showsCoach: Bool {
