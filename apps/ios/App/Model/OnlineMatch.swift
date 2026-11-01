@@ -38,6 +38,7 @@ final class OnlineMatch: TableSession {
     var isPaused: Bool { view?.paused ?? false }
     var canPause: Bool { view?.canHostTogglePause ?? false }
     var pauseMessage: String? { view?.pauseMessage }
+    var thinkingPlayerId: PlayerId? { nil }
 
     var pauseDeadline: Date? {
         view?.secondsUntilRejoinDeadline.map { Date.now.addingTimeInterval($0) }

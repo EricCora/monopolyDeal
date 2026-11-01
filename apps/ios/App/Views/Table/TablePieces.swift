@@ -14,12 +14,22 @@ struct HandFan: View {
     var cardWidth: CGFloat
     var space: Namespace.ID
 
+    var animatesDeal = true
+
     @State private var dragging: String?
     @State private var dragOffset: CGSize = .zero
+    /// While the opening hand is being dealt, how many cards have landed so far.
+    @State private var dealtCount: Int?
 
-    private var cards: [String] { session.viewer?.hand ?? [] }
+    private var allCards: [String] { session.viewer?.hand ?? [] }
+    private var cards: [String] { dealtCount.map { Array(allCards.prefix($0)) } ?? allCards }
 
     var body: some View {
+        // Worked out once per draw: comparing every card to every legal action is costly
+        // when a Forced Deal offers hundreds of them.
+        let playable = session.isViewersPrompt
+            ? Set(session.legalActions.compactMap { TableActions.handCardId($0.action) })
+            : Set<String>()
         GeometryReader { geometry in
             let count = cards.count
             // The outer cards tilt, so they need some margin to stay on screen.
@@ -28,7 +38,7 @@ struct HandFan: View {
             let total = spacing * CGFloat(max(count - 1, 0))
             ZStack(alignment: .bottomLeading) {
                 ForEach(Array(cards.enumerated()), id: \.element) { index, cardId in
-                    handCard(cardId, index: index, count: count)
+                    handCard(cardId, index: index, count: count, playable: playable.contains(cardId))
                         .position(
                             x: (geometry.size.width - total) / 2 + CGFloat(index) * spacing,
                             y: geometry.size.height - cardWidth * CardView.aspect / 2
@@ -38,19 +48,30 @@ struct HandFan: View {
         }
         .frame(height: cardWidth * CardView.aspect + 8)
         .accessibilityElement(children: .contain)
+        .task(id: session.viewerId) { await dealOpeningHand() }
     }
 
-    private func isPlayable(_ cardId: String) -> Bool {
-        session.isViewersPrompt && !actions.options(forHandCard: cardId).isEmpty
+    /// Deals a new game's first hand one card at a time.
+    private func dealOpeningHand() async {
+        guard animatesDeal, session.game?.history.isEmpty == true, !allCards.isEmpty else {
+            dealtCount = nil
+            return
+        }
+        dealtCount = 0
+        for index in 1...allCards.count {
+            try? await Task.sleep(for: .milliseconds(95))
+            if Task.isCancelled { break }
+            withAnimation(.snappy(duration: 0.34)) { dealtCount = index }
+        }
+        dealtCount = nil
     }
 
     @ViewBuilder
-    private func handCard(_ cardId: String, index: Int, count: Int) -> some View {
+    private func handCard(_ cardId: String, index: Int, count: Int, playable: Bool) -> some View {
         let middle = CGFloat(count - 1) / 2
         let offsetFromMiddle = CGFloat(index) - middle
         let maxTilt: CGFloat = count > 7 ? 2.2 : 3.2
         let selected = ui.selectedCardId == cardId
-        let playable = isPlayable(cardId)
         let isDragging = dragging == cardId
         CardView(cardId: cardId, variant: session.variant, width: cardWidth)
             .matchedGeometryEffect(id: cardId, in: space)
@@ -113,6 +134,7 @@ struct PlayerBoard: View {
     var space: Namespace.ID
 
     var body: some View {
+        let lanes = BoardLane.lanes(for: player, variant: session.variant)
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(player.name)
@@ -125,7 +147,7 @@ struct PlayerBoard: View {
             ScrollView([.horizontal, .vertical], showsIndicators: false) {
                 HStack(alignment: .top, spacing: 10) {
                     BankStack(cards: player.bank, variant: session.variant, cardWidth: cardWidth, space: space, onTap: { actions.ui.inspectedCard = $0 })
-                    ForEach(setLanes, id: \.id) { lane in
+                    ForEach(lanes, id: \.id) { lane in
                         SetLane(lane: lane, variant: session.variant, cardWidth: cardWidth, space: space) { cardId in
                             actions.tapBoardCard(cardId, in: lane.color)
                         }
@@ -136,7 +158,7 @@ struct PlayerBoard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .overlay {
-                if setLanes.isEmpty && player.bank.isEmpty {
+                if lanes.isEmpty && player.bank.isEmpty {
                     Text("Your Bank and properties go here.")
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(.white.opacity(0.45))
@@ -150,8 +172,6 @@ struct PlayerBoard: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .glassPanel(cornerRadius: 18)
     }
-
-    private var setLanes: [BoardLane] { BoardLane.lanes(for: player, variant: session.variant) }
 }
 
 struct BoardLane: Identifiable, Hashable {
@@ -612,6 +632,62 @@ struct CardInspector: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Everything played so far, newest first.
+struct DiscardBrowser: View {
+    var cards: [String]
+    var variant: GameVariant
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("Discard Pile")
+                .font(.headline.weight(.bold))
+                .padding(.top, 18)
+            Text("\(cards.count) \(cards.count == 1 ? "card" : "cards"), newest first")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            if cards.isEmpty {
+                ContentUnavailableView("Nothing Yet", systemImage: "tray", description: Text("Cards played as actions and discards land here."))
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 10) {
+                        ForEach(Array(cards.reversed().enumerated()), id: \.element) { _, cardId in
+                            CardView(cardId: cardId, variant: variant, width: 132)
+                                .shadow(radius: 4, y: 2)
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 8)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityIdentifier("discard.browser")
+    }
+}
+
+/// The card another player just played, large enough to read across the table.
+struct PlaySpotlightView: View {
+    var spotlight: PlaySpotlight
+    var variant: GameVariant
+    var width: CGFloat
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text("\(spotlight.playerName) played")
+                .font(.subheadline.weight(.heavy))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .glassEffect(.regular, in: Capsule())
+            CardView(cardId: spotlight.cardId, variant: variant, width: width)
+                .shadow(color: .black.opacity(0.55), radius: 22, y: 12)
+        }
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("table.spotlight")
     }
 }
 

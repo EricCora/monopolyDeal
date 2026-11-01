@@ -75,3 +75,36 @@ struct ShakeEffect: GeometryEffect {
         ProjectionTransform(CGAffineTransform(translationX: travel * sin(animatableData * .pi * 4), y: 0))
     }
 }
+
+/// A short gold burst of sparks, drawn on one canvas. It plays once and leaves nothing behind.
+struct GoldBurst: View {
+    private let start = Date.now
+    private let sparks = 64
+    private let duration = 1.1
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            Canvas { context, size in
+                let elapsed = timeline.date.timeIntervalSince(start)
+                guard elapsed < duration else { return }
+                let progress = elapsed / duration
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                var random = SplitMix(seed: 19)
+                for index in 0..<sparks {
+                    let angle = Double(index) / Double(sparks) * 2 * .pi + Double(random.next()) * 0.4
+                    let reach = (0.45 + random.next() * 0.55) * min(size.width, size.height) * 0.62
+                    let eased = 1 - pow(1 - progress, 3)
+                    let distance = reach * eased
+                    let drop = 60 * progress * progress
+                    let point = CGPoint(x: center.x + cos(angle) * distance, y: center.y + sin(angle) * distance + drop)
+                    let radius = (2 + random.next() * 3.5) * (1 - progress * 0.7)
+                    let rect = CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)
+                    context.opacity = 1 - progress * progress
+                    context.fill(Path(ellipseIn: rect), with: .color(index % 3 == 0 ? .white : Palette.gold))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}

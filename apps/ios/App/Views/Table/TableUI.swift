@@ -19,6 +19,12 @@ struct ChooserContent: Identifiable {
     var options: [CardOption]
 }
 
+struct PlaySpotlight: Identifiable, Equatable {
+    let id = UUID()
+    var cardId: String
+    var playerName: String
+}
+
 struct RiskyConfirmation: Identifiable {
     let id = UUID()
     var action: Action
@@ -42,6 +48,12 @@ final class TableUI {
     var showRules = false
     var showSaves = false
     var showMenu = false
+    var showDiscards = false
+    /// The card another player just played, shown large for a moment.
+    var spotlight: PlaySpotlight?
+    /// Bumped each time the viewer completes a set, to start the celebration.
+    var setBurstToken = 0
+    var setBanner: String?
     var coach: CoachHint?
     var shakeToken: CGFloat = 0
     var shakeCardId: String?

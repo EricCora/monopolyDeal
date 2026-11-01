@@ -20,6 +20,8 @@ protocol TableSession: AnyObject {
     var pauseDeadline: Date? { get }
     var canUndo: Bool { get }
     var errorMessage: String? { get set }
+    /// A bot working through a long decision, so the wait doesn't look like a freeze.
+    var thinkingPlayerId: PlayerId? { get }
     var showsCoach: Bool { get }
     var title: String { get }
 
@@ -54,6 +56,7 @@ final class LocalMatch: TableSession {
     private(set) var revealedPlayerId: PlayerId?
     private(set) var summary: PostGameSummary?
     private(set) var unlocked: [AchievementId] = []
+    private(set) var thinkingPlayerId: PlayerId?
     var errorMessage: String?
 
     private let store: DealStore
@@ -264,9 +267,11 @@ final class LocalMatch: TableSession {
             try? await Task.sleep(for: delay)
             if Task.isCancelled { return }
             // A hard bot simulates thousands of moves, so it thinks off the main thread.
+            if hard { self?.thinkingPlayerId = actorId }
             let action = await Task.detached(priority: .userInitiated) {
                 BotBrain.choose(game, actorId: actorId, legalActions: legal, hard: hard)
             }.value
+            self?.thinkingPlayerId = nil
             if Task.isCancelled { return }
             self?.perform(action)
         }
@@ -295,7 +300,7 @@ import DealAI
 enum BotBrain {
     nonisolated static func choose(_ game: GameState, actorId: PlayerId, legalActions: [LegalAction], hard: Bool) -> Action {
         let decision = hard
-            ? MonteCarlo.choose(game, actorId: actorId, legalActions: legalActions, simulations: 18, depth: 11)
+            ? MonteCarlo.choose(game, actorId: actorId, legalActions: legalActions, simulations: 18, depth: 11, timeBudget: .seconds(2.5))
             : Heuristic.choose(game, actorId: actorId, legalActions: legalActions)
         if let action = decision?.action, legalActions.contains(where: { $0.action == action }) { return action }
         return legalActions[0].action

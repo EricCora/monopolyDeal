@@ -60,7 +60,8 @@ struct TableView: View {
                         actions: actions,
                         ui: ui,
                         cardWidth: wide ? 170 : phoneHand,
-                        space: cardSpace
+                        space: cardSpace,
+                        animatesDeal: cardsAnimate
                     )
                 }
                 .padding(.horizontal, 12)
@@ -69,6 +70,8 @@ struct TableView: View {
                 PromptPanel(session: session, actions: actions, ui: ui)
 
                 toast
+
+                tableMoments(wide: wide, height: geometry.size.height)
             }
         }
         .overlay { pauseOverlay }
@@ -96,6 +99,11 @@ struct TableView: View {
                     .presentationBackground(.ultraThinMaterial)
             }
         }
+        .sheet(isPresented: $ui.showDiscards) {
+            DiscardBrowser(cards: session.game?.discardPile ?? [], variant: session.variant)
+                .presentationDetents([.medium])
+                .presentationBackground(.ultraThinMaterial)
+        }
         .sheet(isPresented: $ui.showLog) {
             EventLogSheet(events: session.game?.history ?? [])
                 .presentationDetents([.medium, .large])
@@ -120,6 +128,12 @@ struct TableView: View {
             Button("Cancel", role: .cancel) { ui.confirmation = nil }
         } message: { confirmation in
             Text(confirmation.preview)
+        }
+        .onChange(of: session.game?.discardPile.last) { old, new in
+            showSpotlightIfNeeded(previousTop: old, newTop: new)
+        }
+        .onChange(of: viewerCompleteSets) { old, new in
+            celebrateIfNeeded(old: old, new: new)
         }
         .onChange(of: session.prompt) {
             ui.chooser = nil
@@ -249,6 +263,9 @@ struct TableView: View {
 
     private var statusText: String {
         guard let game = session.game, let prompt = session.prompt else { return "Waiting for the game to start." }
+        if let thinking = session.thinkingPlayerId {
+            return "\(session.playerName(thinking)) is thinking…"
+        }
         if !session.isViewersPrompt {
             if let last = game.history.last, session.viewerId != nil { return displayText(last.message) }
             return "Waiting for \(session.playerName(prompt.playerId))."
@@ -382,6 +399,83 @@ struct TableView: View {
         }
     }
 
+    // MARK: Moments
+
+    private var viewerCompleteSets: Int {
+        session.viewer.map { Engine.countCompleteSets($0, session.variant) } ?? 0
+    }
+
+    /// Shows the card someone else just played. Reduce Effects leaves this out, and the
+    /// status line still says what happened.
+    private func showSpotlightIfNeeded(previousTop: String?, newTop: String?) {
+        guard !app.preferences.reducedEffects, let newTop, newTop != previousTop,
+              let game = session.game, let card = Catalog.lookup(newTop, session.variant),
+              card.kind == .action, let actor = actorOfLatestPlay(in: game), actor != session.viewerId else { return }
+        let spotlight = PlaySpotlight(cardId: newTop, playerName: session.playerName(actor))
+        withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.34, dampingFraction: 0.72)) {
+            ui.spotlight = spotlight
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard ui.spotlight?.id == spotlight.id else { return }
+            withAnimation(.easeOut(duration: 0.25)) { ui.spotlight = nil }
+        }
+    }
+
+    /// A Just Say No comes from whoever is in the chain. Anything else, from the current player.
+    private func actorOfLatestPlay(in game: GameState) -> PlayerId? {
+        if case .counter(let request) = game.pending, let last = request.chain.last { return last.playerId }
+        return game.players[game.currentPlayerIndex].id
+    }
+
+    private func celebrateIfNeeded(old: Int, new: Int) {
+        guard new > old else { return }
+        app.feedback(.win)
+        let needed = session.game.map { Engine.ruleset($0).winCompleteSets } ?? 3
+        ui.setBurstToken += 1
+        withAnimation(.snappy) { ui.setBanner = "Set complete! \(new) of \(needed)" }
+        let token = ui.setBurstToken
+        Task {
+            try? await Task.sleep(for: .seconds(1.6))
+            guard ui.setBurstToken == token else { return }
+            withAnimation(.easeOut(duration: 0.25)) { ui.setBanner = nil }
+        }
+    }
+
+    @ViewBuilder
+    private func tableMoments(wide: Bool, height: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            ZStack {
+                if let spotlight = ui.spotlight {
+                    PlaySpotlightView(spotlight: spotlight, variant: session.variant, width: wide ? 260 : min(210, height * 0.22))
+                        .transition(reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
+                }
+                if let banner = ui.setBanner {
+                    ZStack {
+                        if cardsAnimate {
+                            GoldBurst()
+                                .frame(width: 380, height: 380)
+                                .id(ui.setBurstToken)
+                        }
+                        Label(banner, systemImage: "star.fill")
+                            .font(.headline.weight(.heavy))
+                            .foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 11)
+                            .background(Capsule().fill(Palette.gold))
+                            .shadow(color: Palette.gold.opacity(0.6), radius: 14)
+                            .accessibilityIdentifier("table.setBanner")
+                    }
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
+                }
+            }
+            .frame(maxHeight: .infinity)
+            // Keep clear of the hand and any prompt panel below.
+            Spacer().frame(height: height * 0.3)
+        }
+        .allowsHitTesting(false)
+    }
+
     // MARK: Overlays
 
     @ViewBuilder
@@ -496,7 +590,7 @@ private struct PileStack: View {
             .accessibilityLabel("\(session.game?.drawPile.count ?? 0) cards in the deck")
 
             Button {
-                if let top = session.game?.discardPile.last { ui.inspectedCard = top }
+                ui.showDiscards = true
             } label: {
                 Group {
                     if let top = session.game?.discardPile.last {
@@ -509,7 +603,9 @@ private struct PileStack: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Discard pile")
+            .accessibilityLabel("Discard pile, \(session.game?.discardPile.count ?? 0) cards")
+            .accessibilityHint("Shows every discarded card")
+            .accessibilityIdentifier("table.discards")
         }
     }
 }
