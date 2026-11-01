@@ -325,3 +325,10 @@ Validation:
 - Multiplayer server entry: `apps/server/src/index.ts`
 - Legacy LAN fallback: `src/ui/screens/LanPlayScreen.tsx`, `src/network/lanClient.ts`
 - Tests: `src/test/engine.test.ts`, `src/test/app.test.tsx`, `src/test/card-ui.test.tsx`
+
+## Multiplayer behavior notes
+
+- A dropped socket keeps a lobby seat for 30 seconds (`disconnectRoomSeat`); `leaveRoom` is for leaving on purpose.
+- The server ignores a client `seed` unless `MULTIPLAYER_ALLOW_CLIENT_SEED=true`.
+- Undo history is capped at 32 snapshots per turn and cleared by any play that takes cards off the deck.
+- See `DECISIONS.md` for the reasons.
