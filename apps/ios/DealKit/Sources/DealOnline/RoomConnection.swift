@@ -24,7 +24,7 @@ public final class RoomConnection {
     private var streamTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var keepAliveTask: Task<Void, Never>?
-    private var refreshInFlight = false
+    private var refreshTask: Task<Void, Never>?
     private var refreshAgain = false
     private var reclaimingSeat = false
     private var healedRevision: Int?
@@ -145,14 +145,21 @@ public final class RoomConnection {
         }
     }
 
-    /// Fetches the room, coalescing bursts so only one request runs at a time.
+    /// Fetches the room, coalescing bursts so only one request runs at a time. It always
+    /// returns with state from after the call: callers such as a command's retry rely on that.
     public func refresh() async {
-        if refreshInFlight {
+        if let running = refreshTask {
             refreshAgain = true
+            await running.value
             return
         }
-        refreshInFlight = true
-        defer { refreshInFlight = false }
+        let task = Task { await runRefreshes() }
+        refreshTask = task
+        await task.value
+    }
+
+    private func runRefreshes() async {
+        defer { refreshTask = nil }
         repeat {
             refreshAgain = false
             do {

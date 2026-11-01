@@ -240,6 +240,7 @@ public enum OnlineError: Error, Equatable, LocalizedError {
         case .server(let code, let message):
             switch code {
             case "room_full": return "That room is full."
+            case "room_capacity_reached": return "The server is full right now. Try again in a few minutes."
             case "room_not_found", "not_found": return "No room has that code. Check it and try again."
             case "room_started", "match_already_started": return "That match has already started."
             case "invalid_session", "invalid_token", "seat_not_found": return "Your seat in that room is no longer valid."
