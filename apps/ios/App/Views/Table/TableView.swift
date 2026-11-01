@@ -75,6 +75,9 @@ struct TableView: View {
             }
         }
         .overlay { pauseOverlay }
+        // The hand sits at the bottom edge, where iOS would otherwise hold touches back
+        // to see whether they're a home swipe.
+        .defersSystemGestures(on: .bottom)
         // Every state change animates here, so a bot's or another player's move glides too.
         .animation(cardsAnimate ? .snappy(duration: 0.42) : nil, value: session.game?.updatedAt)
         .sheet(item: Binding(get: { ui.chooser }, set: { ui.chooser = $0 })) { chooser in
@@ -82,7 +85,7 @@ struct TableView: View {
                 ui.chooser = nil
                 actions.run(option.legal)
             }
-            .presentationDetents([.height(min(CGFloat(chooser.options.count) * 56 + 300, 680))])
+            .presentationDetents([.height(min(CGFloat(chooser.options.count) * 56 + (chooser.note == nil ? 300 : 350), 680))])
             .presentationBackground(.ultraThinMaterial)
         }
         .sheet(isPresented: Binding(get: { ui.inspectedCard != nil }, set: { if !$0 { ui.inspectedCard = nil } })) {
@@ -136,6 +139,7 @@ struct TableView: View {
             celebrateIfNeeded(old: old, new: new)
         }
         .onChange(of: session.prompt) {
+            ui.notice = nil
             ui.chooser = nil
             ui.selectedCardId = nil
             ui.coach = nil
@@ -485,7 +489,23 @@ struct TableView: View {
 
     @ViewBuilder
     private var toast: some View {
-        if let message = session.errorMessage {
+        if let notice = ui.notice {
+            Label(notice, systemImage: "info.circle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .glassEffect(.regular.tint(Color.black.opacity(0.5)), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.bottom, 200)
+                .padding(.horizontal, 20)
+                .transition(.opacity)
+                .onTapGesture { ui.notice = nil }
+                .task(id: notice) {
+                    try? await Task.sleep(for: .seconds(3.5))
+                    ui.notice = nil
+                }
+                .accessibilityIdentifier("table.notice")
+        } else if let message = session.errorMessage {
             Text(message)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)

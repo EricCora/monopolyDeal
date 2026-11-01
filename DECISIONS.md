@@ -69,3 +69,9 @@ A five-player Forced Deal can offer over 200 moves, which took up to 6.5 seconds
 
 ## 2026-11-01: A disconnected seat reclaims itself
 The server answers `invalid_session` both for a bad token and for a seat it marked disconnected, so the app tries to reconnect before treating the seat as lost.
+
+## 2026-11-01: Two Wilds stay short of a complete Classic set
+Eric reviewed this while playing on iOS and kept the rule. The app now says why, instead of changing it.
+
+## 2026-11-01: The iOS hand reacts to a hold after 60 ms
+Spreading starts before a tap has ended, so a touch released within 250 ms without moving still counts as a tap. Slower thresholds felt laggy on a real phone.

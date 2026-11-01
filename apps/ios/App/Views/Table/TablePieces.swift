@@ -25,11 +25,15 @@ struct HandFan: View {
     @State private var dealtCount: Int?
     /// The card the current touch started on.
     @State private var touchedCard: String?
+    @State private var touchStart = Date.distantPast
     @State private var holdTask: Task<Void, Never>?
     @State private var isFanned = false
     @State private var focusedCard: String?
 
-    private static let holdDelay: Duration = .milliseconds(132)
+    /// How soon the hand starts to spread, and how long a touch can last and still count as
+    /// a tap. Spreading starts well before a tap has ended, so it feels immediate.
+    private static let holdDelay: Duration = .milliseconds(60)
+    private static let tapWindow: TimeInterval = 0.25
     private static let moveTolerance: CGFloat = 12
     private static let focusScale: CGFloat = 1.5
 
@@ -82,8 +86,9 @@ struct HandFan: View {
         }
         .frame(height: cardWidth * CardView.aspect + 8)
         .accessibilityElement(children: .contain)
-        .sensoryFeedback(.selection, trigger: focusedCard) { _, new in
-            new != nil && app.preferences.hapticsEnabled
+        // Only when sliding between cards, so a plain tap doesn't buzz twice.
+        .sensoryFeedback(.selection, trigger: focusedCard) { old, new in
+            old != nil && new != nil && app.preferences.hapticsEnabled
         }
         .task(id: session.viewerId) { await dealOpeningHand() }
         .onChange(of: session.viewerId) { endHold() }
@@ -102,6 +107,7 @@ struct HandFan: View {
             .onChanged { value in
                 if touchedCard == nil, holdTask == nil {
                     touchedCard = cardIndex(atX: value.startLocation.x, width: width).map { cards[$0] }
+                    touchStart = value.time
                     let startX = value.startLocation.x
                     holdTask = Task {
                         try? await Task.sleep(for: Self.holdDelay)
@@ -128,11 +134,13 @@ struct HandFan: View {
                 holdTask = nil
                 let card = touchedCard
                 touchedCard = nil
+                let distance = hypot(value.translation.width, value.translation.height)
                 if isFanned {
                     endHold()
+                    let wasTap = value.time.timeIntervalSince(touchStart) < Self.tapWindow && distance <= Self.moveTolerance
+                    if wasTap, let card { actions.tapHandCard(card) }
                     return
                 }
-                let distance = hypot(value.translation.width, value.translation.height)
                 let released = dragging != nil && value.translation.height < -90
                 withAnimation(.snappy(duration: 0.28)) {
                     dragging = nil
@@ -146,7 +154,7 @@ struct HandFan: View {
 
     private func beginHold(atX x: CGFloat, width: CGFloat) {
         guard !cards.isEmpty else { return }
-        let animation: Animation = reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.24)
+        let animation: Animation = reduceMotion ? .easeOut(duration: 0.1) : .snappy(duration: 0.16)
         withAnimation(animation) { isFanned = true }
         withAnimation(animation) { focusedCard = nearestCard(toX: x, width: width) }
     }
@@ -692,6 +700,14 @@ struct ChooserSheet: View {
                 .padding(.top, 18)
             Text(content.title)
                 .font(.title3.weight(.bold))
+            if let note = content.note {
+                Label(note, systemImage: "info.circle")
+                    .font(.footnote)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 20)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("chooser.note")
+            }
             ScrollView {
                 VStack(spacing: 8) {
                     ForEach(Array(content.options.enumerated()), id: \.element.id) { index, option in

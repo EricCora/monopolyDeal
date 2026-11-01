@@ -387,6 +387,7 @@ private struct CardPickPanel: View {
         actions.ui.chooser = ChooserContent(
             cardId: cardId,
             title: Catalog.card(cardId, session.variant).name,
+            note: nil,
             options: legal.enumerated().map { index, item in
                 let destination = item.action.destinationColor?.label
                 return CardOption(id: index, label: destination.map { "Put in \($0)" } ?? item.label, detail: nil, legal: item)
@@ -452,6 +453,7 @@ private struct ForcedDealPanel: View {
             ui.chooser = ChooserContent(
                 cardId: card.id,
                 title: Catalog.card(card.id, session.variant).name,
+                note: nil,
                 options: matches.enumerated().map { index, item in
                     CardOption(id: index, label: item.action.destinationColor.map { "Put in \($0.label)" } ?? item.label, detail: nil, legal: item)
                 }

@@ -16,6 +16,8 @@ struct ChooserContent: Identifiable {
     let id = UUID()
     var cardId: String
     var title: String
+    /// Why the card can't do what it's meant for, when only something lesser is on offer.
+    var note: String?
     var options: [CardOption]
 }
 
@@ -54,6 +56,8 @@ final class TableUI {
     /// Bumped each time the viewer completes a set, to start the celebration.
     var setBurstToken = 0
     var setBanner: String?
+    /// A short explanation of why a tap didn't do anything.
+    var notice: String?
     var coach: CoachHint?
     var shakeToken: CGFloat = 0
     var shakeCardId: String?
@@ -130,12 +134,18 @@ struct TableActions {
         }
     }
 
+    private func restriction(for cardId: String) -> String? {
+        guard let game = session.game, let viewerId = session.viewerId else { return nil }
+        return Engine.playRestriction(game, playerId: viewerId, cardId: cardId)
+    }
+
     func tapHandCard(_ cardId: String) {
-        guard session.isViewersPrompt, !session.isPaused else { return }
-        let options = options(forHandCard: cardId)
+        guard !session.isPaused else { return }
+        let options = session.isViewersPrompt ? options(forHandCard: cardId) : []
         guard !options.isEmpty else {
             ui.shakeCardId = cardId
             ui.shakeToken += 1
+            ui.notice = restriction(for: cardId)
             errorFeedback()
             return
         }
@@ -150,7 +160,7 @@ struct TableActions {
         if options.count == 1 && oneTap {
             run(options[0].legal)
         } else {
-            ui.chooser = ChooserContent(cardId: cardId, title: card.kind == .money ? "$\(card.value)" : card.name, options: options)
+            ui.chooser = ChooserContent(cardId: cardId, title: card.kind == .money ? "$\(card.value)" : card.name, note: restriction(for: cardId), options: options)
         }
     }
 
