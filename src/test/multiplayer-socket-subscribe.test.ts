@@ -47,3 +47,21 @@ describe('room event subscription', () => {
     expect(getMultiplayerTransportMode()).toBe('socket_primary');
   });
 });
+
+describe('LAN invite origins', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('drops an origin that does not answer, so an invite never points at a dead address', async () => {
+    const { listMultiplayerLanOrigins } = await import('../network/multiplayerClient');
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('lan-origins')) {
+        return new Response(JSON.stringify({ origins: ['http://192.168.1.5:5173', 'http://192.168.1.6:5173'] }), { status: 200 });
+      }
+      if (url.startsWith('http://192.168.1.5')) throw new TypeError('connection refused');
+      return new Response('', { status: 200 });
+    }));
+    await expect(listMultiplayerLanOrigins('http://api', 5173)).resolves.toEqual(['http://192.168.1.6:5173']);
+  });
+});
