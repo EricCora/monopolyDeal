@@ -135,6 +135,14 @@ struct PlayerBoard: View {
                 .padding(.horizontal, 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .overlay {
+                if setLanes.isEmpty && player.bank.isEmpty {
+                    Text("Your Bank and properties go here.")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .allowsHitTesting(false)
+                }
+            }
             .frame(maxHeight: .infinity, alignment: .top)
             .scrollBounceBehavior(.basedOnSize)
         }
@@ -223,6 +231,10 @@ struct BankStack: View {
 
     private var total: Int { cards.reduce(0) { $0 + Engine.cardMoneyValue($1, variant) } }
 
+    /// Only the newest cards are drawn, so a rich Bank doesn't crowd out the sets beside it.
+    private var visibleCards: [String] { Array(cards.suffix(5)) }
+    private static let overlap: CGFloat = 7
+
     var body: some View {
         VStack(spacing: 4) {
             ZStack(alignment: .topLeading) {
@@ -235,13 +247,13 @@ struct BankStack: View {
                                 .foregroundStyle(.white.opacity(0.4))
                         }
                     }
-                ForEach(Array(cards.enumerated()), id: \.element) { index, cardId in
+                ForEach(Array(visibleCards.enumerated()), id: \.element) { index, cardId in
                     card(cardId)
-                        .offset(x: CGFloat(index) * min(6, 40 / CGFloat(max(cards.count, 1))), y: CGFloat(index) * 2)
+                        .offset(x: CGFloat(index) * Self.overlap)
                         .zIndex(Double(index))
                 }
             }
-            .frame(width: cardWidth + 28, alignment: .topLeading)
+            .frame(width: cardWidth + Self.overlap * CGFloat(max(visibleCards.count - 1, 0)), alignment: .topLeading)
             Text("Bank $\(total)")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.white.opacity(0.85))

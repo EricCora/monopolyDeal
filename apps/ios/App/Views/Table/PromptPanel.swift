@@ -15,7 +15,7 @@ struct PromptPanel: View {
                 VStack(spacing: 10) { content }
                     .padding(14)
                     .frame(maxWidth: 620)
-                    .glassPanel(cornerRadius: 26)
+                    .glassPanel(cornerRadius: 26, tint: Color.black.opacity(0.42))
                     .padding(.horizontal, 10)
                     .padding(.bottom, 6)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -500,7 +500,7 @@ private struct DealBreakerPanel: View {
                             Button {
                                 actions.perform(legal.action)
                             } label: {
-                                SetLane(lane: lane, variant: session.variant, cardWidth: 64, space: nil) { _ in
+                                SetLane(lane: lane, variant: session.variant, cardWidth: 58, space: nil) { _ in
                                     actions.perform(legal.action)
                                 }
                             }
@@ -510,7 +510,7 @@ private struct DealBreakerPanel: View {
                     }
                 }
             }
-            .frame(maxHeight: 300)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -556,7 +556,8 @@ private struct ChoiceListPanel: View {
                     }
                 }
             }
-            .frame(maxHeight: 280)
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(height: min(CGFloat(session.legalActions.count) * 52, 280))
         }
     }
 }

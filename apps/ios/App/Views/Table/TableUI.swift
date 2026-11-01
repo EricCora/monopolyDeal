@@ -129,10 +129,15 @@ struct TableActions {
         }
         tapFeedback()
         ui.selectedCardId = cardId
-        if options.count == 1 {
+        let card = Catalog.card(cardId, session.variant)
+        // One tap plays money and properties. Anything costlier to misplay, such as an
+        // action card whose only option is the Bank, or a discard, always asks first.
+        let oneTap = (card.kind == .money || card.kind == .property || card.kind == .wild)
+            && options[0].legal.action.type != .discard_card
+            && options[0].legal.action.type != .repay_debt
+        if options.count == 1 && oneTap {
             run(options[0].legal)
         } else {
-            let card = Catalog.card(cardId, session.variant)
             ui.chooser = ChooserContent(cardId: cardId, title: card.kind == .money ? "$\(card.value)" : card.name, options: options)
         }
     }

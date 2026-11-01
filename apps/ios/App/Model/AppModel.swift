@@ -83,6 +83,7 @@ final class AppModel {
         client = RoomClient(baseURL: LaunchOptions().serverURL ?? RoomClient.productionURL)
         storedRoom = SessionVault.load()
         reloadStoredData()
+        if launch.resumeOnLaunch { resumeActive() }
     }
 
     func reloadStoredData() {
@@ -352,5 +353,5 @@ struct LaunchOptions {
     var ruleset: Ruleset? {
         defaults.object(forKey: "winSets") == nil ? nil : Ruleset(winCompleteSets: defaults.integer(forKey: "winSets"))
     }
-    var reduceAnimations: Bool { defaults.bool(forKey: "fastUI") }
+    var resumeOnLaunch: Bool { defaults.bool(forKey: "resumeOnLaunch") }
 }
