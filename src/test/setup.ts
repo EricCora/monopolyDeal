@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom';
+import { afterEach } from 'vitest';
 
 class ResizeObserverMock {
   observe() {
@@ -20,3 +21,6 @@ if (!window.ResizeObserver) {
 afterEach(() => {
   window.sessionStorage.clear();
 });
+
+// jsdom has no layout, and logs an error for scrollTo.
+window.scrollTo = () => undefined;

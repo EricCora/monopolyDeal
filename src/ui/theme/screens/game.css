@@ -428,3 +428,114 @@
     animation: none;
   }
 }
+
+/*
+ * Keep the hand and turn controls within reach. Status detail that repeats
+ * the turn banner stays out of the way, and the player's own seat comes before
+ * the piles, whose counts are already in the Table chip.
+ */
+.game-table-screen .table-match-summary,
+.game-table-screen .table-match-debug,
+.game-table-screen .table-surface-focus,
+.game-table-screen .table-surface-note,
+.game-table-screen .table-top-group-label {
+  display: none;
+}
+
+.game-table-screen .table-command-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.game-table-screen .table-match-chip {
+  flex: 0 1 auto;
+  min-height: 0;
+  padding: 0.25rem 0.6rem;
+}
+
+.game-table-screen .table-top-panels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.game-table-screen .table-top-panels.is-hidden {
+  display: none;
+}
+
+.game-table-screen .table-top-group,
+.game-table-screen .table-top-group-actions {
+  display: contents;
+}
+
+.game-table-screen .table-top-group-actions button {
+  flex: 0 1 auto;
+  width: auto;
+  min-height: 0;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.game-table-screen.is-live-room .table-quick-actions {
+  padding-right: 5.5rem;
+}
+
+.game-table-screen .table-quick-actions button {
+  flex: 0 1 auto;
+  min-height: 0;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.9rem;
+}
+
+.multiplayer-chat-dock.shell-table-live {
+  top: max(0.6rem, env(safe-area-inset-top));
+  right: max(0.6rem, env(safe-area-inset-right));
+  left: auto;
+  bottom: auto;
+  width: min(380px, calc(100vw - 1.2rem));
+  justify-items: end;
+  pointer-events: none;
+}
+
+.multiplayer-chat-dock.shell-table-live > * {
+  pointer-events: auto;
+}
+
+.game-table-screen .table-surface {
+  display: flex;
+  flex-direction: column;
+}
+
+.game-table-screen .table-surface > .players-grid {
+  order: 1;
+}
+
+.game-table-screen .table-surface > .table-pile-row {
+  order: 2;
+}
+
+.game-table-screen .table-surface > .table-surface-staging {
+  order: 3;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* One seat per row gives the hand the table's full width, with the player's own seat first. */
+.game-table-screen .players-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.game-table-screen .players-grid > .player:has(.is-own-hand) {
+  order: -1;
+}
+
+.multiplayer-chat-dock.shell-table-live .chat-pill {
+  justify-self: end;
+}
+
+@media (max-width: 720px) {
+  .game-table-screen .table-surface-glance,
+  .game-table-screen .table-command-strip > .table-priority-banner {
+    display: none;
+  }
+}

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGame, type GameState } from '../engine';
 import App from '../App';
 import { AppErrorBoundary } from '../ui/AppErrorBoundary';
-import { pendingRequestBanner } from '../ui/screens/GameTableScreen';
+import { pendingRequestBanner } from '../ui/screens/pendingRequestBanner';
 import { getCardVisualModel } from '../ui/cards';
 import { saveRecoveryEntry } from '../persistence/multiplayerRecovery';
 import { readFileSync } from 'node:fs';

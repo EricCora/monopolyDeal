@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatPropertyColor, getCardDisplayName, type PropertyColor } from '../../cards/catalog';
+import { pendingRequestBanner } from './pendingRequestBanner';
 import {
   getSetCompletionCount,
   isGameOver,
@@ -44,11 +45,6 @@ interface PlayChooserState {
   variants: CardActionVariant[];
 }
 
-interface PendingRequestBanner {
-  title: string;
-  detail: string;
-  tone: 'payment' | 'selection' | 'response';
-}
 
 interface TablePriorityNotice {
   title: string;
@@ -166,88 +162,6 @@ function colorLabel(color: PropertyColor): string {
   return formatPropertyColor(color);
 }
 
-export function pendingRequestBanner(game: GameState, playerId: string): PendingRequestBanner | null {
-  const pending = game.pending;
-  if (!pending) return null;
-
-  if (pending.kind === 'payment' && pending.payload.targetPlayerId === playerId) {
-    const sourceName = game.players.find((player) => player.id === pending.payload.sourcePlayerId)?.name ?? 'Another player';
-    return {
-      title: 'Payment Requested',
-      detail: `${sourceName} is requesting $${pending.payload.amount} for ${pending.payload.reason}. Select cards from bank and properties to submit payment.`,
-      tone: 'payment',
-    };
-  }
-
-  if (pending.kind === 'counter' && pending.payload.awaitingPlayerId === playerId) {
-    const sourceName = game.players.find((player) => player.id === pending.payload.sourcePlayerId)?.name ?? 'Another player';
-    return {
-      title: 'Counter Response Needed',
-      detail: `${sourceName} played ${getCardDisplayName(pending.payload.actionCardId, game.variant ?? 'classic')}. Choose your response to continue.`,
-      tone: 'response',
-    };
-  }
-
-  if (pending.kind === 'rent' && pending.payload.sourcePlayerId === playerId) {
-    return {
-      title: 'Rent Target Required',
-      detail: `Choose who pays $${pending.payload.amount} for ${colorLabel(pending.payload.color)} rent.`,
-      tone: 'selection',
-    };
-  }
-
-  if (pending.kind === 'sly_deal' && pending.payload.sourcePlayerId === playerId) {
-    const targetName = game.players.find((player) => player.id === pending.payload.targetPlayerId)?.name ?? 'target player';
-    return {
-      title: 'Steal a Property',
-      detail: `Pick one movable property from ${targetName}.`,
-      tone: 'selection',
-    };
-  }
-
-  if (pending.kind === 'forced_deal' && pending.payload.sourcePlayerId === playerId) {
-    const targetName = game.players.find((player) => player.id === pending.payload.targetPlayerId)?.name ?? 'target player';
-    return {
-      title: 'Swap Required',
-      detail: `Pick one of your properties, then a property from ${targetName} to complete the swap.`,
-      tone: 'selection',
-    };
-  }
-
-  if (pending.kind === 'deal_breaker' && pending.payload.sourcePlayerId === playerId) {
-    const targetName = game.players.find((player) => player.id === pending.payload.targetPlayerId)?.name ?? 'target player';
-    return {
-      title: 'Choose Set to Steal',
-      detail: `Pick a complete set to steal from ${targetName}.`,
-      tone: 'selection',
-    };
-  }
-
-  if (pending.kind === 'debt_card' && pending.payload.creditorPlayerId === playerId) {
-    return {
-      title: 'Debt Card Received',
-      detail: 'Resolve the received card into your Bank, collection, or immediate action before the debtor continues.',
-      tone: 'selection',
-    };
-  }
-
-  if (pending.kind === 'no_mercy') {
-    const req = pending.payload;
-    const actorId = req.step === 'heist_pick' || req.step === 'market_crash_pick' || req.step === 'tough_luck_choice'
-      ? req.sourcePlayerId : req.targetPlayerId;
-    if (actorId === playerId) {
-      return {
-        title: 'No Mercy Selection',
-        detail: req.step?.endsWith('_distribute')
-          ? 'Choose which player receives the next redistributed card.'
-          : 'Resolve the highlighted No Mercy effect to continue.',
-        tone: 'selection',
-      };
-    }
-  }
-
-  return null;
-}
 
 function renderHiddenHand(cardCount: number) {
   const visibleBacks = Math.min(5, cardCount);
@@ -817,6 +731,11 @@ export function GameTableScreen({
   const showControlsPanel = !narrowLayout || controlsExpanded;
   const showRoomActions = Boolean(isMultiplayer);
   const showHostTools = Boolean(isMultiplayer && isMultiplayerHost);
+
+  // Coming from a long lobby or setup page shouldn't open the table scrolled past the turn controls.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(Date.now()), 450);
@@ -1654,7 +1573,7 @@ export function GameTableScreen({
                     </section>
                   ) : null}
 
-                  <section className={`player-zone ${handZoneSpotlight ? `is-spotlight tone-${prompt.kind}` : ''}`}>
+                  <section className={`player-zone ${canSeeHand ? 'is-own-hand' : ''} ${handZoneSpotlight ? `is-spotlight tone-${prompt.kind}` : ''}`}>
                     <div className="player-zone-head">
                       <strong>Hand</strong>
                       <span className="player-zone-meta">{player.hand.length} cards</span>
