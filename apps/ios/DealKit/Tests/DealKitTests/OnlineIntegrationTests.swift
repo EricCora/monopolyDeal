@@ -55,9 +55,18 @@ final class OnlineIntegrationTests: XCTestCase {
             var moved = false
             for seat in seats where await playOneMove(seat) { moved = true }
             if seats[0].view?.isFinished == true { return }
+            // Yield while waiting, so a refresh already in flight can finish. Ten seconds
+            // with no move from anyone is a real stall.
             idle = moved ? 0 : idle + 1
-            XCTAssertLessThan(idle, 400, "Nobody could move: \(seats[0].view?.gameState?.turn as Any)")
-            if idle >= 400 { return }
+            if !moved { try await Task.sleep(for: .milliseconds(10)) }
+            if idle >= 1000 {
+                let detail = seats.map { seat in
+                    let view = seat.view
+                    return "\(view?.yourPlayerId ?? "?") legal=\(view?.legalActions.map(\.label).prefix(3) ?? []) prompt=\(view?.promptPlayerId ?? "?") pending=\(String(describing: view?.gameState?.pending).prefix(120)) paused=\(view?.paused ?? false) rev=\(view?.revision ?? -1) err=\(String(describing: seat.lastError)) connected=\(view?.yourSeat?.connected as Any)"
+                }.joined(separator: " | ")
+                XCTFail("Nobody could move: \(detail)")
+                return
+            }
         }
         XCTFail("The match never finished")
     }
@@ -311,6 +320,25 @@ final class OnlineIntegrationTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(100))
         }
         XCTAssertTrue(moved, "Nobody could move after the restart")
+    }
+
+    /// A caller of `refresh` relies on seeing the room as it is now, even if another
+    /// refresh is already running. The retry of a stale command depends on this.
+    func testRefreshWaitsForFreshStateWhenOneIsAlreadyRunning() async throws {
+        let hostSession = try await client.createRoom(playerName: "Host")
+        let guestSession = try await client.joinRoom(code: hostSession.roomCode, playerName: "Guest")
+        let host = RoomConnection(client: client, session: hostSession)
+        await host.refresh()
+        let client = self.client!
+        for round in 0..<20 {
+            try await client.setReady(guestSession, ready: round % 2 == 0, expectedRevision: nil)
+            let latest = try await client.state(guestSession).revision
+            async let first: Void = host.refresh()
+            await Task.yield()
+            await host.refresh()
+            XCTAssertEqual(host.view?.revision, latest, "Round \(round) returned before the room was fetched")
+            await first
+        }
     }
 
     func testStaleRevisionRefreshesInsteadOfFailing() async throws {
