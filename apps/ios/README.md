@@ -23,6 +23,7 @@ Automated tests can't cover touch and feel, so try these on the phone:
 - [ ] **Dropped connection:** switch to Airplane Mode for a minute mid-match, then back. The app rejoins your seat.
 - [ ] **Invite link:** open `monopolydeal://join/CODE` from Messages. The code is filled in.
 - [ ] **Share:** the results screen's Share button produces a good-looking image.
+- [ ] **VoiceOver:** with VoiceOver on, play a turn. Automated checks cover labels but not how a real game sounds.
 
 ## Layout
 
