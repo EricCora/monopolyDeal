@@ -1060,7 +1060,8 @@ export function useMultiplayerRoom({
     setLoading(true);
     clearError();
     try {
-      await setMultiplayerReady(current, ready, apiBase, expectedRevision);
+      // Ready only sets this player's own flag, so another player's change needn't reject it.
+      await setMultiplayerReady(current, ready, apiBase, undefined);
       await refreshRoom(current);
     } catch (readyError) {
       const code = readyError instanceof Error ? readyError.message : 'request_failed';
@@ -1069,7 +1070,7 @@ export function useMultiplayerRoom({
     } finally {
       setLoading(false);
     }
-  }, [apiBase, clearError, expectedRevision, refreshOnRevisionConflict, refreshRoom, session, setErrorFromCode]);
+  }, [apiBase, clearError, refreshOnRevisionConflict, refreshRoom, session, setErrorFromCode]);
 
   const setRoomPreset = useCallback(async (presetId: MultiplayerSessionPresetId) => {
     const current = session;

@@ -42,9 +42,10 @@ import type {
 
 const RECONNECT_WINDOW_V1_DEFAULT_MS = 90_000;
 const RECONNECT_WINDOW_MS = resolveReconnectWindowMs(process.env.MP_RECONNECT_GRACE_MS);
-// A page refresh must not cost a lobby seat, but an empty seat shouldn't hold up the host for long.
+// A refresh must not cost a lobby seat, and Start briefly waits for a returning player. An absent player
+// keeps the seat for the full window so a host can leave to share the invite, but stops blocking the others.
 const MATCH_SEED_RANGE = 1_000_000_000;
-const LOBBY_RECONNECT_WINDOW_MS = Math.min(RECONNECT_WINDOW_MS, 30_000);
+const LOBBY_START_HOLD_MS = 30_000;
 // Keep lobby heartbeat grace long enough for frequent tab switching during local beta sessions.
 const STALE_CONNECTION_LOBBY_MS = 1.5 * 60 * 1000;
 // Active/finished matches should reflect disconnect presence quickly even if unload signals are dropped.
@@ -551,7 +552,7 @@ function markDisconnected(room: MultiplayerRoom, player: RoomParticipant): void 
   player.connectionState = 'disconnected';
   player.disconnectedAt = now;
   player.lastSeenAt = now;
-  player.reconnectDeadlineMs = now + (room.status === 'lobby' ? LOBBY_RECONNECT_WINDOW_MS : RECONNECT_WINDOW_MS);
+  player.reconnectDeadlineMs = now + RECONNECT_WINDOW_MS;
   delete room.typingByPlayerId[player.id];
   appendActivity(room, 'connection', `${player.name} disconnected.`, { playerId: player.id });
   applyDisconnectPauseState(room, player.id);
@@ -733,8 +734,10 @@ function connectedLobbyPlayers(room: MultiplayerRoom): RoomParticipant[] {
 
 function allConnectedPlayersReady(room: MultiplayerRoom): boolean {
   const connectedPlayers = connectedLobbyPlayers(room);
-  // A seat still inside its reconnect window is expected back any moment.
-  const seatReconnecting = room.players.some((player) => !player.connected && player.reconnectDeadlineMs > nowMs());
+  const now = nowMs();
+  const seatReconnecting = room.players.some((player) => !player.connected
+    && player.reconnectDeadlineMs > now
+    && now - (player.disconnectedAt ?? 0) < LOBBY_START_HOLD_MS);
   return !seatReconnecting && connectedPlayers.length >= 2 && connectedPlayers.every((player) => player.ready);
 }
 
@@ -1131,8 +1134,6 @@ export function startRoom(
   if (room.status !== 'lobby') {
     throw new Error('room_started');
   }
-  // A seat left behind here would block every rematch, since prune skips started rooms.
-  reclaimDisconnectedLobbyParticipants(room, nowMs(), 'expired');
   const activePlayers = connectedLobbyPlayers(room);
   if (activePlayers.length < 2) {
     throw new Error('minimum_players_required');
@@ -1140,6 +1141,8 @@ export function startRoom(
   if (!allConnectedPlayersReady(room)) {
     throw new Error('players_not_ready');
   }
+  // A seat left behind here would block every rematch, since prune skips started rooms.
+  reclaimDisconnectedLobbyParticipants(room, nowMs(), 'all');
   const players: PlayerConfig[] = activePlayers.map((player) => ({ id: player.id, name: player.name }));
   if (checkpointId) {
     const checkpoint = findCheckpoint(room, checkpointId);
