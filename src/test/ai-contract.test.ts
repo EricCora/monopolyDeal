@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildCoachHint, chooseHeuristicAction, chooseMonteCarloAction, rankHeuristicActions } from '../ai';
+import { getCardDefinition } from '../cards/catalog';
 import { createGame, getLegalActions, type Action, type GameState, type LegalAction } from '../engine';
 
 function sameAction(left: Action, right: Action): boolean {
@@ -140,5 +141,31 @@ describe('AI command contract', () => {
 
     expect(passScore.score).toBe(20);
     expect(passScore.reason).toMatch(/passing early/i);
+  });
+});
+
+describe('action card scores', () => {
+  it("scores It's My Birthday as intended", () => {
+    const state = makeAiState();
+    const birthday = state.players.flatMap((player) => player.hand).concat(state.drawPile)
+      .find((cardId) => cardId.startsWith('its_my_birthday'));
+    expect(birthday).toBeDefined();
+    const [scored] = rankHeuristicActions(state, 'p1', [
+      { action: { type: 'play_action', playerId: 'p1', cardId: birthday! }, label: 'Birthday' },
+    ]);
+    expect(scored.score).toBe(430);
+  });
+
+  it.each(['classic', 'no_mercy'] as const)('gives every %s card a real score', (variant) => {
+    const state = createGame({ seed: 1, variant, players: [{ id: 'p1', name: 'A' }, { id: 'p2', name: 'B' }] });
+    const cards = state.players.flatMap((player) => player.hand).concat(state.drawPile)
+      .filter((cardId) => getCardDefinition(cardId, variant).kind === 'action');
+    expect(cards.length).toBeGreaterThan(0);
+    for (const cardId of cards) {
+      const [scored] = rankHeuristicActions(state, 'p1', [
+        { action: { type: 'play_action', playerId: 'p1', cardId }, label: cardId },
+      ]);
+      expect(Number.isFinite(scored.score), cardId).toBe(true);
+    }
   });
 });
