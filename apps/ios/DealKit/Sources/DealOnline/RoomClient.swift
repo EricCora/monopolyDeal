@@ -22,6 +22,12 @@ public struct RoomClient: Sendable {
         session = URLSession(configuration: configuration)
     }
 
+    /// For tests that answer requests themselves.
+    init(baseURL: URL, configuration: URLSessionConfiguration) {
+        self.baseURL = baseURL
+        session = URLSession(configuration: configuration)
+    }
+
     private func roomURL(_ code: String, _ operation: String) -> URL {
         baseURL.appendingPathComponent("api/multiplayer/rooms").appendingPathComponent(code).appendingPathComponent(operation)
     }

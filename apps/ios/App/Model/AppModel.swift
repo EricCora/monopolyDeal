@@ -362,11 +362,7 @@ final class AppModel {
 
     /// Accepts `monopolydeal://join/CODE` and web-style `.../join/CODE` links.
     func open(url: URL) {
-        var parts = url.pathComponents.filter { $0 != "/" }
-        if url.scheme == "monopolydeal", let host = url.host() { parts.insert(host, at: 0) }
-        guard let index = parts.firstIndex(where: { $0.lowercased() == "join" }), index + 1 < parts.count else { return }
-        let code = parts[index + 1].uppercased().filter { $0.isLetter || $0.isNumber }
-        guard (4...8).contains(code.count) else { return }
+        guard let code = RoomInvite.roomCode(from: url) else { return }
         pendingJoinCode = code
         if path.last != .online { path.append(.online) }
     }

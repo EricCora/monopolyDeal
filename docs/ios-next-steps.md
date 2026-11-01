@@ -9,7 +9,3 @@ Nothing here is built. These are the larger steps that need your call, with my r
 | Push notifications ("it's your turn") | **Later, only if online games drag** | It's the most useful upgrade for slow games between friends, but also the largest: Apple notification setup, plus new server work to store device tokens and send pushes. The free Render tier sleeps, so timing would be unreliable without a paid plan. |
 | iCloud sync | **Skip for now** | It would only carry saves and stats between your own devices. A conflict between two devices would be easy to get wrong, for little benefit with one phone. |
 | Game Center | **Skip** | Achievements and leaderboards aren't worth a second invite system alongside room codes. It also needs App Store setup, and the Monopoly name makes a public listing doubtful. |
-
-## Small questions that would unlock quick wins
-- **What's the web game's address?** With it, invites can include a link browser players can tap. I couldn't find it in the repo, and `monopoly-deal.vercel.app` belongs to another site.
-- **Is it OK to test against the live Render server?** One short match would confirm the app works with what's actually deployed. It creates a few temporary rooms, which the server removes by itself.

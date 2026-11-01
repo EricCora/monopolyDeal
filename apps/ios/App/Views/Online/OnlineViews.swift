@@ -448,7 +448,7 @@ struct RoomLobbyView: View {
     }
 
     private func inviteText(_ view: RoomView) -> String {
-        "Join my Monopoly Deal room. The code is \(view.roomCode).\nOn iPhone: monopolydeal://join/\(view.roomCode)"
+        RoomInvite.text(roomCode: view.roomCode)
     }
 
     private func roster(_ view: RoomView) -> some View {
