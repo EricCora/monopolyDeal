@@ -87,6 +87,25 @@ function rolloutSimulation(startState: GameState, rootPlayerId: PlayerId, depth:
   return evaluateState(state, rootPlayerId);
 }
 
+/** How many times a hard bot may reposition Wilds in one turn. */
+const MAX_WILD_MOVES_PER_TURN = 2;
+
+/**
+ * Moving a Wild costs no play, so a bot whose simulations keep rating it highest would
+ * never end its turn and the game would freeze. Past the limit, it has to do something else.
+ */
+function allowedMoves(state: GameState, legalActions: LegalAction[]): LegalAction[] {
+  let wildMoves = 0;
+  for (let index = state.history.length - 1; index >= 0; index -= 1) {
+    const { type } = state.history[index];
+    if (type === 'draw' || type === 'turn_passed' || type === 'go_again') break;
+    if (type === 'wild_move') wildMoves += 1;
+  }
+  if (wildMoves < MAX_WILD_MOVES_PER_TURN) return legalActions;
+  const others = legalActions.filter((item) => item.action.type !== 'move_wild');
+  return others.length > 0 ? others : legalActions;
+}
+
 export interface RolloutDecision extends ScoredAction {
   simulationScore: number;
   simulations: number;
@@ -106,7 +125,7 @@ export function chooseMonteCarloAction(
 
   let best: RolloutDecision | null = null;
 
-  for (const legal of legalActions) {
+  for (const legal of allowedMoves(state, legalActions)) {
     const first = applyAction(state, legal.action);
     if (first.error) continue;
 

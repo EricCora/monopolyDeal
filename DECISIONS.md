@@ -86,3 +86,6 @@ The web score table now uses the card's real kind, so the card scores 430 on bot
 
 ## 2026-11-01: Recorded games replay in parallel
 The replay was most of `ios:verify`'s time. It now uses half the cores, so the Mac stays usable, and took 103 seconds here against about 12 minutes before. The checks are the same.
+
+## 2026-11-01: The web hard bot gets the same Wild limit as iOS
+A hard bot may move Wilds twice per turn on both platforms. Without the limit, a game could freeze with the bot moving a Wild back and forth, because a move costs no play. This changes only the top difficulty's choices.
