@@ -1,5 +1,6 @@
 import DealAI
 import DealEngine
+import DealStats
 import XCTest
 @testable import DealOnline
 
@@ -90,6 +91,15 @@ final class OnlineIntegrationTests: XCTestCase {
         await guest.refresh()
         XCTAssertEqual(host.view?.isFinished, true)
         XCTAssertNotNil(guest.view?.winnerId)
+
+        // Each seat builds its results screen from a state with the other hands hidden.
+        for seat in [host, guest] {
+            let finished = try XCTUnwrap(seat.view?.gameState)
+            let summary = PostGame.summary(finished, lifetime: LifetimeStats())
+            XCTAssertEqual(summary.winnerId, seat.view?.winnerId)
+            XCTAssertEqual(summary.players.count, 2)
+            XCTAssertEqual(StatsBuilder.matchRecord(finished, mode: .live_online, surface: .multiplayer).winnerId, seat.view?.winnerId)
+        }
     }
 
     func testAppVersusAppClassicFinishes() async throws { try await appVsApp(.classic) }

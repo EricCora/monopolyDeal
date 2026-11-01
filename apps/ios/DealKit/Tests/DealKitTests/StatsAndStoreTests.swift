@@ -121,6 +121,15 @@ final class StatsAndStoreTests: XCTestCase {
         XCTAssertGreaterThan(hardWins, games / 2, "Hard won only \(hardWins) of \(games)")
     }
 
+    /// The online results screen sees other players' hands as hidden placeholders.
+    func testPostGameRecapHandlesHiddenCards() {
+        var game = finishedGame()
+        game.players[1].hand = Array(repeating: Catalog.hiddenCardId, count: game.players[1].hand.count + 2)
+        game.drawPile = game.drawPile.map { _ in Catalog.hiddenCardId }
+        let summary = PostGame.summary(game, lifetime: LifetimeStats())
+        XCTAssertEqual(summary.players.first { $0.playerId == game.players[1].id }?.handCount, game.players[1].hand.count)
+    }
+
     func testCoachOffersTheTopMove() {
         let state = Engine.createGame(GameConfig(players: [PlayerConfig(id: "a", name: "Ann"), PlayerConfig(id: "b", name: "Bo")], seed: 9))
         let legal = Engine.getLegalActions(state, "a")
