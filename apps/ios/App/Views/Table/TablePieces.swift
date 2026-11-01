@@ -329,6 +329,11 @@ struct OpponentColumn: View {
             VStack(spacing: 8) {
                 ForEach(opponents, id: \.id) { summary($0, showBoard: showsBoards).frame(maxWidth: .infinity) }
             }
+        } else if showsBoards {
+            // Room for everyone at once, so the player who's up is never scrolled away.
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible())], spacing: 8) {
+                ForEach(opponents, id: \.id) { summary($0, showBoard: false) }
+            }
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -616,7 +621,7 @@ struct EventLogSheet: View {
     var body: some View {
         NavigationStack {
             List(Array(events.enumerated().reversed()), id: \.offset) { _, event in
-                Text(event.message)
+                Text(displayText(event.message))
                     .font(.subheadline)
                     .listRowBackground(Color.clear)
             }

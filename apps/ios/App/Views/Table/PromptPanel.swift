@@ -142,7 +142,7 @@ private struct PaymentPanel: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            PanelHeader(title: "Pay \(session.playerName(request.sourcePlayerId)) $\(request.amount)", subtitle: reasonText)
+            PanelHeader(title: "Pay \(session.playerName(request.sourcePlayerId)) $\(request.amount)", subtitle: displayText(reasonText))
 
             HStack {
                 Text("Selected")
@@ -310,7 +310,7 @@ private struct CounterPanel: View {
 
     private var detail: String {
         switch request.effect {
-        case .payment(let payment): return "\(payment.reason): pay $\(payment.amount) unless you stop it."
+        case .payment(let payment): return displayText("\(payment.reason): pay $\(payment.amount) unless you stop it.")
         case .slyDeal: return "They'll take one of your properties."
         case .forcedDeal: return "They'll swap a property with you."
         case .dealBreaker: return "They'll take a complete set."

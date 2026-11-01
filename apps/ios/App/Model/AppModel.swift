@@ -84,6 +84,11 @@ final class AppModel {
         storedRoom = SessionVault.load()
         reloadStoredData()
         if launch.resumeOnLaunch { resumeActive() }
+        if let route = launch.route { path = [route] }
+        #if DEBUG
+        autoplayRemaining = launch.autoplayGames
+        if autoplayRemaining > 0 { startFromSetupForAutoplay() }
+        #endif
     }
 
     func reloadStoredData() {
@@ -98,6 +103,26 @@ final class AppModel {
     func feedback(_ tone: Feedback.Tone) {
         Feedback.play(tone, haptics: preferences.hapticsEnabled, sound: preferences.soundEnabled)
     }
+
+    #if DEBUG
+    /// Self-play for soak tests. Launch with `-autoplayGames 3 -autoplayVariant no_mercy`.
+    private var autoplayRemaining = 0
+
+    private func startFromSetupForAutoplay() {
+        setup.variant = launch.autoplayVariant
+        setup.playerCount = launch.autoplayPlayers
+        startFromSetup()
+    }
+
+    private func autoplayFinishedGame() {
+        autoplayRemaining -= 1
+        guard autoplayRemaining > 0 else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            startFromSetupForAutoplay()
+        }
+    }
+    #endif
 
     // MARK: Local games
 
@@ -118,6 +143,12 @@ final class AppModel {
         )
         if let delay = launch.botDelay { match.botDelay = delay }
         localMatch = match
+        #if DEBUG
+        if autoplayRemaining > 0 {
+            match.autoplayAll = true
+            match.onFinished = { [weak self] in self?.autoplayFinishedGame() }
+        }
+        #endif
         match.start()
     }
 
@@ -354,4 +385,17 @@ struct LaunchOptions {
         defaults.object(forKey: "winSets") == nil ? nil : Ruleset(winCompleteSets: defaults.integer(forKey: "winSets"))
     }
     var resumeOnLaunch: Bool { defaults.bool(forKey: "resumeOnLaunch") }
+    var autoplayGames: Int { defaults.integer(forKey: "autoplayGames") }
+    var autoplayVariant: GameVariant { defaults.string(forKey: "autoplayVariant") == "no_mercy" ? .no_mercy : .classic }
+    var autoplayPlayers: Int { max(2, min(5, defaults.integer(forKey: "autoplayPlayers"))) }
+    var route: AppRoute? {
+        switch defaults.string(forKey: "route") {
+        case "setup": .setup
+        case "saved": .saved
+        case "stats": .stats
+        case "settings": .settings
+        case "online": .online
+        default: nil
+        }
+    }
 }

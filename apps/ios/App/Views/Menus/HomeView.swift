@@ -254,6 +254,7 @@ struct SetupView: View {
                 .frame(maxWidth: .infinity)
             }
         }
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("New Game")
         .navigationBarTitleDisplayMode(.inline)
     }

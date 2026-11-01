@@ -166,8 +166,6 @@ struct TableActions {
     func perform(_ action: Action) {
         ui.clearSelection()
         ui.confirmation = nil
-        withAnimation(.snappy(duration: 0.42)) {
-            session.perform(action)
-        }
+        session.perform(action)
     }
 }

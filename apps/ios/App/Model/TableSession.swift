@@ -62,6 +62,11 @@ final class LocalMatch: TableSession {
     /// UI tests shorten the bot's pause so a whole game fits in a test run.
     var botDelay: Duration = .milliseconds(650)
     var active = true
+    #if DEBUG
+    /// Debug builds can play every seat, to soak-test the real screens: see `LaunchOptions.autoplayGames`.
+    var autoplayAll = false
+    var onFinished: (() -> Void)?
+    #endif
 
     init(game: GameState, mode: MatchMode, store: DealStore, preferences: @escaping () -> Preferences, updatePreferences: @escaping ((inout Preferences) -> Void) -> Void, onFeedback: @escaping (Feedback.Tone) -> Void) {
         self.game = game
@@ -238,7 +243,13 @@ final class LocalMatch: TableSession {
         botTask?.cancel()
         botTask = nil
         guard active, !isPaused, let game, let prompt, !Engine.isGameOver(game).done,
-              let player = promptPlayer, player.controller == .bot, !legalActions.isEmpty else { return }
+              let player = promptPlayer, !legalActions.isEmpty else { return }
+        #if DEBUG
+        if autoplayAll { revealedPlayerId = prompt.playerId }
+        guard player.controller == .bot || autoplayAll else { return }
+        #else
+        guard player.controller == .bot else { return }
+        #endif
         let legal = legalActions
         let actorId = prompt.playerId
         let hard = player.botDifficulty == .hard
@@ -267,6 +278,9 @@ final class LocalMatch: TableSession {
         saveTask?.cancel()
         turnSnapshots = []
         onFeedback(.win)
+        #if DEBUG
+        onFinished?()
+        #endif
     }
 }
 

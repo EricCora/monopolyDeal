@@ -204,6 +204,8 @@ private struct WildFace: View {
     var body: some View {
         let s = Scale(width: width)
         ZStack {
+            // The bands below are translucent gradients, so the card needs a solid base.
+            Palette.paper
             if card.colors.count > 2 {
                 AngularGradient(colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .red], center: .center)
                 Circle()

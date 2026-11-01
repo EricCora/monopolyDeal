@@ -94,6 +94,20 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Every-color Wilds cannot complete a set by themselves or be used as payment. Shacks add $5 rent and move with the property they are attached to.
 - No Mercy action cards include Rent/Double Rent, Deal Breaker, Forced Debt, Go Again, Heist, Market Crash, Pass Go, Go Go!, Repossession, Shack, Super Sly Deal, Tax Collector, Tough Luck, Unfair Trade, Yoink!, and Just Say No. Global effects expose independent counter windows so one player's Just Say No does not cancel another player's outcome.
 
+## iOS App
+
+A native SwiftUI app lives in `apps/ios/`, with the same local and online features. It needs Xcode 27 and runs on iOS 27 or later.
+
+```bash
+open apps/ios/MonopolyDeal.xcodeproj
+```
+
+To run it on an iPhone, choose your team under Signing & Capabilities for the MonopolyDeal target, select your phone, and press Run. iOS and browser players can share a room.
+
+- Rules: `apps/ios/DealKit/Sources/DealEngine` mirrors `src/engine`. `npm run traces:record` records games from the TypeScript engine, and the Swift tests must reproduce them exactly.
+- Verification: `npm run ios:verify` runs the Swift tests, including full matches against a local room server, then builds the app and runs its UI tests.
+- Links: `monopolydeal://join/CODE` opens the app on a room code.
+
 ## Tech Stack
 
 - React 19

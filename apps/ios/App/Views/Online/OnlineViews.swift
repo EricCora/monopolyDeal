@@ -28,6 +28,13 @@ struct OnlineHomeView: View {
                             .accessibilityIdentifier("online.name")
                     }
 
+                    if !nameIsSet {
+                        Text("Enter your name to host or join a room.")
+                            .font(.footnote)
+                            .foregroundStyle(.white.opacity(0.7))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     if let stored = app.storedRoom {
                         VStack(spacing: 8) {
                             SectionTitle(text: "Your Room")
@@ -108,6 +115,7 @@ struct OnlineHomeView: View {
                 .frame(maxWidth: .infinity)
             }
         }
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Online")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -552,7 +560,7 @@ struct RoomLobbyView: View {
         VStack(alignment: .leading, spacing: 6) {
             SectionTitle(text: "Activity")
             ForEach(view.activityFeed.suffix(6).reversed()) { item in
-                Text(item.message)
+                Text(displayText(item.message))
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.75))
             }

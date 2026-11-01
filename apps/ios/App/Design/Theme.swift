@@ -214,3 +214,14 @@ func formatDuration(_ seconds: Int) -> String {
     if minutes < 60 { return "\(minutes)m \(seconds % 60)s" }
     return "\(minutes / 60)h \(minutes % 60)m"
 }
+
+/// Engine messages use raw color ids such as `light_blue`. This makes them read naturally.
+func displayText(_ message: String) -> String {
+    message.replacingOccurrences(of: "_", with: " ")
+}
+
+/// "You win!" or "Ann wins!"
+func winnerHeadline(_ name: String?) -> String {
+    guard let name else { return "Nobody wins" }
+    return name == "You" ? "You win!" : "\(name) wins!"
+}

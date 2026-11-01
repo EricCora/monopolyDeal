@@ -142,7 +142,7 @@ struct PostGameView: View {
                 .foregroundStyle(LinearGradient(colors: [Palette.gold, Palette.goldDeep], startPoint: .top, endPoint: .bottom))
                 .shadow(color: Palette.gold.opacity(0.6), radius: 16)
                 .symbolEffect(.bounce, options: .nonRepeating, value: summary.endedAt)
-            Text("\(summary.winnerName ?? "Nobody") wins!")
+            Text(winnerHeadline(summary.winnerName))
                 .font(.largeTitle.weight(.black))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
@@ -170,8 +170,8 @@ struct PostGameView: View {
 
     private var recap: some View {
         VStack(alignment: .leading, spacing: 10) {
-            recapRow("Winning move", summary.winningMove, icon: "flag.checkered")
-            recapRow("Momentum shift", summary.momentumShift, icon: "chart.line.uptrend.xyaxis")
+            recapRow("Winning move", displayText(summary.winningMove), icon: "flag.checkered")
+            recapRow("Momentum shift", displayText(summary.momentumShift), icon: "chart.line.uptrend.xyaxis")
             if !summary.highlightCards.isEmpty {
                 recapRow("Standout cards", summary.highlightCards.joined(separator: ", "), icon: "sparkles")
             }
@@ -264,7 +264,7 @@ struct ShareCardView: View {
                 Image(systemName: "trophy.fill")
                     .font(.system(size: 54))
                     .foregroundStyle(Palette.gold)
-                Text("\(summary.winnerName ?? "Nobody") won Monopoly Deal")
+                Text(summary.winnerName == "You" ? "I won Monopoly Deal" : "\(summary.winnerName ?? "Nobody") won Monopoly Deal")
                     .font(.system(size: 26, weight: .black, design: .rounded))
                     .multilineTextAlignment(.center)
                 Text("\(summary.turnCount) turns · \(formatDuration(summary.durationSec))")
@@ -281,7 +281,7 @@ struct ShareCardView: View {
                     }
                 }
                 .padding(.top, 6)
-                Text(summary.winningMove)
+                Text(displayText(summary.winningMove))
                     .font(.system(size: 13, weight: .medium))
                     .multilineTextAlignment(.center)
                     .opacity(0.8)

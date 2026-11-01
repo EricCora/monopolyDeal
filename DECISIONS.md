@@ -39,3 +39,24 @@ Vercel's dashboard held a `VITE_MULTIPLAYER_API_URL` for a suspended Render serv
 
 ## 2026-11-01: Lobby seats are held for 90 seconds, and Start waits only 30
 Sharing an invite from a phone means leaving the browser, which drops the connection, so 30 seconds could cost the host their seat. The seat now gets the full reconnect window, while Start stops waiting after 30 seconds. An absent seat is removed when the match starts.
+
+## 2026-11-01: The iOS app is a native Swift rewrite, kept honest by recorded games
+SwiftUI with a Swift engine, rather than a web wrapper or the TypeScript engine running in JavaScriptCore. Offline games stay fast, including hard bots, because iOS apps can't use a JIT for JavaScript. The cost is two engines, so `npm run traces:record` records 1,000 games from TypeScript and Swift must reproduce every state, event, prompt and legal action. A rule change fails `npm run quality` until it's re-recorded, and then `npm run ios:verify` until Swift matches. In an online room the server runs the rules, so cross-play doesn't depend on this.
+
+## 2026-11-01: The iOS bot scores It's My Birthday as intended; the web bot still has a bug
+The web score table's key is `birthday` but the card's kind is `its_my_birthday`, so that card scores NaN in `src/ai/heuristic.ts`. Swift uses the intended 430. The recordings mark positions where the card is legal, and the bot comparison skips them. The hard bot can't be compared move for move, because NaN reaches its simulations, so it's tested by beating the easy bot. Fixing the web bug is a separate change, and it would let the comparison cover those positions.
+
+## 2026-11-01: The iOS app talks to rooms over HTTP and SSE, not Socket.IO
+The server already supports both, and this keeps the app free of third-party packages. An open event stream doesn't count as being seen, and the server marks a seat disconnected after 20 seconds, so the app also fetches the room every 15 seconds.
+
+## 2026-11-01: Actions are sent to rooms as exact wire text
+The server decides legality by comparing `JSON.stringify` of the action, so key order matters. `Action.wireJSON` writes keys in the TypeScript order, and the recorded games check that text.
+
+## 2026-11-01: One tap plays money and properties; anything else asks first
+On a phone a mis-tap is easy. Unlike the web app, an action card whose only option is the Bank, a discard or a debt repayment opens the chooser even with a single option.
+
+## 2026-11-01: iPhone is portrait only
+A hand, a board and opponents don't fit a phone's landscape height at a readable card size. iPad supports every orientation.
+
+## 2026-11-01: iOS build output stays out of the repo
+The project sits on a Desktop that syncs to iCloud, which uploads build folders and offloads files until they're read. `npm run ios:verify` builds in `~/Library/Caches/MonopolyDealBuild`.

@@ -15,6 +15,8 @@ struct TableView: View {
     @State private var ui = TableUI()
     @Namespace private var cardSpace
 
+    private var cardsAnimate: Bool { !reduceMotion && !app.preferences.reducedEffects }
+
     private var actions: TableActions {
         TableActions(
             session: session,
@@ -42,7 +44,7 @@ struct TableView: View {
                                 .frame(width: 280)
                             VStack(spacing: 8) {
                                 statusRow
-                                playerBoard(cardWidth: 74)
+                                playerBoard(cardWidth: 112)
                             }
                         }
                     } else {
@@ -57,7 +59,7 @@ struct TableView: View {
                         session: session,
                         actions: actions,
                         ui: ui,
-                        cardWidth: wide ? 132 : phoneHand,
+                        cardWidth: wide ? 170 : phoneHand,
                         space: cardSpace
                     )
                 }
@@ -70,6 +72,8 @@ struct TableView: View {
             }
         }
         .overlay { pauseOverlay }
+        // Every state change animates here, so a bot's or another player's move glides too.
+        .animation(cardsAnimate ? .snappy(duration: 0.42) : nil, value: session.game?.updatedAt)
         .sheet(item: Binding(get: { ui.chooser }, set: { ui.chooser = $0 })) { chooser in
             ChooserSheet(content: chooser, variant: session.variant) { option in
                 ui.chooser = nil
@@ -194,23 +198,39 @@ struct TableView: View {
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(session.isViewersPrompt ? app.preferences.tableStyle.accent : .white.opacity(0.8))
                     .symbolEffect(.pulse, isActive: session.isViewersPrompt && !reduceMotion)
-                Text(statusText)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-                    .multilineTextAlignment(.leading)
-                    .contentTransition(.opacity)
-                    .id(statusText)
-                    .transition(.opacity)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(statusText)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                        .multilineTextAlignment(.leading)
+                        .contentTransition(.opacity)
+                    if let latest = latestEventText {
+                        Text(latest.text)
+                            .font(.caption.weight(latest.againstYou ? .bold : .regular))
+                            .foregroundStyle(latest.againstYou ? Color(hex: 0xFF9A9E) : .white.opacity(0.62))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
+            .padding(.vertical, 5)
             .frame(minHeight: 46)
             .glassEffect(session.isViewersPrompt ? .regular.tint(app.preferences.tableStyle.accent.opacity(0.22)) : .regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("table.status")
+    }
+
+    /// The most recent thing to happen, so you can see what the last player did.
+    /// A property taken from you stands out.
+    private var latestEventText: (text: String, againstYou: Bool)? {
+        guard session.isViewersPrompt, let event = session.game?.history.last else { return nil }
+        let againstYou = event.details?.kind == "property_steal" && event.details?.targetPlayerId == session.viewerId
+        return (displayText(event.message), againstYou)
     }
 
     private var statusIcon: String {
@@ -230,7 +250,7 @@ struct TableView: View {
     private var statusText: String {
         guard let game = session.game, let prompt = session.prompt else { return "Waiting for the game to start." }
         if !session.isViewersPrompt {
-            if let last = game.history.last, session.viewerId != nil { return last.message }
+            if let last = game.history.last, session.viewerId != nil { return displayText(last.message) }
             return "Waiting for \(session.playerName(prompt.playerId))."
         }
         switch prompt.kind {
@@ -244,7 +264,10 @@ struct TableView: View {
         case .debt:
             return "Repay your debt: tap a card from your hand."
         default:
-            return prompt.text
+            // Engine prompts start with the player's name, which reads oddly on your own screen.
+            let name = "\(session.playerName(prompt.playerId)): "
+            let text = prompt.text.hasPrefix(name) ? String(prompt.text.dropFirst(name.count)) : prompt.text
+            return displayText(text.prefix(1).uppercased() + text.dropFirst())
         }
     }
 
@@ -276,7 +299,7 @@ struct TableView: View {
     private var actionBar: some View {
         HStack(spacing: 8) {
             if session.canUndo {
-                Button { withAnimation(.snappy) { session.undo() } } label: {
+                Button { session.undo() } label: {
                     Label("Undo", systemImage: "arrow.uturn.backward")
                         .labelStyle(.iconOnly)
                 }
@@ -285,7 +308,7 @@ struct TableView: View {
                 .accessibilityLabel("Undo")
                 .accessibilityIdentifier("action.undo")
 
-                Button { withAnimation(.snappy) { session.resetTurn() } } label: {
+                Button { session.resetTurn() } label: {
                     Label("Reset Turn", systemImage: "arrow.counterclockwise")
                         .labelStyle(.iconOnly)
                 }
