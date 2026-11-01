@@ -6,8 +6,11 @@ import SwiftUI
 // MARK: Hand
 
 /// The viewer's hand as an arc of cards. Cards overlap more as the hand grows, so it
-/// always fits the screen. Tap to play, or drag a card up onto the table.
+/// always fits the screen. Tap to play, or drag a card up onto the table. Hold to spread
+/// the hand and slide along it: the card under your finger lifts up, large enough to read.
 struct HandFan: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var session: any TableSession
     var actions: TableActions
     var ui: TableUI
@@ -20,9 +23,40 @@ struct HandFan: View {
     @State private var dragOffset: CGSize = .zero
     /// While the opening hand is being dealt, how many cards have landed so far.
     @State private var dealtCount: Int?
+    /// The card the current touch started on.
+    @State private var touchedCard: String?
+    @State private var holdTask: Task<Void, Never>?
+    @State private var isFanned = false
+    @State private var focusedCard: String?
+
+    private static let holdDelay: Duration = .milliseconds(220)
+    private static let moveTolerance: CGFloat = 12
+    private static let focusScale: CGFloat = 1.5
 
     private var allCards: [String] { session.viewer?.hand ?? [] }
     private var cards: [String] { dealtCount.map { Array(allCards.prefix($0)) } ?? allCards }
+
+    /// Where each card's center sits. A held hand spreads as wide as the screen allows.
+    private func centers(width: CGFloat) -> [CGFloat] {
+        let count = cards.count
+        // The outer cards tilt, so they need some margin to stay on screen.
+        let available = width - cardWidth - (isFanned ? 12 : 34)
+        let spacing = count > 1 ? min(cardWidth * (isFanned ? 0.95 : 0.8), available / CGFloat(count - 1)) : 0
+        let total = spacing * CGFloat(max(count - 1, 0))
+        return (0..<count).map { (width - total) / 2 + CGFloat($0) * spacing }
+    }
+
+    /// The topmost card under a touch. Later cards overlap earlier ones.
+    private func cardIndex(atX x: CGFloat, width: CGFloat) -> Int? {
+        let positions = centers(width: width)
+        return positions.indices.last { abs(positions[$0] - x) <= cardWidth / 2 }
+    }
+
+    /// While the hand is held, every point along it belongs to the nearest card.
+    private func nearestCard(toX x: CGFloat, width: CGFloat) -> String? {
+        let positions = centers(width: width)
+        return positions.indices.min { abs(positions[$0] - x) < abs(positions[$1] - x) }.map { cards[$0] }
+    }
 
     var body: some View {
         // Worked out once per draw: comparing every card to every legal action is costly
@@ -31,24 +65,100 @@ struct HandFan: View {
             ? Set(session.legalActions.compactMap { TableActions.handCardId($0.action) })
             : Set<String>()
         GeometryReader { geometry in
-            let count = cards.count
-            // The outer cards tilt, so they need some margin to stay on screen.
-            let available = geometry.size.width - cardWidth - 34
-            let spacing = count > 1 ? min(cardWidth * 0.8, available / CGFloat(count - 1)) : 0
-            let total = spacing * CGFloat(max(count - 1, 0))
+            let width = geometry.size.width
+            let positions = centers(width: width)
             ZStack(alignment: .bottomLeading) {
                 ForEach(Array(cards.enumerated()), id: \.element) { index, cardId in
-                    handCard(cardId, index: index, count: count, playable: playable.contains(cardId))
+                    handCard(cardId, index: index, count: cards.count, playable: playable.contains(cardId))
                         .position(
-                            x: (geometry.size.width - total) / 2 + CGFloat(index) * spacing,
+                            x: cardX(cardId, center: positions[index], width: width),
                             y: geometry.size.height - cardWidth * CardView.aspect / 2
                         )
                 }
             }
+            .frame(width: width, height: geometry.size.height)
+            .contentShape(Rectangle())
+            .gesture(handGesture(width: width, playable: playable))
         }
         .frame(height: cardWidth * CardView.aspect + 8)
         .accessibilityElement(children: .contain)
+        .sensoryFeedback(.selection, trigger: focusedCard) { _, new in
+            new != nil && app.preferences.hapticsEnabled
+        }
         .task(id: session.viewerId) { await dealOpeningHand() }
+        .onChange(of: session.viewerId) { endHold() }
+    }
+
+    /// Keeps the enlarged card on screen at either end of the hand.
+    private func cardX(_ cardId: String, center: CGFloat, width: CGFloat) -> CGFloat {
+        guard focusedCard == cardId else { return center }
+        let half = cardWidth * Self.focusScale / 2 + 6
+        return min(max(center, half), max(half, width - half))
+    }
+
+    /// One gesture covers the whole hand, so a held finger can slide from card to card.
+    private func handGesture(width: CGFloat, playable: Set<String>) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if touchedCard == nil, holdTask == nil {
+                    touchedCard = cardIndex(atX: value.startLocation.x, width: width).map { cards[$0] }
+                    let startX = value.startLocation.x
+                    holdTask = Task {
+                        try? await Task.sleep(for: Self.holdDelay)
+                        if !Task.isCancelled { beginHold(atX: startX, width: width) }
+                    }
+                }
+                if isFanned {
+                    let next = nearestCard(toX: value.location.x, width: width)
+                    if next != focusedCard {
+                        withAnimation(.snappy(duration: 0.16)) { focusedCard = next }
+                    }
+                    return
+                }
+                let distance = hypot(value.translation.width, value.translation.height)
+                guard distance > Self.moveTolerance else { return }
+                holdTask?.cancel()
+                if let touchedCard, playable.contains(touchedCard) {
+                    dragging = touchedCard
+                    dragOffset = value.translation
+                }
+            }
+            .onEnded { value in
+                holdTask?.cancel()
+                holdTask = nil
+                let card = touchedCard
+                touchedCard = nil
+                if isFanned {
+                    endHold()
+                    return
+                }
+                let distance = hypot(value.translation.width, value.translation.height)
+                let released = dragging != nil && value.translation.height < -90
+                withAnimation(.snappy(duration: 0.28)) {
+                    dragging = nil
+                    dragOffset = .zero
+                }
+                if let card, released || distance <= Self.moveTolerance {
+                    actions.tapHandCard(card)
+                }
+            }
+    }
+
+    private func beginHold(atX x: CGFloat, width: CGFloat) {
+        guard !cards.isEmpty else { return }
+        let animation: Animation = reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.24)
+        withAnimation(animation) { isFanned = true }
+        withAnimation(animation) { focusedCard = nearestCard(toX: x, width: width) }
+    }
+
+    private func endHold() {
+        holdTask?.cancel()
+        holdTask = nil
+        touchedCard = nil
+        withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.26)) {
+            isFanned = false
+            focusedCard = nil
+        }
     }
 
     /// Deals a new game's first hand one card at a time.
@@ -70,56 +180,41 @@ struct HandFan: View {
     private func handCard(_ cardId: String, index: Int, count: Int, playable: Bool) -> some View {
         let middle = CGFloat(count - 1) / 2
         let offsetFromMiddle = CGFloat(index) - middle
-        let maxTilt: CGFloat = count > 7 ? 2.2 : 3.2
+        let maxTilt: CGFloat = isFanned ? 1.2 : (count > 7 ? 2.2 : 3.2)
         let selected = ui.selectedCardId == cardId
         let isDragging = dragging == cardId
+        let isFocused = focusedCard == cardId
         CardView(cardId: cardId, variant: session.variant, width: cardWidth)
             .matchedGeometryEffect(id: cardId, in: space)
-            .shadow(color: .black.opacity(0.35), radius: selected ? 9 : 4, y: selected ? 6 : 2)
+            .shadow(color: .black.opacity(isFocused ? 0.55 : 0.35), radius: isFocused ? 16 : (selected ? 9 : 4), y: isFocused ? 10 : (selected ? 6 : 2))
             .overlay {
                 if playable {
                     RoundedRectangle(cornerRadius: cardWidth * 0.09, style: .continuous)
                         .strokeBorder(Palette.gold.opacity(0.9), lineWidth: 1.5)
                 }
             }
-            .saturation(session.isViewersPrompt && !playable ? 0.75 : 1)
-            .rotationEffect(.degrees(isDragging ? 0 : offsetFromMiddle * maxTilt), anchor: .bottom)
+            .saturation(session.isViewersPrompt && !playable && !isFocused ? 0.75 : 1)
+            .scaleEffect(isFocused ? Self.focusScale : 1, anchor: .bottom)
+            .rotationEffect(.degrees(isDragging || isFocused ? 0 : offsetFromMiddle * maxTilt), anchor: .bottom)
             .offset(
                 x: isDragging ? dragOffset.width : 0,
                 y: (isDragging ? dragOffset.height : 0)
-                    + (selected ? -24 : 0)
-                    + abs(offsetFromMiddle) * abs(offsetFromMiddle) * 0.7
+                    + (selected && !isFanned ? -24 : 0)
+                    + (isFocused ? -18 : (isFanned ? -6 : abs(offsetFromMiddle) * abs(offsetFromMiddle) * 0.7))
             )
             .modifier(ShakeEffect(animatableData: ui.shakeCardId == cardId ? ui.shakeToken : 0))
-            .zIndex(isDragging || selected ? 100 : Double(index))
+            .zIndex(isFocused ? 200 : (isDragging || selected ? 100 : Double(index)))
             .transition(.asymmetric(
                 insertion: .offset(x: 120, y: -360).combined(with: .scale(scale: 0.4)).combined(with: .opacity),
                 removal: .opacity
             ))
             .animation(.snappy(duration: 0.28), value: selected)
-            .onTapGesture { actions.tapHandCard(cardId) }
-            .onLongPressGesture(minimumDuration: 0.35) { ui.inspectedCard = cardId }
-            .gesture(
-                DragGesture(minimumDistance: 14)
-                    .onChanged { value in
-                        guard playable else { return }
-                        dragging = cardId
-                        dragOffset = value.translation
-                    }
-                    .onEnded { value in
-                        let released = dragging == cardId && value.translation.height < -90
-                        withAnimation(.snappy(duration: 0.28)) {
-                            dragging = nil
-                            dragOffset = .zero
-                        }
-                        if released { actions.tapHandCard(cardId) }
-                    }
-            )
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("hand.\(index)")
             .accessibilityValue(playable ? "playable" : "")
             .accessibilityAddTraits(playable ? .isButton : [])
             .accessibilityAction { actions.tapHandCard(cardId) }
+            .accessibilityAction(named: "View Card") { ui.inspectedCard = cardId }
     }
 }
 

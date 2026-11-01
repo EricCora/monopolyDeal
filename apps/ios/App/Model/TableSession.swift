@@ -39,6 +39,16 @@ extension TableSession {
     /// True when the phone's player is the one the game is waiting on.
     var isViewersPrompt: Bool { prompt != nil && prompt?.playerId == viewerId }
 
+    /// The color a card on the table is currently played as, so a Wild shows that color upright.
+    func assignedColor(of cardId: String) -> PropertyColor? {
+        for player in game?.players ?? [] {
+            for color in PropertyColor.allCases where player.properties[color].contains(where: { $0.cardId == cardId }) {
+                return color
+            }
+        }
+        return nil
+    }
+
     func playerName(_ id: PlayerId?) -> String {
         game?.players.first { $0.id == id }?.name ?? "Player"
     }

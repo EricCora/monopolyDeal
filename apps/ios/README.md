@@ -14,7 +14,7 @@ Your signing team is already set in the project. To use a different one, change 
 Automated tests can't cover touch and feel, so try these on the phone:
 
 - [ ] **Motion:** cards glide smoothly from hand to table, with no stutter while a bot is playing.
-- [ ] **Hand:** tapping, and dragging a card upward to play it, both feel right. Long-press opens a large view of the card.
+- [ ] **Hand:** tapping, and dragging a card upward to play it, both feel right. Holding spreads the hand, and sliding along it lifts each card so you can read it.
 - [ ] **Haptics and sound:** they fire when you play a card, and the toggles in Settings turn them off.
 - [ ] **Hard bot:** the table stays responsive while it thinks, and each move takes no more than a few seconds.
 - [ ] **Pass-and-play:** the next player's hand stays hidden until they tap Show My Hand.

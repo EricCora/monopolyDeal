@@ -187,7 +187,7 @@ private struct PaymentPanel: View {
                                 }
                                 actions.tapFeedback()
                             } label: {
-                                CardView(cardId: cardId, variant: session.variant, width: 78)
+                                CardView(cardId: cardId, variant: session.variant, width: 78, assignedColor: session.assignedColor(of: cardId))
                                     .overlay {
                                         if isSelected {
                                             RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -367,7 +367,7 @@ private struct CardPickPanel: View {
                         Button {
                             pick(group.cardId, group.legal)
                         } label: {
-                            CardView(cardId: group.cardId, variant: session.variant, width: 88)
+                            CardView(cardId: group.cardId, variant: session.variant, width: 88, assignedColor: session.assignedColor(of: group.cardId))
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("prompt.\(index)")

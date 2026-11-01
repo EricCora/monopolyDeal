@@ -221,8 +221,10 @@ private struct WildFace: View {
                 }
                 .foregroundStyle(Palette.ink)
             } else {
-                let first = card.colors.first ?? .brown
-                let second = card.colors.last ?? .brown
+                // The chosen color sits upright, like turning a real card around.
+                let isFlipped = assigned != nil && assigned == card.colors.last
+                let first = (isFlipped ? card.colors.last : card.colors.first) ?? .brown
+                let second = (isFlipped ? card.colors.first : card.colors.last) ?? .brown
                 VStack(spacing: 0) {
                     ZStack {
                         LinearGradient(colors: [first.tint, first.tint.opacity(0.85)], startPoint: .top, endPoint: .bottom)
@@ -242,7 +244,8 @@ private struct WildFace: View {
                     .background(Capsule().fill(Palette.paper))
                     .overlay(Capsule().strokeBorder(Palette.ink.opacity(0.25), lineWidth: s(0.6)))
             }
-            if let assigned {
+            // A two-color Wild shows its color by which way up it is. An any-color one can't.
+            if let assigned, card.colors.count > 2 {
                 VStack {
                     HStack {
                         Circle()
