@@ -171,6 +171,148 @@ final class OnlineIntegrationTests: XCTestCase {
         XCTAssertEqual(guest.view?.players.first { $0.id == guestSession.playerId }?.connected, true)
     }
 
+    /// Starts a match, then lets the guest go quiet until the server marks the seat disconnected.
+    private func matchWithSilentGuest() async throws -> (host: RoomConnection, guest: RoomConnection) {
+        let hostSession = try await client.createRoom(playerName: "Host")
+        let guestSession = try await client.joinRoom(code: hostSession.roomCode, playerName: "Guest")
+        let host = RoomConnection(client: client, session: hostSession)
+        let guest = RoomConnection(client: client, session: guestSession)
+        await host.connect()
+        await guest.connect()
+        await readyUp(guest)
+        await readyUp(host)
+        try await start(host)
+        // Hand the turn to the guest, so the guest has a move to try when the network returns.
+        await host.refresh()
+        let hostId = hostSession.playerId
+        _ = await host.perform(Action(.draw_cards, playerId: hostId))
+        _ = await host.perform(Action(.pass_turn, playerId: hostId))
+        await guest.refresh()
+        XCTAssertEqual(guest.view?.promptPlayerId, guestSession.playerId)
+        guest.stop()
+        try await waitFor("the server to mark the quiet seat disconnected", timeout: .seconds(70)) {
+            host.view?.players.first { $0.id == guestSession.playerId }?.connected == false
+        }
+        return (host, guest)
+    }
+
+    /// A network blip outlasts the server's 20-second limit, then the network returns.
+    func testASeatMarkedDisconnectedRecoversByItself() async throws {
+        let (host, guest) = try await matchWithSilentGuest()
+        defer {
+            host.stop()
+            guest.stop()
+        }
+        await guest.refresh()
+        try await waitFor("the seat to recover", timeout: .seconds(10)) {
+            guest.view?.players.first { $0.id == guest.view?.yourPlayerId }?.connected == true
+        }
+        XCTAssertNil(guest.endedReason)
+        await host.refresh()
+        XCTAssertEqual(host.view?.paused, false, "The match should resume once the seat is back")
+    }
+
+    /// The first thing the app does after the blip is try to act, which the server refuses.
+    /// That refusal must not be mistaken for the seat being gone for good.
+    func testActingWhileMarkedDisconnectedDoesNotLoseTheSeat() async throws {
+        let (host, guest) = try await matchWithSilentGuest()
+        defer {
+            host.stop()
+            guest.stop()
+        }
+        let guestId = try XCTUnwrap(guest.view?.yourPlayerId)
+        _ = await guest.perform(Action(.draw_cards, playerId: guestId))
+        XCTAssertNil(guest.endedReason, "A reconnectable seat was treated as lost")
+        try await waitFor("the seat to recover", timeout: .seconds(10)) {
+            guest.view?.players.first { $0.id == guestId }?.connected == true
+        }
+        // With the seat back, the move goes through.
+        await guest.refresh()
+        let draw = guest.view?.legalActions.first { $0.action.type == .draw_cards }
+        XCTAssertNotNil(draw, "The seat came back without its legal actions")
+        if let draw {
+            let drew = await guest.perform(draw.action)
+            XCTAssertTrue(drew)
+        }
+    }
+
+    /// The hosted server restarts on every deploy, and on its free tier after sleeping.
+    func testMatchSurvivesAServerRestart() async throws {
+        let repoRoot = try XCTUnwrap(ProcessInfo.processInfo.environment["DEAL_REPO_ROOT"], "ios:verify sets DEAL_REPO_ROOT")
+        let snapshots = FileManager.default.temporaryDirectory.appendingPathComponent("deal-restart-\(UUID().uuidString).json")
+        let port = 8807
+        func launchServer() throws -> Process {
+            let server = Process()
+            server.currentDirectoryURL = URL(fileURLWithPath: repoRoot)
+            server.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            server.arguments = ["node", "--import", "tsx/esm", "apps/server/src/index.ts"]
+            server.environment = ProcessInfo.processInfo.environment.merging(["PORT": "\(port)", "MONOPOLY_DEAL_SNAPSHOT_PATH": snapshots.path]) { $1 }
+            server.standardOutput = FileHandle.nullDevice
+            server.standardError = FileHandle.nullDevice
+            try server.run()
+            return server
+        }
+        let local = RoomClient(baseURL: URL(string: "http://localhost:\(port)")!)
+        func waitForHealth() async throws {
+            let clock = ContinuousClock()
+            let deadline = clock.now + .seconds(60)
+            while await !local.health() {
+                if clock.now > deadline {
+                    XCTFail("The server didn't start")
+                    throw CancellationError()
+                }
+                try await Task.sleep(for: .milliseconds(200))
+            }
+        }
+
+        var server = try launchServer()
+        defer {
+            server.terminate()
+            try? FileManager.default.removeItem(at: snapshots)
+        }
+        try await waitForHealth()
+        let hostSession = try await local.createRoom(playerName: "Host")
+        let guestSession = try await local.joinRoom(code: hostSession.roomCode, playerName: "Guest")
+        let host = RoomConnection(client: local, session: hostSession)
+        let guest = RoomConnection(client: local, session: guestSession)
+        await host.connect()
+        await guest.connect()
+        defer {
+            host.stop()
+            guest.stop()
+        }
+        await readyUp(guest)
+        await readyUp(host)
+        try await start(host)
+        await guest.refresh()
+        let hand = try XCTUnwrap(guest.view?.gameState?.players.first { $0.id == guestSession.playerId }?.hand)
+        XCTAssertFalse(hand.isEmpty)
+
+        server.terminate()
+        server.waitUntilExit()
+        await guest.refresh()
+        XCTAssertEqual(guest.status, .reconnecting, "An unreachable server should show as reconnecting")
+        XCTAssertNil(guest.endedReason, "An outage must not end the seat")
+
+        server = try launchServer()
+        try await waitForHealth()
+        try await waitFor("both seats to recover", timeout: .seconds(45)) {
+            host.status != .reconnecting && guest.status != .reconnecting
+                && host.view?.players.allSatisfy(\.connected) == true
+        }
+        XCTAssertEqual(guest.view?.gameState?.players.first { $0.id == guestSession.playerId }?.hand, hand)
+        XCTAssertNil(guest.endedReason)
+        XCTAssertNil(host.endedReason)
+
+        // The match is still playable.
+        var moved = false
+        for _ in 0..<40 where !moved {
+            if await playOneMove(host) { moved = true } else if await playOneMove(guest) { moved = true }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertTrue(moved, "Nobody could move after the restart")
+    }
+
     func testStaleRevisionRefreshesInsteadOfFailing() async throws {
         let hostSession = try await client.createRoom(playerName: "Host")
         let guestSession = try await client.joinRoom(code: hostSession.roomCode, playerName: "Guest")
