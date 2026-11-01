@@ -86,9 +86,8 @@ final class EngineConformanceTests: XCTestCase {
                 let prompt = Engine.nextPrompt(state)
                 let options = Engine.getLegalActions(state, prompt.playerId)
                 let pick = try XCTUnwrap(game.picks?[steps], "game \(index) ran past its recorded picks")
-                let chosen = pick < 0 ? -(pick + 1) : pick
-                choice = options[chosen]
-                if pick >= 0 && botMismatch == nil {
+                choice = options[pick]
+                if botMismatch == nil {
                     let top = Heuristic.rank(state, actorId: prompt.playerId, legalActions: options)[0]
                     if top.action != choice.action {
                         botMismatch = "step \(steps): TypeScript chose \(choice.label), Swift chose \(top.label)"
@@ -122,14 +121,27 @@ final class EngineConformanceTests: XCTestCase {
             try (dump!.joined(separator: "\n") + "\n").write(toFile: path, atomically: true, encoding: .utf8)
         }
 
+        // DEAL_CONFORMANCE_LIMIT replays only the first games of each kind, for a quick check.
+        let limit = environment["DEAL_CONFORMANCE_LIMIT"].flatMap(Int.init)
+        let selected = file.games.enumerated().filter { limit == nil || $0.offset % 250 < limit! }
+
+        // Half the cores: the replay is most of this suite's time, and the Mac stays usable.
+        let results = ReplayResults(count: selected.count)
+        let workers = max(1, ProcessInfo.processInfo.activeProcessorCount / 2)
+        let next = ReplayResults.Counter()
+        DispatchQueue.concurrentPerform(iterations: workers) { _ in
+            while let slot = next.take(below: selected.count) {
+                let (index, game) = selected[slot]
+                var noDump: [String]?
+                results.store(slot, Result { try self.replay(game, index: index, dump: &noDump) })
+            }
+        }
+
         var failures: [String] = []
         var botMismatches: [String] = []
         var comparablePicks = 0
-        // DEAL_CONFORMANCE_LIMIT replays only the first games of each kind, for a quick check.
-        let limit = environment["DEAL_CONFORMANCE_LIMIT"].flatMap(Int.init)
-        for (index, game) in file.games.enumerated() where limit == nil || index % 250 < limit! {
-            var noDump: [String]?
-            let outcome = try replay(game, index: index, dump: &noDump)
+        for (slot, (index, game)) in selected.enumerated() {
+            let outcome = try results.value(slot).get()
             if outcome.checkpoints != game.checkpoints {
                 let firstDifferent = zip(outcome.checkpoints, game.checkpoints).enumerated().first { $0.element.0 != $0.element.1 }?.offset ?? -1
                 failures.append("game \(index) (\(game.variant.rawValue), \(game.mode), seed \(game.seed)): differs by step \(firstDifferent * 10)")
@@ -137,7 +149,7 @@ final class EngineConformanceTests: XCTestCase {
                 failures.append("game \(index): finished differently")
             }
             if let mismatch = outcome.botMismatch { botMismatches.append("game \(index) \(mismatch)") }
-            comparablePicks += game.picks?.filter { $0 >= 0 }.count ?? 0
+            comparablePicks += game.picks?.count ?? 0
         }
         XCTAssertEqual(failures, [], "\(failures.count) games diverged")
         XCTAssertEqual(botMismatches, [], "\(botMismatches.count) bot games chose a different top move")
@@ -250,5 +262,36 @@ enum CanonicalJSON {
         default:
             output += "null"
         }
+    }
+}
+
+/// Hands out replay slots and collects their outcomes across threads, in order.
+private final class ReplayResults: @unchecked Sendable {
+    typealias Outcome = (checkpoints: [String], steps: Int, winner: String?, botMismatch: String?)
+
+    final class Counter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = 0
+
+        func take(below limit: Int) -> Int? {
+            lock.withLock {
+                guard value < limit else { return nil }
+                defer { value += 1 }
+                return value
+            }
+        }
+    }
+
+    private let lock = NSLock()
+    private var outcomes: [Result<Outcome, Error>?]
+
+    init(count: Int) { outcomes = Array(repeating: nil, count: count) }
+
+    func store(_ slot: Int, _ outcome: Result<Outcome, Error>) {
+        lock.withLock { outcomes[slot] = outcome }
+    }
+
+    func value(_ slot: Int) -> Result<Outcome, Error> {
+        lock.withLock { outcomes[slot]! }
     }
 }

@@ -1,8 +1,6 @@
 import DealEngine
 
-/// Mirrors `src/ai/heuristic.ts`, with one deliberate difference recorded in
-/// DECISIONS.md: It's My Birthday scores its intended 430, where the web table's
-/// misspelled key leaves it as NaN.
+/// Mirrors `src/ai/heuristic.ts`.
 public struct ScoredAction: Hashable, Sendable {
     public var action: Action
     public var label: String

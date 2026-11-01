@@ -44,6 +44,8 @@ Sharing an invite from a phone means leaving the browser, which drops the connec
 SwiftUI with a Swift engine, rather than a web wrapper or the TypeScript engine running in JavaScriptCore. Offline games stay fast, including hard bots, because iOS apps can't use a JIT for JavaScript. The cost is two engines, so `npm run traces:record` records 1,000 games from TypeScript and Swift must reproduce every state, event, prompt and legal action. A rule change fails `npm run quality` until it's re-recorded, and then `npm run ios:verify` until Swift matches. In an online room the server runs the rules, so cross-play doesn't depend on this.
 
 ## 2026-11-01: The iOS bot scores It's My Birthday as intended; the web bot still has a bug
+**Superseded** by "The web bot scores It's My Birthday too" below.
+
 The web score table's key is `birthday` but the card's kind is `its_my_birthday`, so that card scores NaN in `src/ai/heuristic.ts`. Swift uses the intended 430. The recordings mark positions where the card is legal, and the bot comparison skips them. The hard bot can't be compared move for move, because NaN reaches its simulations, so it's tested by beating the easy bot. Fixing the web bug is a separate change, and it would let the comparison cover those positions.
 
 ## 2026-11-01: The iOS app talks to rooms over HTTP and SSE, not Socket.IO
@@ -78,3 +80,9 @@ Spreading starts before a tap has ended, so a touch released within 250 ms witho
 
 ## 2026-11-01: The iOS hand uses a UIKit touch recognizer instead of a SwiftUI gesture
 Timing on an iPhone 18 Pro Max showed SwiftUI's `DragGesture(minimumDistance: 0)` delivering a resting finger about 700 ms late, and a tap only when the finger lifted. A `UIGestureRecognizer` on the same view got touches about 17 ms after they happened. The delay's source wasn't identified. A hold now responds as soon as the finger lands, at 60 ms.
+
+## 2026-11-01: The web bot scores It's My Birthday too
+The web score table now uses the card's real kind, so the card scores 430 on both platforms. The recordings no longer mark those positions, and the bot comparison covers every position in the 200 bot games. This changes how web bots play that card.
+
+## 2026-11-01: Recorded games replay in parallel
+The replay was most of `ios:verify`'s time. It now uses half the cores, so the Mac stays usable, and took 103 seconds here against about 12 minutes before. The checks are the same.

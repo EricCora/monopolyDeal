@@ -1,5 +1,4 @@
 import { rankHeuristicActions } from '../../ai/heuristic';
-import { getCardDefinition } from '../../cards/catalog';
 import { applyAction, createGame, getLegalActions, getNextPrompt, isGameOver, type GameState, type GameVariant, type LegalAction, type RulesetV1 } from '../../engine';
 
 /**
@@ -7,7 +6,7 @@ import { applyAction, createGame, getLegalActions, getNextPrompt, isGameOver, ty
  * apps/ios/DealKit replays the same games and must produce the same hashes, so a
  * rule change here fails until both engines agree. See DECISIONS.md.
  */
-export const TRACE_VERSION = 2;
+export const TRACE_VERSION = 3;
 const CHECKPOINT_EVERY = 10;
 const MAX_STEPS = 6000;
 const GAMES_PER_VARIANT = { random: 400, bot: 100 };
@@ -26,11 +25,7 @@ export interface TraceGame extends TraceGameConfig {
   steps: number;
   winnerId: string | null;
   checkpoints: string[];
-  /**
-   * Bot games only: the option chosen at each step. A value below zero means the
-   * chosen option is -(value + 1) and the top pick can't be compared across engines,
-   * because It's My Birthday scores NaN in `rankHeuristicActions`. See DECISIONS.md.
-   */
+  /** Bot games only: the option chosen at each step. */
   picks?: number[];
 }
 
@@ -102,11 +97,6 @@ function fuzzRandom(seed: number): () => number {
   };
 }
 
-function birthdayIsLegal(state: GameState, options: LegalAction[]): boolean {
-  return options.some((option) => option.action.type === 'play_action'
-    && getCardDefinition(option.action.cardId, state.variant ?? 'classic').actionKind === 'its_my_birthday');
-}
-
 /** The option a bot game plays: the prompted player's top heuristic choice. */
 function botChoice(state: GameState, options: LegalAction[], playerId: string): number {
   const top = rankHeuristicActions(state, playerId, options)[0];
@@ -142,7 +132,7 @@ export function playTrace(config: TraceGameConfig, onStep?: (step: number, text:
       const options = getLegalActions(state, prompt.playerId);
       if (options.length === 0) throw new Error(`soft-lock at step ${steps} of seed ${config.seed}`);
       const index = botChoice(state, options, prompt.playerId);
-      picks.push(birthdayIsLegal(state, options) ? -(index + 1) : index);
+      picks.push(index);
       choice = options[index];
     } else {
       const options = state.players.flatMap((player) => getLegalActions(state, player.id));

@@ -98,7 +98,7 @@ function actionScore(state: GameState, actorId: PlayerId, item: LegalAction): Sc
       forced_deal: 560,
       sly_deal: 500,
       debt_collector: 450,
-      birthday: 430,
+      its_my_birthday: 430,
       rent: 410,
       rent_wild: 410,
       just_say_no: 230,
