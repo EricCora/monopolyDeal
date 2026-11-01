@@ -303,7 +303,12 @@ public enum PostGame {
 
     public static func summary(_ state: GameState, lifetime: LifetimeStats) -> PostGameSummary {
         let variant = state.resolvedVariant
-        func zone(_ cards: [String]) -> Int { cards.reduce(0) { $0 + Engine.cardMoneyValue($1, variant) } }
+        // Online, other players' hands arrive as hidden placeholders, which count for nothing.
+        func zone(_ cards: [String]) -> Int {
+            cards.reduce(0) { total, cardId in
+                total + (Catalog.lookup(cardId, variant).map { $0.moneyValue ?? $0.value } ?? 0)
+            }
+        }
         struct Ranked {
             var player: PlayerState
             var sets: Int

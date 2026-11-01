@@ -82,6 +82,9 @@ final class OnlineMatch: TableSession {
     /// Called when the room changes: counts unread chat, nudges on a new prompt, and records a finished match.
     func observeChange() {
         guard let view else { return }
+        #if DEBUG
+        autoplayIfNeeded(view)
+        #endif
         if let latest = view.chatMessages.last?.id, latest > lastSeenChatId {
             if !chatOpen {
                 unreadChat += view.chatMessages.filter { $0.id > lastSeenChatId && $0.playerId != view.yourPlayerId }.count
@@ -108,6 +111,30 @@ final class OnlineMatch: TableSession {
         onFeedback(.win)
     }
 }
+
+#if DEBUG
+import DealAI
+
+extension OnlineMatch {
+    /// Self-play for soak tests: `-autoplayOnlineRoom CODE` joins a room and plays its seat.
+    fileprivate func autoplayIfNeeded(_ view: RoomView) {
+        guard UserDefaults.standard.string(forKey: "autoplayOnlineRoom") != nil else { return }
+        let you = view.players.first { $0.id == view.yourPlayerId }
+        if !view.started, you?.ready == false {
+            Task { await connection.run { client, session, revision in try await client.setReady(session, ready: true, expectedRevision: revision) } }
+            return
+        }
+        guard let game = view.gameState, !view.legalActions.isEmpty, !view.isFinished else { return }
+        let revision = view.revision
+        Task {
+            try? await Task.sleep(for: .milliseconds(120))
+            guard self.view?.revision == revision else { return }
+            let choice = Heuristic.choose(game, actorId: view.yourPlayerId, legalActions: view.legalActions)?.action ?? view.legalActions[0].action
+            self.perform(choice)
+        }
+    }
+}
+#endif
 
 /// Stores the seat token for a room in the Keychain, so a relaunch can rejoin it.
 enum SessionVault {

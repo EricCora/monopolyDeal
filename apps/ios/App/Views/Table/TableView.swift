@@ -372,7 +372,8 @@ struct TableView: View {
     private func showCoach() {
         guard let game = session.game, let prompt = session.prompt else { return }
         let legal = session.legalActions
-        let hard = app.preferences.hardCoach
+        // The thorough coach simulates ahead, which needs every card. Online, other hands are hidden.
+        let hard = app.preferences.hardCoach && session is LocalMatch
         Task {
             let hint = await Task.detached(priority: .userInitiated) {
                 Coach.hint(game, playerId: prompt.playerId, legalActions: legal, hard: hard)

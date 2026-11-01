@@ -3,12 +3,14 @@
  * plays over Socket.IO, the same transport the web client uses first.
  *
  *   node --import tsx/esm scripts/online_peer.ts http://localhost:8787 ABCD
+ *   node --import tsx/esm scripts/online_peer.ts http://localhost:8787 --host   hosts a room, prints its code, starts when ready
  */
 import { io } from 'socket.io-client';
 import { chooseHeuristicAction } from '../src/ai/heuristic';
 import type { GameState, LegalAction } from '../src/engine';
 
-const [baseUrl, roomCode] = process.argv.slice(2);
+const [baseUrl, roomArg] = process.argv.slice(2);
+const hosting = roomArg === '--host';
 
 interface View {
   revision: number;
@@ -16,6 +18,7 @@ interface View {
   status: string;
   yourPlayerId: string;
   legalActions: LegalAction[];
+  canStart: boolean;
   gameState?: GameState;
   players: Array<{ id: string; ready: boolean }>;
   winnerId?: string;
@@ -27,11 +30,13 @@ interface Ack<T> {
   error?: { code: string; message?: string };
 }
 
-const joined = await fetch(`${baseUrl}/api/multiplayer/rooms/${roomCode}/join`, {
+const joined = await fetch(hosting ? `${baseUrl}/api/multiplayer/rooms` : `${baseUrl}/api/multiplayer/rooms/${roomArg}/join`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ playerName: 'Browser Peer' }),
-}).then((response) => response.json()) as { seatId: string; resumeToken: string; playerId: string; sessionToken: string };
+}).then((response) => response.json()) as { roomCode: string; seatId: string; resumeToken: string; playerId: string; sessionToken: string };
+const roomCode = joined.roomCode;
+if (hosting) console.log(`room=${roomCode}`);
 
 const socket = io(baseUrl, {
   transports: ['websocket'],
@@ -70,6 +75,7 @@ async function step(): Promise<void> {
           readySent = true;
           await command('mp:cmd:ready', { ready: true, expectedRevision: view.revision });
         }
+        if (hosting && view.canStart) await command('mp:cmd:start', { expectedRevision: view.revision });
         continue;
       }
       if (view.legalActions.length > 0 && view.gameState) {

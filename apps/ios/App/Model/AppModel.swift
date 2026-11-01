@@ -88,6 +88,10 @@ final class AppModel {
         #if DEBUG
         autoplayRemaining = launch.autoplayGames
         if autoplayRemaining > 0 { startFromSetupForAutoplay() }
+        if let room = UserDefaults.standard.string(forKey: "autoplayOnlineRoom") {
+            preferences.onlineName = "iPhone Auto"
+            Task { await joinRoom(code: room) }
+        }
         #endif
     }
 

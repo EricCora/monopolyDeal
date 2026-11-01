@@ -204,12 +204,12 @@ struct PostGameView: View {
                         .frame(width: 22)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(row.name).font(.subheadline.weight(.bold)).foregroundStyle(.white)
-                        Text("\(row.lifetimeWins) wins in \(row.lifetimeGamesPlayed) games")
+                        Text("\(row.lifetimeWins) \(row.lifetimeWins == 1 ? "win" : "wins") in \(row.lifetimeGamesPlayed) \(row.lifetimeGamesPlayed == 1 ? "game" : "games")")
                             .font(.caption2).foregroundStyle(.white.opacity(0.6))
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 1) {
-                        Text("\(row.completeSets) sets").font(.footnote.weight(.bold)).foregroundStyle(.white)
+                        Text("\(row.completeSets) \(row.completeSets == 1 ? "set" : "sets")").font(.footnote.weight(.bold)).foregroundStyle(.white)
                         Text("Bank $\(row.bankValue)").font(.caption2).foregroundStyle(.white.opacity(0.65))
                     }
                 }
@@ -275,7 +275,7 @@ struct ShareCardView: View {
                         HStack {
                             Text("\(row.rank). \(row.name)").fontWeight(.bold)
                             Spacer()
-                            Text("\(row.completeSets) sets · $\(row.bankValue)")
+                            Text("\(row.completeSets) \(row.completeSets == 1 ? "set" : "sets") · $\(row.bankValue)")
                         }
                         .font(.system(size: 15))
                     }
