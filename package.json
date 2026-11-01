@@ -21,7 +21,9 @@
     "tree": "node scripts/print_tree.mjs",
     "quality": "node scripts/run_quality.mjs",
     "e2e:smoke": "node scripts/run_e2e.mjs",
-    "replay:verify": "node scripts/replay_verify.mjs"
+    "replay:verify": "node scripts/replay_verify.mjs",
+    "traces:record": "node --import tsx/esm scripts/record_engine_traces.ts",
+    "ios:verify": "node scripts/ios_verify.mjs"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.3",

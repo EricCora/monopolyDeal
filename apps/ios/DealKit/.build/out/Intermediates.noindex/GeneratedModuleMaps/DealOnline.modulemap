@@ -1,4 +1,0 @@
-module DealOnline {
-header "DealOnline-Swift.h"
-export *
-}

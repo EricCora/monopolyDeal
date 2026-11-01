@@ -366,6 +366,12 @@ public enum Engine {
         public var color: PropertyColor
         public var cardId: String
         public var setId: String?
+
+        public init(color: PropertyColor, cardId: String, setId: String? = nil) {
+            self.color = color
+            self.cardId = cardId
+            self.setId = setId
+        }
     }
 
     public static func movablePropertyCards(_ player: PlayerState, _ variant: GameVariant) -> [MovableCard] {

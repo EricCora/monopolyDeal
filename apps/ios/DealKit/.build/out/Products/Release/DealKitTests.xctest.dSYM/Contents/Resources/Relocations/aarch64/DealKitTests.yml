@@ -1,5 +1,0 @@
----
-triple:          'arm64-apple-darwin'
-binary-path:     '/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Products/Release/DealKitTests.xctest/Contents/MacOS/DealKitTests'
-relocations:     []
-...

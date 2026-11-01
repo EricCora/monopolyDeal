@@ -26,3 +26,9 @@ coverage
 apps/server/.lan-room-snapshots.json
 apps/server/.multiplayer-room-snapshots.json
 .cursor/
+
+# iOS
+apps/ios/DealKit/.build
+apps/ios/build
+*.xcuserstate
+xcuserdata/

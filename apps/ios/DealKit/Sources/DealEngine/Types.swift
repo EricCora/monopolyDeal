@@ -520,6 +520,94 @@ public struct Action: Codable, Hashable, Sendable {
     }
 }
 
+extension Action {
+    /// The action as JSON, with keys in the order the TypeScript engine writes them. The
+    /// server decides legality by comparing `JSON.stringify` text, so key order is part
+    /// of the protocol. Always send actions to a room in this form.
+    public var wireJSON: String {
+        var parts = ["\"type\":\(Self.quoted(type.rawValue))", "\"playerId\":\(Self.quoted(playerId))"]
+        func add(_ key: String, _ value: String?) {
+            if let value { parts.append("\"\(key)\":\(Self.quoted(value))") }
+        }
+        switch type {
+        case .draw_cards, .pass_turn:
+            break
+        case .play_to_bank, .discard_card:
+            add("cardId", cardId)
+        case .play_property:
+            add("cardId", cardId)
+            add("color", color?.rawValue)
+            add("setId", setId)
+            add("attachedToCardId", attachedToCardId)
+        case .move_wild:
+            add("cardId", cardId)
+            add("fromColor", fromColor?.rawValue)
+            add("toColor", toColor?.rawValue)
+            add("fromSetId", fromSetId)
+            add("setId", setId)
+        case .play_action:
+            add("cardId", cardId)
+            add("targetPlayerId", targetPlayerId)
+            add("color", color?.rawValue)
+        case .counter_response:
+            if let useJustSayNo { parts.append("\"useJustSayNo\":\(useJustSayNo)") }
+            add("cardId", cardId)
+        case .pay_request:
+            parts.append("\"cards\":[\((cards ?? []).map(Self.quoted).joined(separator: ","))]")
+        case .repay_debt:
+            add("debtId", debtId)
+            add("chipId", chipId)
+            add("creditorPlayerId", creditorPlayerId)
+            add("cardId", cardId)
+        case .resolve_debt_card:
+            add("debtId", debtId)
+            add("cardId", cardId)
+            add("mode", mode)
+            add("targetPlayerId", targetPlayerId)
+            add("color", color?.rawValue)
+            add("setId", setId)
+        case .no_mercy_pick:
+            add("actionCardId", actionCardId)
+            add("targetPlayerId", targetPlayerId)
+            add("cardId", cardId)
+            add("color", color?.rawValue)
+            add("recipientPlayerId", recipientPlayerId)
+            add("choice", choice?.rawValue)
+        case .sly_deal_pick:
+            add("cardId", cardId)
+            add("sourceColor", sourceColor?.rawValue)
+            add("destinationColor", destinationColor?.rawValue)
+            add("sourceSetId", sourceSetId)
+            add("setId", setId)
+        case .forced_deal_pick:
+            add("giveCardId", giveCardId)
+            add("giveColor", giveColor?.rawValue)
+            add("takeCardId", takeCardId)
+            add("takeColor", takeColor?.rawValue)
+            add("destinationColor", destinationColor?.rawValue)
+            add("giveSetId", giveSetId)
+            add("takeSetId", takeSetId)
+            add("setId", setId)
+        case .deal_breaker_pick:
+            add("color", color?.rawValue)
+            add("setId", setId)
+        }
+        return "{\(parts.joined(separator: ","))}"
+    }
+
+    private static func quoted(_ text: String) -> String {
+        var output = "\""
+        for scalar in text.unicodeScalars {
+            switch scalar {
+            case "\"": output += "\\\""
+            case "\\": output += "\\\\"
+            default: output.unicodeScalars.append(scalar)
+            }
+        }
+        return output + "\""
+    }
+}
+
 public enum RiskLevel: String, Codable, Hashable, Sendable { case low, medium, high }
 
 public struct LegalAction: Codable, Hashable, Sendable {

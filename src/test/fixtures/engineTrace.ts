@@ -7,7 +7,7 @@ import { applyAction, createGame, getLegalActions, getNextPrompt, isGameOver, ty
  * apps/ios/DealKit replays the same games and must produce the same hashes, so a
  * rule change here fails until both engines agree. See DECISIONS.md.
  */
-export const TRACE_VERSION = 1;
+export const TRACE_VERSION = 2;
 const CHECKPOINT_EVERY = 10;
 const MAX_STEPS = 6000;
 const GAMES_PER_VARIANT = { random: 400, bot: 100 };
@@ -88,6 +88,8 @@ export function stepText(state: GameState, eventsFrom: number): string {
     canonicalJson(state.history.slice(eventsFrom)),
     canonicalJson(prompt),
     canonicalJson(legal),
+    // Key order is part of the protocol: the server compares these strings.
+    legal.map((entry) => JSON.stringify(entry.action)).join('\n'),
     counts.join(','),
   ].join('\n');
 }

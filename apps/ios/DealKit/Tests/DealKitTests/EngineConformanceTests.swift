@@ -45,6 +45,7 @@ final class EngineConformanceTests: XCTestCase {
             try CanonicalJSON.string(Array(state.history[eventsFrom...])),
             try CanonicalJSON.string(prompt),
             try CanonicalJSON.string(legal),
+            legal.map(\.action.wireJSON).joined(separator: "\n"),
             counts,
         ].joined(separator: "\n")
     }

@@ -186,6 +186,9 @@ private let classicInstances = instanceIndex(classicDefinitions)
 private let noMercyInstances = instanceIndex(noMercyDefinitions)
 
 public enum Catalog {
+    /// What the server sends in place of a card the viewer isn't allowed to see.
+    public static let hiddenCardId = "__hidden__"
+
     public static func definitions(_ variant: GameVariant) -> [CardDefinition] {
         variant == .no_mercy ? noMercyDefinitions : classicDefinitions
     }
