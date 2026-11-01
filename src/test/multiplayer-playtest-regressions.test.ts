@@ -12,6 +12,7 @@ import {
   undoRoomAction,
   type MultiplayerRoom,
 } from '../../apps/server/src/gameService.ts';
+import { getLegalActions } from '../engine';
 import { resolveMatchSeed } from '../../apps/server/src/validation.ts';
 
 function lobby(guests = 2) {
@@ -131,18 +132,14 @@ describe('undo', () => {
     const { room, session } = started();
     actionTurn(room, []);
     const player = room.game!.players[0];
-    player.properties.green = [{ cardId: 'wild_green_railroad#1', assignedColor: 'green', setId: 'g-1' }];
+    player.properties.light_blue = [{ cardId: 'wild_light_blue_railroad#1', assignedColor: 'light_blue', setId: 'g-1' }];
     const turnStart = structuredClone(room.game);
-    let color: 'green' | 'railroad' = 'green';
     for (let move = 0; move < 80; move += 1) {
-      const toColor = color === 'green' ? 'railroad' : 'green';
-      applyRoomAction(room, session.playerId, session.sessionToken, {
-        type: 'move_wild', playerId: session.playerId, cardId: 'wild_green_railroad#1', fromColor: color, toColor,
-      });
-      color = toColor;
+      const moveWild = getLegalActions(room.game!, session.playerId).find((entry) => entry.action.type === 'move_wild');
+      applyRoomAction(room, session.playerId, session.sessionToken, moveWild!.action);
     }
     expect(room.turnSnapshots.length).toBeLessThanOrEqual(32);
-    expect(room.turnSnapshots[0].players[0].properties.green).toEqual(turnStart!.players[0].properties.green);
+    expect(room.turnSnapshots[0].players[0].properties.light_blue).toEqual(turnStart!.players[0].properties.light_blue);
   });
 });
 

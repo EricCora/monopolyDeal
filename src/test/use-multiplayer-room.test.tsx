@@ -610,9 +610,10 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     expect(result.current.joinCode).toBe('');
   });
 
-  it('reconnects on load when the join link matches the stored room', async () => {
+  it('reconnects when this tab refreshes on the join link of its own room', async () => {
     vi.useFakeTimers();
     window.history.pushState({}, '', '/join/ABCDE');
+    sessionStorage.setItem('monopolyDeal.multiplayerLiveRoom.v1', 'ABCDE');
     localStorage.setItem('monopolyDeal.multiplayerSession.v1', JSON.stringify({
       version: 1,
       roomCode: 'ABCDE',
@@ -628,6 +629,7 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
 
     await advanceAndFlush(0, 4);
     expect(clientMocks.reconnectMultiplayerRoom).toHaveBeenCalled();
+    sessionStorage.clear();
   });
 
   it('exposes a recovery entry from the registry and resumes it on demand', async () => {

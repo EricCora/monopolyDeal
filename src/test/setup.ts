@@ -15,3 +15,8 @@ class ResizeObserverMock {
 if (!window.ResizeObserver) {
   window.ResizeObserver = ResizeObserverMock as typeof ResizeObserver;
 }
+
+// Tab-scoped state must not leak from one test into the next.
+afterEach(() => {
+  window.sessionStorage.clear();
+});

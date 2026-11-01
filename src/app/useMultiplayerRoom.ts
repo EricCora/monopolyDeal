@@ -51,6 +51,9 @@ import {
   clearExpiredRecoveryEntries,
   createRecoveryEntryFromSession,
   loadRecoveryEntries,
+  findAutoResumeEntry,
+  isRoomLiveInTab,
+  markRoomLiveInTab,
   recoveryEntryToSession,
   removeRecoveryEntry,
   saveRecoveryEntry,
@@ -113,9 +116,8 @@ export function computeReconnectDelayMs(
 }
 
 function sanitizeName(input: string): string {
-  const trimmed = input.trim();
-  if (!trimmed) return 'Player';
-  return trimmed.slice(0, 28);
+  // A blank name goes to the server as blank, which assigns the seat's default.
+  return input.trim().slice(0, 28);
 }
 
 function sanitizeRoomCode(input: string): string {
@@ -362,6 +364,7 @@ export function useMultiplayerRoom({
     reconnectLastErrorCodeRef.current = null;
     reconnectAutoRetryBlockedRef.current = false;
     setSession(null);
+    markRoomLiveInTab(null);
     setRoomView(null);
     setHostChangeNotice(null);
     clearRecoveredUiTimer();
@@ -782,9 +785,14 @@ export function useMultiplayerRoom({
       ...entry,
       recoveryState: 'reconnecting',
       lastSeenAt: Date.now(),
+      userExited: false,
     });
     return reconnectSessionSingleFlight(nextSession);
   }, [persistRecoveryEntry, reconnectSessionSingleFlight]);
+
+  useEffect(() => {
+    if (session && roomView) markRoomLiveInTab(session.roomCode);
+  }, [roomView, session]);
 
   const hostRoom = useCallback(async (): Promise<boolean> => {
     setLoading(true);
@@ -806,7 +814,7 @@ export function useMultiplayerRoom({
         resumeToken: identities.resumeToken,
         playerId: identities.playerId,
         sessionToken: identities.sessionToken,
-        playerName: nextName,
+        playerName: nextName || 'Player',
         reconnectDeadlineMs: created.reconnectDeadlineMs,
       };
       setPlayerName(nextName);
@@ -864,7 +872,7 @@ export function useMultiplayerRoom({
         resumeToken: identities.resumeToken,
         playerId: identities.playerId,
         sessionToken: identities.sessionToken,
-        playerName: nextName,
+        playerName: nextName || 'Player',
         reconnectDeadlineMs: joined.reconnectDeadlineMs,
       };
       setPlayerName(nextName);
@@ -913,7 +921,7 @@ export function useMultiplayerRoom({
     setLoading(true);
     const operationVersion = forgetSession ? nextSessionOperationVersion() : sessionOperationVersionRef.current;
     try {
-      await leaveMultiplayerRoom(current, apiBase, false, expectedRevision);
+      await leaveMultiplayerRoom(current, apiBase, false, expectedRevision, forgetSession);
     } catch {
       // Best-effort leave; local cleanup still proceeds.
     } finally {
@@ -928,10 +936,12 @@ export function useMultiplayerRoom({
           clearSession();
           setRecoveryNotice(null);
         } else {
+          markRoomLiveInTab(null);
           upsertRecoveryFromSession(current, {
             recoveryState: 'resumable',
             lastKnownStatus: roomView?.status,
             lastKnownRuntimeState: roomView?.roomRuntimeState ?? null,
+            userExited: true,
           });
           setRoomView(null);
         }
@@ -1354,8 +1364,14 @@ export function useMultiplayerRoom({
   useEffect(() => {
     if (!enabled || autoReconnectAttemptedRef.current) return;
     autoReconnectAttemptedRef.current = true;
-    if (typeof window !== 'undefined' && hasExplicitJoinPath(window.location.pathname)) return;
-    const storedEntry = clearExpiredRecoveryEntries().find((entry) => canResumeRecoveryEntry(entry)) ?? null;
+    // On a join link, only a refresh of this tab's own table resumes by itself.
+    // Otherwise the player chooses, since the link may be for a different room.
+    const linkedRoomCode = typeof window !== 'undefined' && hasExplicitJoinPath(window.location.pathname)
+      ? sanitizeRoomCode(window.location.pathname.split('/')[2] ?? '')
+      : null;
+    if (linkedRoomCode !== null && !isRoomLiveInTab(linkedRoomCode)) return;
+    const storedEntry = findAutoResumeEntry(clearExpiredRecoveryEntries()
+      .filter((entry) => linkedRoomCode === null || entry.roomCode === linkedRoomCode));
     setRecoveryEntries(loadRecoveryEntries());
     if (!storedEntry) return;
     const stored = recoveryEntryToSession(storedEntry);

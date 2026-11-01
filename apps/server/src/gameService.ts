@@ -1,3 +1,5 @@
+import { randomBytes, randomInt } from 'node:crypto';
+import { actionRevealedDeckCards } from '../../../src/engine/undoPolicy.ts';
 import {
   applyAction,
   createGame,
@@ -37,6 +39,10 @@ import type {
 
 const RECONNECT_WINDOW_V1_DEFAULT_MS = 90_000;
 const RECONNECT_WINDOW_MS = resolveReconnectWindowMs(process.env.MP_RECONNECT_GRACE_MS);
+// A page refresh must not cost a lobby seat, but an empty seat shouldn't hold up the host for long.
+const LOBBY_RECONNECT_WINDOW_MS = Math.min(RECONNECT_WINDOW_MS, 30_000);
+// Free moves like Wild swaps snapshot the whole game, so a turn's undo history needs a ceiling.
+const MAX_TURN_SNAPSHOTS = 32;
 // Keep lobby heartbeat grace long enough for frequent tab switching during local beta sessions.
 const STALE_CONNECTION_LOBBY_MS = 1.5 * 60 * 1000;
 // Active/finished matches should reflect disconnect presence quickly even if unload signals are dropped.
@@ -251,7 +257,7 @@ function nextRoomCode(existing: Map<string, MultiplayerRoom>): string {
   for (;;) {
     let code = '';
     for (let i = 0; i < 5; i += 1) {
-      const index = Math.floor(Math.random() * alphabet.length);
+      const index = randomInt(alphabet.length);
       code += alphabet[index];
     }
     if (!existing.has(code)) return code;
@@ -259,16 +265,26 @@ function nextRoomCode(existing: Map<string, MultiplayerRoom>): string {
 }
 
 function randomToken(): string {
-  return `${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+  return randomBytes(32).toString('hex');
 }
 
 function randomCheckpointId(): string {
-  return `${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+  return randomBytes(8).toString('hex');
 }
 
 function sanitizeName(name: string, fallback: string): string {
   const trimmed = name.trim();
   return trimmed.length > 0 ? trimmed.slice(0, 28) : fallback;
+}
+
+/** Players in a room can't tell each other apart by seat, so names stay distinct. */
+function uniqueSeatName(room: MultiplayerRoom, name: string): string {
+  const taken = new Set(room.players.map((player) => player.name.toLowerCase()));
+  if (!taken.has(name.toLowerCase())) return name;
+  for (let suffix = 2; ; suffix += 1) {
+    const candidate = `${name.slice(0, 24)} (${suffix})`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
 }
 
 function sanitizeCheckpointName(name: string): string {
@@ -529,7 +545,7 @@ function markDisconnected(room: MultiplayerRoom, player: RoomParticipant): void 
   player.connectionState = 'disconnected';
   player.disconnectedAt = now;
   player.lastSeenAt = now;
-  player.reconnectDeadlineMs = now + RECONNECT_WINDOW_MS;
+  player.reconnectDeadlineMs = now + (room.status === 'lobby' ? LOBBY_RECONNECT_WINDOW_MS : RECONNECT_WINDOW_MS);
   delete room.typingByPlayerId[player.id];
   appendActivity(room, 'connection', `${player.name} disconnected.`, { playerId: player.id });
   applyDisconnectPauseState(room, player.id);
@@ -709,7 +725,9 @@ function connectedLobbyPlayers(room: MultiplayerRoom): RoomParticipant[] {
 
 function allConnectedPlayersReady(room: MultiplayerRoom): boolean {
   const connectedPlayers = connectedLobbyPlayers(room);
-  return connectedPlayers.length >= 2 && connectedPlayers.every((player) => player.ready);
+  // A seat still inside its reconnect window is expected back any moment.
+  const seatReconnecting = room.players.some((player) => !player.connected && player.reconnectDeadlineMs > nowMs());
+  return !seatReconnecting && connectedPlayers.length >= 2 && connectedPlayers.every((player) => player.ready);
 }
 
 function allRoomPlayersConnectedAndReady(room: MultiplayerRoom): boolean {
@@ -991,7 +1009,7 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
   if (room.status !== 'lobby' || room.game) {
     throw new Error('room_started');
   }
-  reclaimDisconnectedLobbyParticipants(room, nowMs(), 'all');
+  reclaimDisconnectedLobbyParticipants(room, nowMs(), room.players.length >= 5 ? 'all' : 'expired');
   if (room.players.length >= 5) {
     throw new Error('room_full');
   }
@@ -1000,7 +1018,7 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
   const now = nowMs();
   room.players.push({
     id: playerId,
-    name: sanitizeName(playerName, `Player ${playerId.slice(1)}`),
+    name: uniqueSeatName(room, sanitizeName(playerName, `Player ${playerId.slice(1)}`)),
     sessionToken: token,
     connected: true,
     connectionState: 'connected',
@@ -1033,6 +1051,9 @@ export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, session
   touchPlayer(player);
   if (!wasConnected) {
     appendActivity(room, 'connection', `${player.name} reconnected.`, { playerId: player.id });
+    // Clients drop events whose id they have already seen, so the resume
+    // broadcast needs a new one or they wait for their next poll.
+    incrementEventId(room);
   }
   if (room.status === 'lobby' && player.id === room.originalHostPlayerId && room.hostPlayerId !== player.id) {
     room.hostPlayerId = player.id;
@@ -1055,7 +1076,13 @@ export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, session
   };
 }
 
-export function leaveRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, expectedRevision?: number): void {
+export function leaveRoom(
+  room: MultiplayerRoom,
+  playerId: PlayerId,
+  sessionToken: string,
+  expectedRevision?: number,
+  options: { abandon?: boolean } = {},
+): void {
   const player = requireSession(room, playerId, sessionToken);
   ensureExpectedRevision(room, expectedRevision);
   if (room.status === 'lobby') {
@@ -1065,6 +1092,20 @@ export function leaveRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToke
     return;
   }
   markDisconnected(room, player);
+  if (options.abandon) {
+    // The player won't return, so the others shouldn't wait out the grace period.
+    const now = nowMs();
+    player.reconnectDeadlineMs = now;
+    markSeatTimedOutIfExpired(room, player.id, now);
+  }
+  bumpUpdatedAt(room);
+}
+
+/** A dropped connection, unlike leaving on purpose, keeps the seat for the reconnect window. */
+export function disconnectRoomSeat(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string): void {
+  const player = requireSession(room, playerId, sessionToken);
+  markDisconnected(room, player);
+  if (room.status === 'lobby') incrementRevision(room);
   bumpUpdatedAt(room);
 }
 
@@ -1223,6 +1264,8 @@ export function applyRoomAction(
   const shouldSnapshot = isReversibleActionType(action.type) && getNextPrompt(game).playerId === playerId;
   if (shouldSnapshot) {
     room.turnSnapshots.push(structuredClone(game));
+    // Keep the first entry, which is what Reset Turn restores.
+    if (room.turnSnapshots.length > MAX_TURN_SNAPSHOTS) room.turnSnapshots.splice(1, 1);
   }
 
   const result = applyAction(game, action);
@@ -1231,7 +1274,8 @@ export function applyRoomAction(
   }
   room.game = result.state;
   const nextPromptPlayerId = getNextPrompt(result.state).playerId;
-  if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId)) {
+  if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId)
+    || actionRevealedDeckCards(game, result.state, action.type)) {
     room.turnSnapshots = [];
   }
   if (isGameOver(result.state).done) {
@@ -1665,7 +1709,7 @@ export function pruneInactiveRooms(rooms: Map<string, MultiplayerRoom>, now = no
       if (room.status === 'lobby') incrementRevision(room);
       else bumpUpdatedAt(room);
     }
-    reclaimDisconnectedLobbyParticipants(room, now, room.status === 'lobby' ? 'all' : 'expired');
+    reclaimDisconnectedLobbyParticipants(room, now, 'expired');
 
     const inactiveForMs = now - room.updatedAt;
     const ttl = room.status === 'lobby' ? 30 * 60 * 1000 : room.status === 'finished' ? 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;

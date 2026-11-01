@@ -6,6 +6,7 @@ import type {
 
 const RECOVERY_KEY = 'monopolyDeal.multiplayerRecovery.v1';
 const LEGACY_SESSION_KEY = 'monopolyDeal.multiplayerSession.v1';
+const LIVE_ROOM_TAB_KEY = 'monopolyDeal.multiplayerLiveRoom.v1';
 const TERMINAL_ENTRY_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export type MultiplayerRecoveryState =
@@ -27,6 +28,8 @@ export interface MultiplayerRecoveryEntry {
   lastKnownRuntimeState?: MultiplayerRoomRuntimeState | null;
   recoveryState: MultiplayerRecoveryState;
   lastSeenAt: number;
+  /** The player chose Exit, so opening the app shouldn't pull them back in. */
+  userExited?: boolean;
 }
 
 interface MultiplayerRecoveryCollectionV1 {
@@ -107,6 +110,7 @@ function normalizeRecoveryEntry(raw: unknown): MultiplayerRecoveryEntry | null {
         : null,
     recoveryState: normalizeRecoveryState(candidate.recoveryState),
     lastSeenAt: normalizeTimestamp(candidate.lastSeenAt),
+    ...(candidate.userExited === true ? { userExited: true } : {}),
   };
 }
 
@@ -240,6 +244,7 @@ export function createRecoveryEntryFromSession(
     lastKnownRuntimeState: overrides.lastKnownRuntimeState ?? null,
     recoveryState: overrides.recoveryState ?? 'resumable',
     lastSeenAt: overrides.lastSeenAt ?? Date.now(),
+    ...(overrides.userExited ? { userExited: true } : {}),
   };
 }
 
@@ -259,6 +264,27 @@ export function recoveryEntryToSession(entry: MultiplayerRecoveryEntry): Multipl
     playerName: entry.playerName,
     reconnectDeadlineMs: entry.reconnectDeadlineMs ?? 0,
   };
+}
+
+/**
+ * sessionStorage survives a refresh but not a new tab, which separates a player
+ * reloading their table from one opening an old invite link.
+ */
+export function markRoomLiveInTab(roomCode: string | null): void {
+  if (typeof window === 'undefined') return;
+  if (roomCode) window.sessionStorage.setItem(LIVE_ROOM_TAB_KEY, roomCode);
+  else window.sessionStorage.removeItem(LIVE_ROOM_TAB_KEY);
+}
+
+export function isRoomLiveInTab(roomCode: string): boolean {
+  return typeof window !== 'undefined' && window.sessionStorage.getItem(LIVE_ROOM_TAB_KEY) === roomCode;
+}
+
+/** A live room this browser should return to on load without being asked. */
+export function findAutoResumeEntry(entries: MultiplayerRecoveryEntry[]): MultiplayerRecoveryEntry | null {
+  return entries.find((entry) => canResumeRecoveryEntry(entry)
+    && !entry.userExited
+    && entry.lastKnownStatus !== 'finished') ?? null;
 }
 
 export function canResumeRecoveryEntry(entry: MultiplayerRecoveryEntry | null | undefined): boolean {

@@ -74,6 +74,8 @@ const socketTransportState: SocketTransportState = {
   sessionKey: null,
 };
 
+const LAN_PROBE_TIMEOUT_MS = 800;
+
 let multiplayerTransportMode: MultiplayerTransportMode = 'http_fallback';
 let socketProbeCooldownUntilMs = 0;
 const transportModeListeners = new Set<(mode: MultiplayerTransportMode) => void>();
@@ -465,7 +467,20 @@ export async function listMultiplayerLanOrigins(
   const payload = await request<MultiplayerLanOriginsResponse>(
     `${apiBase}/api/multiplayer/dev/lan-origins${suffix ? `?${suffix}` : ''}`,
   );
-  return Array.isArray(payload.origins) ? payload.origins.filter((origin) => typeof origin === 'string') : [];
+  const origins = Array.isArray(payload.origins) ? payload.origins.filter((origin) => typeof origin === 'string') : [];
+  // The server only knows this machine's addresses, not whether the UI listens
+  // on them. `npm run dev:all` binds to localhost alone.
+  const reachable = await Promise.all(origins.map(isOriginReachable));
+  return origins.filter((_, index) => reachable[index]);
+}
+
+async function isOriginReachable(origin: string): Promise<boolean> {
+  try {
+    await fetch(origin, { mode: 'no-cors', signal: AbortSignal.timeout(LAN_PROBE_TIMEOUT_MS) });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function createMultiplayerRoom(
@@ -529,9 +544,10 @@ export async function leaveMultiplayerRoom(
   apiBase = getMultiplayerApiBase(),
   keepalive = false,
   expectedRevision?: number,
+  abandon = false,
 ): Promise<void> {
   await runWithTransportFallback(
-    () => runSocketCommand(session, apiBase, 'mp:cmd:leave', { expectedRevision }).then(() => undefined),
+    () => runSocketCommand(session, apiBase, 'mp:cmd:leave', { expectedRevision, abandon }).then(() => undefined),
     () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/leave`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -539,6 +555,7 @@ export async function leaveMultiplayerRoom(
         playerId: session.playerId,
         sessionToken: session.sessionToken,
         expectedRevision,
+        abandon,
       }),
       keepalive,
     }).then(() => undefined),
@@ -1077,7 +1094,9 @@ export function subscribeMultiplayerRoomEvents(
       if (connectedViaSocket || closed) return;
       activateFallback();
     }, SOCKET_CONNECT_TIMEOUT_MS);
-    socket.connect();
+    // A reused socket that is already connected won't emit 'connect' again.
+    if (socket.connected) onConnect();
+    else socket.connect();
   } catch {
     activateFallback();
   }

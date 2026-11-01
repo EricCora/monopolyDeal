@@ -641,7 +641,7 @@ export function finishTurn(state: GameState, events: GameEvent[]): RuleError | u
   state.currentPlayerIndex = nextPlayerIndex(state);
   state.turn = { phase: 'draw', playsUsed: 0, doubleRentMultiplier: 1, endingTurn: false };
   state.turnCount += 1;
-  pushEvent(events, 'turn_passed', `${current.name} ended their turn.`);
+  pushEvent(events, 'turn_passed', `${current.name} ended the turn.`);
   endGameIfDeckExhausted(state, events);
   return undefined;
 }

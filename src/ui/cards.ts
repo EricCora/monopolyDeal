@@ -79,10 +79,10 @@ function subtitleFromCard(card: CardDefinition): string {
 
 function actionBadgeFromCard(card: CardDefinition): string | undefined {
   if (card.kind === 'action' && card.actionKind) {
-    return card.actionKind.replace('_', ' ').replace(/\b\w/g, (value) => value.toUpperCase());
+    return card.actionKind.replace(/_/g, ' ').replace(/\b\w/g, (value) => value.toUpperCase());
   }
   if (card.kind === 'building' && card.actionKind) {
-    return card.actionKind.replace('_', ' ').replace(/\b\w/g, (value) => value.toUpperCase());
+    return card.actionKind.replace(/_/g, ' ').replace(/\b\w/g, (value) => value.toUpperCase());
   }
   return undefined;
 }

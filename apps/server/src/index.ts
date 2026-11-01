@@ -8,6 +8,7 @@ import {
   deleteRoomCheckpoint,
   getSeatConnectionSnapshot,
   joinRoom,
+  disconnectRoomSeat,
   leaveRoom,
   listSeatConnectionSnapshots,
   listRoomCheckpoints,
@@ -60,12 +61,14 @@ import {
   isValidGameVariant,
   isValidMultiplayerAction,
   optionalTrimmedString,
+  resolveMatchSeed,
 } from './validation.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const MULTIPLAYER_PUSH_ENABLED = process.env.MULTIPLAYER_PUSH_ENABLED !== 'false';
 const MULTIPLAYER_REACTIONS_ENABLED = process.env.MULTIPLAYER_REACTIONS_ENABLED !== 'false';
 const MULTIPLAYER_SOCKET_ENABLED = process.env.MULTIPLAYER_SOCKET_ENABLED !== 'false';
+const MULTIPLAYER_ALLOW_CLIENT_SEED = process.env.MULTIPLAYER_ALLOW_CLIENT_SEED === 'true';
 const SSE_HEARTBEAT_MS = 25_000;
 const MAX_JSON_BODY_BYTES = positiveIntegerEnv('MULTIPLAYER_MAX_JSON_BODY_BYTES', 64 * 1024);
 const MAX_ACTIVE_ROOMS = positiveIntegerEnv('MULTIPLAYER_MAX_ACTIVE_ROOMS', 100);
@@ -477,7 +480,7 @@ async function handleSocketDisconnect(socket: Socket, reason?: string): Promise<
   const previousRuntimeState = room.roomRuntimeState;
   const preStatus = room.status;
   try {
-    leaveRoom(room, binding.seatId, binding.sessionToken);
+    disconnectRoomSeat(room, binding.seatId, binding.sessionToken);
   } catch {
     return;
   }
@@ -596,7 +599,7 @@ function registerSocketCommands(socket: Socket): void {
 
   registerSocketCommand(socket, 'mp:cmd:start', (room, binding, payload) => {
     const previousRuntimeState = room.roomRuntimeState;
-    startRoom(room, binding.seatId, binding.sessionToken, payload?.seed, payload?.expectedRevision, payload?.checkpointId);
+    startRoom(room, binding.seatId, binding.sessionToken, resolveMatchSeed(payload?.seed, MULTIPLAYER_ALLOW_CLIENT_SEED), payload?.expectedRevision, payload?.checkpointId);
     snapshotAll();
     broadcastRoomEvent(room, payload?.checkpointId ? 'start_from_checkpoint' : 'start');
     emitRoomRuntimeTransition(room, previousRuntimeState);
@@ -636,7 +639,7 @@ function registerSocketCommands(socket: Socket): void {
   registerSocketCommand(socket, 'mp:cmd:leave', (room, binding, payload) => {
     const preStatus = room.status;
     const previousRuntimeState = room.roomRuntimeState;
-    leaveRoom(room, binding.seatId, binding.sessionToken, payload?.expectedRevision);
+    leaveRoom(room, binding.seatId, binding.sessionToken, payload?.expectedRevision, { abandon: payload?.abandon === true });
     const seat = getSeatConnectionSnapshot(room, binding.seatId);
     syncDisconnectTimersForRoom(room);
     snapshotAll();
@@ -1147,6 +1150,7 @@ const httpServer = createServer(async (req, res) => {
       clientStateVersion?: unknown;
       actionId?: unknown;
       seed?: unknown;
+      abandon?: unknown;
       name?: unknown;
       checkpointId?: unknown;
       expectedRevision?: unknown;
@@ -1195,7 +1199,7 @@ const httpServer = createServer(async (req, res) => {
       }
       const checkpointId = optionalTrimmedString(payload.checkpointId);
       const previousRuntimeState = room.roomRuntimeState;
-      startRoom(room, playerId, sessionToken, payload.seed, expectedRevision, checkpointId);
+      startRoom(room, playerId, sessionToken, resolveMatchSeed(payload.seed, MULTIPLAYER_ALLOW_CLIENT_SEED), expectedRevision, checkpointId);
       snapshotAll();
       broadcastRoomEvent(room, checkpointId ? 'start_from_checkpoint' : 'start');
       emitRoomRuntimeTransition(room, previousRuntimeState);
@@ -1241,7 +1245,7 @@ const httpServer = createServer(async (req, res) => {
     if (operation === 'leave') {
       const preStatus = room.status;
       const previousRuntimeState = room.roomRuntimeState;
-      leaveRoom(room, playerId, sessionToken, expectedRevision);
+      leaveRoom(room, playerId, sessionToken, expectedRevision, { abandon: payload.abandon === true });
       disconnectSocketForSeat(room.code, playerId, 'session_left_room');
       const seat = getSeatConnectionSnapshot(room, playerId);
       syncDisconnectTimersForRoom(room);

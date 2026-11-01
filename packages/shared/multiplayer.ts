@@ -270,7 +270,7 @@ export interface MultiplayerSocketCommandPayloadMap {
   'mp:cmd:variant': { variant: GameVariant; expectedRevision?: number };
   'mp:cmd:rematch': { expectedRevision?: number };
   'mp:cmd:action': { action: Action; expectedRevision?: number; clientStateVersion?: number; actionId?: string };
-  'mp:cmd:leave': { expectedRevision?: number };
+  'mp:cmd:leave': { expectedRevision?: number; abandon?: boolean };
   'mp:cmd:pause': { expectedRevision?: number };
   'mp:cmd:resume': { expectedRevision?: number };
   'mp:cmd:undo': { expectedRevision?: number };

@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import type { Action } from '../../../src/engine/index.ts';
 import type { GameVariant } from '../../../src/engine/index.ts';
 
@@ -32,6 +33,15 @@ export function isNonEmptyTrimmedString(value: unknown): value is string {
 
 export function isOptionalNonNegativeInteger(value: unknown): value is number | undefined {
   return value === undefined || (typeof value === 'number' && Number.isInteger(value) && value >= 0);
+}
+
+/**
+ * The deck order is server-side hidden information, so a host may not choose
+ * the seed outside an explicitly enabled test server.
+ */
+export function resolveMatchSeed(requestedSeed: number | undefined, allowClientSeed: boolean): number {
+  if (allowClientSeed && requestedSeed !== undefined) return requestedSeed;
+  return randomInt(1_000_000_000);
 }
 
 export function isOptionalFiniteNumber(value: unknown): value is number | undefined {

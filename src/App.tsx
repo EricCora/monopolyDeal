@@ -17,6 +17,7 @@ import {
   type PlayerConfig,
   type PlayerController,
 } from './engine';
+import { actionRevealedDeckCards } from './engine/undoPolicy';
 import {
   clearLifetimeStats,
   clearMatchHistory,
@@ -44,6 +45,7 @@ import {
   type SavedGameSlotV1,
   type UiPreferencesV1,
 } from './persistence/storage';
+import { findAutoResumeEntry, loadRecoveryEntries } from './persistence/multiplayerRecovery';
 import {
   achievementLabel,
   applyMatchToAchievementState,
@@ -264,7 +266,7 @@ function sanitizeRuleset(input: SetupViewModel['customRules']): SetupViewModel['
 }
 
 function App() {
-  const [screen, setScreen] = useState<Screen>('home');
+  const [screen, setScreen] = useState<Screen>(() => (findAutoResumeEntry(loadRecoveryEntries()) ? 'multiplayer' : 'home'));
   const [settingsBackScreen, setSettingsBackScreen] = useState<SettingsBackScreen>('home');
   const [savedGamesBackScreen, setSavedGamesBackScreen] = useState<SavedGamesBackScreen>('home');
   const [game, setGame] = useState<GameState | null>(null);
@@ -518,7 +520,10 @@ function App() {
     [game, prompt],
   );
   const isBotPromptPlayer = promptPlayerState?.controller === 'bot';
-  const shouldShowShield = Boolean(game && prompt && !isBotPromptPlayer && !isGameOver(game).done && revealedPlayerId !== prompt.playerId);
+  // With a single human there is nobody to hide the hand from.
+  const soleHumanSeat = Boolean(game && game.players.filter((player) => player.controller !== 'bot').length === 1);
+  const activeRevealedPlayerId = soleHumanSeat && prompt && !isBotPromptPlayer ? prompt.playerId : revealedPlayerId;
+  const shouldShowShield = Boolean(game && prompt && !isBotPromptPlayer && !isGameOver(game).done && activeRevealedPlayerId !== prompt.playerId);
   const coachHint = useMemo(() => {
     if (!game || !prompt) return null;
     if (!uiPreferences.experimental.aiCoach) return null;
@@ -1369,7 +1374,8 @@ function App() {
     if (snapshotBeforeAction) {
       setTurnSnapshots((prev) => [...prev, snapshotBeforeAction]);
     }
-    if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId)) {
+    if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId)
+      || (game && actionRevealedDeckCards(game, result.state, action.type))) {
       setTurnSnapshots([]);
     }
     setChooser(null);
@@ -1497,7 +1503,6 @@ function App() {
 
   useEffect(() => {
     if (!game || !prompt || screen !== 'game' || isPaused) return;
-    if (!uiPreferences.experimental.aiOpponents) return;
     if (!promptPlayerState || promptPlayerState.controller !== 'bot') return;
     if (legalActions.length === 0) return;
 
@@ -1528,7 +1533,6 @@ function App() {
     promptPlayerState,
     runAction,
     screen,
-    uiPreferences.experimental.aiOpponents,
   ]);
 
   const undoLastPlay = () => {
@@ -1559,7 +1563,7 @@ function App() {
     if (isPaused) return;
     if (!game || !prompt) return;
     if (isGameOver(game).done) return;
-    if (revealedPlayerId !== prompt.playerId) return;
+    if (activeRevealedPlayerId !== prompt.playerId) return;
     if (!playableCardIds.has(cardId)) return;
 
     const variants = cardActionVariants.get(cardId) ?? [];
@@ -1982,7 +1986,7 @@ function App() {
           reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
           legalActions={legalActions}
           contextualActions={contextualActions}
-          revealedPlayerId={revealedPlayerId}
+          revealedPlayerId={activeRevealedPlayerId}
           playableCardIds={playableCardIds}
           selectedCardId={selectedCardId}
           selectedSelectionCardId={forcedDealSelection?.cardId ?? null}

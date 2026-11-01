@@ -166,7 +166,7 @@ function colorLabel(color: PropertyColor): string {
   return formatPropertyColor(color);
 }
 
-function pendingRequestBanner(game: GameState, playerId: string): PendingRequestBanner | null {
+export function pendingRequestBanner(game: GameState, playerId: string): PendingRequestBanner | null {
   const pending = game.pending;
   if (!pending) return null;
 
@@ -183,7 +183,7 @@ function pendingRequestBanner(game: GameState, playerId: string): PendingRequest
     const sourceName = game.players.find((player) => player.id === pending.payload.sourcePlayerId)?.name ?? 'Another player';
     return {
       title: 'Counter Response Needed',
-      detail: `${sourceName} played ${getCardDisplayName(pending.payload.actionCardId)}. Choose your response to continue.`,
+      detail: `${sourceName} played ${getCardDisplayName(pending.payload.actionCardId, game.variant ?? 'classic')}. Choose your response to continue.`,
       tone: 'response',
     };
   }
@@ -362,11 +362,10 @@ function tableSurfaceFocusNote(kind: TurnPrompt['kind']): string {
 }
 
 function multiplayerUpdatesLabel(state: MultiplayerPushState | undefined): string {
-  if (state === 'connected') return 'Live push';
-  if (state === 'connecting') return 'Syncing';
-  if (state === 'fallback') return 'Polling fallback';
-  if (state === 'unsupported') return 'Browser fallback';
-  return 'Manual refresh';
+  if (state === 'connected') return 'Live';
+  if (state === 'connecting') return 'Connecting';
+  if (state === 'fallback' || state === 'unsupported') return 'Every few seconds';
+  return 'When you refresh';
 }
 
 function pendingKindLabel(pending: GameState['pending']): string {
@@ -1119,7 +1118,7 @@ export function GameTableScreen({
           <div className={`table-top-actions ${narrowLayout ? 'is-narrow' : ''}`}>
             <div className="table-quick-actions">
               <button onClick={onNavigateHome}>Home</button>
-              <button onClick={onPauseToggle}>{isPaused ? 'Resume' : 'Pause'}</button>
+              {(!isMultiplayer || isMultiplayerHost) ? <button onClick={onPauseToggle}>{isPaused ? 'Resume' : 'Pause'}</button> : null}
               <button
                 type="button"
                 onClick={() => setTimelineExpanded((open) => !open)}
@@ -1168,7 +1167,14 @@ export function GameTableScreen({
                   <div className="table-top-group-actions">
                     <button onClick={onRefreshMultiplayer} disabled={checkpointLoading}>Refresh</button>
                     <button onClick={onExitMultiplayer} disabled={checkpointLoading}>Exit Match</button>
-                    <button onClick={onForgetMultiplayer} disabled={checkpointLoading}>Forget Room</button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Forget this room? You give up your seat and cannot rejoin this match.')) onForgetMultiplayer?.();
+                      }}
+                      disabled={checkpointLoading}
+                    >
+                      Forget Room
+                    </button>
                   </div>
                 </div>
               ) : null}

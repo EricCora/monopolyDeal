@@ -23,16 +23,19 @@ const fake = vi.hoisted(() => {
 
 vi.mock('socket.io-client', () => ({ io: () => fake.socket }));
 
-import { getMultiplayerTransportMode, subscribeMultiplayerRoomEvents } from '../network/multiplayerClient';
-
 const session = { roomCode: 'ABCDE', playerId: 'p1', seatId: 'p1', sessionToken: 't', resumeToken: 't', playerName: 'A', reconnectDeadlineMs: 0 };
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 describe('room event subscription', () => {
-  it('uses a socket that is already connected instead of timing out to fallback', () => {
+  it('uses a socket that is already connected instead of timing out to fallback', async () => {
+    // The client turns sockets off in test mode, and reads that at import time.
+    vi.stubEnv('MODE', 'development');
+    vi.resetModules();
+    const { getMultiplayerTransportMode, subscribeMultiplayerRoomEvents } = await import('../network/multiplayerClient');
     vi.useFakeTimers();
     const first = subscribeMultiplayerRoomEvents(session as never, { onEvent: () => undefined }, 'http://api');
     fake.socket.connected = true;

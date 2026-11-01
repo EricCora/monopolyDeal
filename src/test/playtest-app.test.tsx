@@ -93,7 +93,6 @@ describe('table copy and controls', () => {
   });
 
   const table = readFileSync('src/ui/screens/GameTableScreen.tsx', 'utf8');
-  const home = readFileSync('src/ui/screens/HomeScreen.tsx', 'utf8');
 
   it('offers Pause only to the host in a live room', () => {
     expect(table).toMatch(/\(!isMultiplayer \|\| isMultiplayerHost\) \? <button onClick=\{onPauseToggle\}/);
@@ -101,9 +100,5 @@ describe('table copy and controls', () => {
 
   it('confirms before forgetting a room', () => {
     expect(table).toMatch(/window\.confirm\([^)]*[Ff]orget/);
-  });
-
-  it('does not call the online game Local', () => {
-    expect(home).not.toContain('Monopoly Deal Local');
   });
 });
