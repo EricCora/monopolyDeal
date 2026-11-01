@@ -1,6 +1,6 @@
 # Fix the bugs found in the playtest
 
-**Status:** Draft
+**Status:** Accepted
 
 ## Problem
 A playtest of the working tree found bugs that crash No Mercy for every client, hang Practice vs Bots by default, lose a player's seat on refresh, soft-lock No Mercy games, and leak hidden information or weaken room security.

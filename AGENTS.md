@@ -4,7 +4,7 @@ This file is the default operating guide for coding agents working in this repos
 
 ## 1) Mission
 
-Build and maintain a local, pass-and-play Monopoly Deal web app while preserving:
+Build and maintain a Monopoly Deal web app, with local pass-and-play, practice against bots and live online rooms, while preserving:
 - Rules correctness in `src/engine/`
 - UI clarity in `src/App.tsx` + `src/ui/components/`
 - Persistent save/stats compatibility in `src/persistence/` and `src/stats/`
@@ -16,6 +16,7 @@ Build and maintain a local, pass-and-play Monopoly Deal web app while preserving
 - Tests: `npm run test`
 - Lint: `npm run lint`
 - Build/type-check: `npm run build`
+- Everything above: `npm run quality`
 
 Always run `npm run test` after logic changes. Run `npm run build` before finishing larger refactors.
 

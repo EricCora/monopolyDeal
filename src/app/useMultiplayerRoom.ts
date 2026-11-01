@@ -919,7 +919,9 @@ export function useMultiplayerRoom({
     }
     stopReconnectLoop();
     setLoading(true);
-    const operationVersion = forgetSession ? nextSessionOperationVersion() : sessionOperationVersionRef.current;
+    // Leaving a lobby gives up the seat, so there is nothing left to resume.
+    const dropSession = forgetSession || roomView?.status === 'lobby';
+    const operationVersion = dropSession ? nextSessionOperationVersion() : sessionOperationVersionRef.current;
     try {
       await leaveMultiplayerRoom(current, apiBase, false, expectedRevision, forgetSession);
     } catch {
@@ -927,7 +929,7 @@ export function useMultiplayerRoom({
     } finally {
       const staleOperation = operationVersion !== sessionOperationVersionRef.current;
       if (!staleOperation) {
-        if (forgetSession) {
+        if (dropSession) {
           deleteRecoveryEntry({
             roomCode: current.roomCode,
             seatId: current.seatId,
