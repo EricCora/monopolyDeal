@@ -306,6 +306,12 @@ function makeResumeResponse(
   };
 }
 
+function deferredRoomView() {
+  let resolve!: (view: MultiplayerRoomView) => void;
+  const promise = new Promise<MultiplayerRoomView>((res) => { resolve = res; });
+  return { promise, resolve };
+}
+
 describe('useMultiplayerRoom reconnect + sync behavior', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -649,6 +655,67 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     await flushMicrotasks();
 
     expect(result.current.recoveryEntry).toBeNull();
+  });
+
+  it('stays exited when a poll that was already in flight finishes afterwards', async () => {
+    vi.useFakeTimers();
+    clientMocks.loadMultiplayerRoomState.mockResolvedValue(makeRoomView(1, { status: 'active', started: true }));
+    const { result } = renderHook(() => useMultiplayerRoom({ enabled: true, pushEnabled: false }));
+    await act(async () => {
+      await result.current.hostRoom();
+    });
+    await flushMicrotasks();
+
+    const inFlight = deferredRoomView();
+    clientMocks.loadMultiplayerRoomState.mockReturnValue(inFlight.promise);
+    let poll: Promise<unknown> = Promise.resolve();
+    act(() => {
+      poll = result.current.refreshRoom();
+    });
+    await act(async () => {
+      await result.current.exitRoom();
+    });
+    await act(async () => {
+      inFlight.resolve(makeRoomView(2, { status: 'active', started: true }));
+      await poll.catch(() => undefined);
+    });
+
+    expect(JSON.parse(localStorage.getItem('monopolyDeal.multiplayerRecovery.v1')!).entries[0].userExited).toBe(true);
+    expect(sessionStorage.getItem('monopolyDeal.multiplayerLiveRoom.v1')).toBeNull();
+  });
+
+  it('forget tells the server to retire the seat, without a revision that could reject it', async () => {
+    vi.useFakeTimers();
+    clientMocks.loadMultiplayerRoomState.mockResolvedValue(makeRoomView(7, { status: 'active', started: true }));
+    const { result } = renderHook(() => useMultiplayerRoom({ enabled: true, pushEnabled: false }));
+    await act(async () => {
+      await result.current.hostRoom();
+    });
+    await flushMicrotasks();
+    await act(async () => {
+      await result.current.leaveRoom();
+    });
+    expect(clientMocks.leaveMultiplayerRoom).toHaveBeenCalledWith(expect.anything(), expect.anything(), false, undefined, true);
+  });
+
+  it('forgetting a stored room also retires its seat on the server', async () => {
+    vi.useFakeTimers();
+    window.history.pushState({}, '', '/join/ABCDE');
+    localStorage.setItem('monopolyDeal.multiplayerRecovery.v1', JSON.stringify({
+      version: 1,
+      entries: [{
+        roomCode: 'ABCDE', playerName: 'Guest', seatId: 'p2', resumeToken: 'token-2', playerId: 'p2', sessionToken: 'token-2',
+        reconnectDeadlineMs: Date.now() + 30_000, recoveryState: 'resumable', lastSeenAt: Date.now(),
+      }],
+    }));
+    const { result } = renderHook(() => useMultiplayerRoom({ enabled: true, pushEnabled: false }));
+    await advanceAndFlush(0, 4);
+    act(() => {
+      result.current.forgetStoredRoom();
+    });
+    expect(clientMocks.leaveMultiplayerRoom).toHaveBeenCalledWith(
+      expect.objectContaining({ roomCode: 'ABCDE', playerId: 'p2' }), expect.anything(), false, undefined, true,
+    );
   });
 
   it('exposes a recovery entry from the registry and resumes it on demand', async () => {

@@ -8,11 +8,13 @@ import {
   pruneInactiveRooms,
   reconnectRoom,
   setRoomReady,
+  setRoomVariant,
   startRoom,
   undoRoomAction,
   type MultiplayerRoom,
 } from '../../apps/server/src/gameService.ts';
 import { getLegalActions } from '../engine';
+import { actionRevealedDeckCards, appendTurnSnapshot } from '../engine/undoPolicy';
 import { resolveMatchSeed } from '../../apps/server/src/validation.ts';
 
 function lobby(guests = 2) {
@@ -101,6 +103,91 @@ describe('abandoning a seat', () => {
   });
 });
 
+describe('retiring a seat in No Mercy', () => {
+  function owes(room: MultiplayerRoom, debtorId: string, creditorId: string) {
+    const debtor = room.game!.players.find((player) => player.id === debtorId)!;
+    const creditor = room.game!.players.find((player) => player.id === creditorId)!;
+    const debt = { id: `${debtorId}-chip-1`, chipId: `${debtorId}-chip-1`, creditorPlayerId: creditorId };
+    debtor.debtsOwed = [debt];
+    debtor.debts = debtor.debtsOwed;
+    debtor.debtChipsRemaining = 2;
+    creditor.debtChipsHeld = [debt];
+    creditor.debtChips = creditor.debtChipsHeld;
+  }
+
+  function debtTurn(room: MultiplayerRoom) {
+    const game = room.game!;
+    game.currentPlayerIndex = 0;
+    game.pending = null;
+    game.turn = { phase: 'debt', playsUsed: 0, doubleRentMultiplier: 1, endingTurn: false };
+    game.players[0].hand = ['money_1#1'];
+  }
+
+  function noMercyMatch() {
+    const context = lobby(2);
+    setRoomVariant(context.room, context.session.playerId, context.session.sessionToken, 'no_mercy');
+    for (const seat of [context.session, ...context.others]) {
+      setRoomReady(context.room, seat.playerId, seat.sessionToken, true);
+    }
+    startRoom(context.room, context.session.playerId, context.session.sessionToken);
+    return context;
+  }
+
+  it('cancels a debt owed to the retired player so the debtor can still play', () => {
+    const { room, session, others: [creditor] } = noMercyMatch();
+    owes(room, session.playerId, creditor.playerId);
+    debtTurn(room);
+    leaveRoom(room, creditor.playerId, creditor.sessionToken, undefined, { abandon: true });
+
+    const debtor = room.game!.players.find((player) => player.id === session.playerId)!;
+    expect(debtor.debtsOwed).toEqual([]);
+    expect(debtor.debtChipsRemaining).toBe(3);
+    expect(room.game!.turn.phase).toBe('action');
+    expect(getLegalActions(room.game!, session.playerId).map((entry) => entry.action.type)).toContain('pass_turn');
+  });
+
+  it('removes the chips other players held against the retired player', () => {
+    const { room, session, others: [debtor] } = noMercyMatch();
+    owes(room, debtor.playerId, session.playerId);
+    leaveRoom(room, debtor.playerId, debtor.sessionToken, undefined, { abandon: true });
+    const creditor = room.game!.players.find((player) => player.id === session.playerId)!;
+    expect(creditor.debtChipsHeld).toEqual([]);
+  });
+
+  it('discards cards in transit when retiring cancels the interaction holding them', () => {
+    const { room, session, others: [creditor] } = noMercyMatch();
+    const game = room.game!;
+    game.currentPlayerIndex = 0;
+    game.turn = { phase: 'debt', playsUsed: 1, doubleRentMultiplier: 1, endingTurn: false };
+    game.pending = {
+      kind: 'debt_card',
+      payload: { debtorPlayerId: session.playerId, creditorPlayerId: creditor.playerId, debtId: 'd1', cardId: 'sly_deal#1' },
+    } as never;
+    leaveRoom(room, creditor.playerId, creditor.sessionToken, undefined, { abandon: true });
+    expect(room.game!.pending).toBeNull();
+    expect(room.game!.discardPile).toContain('sly_deal#1');
+  });
+
+  it('clears the disconnect pause when a seat is abandoned after the match finished', () => {
+    const { room, others: [guest] } = started(2);
+    room.status = 'finished';
+    leaveRoom(room, guest.playerId, guest.sessionToken, undefined, { abandon: true });
+    expect(room.roomRuntimeState).toBe('active');
+    expect(room.paused).toBe(false);
+  });
+});
+
+describe('starting past a lapsed lobby seat', () => {
+  it('removes a seat whose window expired before the next prune', () => {
+    const { room, session, others: [first, second] } = lobby();
+    for (const seat of [session, first, second]) setRoomReady(room, seat.playerId, seat.sessionToken, true);
+    disconnectRoomSeat(room, second.playerId, second.sessionToken);
+    room.players.find((player) => player.id === second.playerId)!.reconnectDeadlineMs = Date.now() - 1;
+    startRoom(room, session.playerId, session.sessionToken);
+    expect(room.players.map((player) => player.id)).toEqual([session.playerId, first.playerId]);
+  });
+});
+
 describe('undo', () => {
   function actionTurn(room: MultiplayerRoom, hand: string[]) {
     const game = room.game!;
@@ -143,6 +230,24 @@ describe('undo', () => {
   });
 });
 
+describe('undo policy', () => {
+  const state = (drawPile: string[]) => ({ drawPile }) as never;
+
+  it('sees a deck change that a reshuffle hid from the card count', () => {
+    expect(actionRevealedDeckCards(state(['a']), state(['b']), 'play_action')).toBe(true);
+    expect(actionRevealedDeckCards(state(['a']), state(['a']), 'play_action')).toBe(false);
+    expect(actionRevealedDeckCards(state(['a', 'b']), state(['a']), 'draw_cards')).toBe(false);
+  });
+
+  it('caps history and keeps the start of the turn', () => {
+    let history: number[] = [];
+    for (let entry = 0; entry < 80; entry += 1) history = appendTurnSnapshot(history, entry);
+    expect(history).toHaveLength(32);
+    expect(history[0]).toBe(0);
+    expect(history.at(-1)).toBe(79);
+  });
+});
+
 describe('room secrets', () => {
   it('builds session tokens from a secure source, not Math.random', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
@@ -151,6 +256,12 @@ describe('room secrets', () => {
     const guest = joinRoom(room, 'Guest');
     expect(session.sessionToken).not.toBe(guest.sessionToken);
     expect(session.sessionToken).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('never seeds a match from Math.random', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const decks = [1, 2, 3].map(() => started().room.game!.drawPile.join());
+    expect(new Set(decks).size).toBeGreaterThan(1);
   });
 
   it('ignores a client-supplied seed unless explicitly allowed', () => {

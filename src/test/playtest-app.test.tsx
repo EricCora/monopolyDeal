@@ -6,7 +6,6 @@ import { AppErrorBoundary } from '../ui/AppErrorBoundary';
 import { pendingRequestBanner } from '../ui/screens/pendingRequestBanner';
 import { getCardVisualModel } from '../ui/cards';
 import { saveRecoveryEntry } from '../persistence/multiplayerRecovery';
-import { readFileSync } from 'node:fs';
 
 beforeEach(() => {
   localStorage.clear();
@@ -91,14 +90,65 @@ describe('table copy and controls', () => {
     expect(getCardVisualModel('its_my_birthday#1').actionBadge).toBe('Its My Birthday');
     expect(getCardVisualModel('just_say_no#1').actionBadge).toBe('Just Say No');
   });
+});
 
-  const table = readFileSync('src/ui/screens/GameTableScreen.tsx', 'utf8');
+describe('live table controls', () => {
+  function stubRoom(hostPlayerId: 'p1' | 'p2') {
+    const gameState = createGame({ seed: 5, players: [{ id: 'p1', name: 'Ann' }, { id: 'p2', name: 'Bo' }] } as Parameters<typeof createGame>[0]);
+    const now = Date.now();
+    const leaves: unknown[] = [];
+    const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/multiplayer/rooms')) {
+        return json({ roomCode: 'ABCDE', playerId: 'p1', sessionToken: 'token', reconnectDeadlineMs: now + 30_000 });
+      }
+      if (url.includes('/leave')) leaves.push(init?.body);
+      if (url.includes('/state')) {
+        return json({
+          roomCode: 'ABCDE', status: 'active', started: true, hostPlayerId, yourPlayerId: 'p1',
+          players: [
+            { id: 'p1', name: 'Ann', handCount: 5, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: hostPlayerId === 'p1' },
+            { id: 'p2', name: 'Bo', handCount: 5, bankCount: 0, completeSets: 0, connected: true, lastSeenAt: now, reconnectDeadlineMs: now + 30_000, isHost: hostPlayerId === 'p2' },
+          ],
+          promptPlayerId: 'p1', legalActions: [{ label: 'Draw cards', action: { type: 'draw_cards', playerId: 'p1' } }],
+          gameState, paused: false, revision: 3, turnSnapshotCount: 0, checkpointSlots: [], canStart: false,
+          reconnectDeadlineMs: now + 30_000, serverTime: now,
+        });
+      }
+      return json({ ok: true });
+    }));
+    return leaves;
+  }
 
-  it('offers Pause only to the host in a live room', () => {
-    expect(table).toMatch(/\(!isMultiplayer \|\| isMultiplayerHost\) \? <button onClick=\{onPauseToggle\}/);
+  async function openTable() {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /play multiplayer/i }));
+    fireEvent.change(await screen.findByLabelText(/your name/i), { target: { value: 'Ann' } });
+    fireEvent.click(await screen.findByRole('button', { name: /host multiplayer game/i }));
+    await screen.findByRole('button', { name: /forget room/i }, { timeout: 4000 });
+  }
+
+  it('offers Pause to the host but not to a guest', async () => {
+    stubRoom('p1');
+    await openTable();
+    expect(screen.getByRole('button', { name: /^pause$/i })).toBeInTheDocument();
   });
 
-  it('confirms before forgetting a room', () => {
-    expect(table).toMatch(/window\.confirm\([^)]*[Ff]orget/);
+  it('hides Pause from a guest, whose click the server would reject', async () => {
+    stubRoom('p2');
+    await openTable();
+    expect(screen.queryByRole('button', { name: /^pause$/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the seat when the Forget Room confirmation is declined', async () => {
+    const leaves = stubRoom('p1');
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal('confirm', confirm);
+    await openTable();
+    fireEvent.click(screen.getByRole('button', { name: /forget room/i }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(leaves).toEqual([]);
+    expect(screen.getByRole('button', { name: /forget room/i })).toBeInTheDocument();
   });
 });
