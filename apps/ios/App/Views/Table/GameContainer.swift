@@ -57,14 +57,14 @@ struct PassDeviceShield: View {
                 VStack(spacing: 6) {
                     Text("Pass the phone to")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(SoftWhite(0.7))
                     Text(promptName)
                         .font(.largeTitle.weight(.black))
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
                     Text(detail)
                         .font(.footnote.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(SoftWhite(0.7))
                         .multilineTextAlignment(.center)
                 }
                 Button {
@@ -149,7 +149,7 @@ struct PostGameView: View {
                 .accessibilityIdentifier("postgame.winner")
             Text("\(summary.turnCount) turns · \(formatDuration(summary.durationSec))")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(SoftWhite(0.75))
         }
         .padding(.top, 20)
     }
@@ -187,7 +187,7 @@ struct PostGameView: View {
                 .foregroundStyle(Palette.gold)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.caption.weight(.heavy)).foregroundStyle(.white.opacity(0.62))
+                Text(title).font(.caption.weight(.heavy)).foregroundStyle(SoftWhite(0.62))
                 Text(text).font(.subheadline.weight(.medium)).foregroundStyle(.white)
             }
         }
@@ -205,12 +205,12 @@ struct PostGameView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(row.name).font(.subheadline.weight(.bold)).foregroundStyle(.white)
                         Text("\(row.lifetimeWins) \(row.lifetimeWins == 1 ? "win" : "wins") in \(row.lifetimeGamesPlayed) \(row.lifetimeGamesPlayed == 1 ? "game" : "games")")
-                            .font(.caption2).foregroundStyle(.white.opacity(0.6))
+                            .font(.caption2).foregroundStyle(SoftWhite(0.6))
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 1) {
                         Text("\(row.completeSets) \(row.completeSets == 1 ? "set" : "sets")").font(.footnote.weight(.bold)).foregroundStyle(.white)
-                        Text("Bank $\(row.bankValue)").font(.caption2).foregroundStyle(.white.opacity(0.65))
+                        Text("Bank $\(row.bankValue)").font(.caption2).foregroundStyle(SoftWhite(0.65))
                     }
                 }
                 .padding(.vertical, 8)

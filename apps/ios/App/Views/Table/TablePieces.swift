@@ -132,6 +132,7 @@ struct HandFan: View {
         }
         .frame(height: cardWidth * CardView.aspect + 8)
         .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("table.hand")
         // Only when sliding between cards, so a plain tap doesn't buzz twice.
         .sensoryFeedback(.selection, trigger: focusedCard) { old, new in
             old != nil && new != nil && app.preferences.hapticsEnabled
@@ -315,7 +316,7 @@ struct PlayerBoard: View {
                 if lanes.isEmpty && player.bank.isEmpty {
                     Text("Your Bank and properties go here.")
                         .font(.footnote.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(.white)
                         .allowsHitTesting(false)
                 }
             }
@@ -425,7 +426,7 @@ struct BankStack: View {
                     .overlay {
                         if cards.isEmpty {
                             Image(systemName: "banknote")
-                                .foregroundStyle(.white.opacity(0.4))
+                                .foregroundStyle(SoftWhite(0.4))
                         }
                     }
                 ForEach(Array(visibleCards.enumerated()), id: \.element) { index, cardId in
@@ -437,7 +438,7 @@ struct BankStack: View {
             .frame(width: cardWidth + Self.overlap * CGFloat(max(visibleCards.count - 1, 0)), alignment: .topLeading)
             Text("Bank $\(total)")
                 .font(.caption2.weight(.bold))
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(.white)
                 .contentTransition(.numericText())
         }
         .accessibilityElement(children: .combine)
@@ -471,6 +472,7 @@ struct SetCountBadge: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(count) of \(needed) sets complete")
+        .accessibilityAddTraits(.isStaticText)
     }
 }
 
@@ -566,6 +568,7 @@ struct OpponentSummary: View {
                     }
                     Spacer(minLength: 0)
                     SetCountBadge(count: Engine.countCompleteSets(player, variant), needed: needed)
+                        .accessibilityHidden(true)
                 }
                 HStack(spacing: 10) {
                     Label("\(player.hand.count)", systemImage: "rectangle.portrait.on.rectangle.portrait.fill")
@@ -574,7 +577,7 @@ struct OpponentSummary: View {
                     Spacer(minLength: 0)
                 }
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(SoftWhite(0.8))
                 if showBoard && hasCardsOnTable {
                     MiniBoard(player: player, variant: variant)
                 } else {
@@ -582,8 +585,8 @@ struct OpponentSummary: View {
                 }
             }
             .padding(9)
-            .glassEffect(
-                isPrompted ? .regular.tint(Palette.gold.opacity(0.28)) : .regular,
+            .dealGlass(
+                tint: isPrompted ? Palette.gold.opacity(0.28) : nil,
                 in: RoundedRectangle(cornerRadius: 14, style: .continuous)
             )
             .overlay(
@@ -592,12 +595,24 @@ struct OpponentSummary: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(player.name), \(player.hand.count) cards in hand, Bank \(Engine.totalBankValue(player, variant)) dollars")
+        .accessibilityLabel(accessibilitySummary)
         .accessibilityHint("Shows their whole board")
     }
 }
 
 extension OpponentSummary {
+    fileprivate var accessibilitySummary: String {
+        var parts = [
+            player.name,
+            "\(Engine.countCompleteSets(player, variant)) of \(needed) sets complete",
+            "\(player.hand.count) cards in hand",
+            "Bank \(Engine.totalBankValue(player, variant)) dollars",
+        ]
+        if variant == .no_mercy, let debts = player.debts?.count, debts > 0 { parts.append("\(debts) debts owed") }
+        if let connection, !connection.connected { parts.append("disconnected") }
+        return parts.joined(separator: ", ")
+    }
+
     fileprivate var hasCardsOnTable: Bool {
         !player.bank.isEmpty || PropertyColor.allCases.contains { !player.properties[$0].isEmpty }
     }
@@ -850,7 +865,7 @@ struct PlaySpotlightView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
-                .glassEffect(.regular, in: Capsule())
+                .dealGlass(in: Capsule())
             CardView(cardId: spotlight.cardId, variant: variant, width: width)
                 .shadow(color: .black.opacity(0.55), radius: 22, y: 12)
         }

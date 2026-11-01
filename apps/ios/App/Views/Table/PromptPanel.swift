@@ -104,7 +104,7 @@ struct PanelHeader: View {
                 .foregroundStyle(.white)
             Text(subtitle)
                 .font(.footnote)
-                .foregroundStyle(.white.opacity(0.78))
+                .foregroundStyle(SoftWhite(0.78))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -170,7 +170,7 @@ private struct PaymentPanel: View {
             if payable.isEmpty {
                 Text("You have nothing to pay with.")
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.8))
+                    .foregroundStyle(SoftWhite(0.8))
                     .padding(.vertical, 8)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -282,7 +282,7 @@ private struct CounterPanel: View {
                         .foregroundStyle(.white)
                     Text(detail)
                         .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.78))
+                        .foregroundStyle(SoftWhite(0.78))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)

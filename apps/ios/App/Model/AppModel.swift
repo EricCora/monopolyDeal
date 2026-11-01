@@ -86,6 +86,9 @@ final class AppModel {
         if launch.resumeOnLaunch { resumeActive() }
         if let route = launch.route { path = [route] }
         #if DEBUG
+        // For reviewing themes: `-tableStyle neon_arcade -reducedEffects YES`.
+        if let raw = UserDefaults.standard.string(forKey: "tableStyle"), let style = TableTheme(rawValue: raw) { preferences.tableStyle = style }
+        if UserDefaults.standard.object(forKey: "reducedEffects") != nil { preferences.reducedEffects = UserDefaults.standard.bool(forKey: "reducedEffects") }
         autoplayRemaining = launch.autoplayGames
         if autoplayRemaining > 0 { startFromSetupForAutoplay() }
         if let room = UserDefaults.standard.string(forKey: "autoplayOnlineRoom") {

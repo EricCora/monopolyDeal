@@ -3,6 +3,8 @@ import DealStats
 import SwiftUI
 
 struct HomeView: View {
+    @ScaledMetric(relativeTo: .largeTitle) private var titleSize = 42.0
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var floating = false
@@ -53,14 +55,14 @@ struct HomeView: View {
             .accessibilityHidden(true)
 
             Text("Monopoly Deal")
-                .font(.system(size: 42, weight: .black, design: .rounded))
+                .font(.system(size: titleSize, weight: .black, design: .rounded))
                 .foregroundStyle(LinearGradient(colors: [.white, Palette.gold], startPoint: .top, endPoint: .bottom))
                 .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
             Text("Collect three sets. Trust no one.")
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white.opacity(0.74))
+                .foregroundStyle(SoftWhite(0.74))
         }
     }
 
@@ -85,16 +87,16 @@ struct HomeView: View {
                         .foregroundStyle(.white)
                     Text("\(active.gameState.players.map(\.name).joined(separator: ", ")) · Turn \(active.gameState.turnCount)")
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(SoftWhite(0.7))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.bold))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(SoftWhite(0.5))
             }
             .padding(14)
-            .glassEffect(.regular.tint(Palette.gold.opacity(0.18)).interactive(), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .dealGlass(tint: Palette.gold.opacity(0.18), interactive: true, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home.continue")
@@ -158,12 +160,12 @@ struct HomeView: View {
                         .foregroundStyle(.white)
                     Text(dailyDetail)
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(.white)
                 }
                 Spacer(minLength: 0)
             }
             .padding(12)
-            .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .dealGlass(interactive: true, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home.daily")
@@ -177,11 +179,16 @@ struct HomeView: View {
     }
 
     private var menuGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-            menuTile("Saved Games", icon: "square.stack.fill", id: "home.saved") { app.path.append(.saved) }
-            menuTile("Stats", icon: "chart.bar.fill", id: "home.stats") { app.path.append(.stats) }
-            menuTile("Rules", icon: "book.fill", id: "home.rules") { showRules = true }
-            menuTile("Settings", icon: "gearshape.fill", id: "home.settings") { app.path.append(.settings) }
+        let row = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
+        return VStack(spacing: 10) {
+            row {
+                menuTile("Saved Games", icon: "square.stack.fill", id: "home.saved") { app.path.append(.saved) }
+                menuTile("Stats", icon: "chart.bar.fill", id: "home.stats") { app.path.append(.stats) }
+            }
+            row {
+                menuTile("Rules", icon: "book.fill", id: "home.rules") { showRules = true }
+                menuTile("Settings", icon: "gearshape.fill", id: "home.settings") { app.path.append(.settings) }
+            }
         }
     }
 
@@ -216,7 +223,7 @@ struct SetupView: View {
                             ? "The original: 106 cards and three sets to win."
                             : "115 cards, debt chips, Shacks and far nastier action cards.")
                             .font(.footnote)
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(SoftWhite(0.7))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
@@ -328,7 +335,7 @@ struct SavedGamesView: View {
                     if let message {
                         Text(message)
                             .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.85))
+                            .foregroundStyle(SoftWhite(0.85))
                     }
                     if app.savedSlots.isEmpty {
                         ContentUnavailableView("No Saved Games", systemImage: "square.stack", description: Text("Save a game from the table menu to keep up to 5 at once."))
@@ -377,7 +384,7 @@ struct SavedGamesView: View {
                     .lineLimit(2)
                 Text("\(slot.gameState.resolvedVariant.label) · \(Date(timeIntervalSince1970: slot.updatedAt / 1000).formatted(date: .abbreviated, time: .shortened))")
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.65))
+                    .foregroundStyle(SoftWhite(0.65))
             }
             Spacer(minLength: 6)
             if !duringGame {
@@ -399,7 +406,7 @@ struct SavedGamesView: View {
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.title3)
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(SoftWhite(0.85))
                     .frame(width: 40, height: 40)
             }
             .accessibilityLabel("More for \(slot.name)")

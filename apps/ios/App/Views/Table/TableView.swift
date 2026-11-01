@@ -115,6 +115,8 @@ struct TableView: View {
         .sheet(isPresented: $ui.showSaves) {
             NavigationStack { SavedGamesView(duringGame: true) }
         }
+        // Past this size the board no longer fits a phone. Menus and sheets have no limit.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .confirmationDialog(
             ui.confirmation?.label ?? "",
             isPresented: Binding(get: { ui.confirmation != nil }, set: { if !$0 { ui.confirmation = nil } }),
@@ -134,6 +136,9 @@ struct TableView: View {
         }
         .onChange(of: viewerCompleteSets) { old, new in
             celebrateIfNeeded(old: old, new: new)
+        }
+        .onChange(of: session.isViewersPrompt) { _, yours in
+            if yours { AccessibilityNotification.Announcement("Your move").post() }
         }
         .onChange(of: session.prompt) {
             ui.notice = nil
@@ -167,7 +172,7 @@ struct TableView: View {
                     .font(.headline.weight(.bold))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
-                    .glassEffect(.regular.interactive(), in: Circle())
+                    .dealGlass(interactive: true, in: Circle())
             }
             .accessibilityLabel("Game menu")
             .accessibilityIdentifier("table.menu")
@@ -180,8 +185,9 @@ struct TableView: View {
                     .minimumScaleFactor(0.7)
                 Text(subtitle)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.68))
+                    .foregroundStyle(.white)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
             Spacer(minLength: 4)
 
@@ -234,7 +240,11 @@ struct TableView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
             .frame(minHeight: 46)
-            .glassEffect(session.isViewersPrompt ? .regular.tint(app.preferences.tableStyle.accent.opacity(0.22)) : .regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .dealGlass(tint: Color.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(session.isViewersPrompt ? app.preferences.tableStyle.accent.opacity(0.8) : .clear, lineWidth: 1.5)
+            )
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("table.status")
@@ -304,7 +314,7 @@ struct TableView: View {
                     .font(.subheadline)
                     .multilineTextAlignment(.center)
             }
-            .foregroundStyle(.white.opacity(0.6))
+            .foregroundStyle(SoftWhite(0.6))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
@@ -414,10 +424,12 @@ struct TableView: View {
     /// Shows the card someone else just played. Reduce Effects leaves this out, and the
     /// status line still says what happened.
     private func showSpotlightIfNeeded(previousTop: String?, newTop: String?) {
-        guard !app.preferences.reducedEffects, let newTop, newTop != previousTop,
+        guard let newTop, newTop != previousTop,
               let game = session.game, let card = Catalog.lookup(newTop, session.variant),
               card.kind == .action, let actor = actorOfLatestPlay(in: game), actor != session.viewerId else { return }
         let spotlight = PlaySpotlight(cardId: newTop, playerName: session.playerName(actor))
+        AccessibilityNotification.Announcement("\(spotlight.playerName) played \(CardText.spokenName(card))").post()
+        guard !app.preferences.reducedEffects else { return }
         withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.34, dampingFraction: 0.72)) {
             ui.spotlight = spotlight
         }
@@ -492,12 +504,13 @@ struct TableView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .glassEffect(.regular.tint(Color.black.opacity(0.5)), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .dealGlass(tint: Color.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .padding(.bottom, 200)
                 .padding(.horizontal, 20)
                 .transition(.opacity)
                 .onTapGesture { ui.notice = nil }
                 .task(id: notice) {
+                    AccessibilityNotification.Announcement(notice).post()
                     try? await Task.sleep(for: .seconds(3.5))
                     ui.notice = nil
                 }
@@ -508,7 +521,7 @@ struct TableView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .glassEffect(.regular.tint(Palette.danger.opacity(0.65)), in: Capsule())
+                .dealGlass(tint: Palette.danger.opacity(0.65), in: Capsule())
                 .padding(.bottom, 170)
                 .padding(.horizontal, 20)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -541,7 +554,7 @@ struct TableView: View {
                     } else if let message = session.pauseMessage {
                         Text(message)
                             .multilineTextAlignment(.center)
-                            .foregroundStyle(.white.opacity(0.8))
+                            .foregroundStyle(SoftWhite(0.8))
                             .padding(.horizontal, 28)
                             .accessibilityIdentifier("pause.message")
                     }
@@ -581,6 +594,7 @@ private struct PlaysPips: View {
         .animation(.snappy, value: used)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(used) of \(total) plays used")
+        .accessibilityAddTraits(.isStaticText)
     }
 }
 
@@ -610,6 +624,7 @@ private struct PileStack: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(session.game?.drawPile.count ?? 0) cards in the deck")
+            .accessibilityIdentifier("table.deck")
 
             Button {
                 ui.showDiscards = true
@@ -646,7 +661,7 @@ private struct CoachBubble: View {
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(SoftWhite(0.8))
                 }
                 .accessibilityLabel("Close hint")
             }
@@ -655,7 +670,7 @@ private struct CoachBubble: View {
                 .foregroundStyle(.white)
             Text(hint.summary)
                 .font(.caption)
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(SoftWhite(0.75))
         }
         .padding(12)
         .glassPanel(cornerRadius: 16)

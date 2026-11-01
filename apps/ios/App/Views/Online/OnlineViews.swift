@@ -31,7 +31,7 @@ struct OnlineHomeView: View {
                     if !nameIsSet {
                         Text("Enter your name to host or join a room.")
                             .font(.footnote)
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(SoftWhite(0.7))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
@@ -44,7 +44,7 @@ struct OnlineHomeView: View {
                                     .foregroundStyle(.white)
                                 Text("You can return to this seat while it's still open.")
                                     .font(.footnote)
-                                    .foregroundStyle(.white.opacity(0.7))
+                                    .foregroundStyle(SoftWhite(0.7))
                                 HStack(spacing: 8) {
                                     Button("Forget") { app.forgetStoredRoom() }
                                         .buttonStyle(SecondaryButtonStyle())
@@ -97,7 +97,7 @@ struct OnlineHomeView: View {
                             ProgressView().tint(.white)
                             Text("Connecting. A sleeping server can take about 20 seconds to wake.")
                                 .font(.footnote)
-                                .foregroundStyle(.white.opacity(0.8))
+                                .foregroundStyle(SoftWhite(0.8))
                         }
                     }
                     if let error = app.onlineError {
@@ -221,7 +221,7 @@ struct OnlineGameView: View {
             ConnectionPill(status: match.connection.status)
             Text("Room \(view.roomCode)")
                 .font(.caption.weight(.heavy).monospaced())
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(SoftWhite(0.8))
             Spacer()
             Menu {
                 ForEach(RoomReaction.allCases, id: \.self) { reaction in
@@ -234,7 +234,7 @@ struct OnlineGameView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 32)
-                    .glassEffect(.regular.interactive(), in: Capsule())
+                    .dealGlass(interactive: true, in: Capsule())
             }
             .accessibilityLabel("Send a reaction")
             Button {
@@ -244,7 +244,7 @@ struct OnlineGameView: View {
                     .font(.subheadline)
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 32)
-                    .glassEffect(.regular.interactive(), in: Capsule())
+                    .dealGlass(interactive: true, in: Capsule())
                     .overlay(alignment: .topTrailing) {
                         if match.unreadChat > 0 {
                             Text("\(match.unreadChat)")
@@ -275,7 +275,7 @@ struct OnlineGameView: View {
                         .font(.subheadline)
                         .foregroundStyle(.white)
                         .frame(width: 36, height: 32)
-                        .glassEffect(.regular.interactive(), in: Capsule())
+                        .dealGlass(interactive: true, in: Capsule())
                 }
                 .accessibilityLabel("Checkpoints")
             }
@@ -286,7 +286,7 @@ struct OnlineGameView: View {
                     .font(.subheadline)
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 32)
-                    .glassEffect(.regular.interactive(), in: Capsule())
+                    .dealGlass(interactive: true, in: Capsule())
             }
             .accessibilityLabel("Forget Room")
             .accessibilityIdentifier("room.forget")
@@ -306,13 +306,13 @@ struct RoomEndedView: View {
             VStack(spacing: 16) {
                 Image(systemName: "door.left.hand.closed")
                     .font(.system(size: 56))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(SoftWhite(0.85))
                 Text("Match Ended")
                     .font(.title.weight(.bold))
                     .foregroundStyle(.white)
                 Text(message)
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.8))
+                    .foregroundStyle(SoftWhite(0.8))
                 Button("Done", action: onClose)
                     .buttonStyle(PrimaryButtonStyle())
                     .frame(maxWidth: 220)
@@ -346,7 +346,7 @@ struct ConnectionPill: View {
         }
         .padding(.horizontal, 8)
         .frame(height: 24)
-        .glassEffect(.regular, in: Capsule())
+        .dealGlass(in: Capsule())
         .accessibilityIdentifier("room.connection")
     }
 }
@@ -416,7 +416,7 @@ struct RoomLobbyView: View {
                         .font(.headline.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(width: 42, height: 42)
-                        .glassEffect(.regular.interactive(), in: Circle())
+                        .dealGlass(interactive: true, in: Circle())
                 }
                 .accessibilityLabel("Exit room")
                 .accessibilityIdentifier("room.exit")
@@ -426,14 +426,14 @@ struct RoomLobbyView: View {
                     Image(systemName: "bubble.left.and.bubble.right.fill")
                         .foregroundStyle(.white)
                         .frame(width: 42, height: 42)
-                        .glassEffect(.regular.interactive(), in: Circle())
+                        .dealGlass(interactive: true, in: Circle())
                 }
                 .accessibilityLabel("Chat")
             }
             Text("ROOM CODE")
                 .font(.caption.weight(.heavy))
                 .tracking(1.2)
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(SoftWhite(0.6))
             Text(view.roomCode)
                 .font(.system(size: 46, weight: .black, design: .monospaced))
                 .foregroundStyle(Palette.gold)
@@ -467,7 +467,7 @@ struct RoomLobbyView: View {
                             .accessibilityLabel("Host")
                     }
                     if player.id == view.yourPlayerId {
-                        Text("You").font(.caption2.weight(.heavy)).foregroundStyle(.white.opacity(0.6))
+                        Text("You").font(.caption2.weight(.heavy)).foregroundStyle(SoftWhite(0.6))
                     }
                     Spacer()
                     if !player.connected {
@@ -481,7 +481,7 @@ struct RoomLobbyView: View {
                     } else {
                         Text("Not ready")
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.55))
+                            .foregroundStyle(SoftWhite(0.55))
                     }
                 }
                 .accessibilityElement(children: .combine)
@@ -517,7 +517,7 @@ struct RoomLobbyView: View {
                 .accessibilityIdentifier("room.preset")
                 Text(view.presetId.summary)
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(SoftWhite(0.7))
             }
             if !view.checkpointSlots.isEmpty {
                 SectionTitle(text: "Start From a Checkpoint")
@@ -553,7 +553,7 @@ struct RoomLobbyView: View {
                 .foregroundStyle(.white)
             Text("The host chooses these.")
                 .font(.caption)
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(SoftWhite(0.65))
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -580,7 +580,7 @@ struct RoomLobbyView: View {
                 if !view.canStart {
                     Text("Everyone needs to be here and ready, with at least 2 players.")
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.65))
+                        .foregroundStyle(SoftWhite(0.65))
                 }
             }
             Button("Forget Room", role: .destructive, action: onForget)
@@ -596,7 +596,7 @@ struct RoomLobbyView: View {
             ForEach(view.activityFeed.suffix(6).reversed()) { item in
                 Text(displayText(item.message))
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(SoftWhite(0.75))
             }
         }
         .padding(14)
@@ -653,7 +653,7 @@ struct ChatSheet: View {
                     .onSubmit(send)
                     .padding(.horizontal, 12)
                     .frame(minHeight: 42)
-                    .glassEffect(.regular, in: Capsule())
+                    .dealGlass(in: Capsule())
                     .accessibilityIdentifier("chat.field")
                 Button(action: send) {
                     Image(systemName: "arrow.up.circle.fill").font(.title)

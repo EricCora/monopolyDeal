@@ -89,3 +89,18 @@ The replay was most of `ios:verify`'s time. It now uses half the cores, so the M
 
 ## 2026-11-01: The web hard bot gets the same Wild limit as iOS
 A hard bot may move Wilds twice per turn on both platforms. Without the limit, a game could freeze with the bot moving a Wild back and forth, because a move costs no play. This changes only the top difficulty's choices.
+
+## 2026-11-01: Accessibility rules for the iOS app
+Reduce Transparency and Increase Contrast swap Liquid Glass for solid panels, and Increase Contrast also strengthens quiet text. Menus follow any text size. The table's text stops growing at `accessibility1`, because past that the board doesn't fit a phone.
+
+Xcode's accessibility audit now runs with the UI tests, with these exceptions, each named in `AccessibilityAuditTests.swift`:
+- Text on a card is artwork that scales with the card, and holding the hand or opening a card enlarges it.
+- The table skips the Dynamic Type check, because of the limit above.
+- The home title's gradient and the "Draw to start" status were flagged for contrast, but both read clearly in screenshots.
+- Assumption: the home screen's nameless "inaccessible text" issue is the decorative hero cards. The audit gives no element for it.
+
+## 2026-11-01: The status line uses a dark panel with a colored border
+A tinted glass panel washed out the white text on your turn. A dark panel with a border in the theme's color stands out as much and stays readable.
+
+## 2026-11-01: Invite links use the web address from the GitHub repo's homepage
+Invites now carry `https://monopoly-deal-smoky.vercel.app/join/CODE` as well as the app link. The page and its room server proxy were both confirmed to answer. The earlier `monopoly-deal.vercel.app` guess belongs to another site.

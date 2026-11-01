@@ -106,7 +106,7 @@ struct StatsView: View {
             .minimumScaleFactor(0.7)
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, minHeight: 36)
-            .glassEffect(.regular.interactive(), in: Capsule())
+            .dealGlass(interactive: true, in: Capsule())
     }
 
     private var kpis: some View {
@@ -129,7 +129,7 @@ struct StatsView: View {
                 .lineLimit(1)
             Text(title)
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(SoftWhite(0.65))
         }
         .frame(maxWidth: .infinity, minHeight: 66)
         .glassPanel(cornerRadius: 14)
@@ -146,13 +146,13 @@ struct StatsView: View {
                     .annotation(position: .trailing) {
                         Text("\(row.wins) of \(row.games)")
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.75))
+                            .foregroundStyle(SoftWhite(0.75))
                     }
             }
             .chartXAxis(.hidden)
             .chartYAxis {
                 AxisMarks { _ in
-                    AxisValueLabel().foregroundStyle(.white.opacity(0.85))
+                    AxisValueLabel().foregroundStyle(SoftWhite(0.85))
                 }
             }
             .frame(height: CGFloat(winRows.count) * 34 + 8)
@@ -174,8 +174,8 @@ struct StatsView: View {
             .chartXAxis(.hidden)
             .chartYAxis {
                 AxisMarks(position: .leading) { _ in
-                    AxisGridLine().foregroundStyle(.white.opacity(0.1))
-                    AxisValueLabel().foregroundStyle(.white.opacity(0.7))
+                    AxisGridLine().foregroundStyle(SoftWhite(0.1))
+                    AxisValueLabel().foregroundStyle(SoftWhite(0.7))
                 }
             }
             .frame(height: 130)
@@ -195,7 +195,7 @@ struct StatsView: View {
                         .frame(width: 26)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(id.label).font(.subheadline.weight(.bold)).foregroundStyle(.white)
-                        Text(id.detail).font(.caption).foregroundStyle(.white.opacity(0.65))
+                        Text(id.detail).font(.caption).foregroundStyle(SoftWhite(0.65))
                     }
                     Spacer()
                     if unlocked {
@@ -219,7 +219,7 @@ struct StatsView: View {
                 .foregroundStyle(.white)
             Text("\(challenge.attempts) attempts · Best: \(challenge.bestTurnCount.map { "\($0) turns" } ?? "none yet") · \(challenge.completed ? "Done" : "Not done yet")")
                 .font(.caption)
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(SoftWhite(0.7))
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -232,7 +232,7 @@ struct StatsView: View {
             if matches.isEmpty {
                 Text("Finished games will appear here.")
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(SoftWhite(0.7))
             }
             ForEach(matches) { match in
                 VStack(alignment: .leading, spacing: 2) {
@@ -247,10 +247,10 @@ struct StatsView: View {
                     }
                     Text(match.players.joined(separator: ", "))
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.75))
+                        .foregroundStyle(SoftWhite(0.75))
                     Text("\(match.turnCount) turns · \(formatDuration(match.durationSec)) · \(match.endedDate.formatted(date: .abbreviated, time: .shortened))")
                         .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(SoftWhite(0.55))
                 }
                 .padding(.vertical, 4)
                 .accessibilityElement(children: .combine)

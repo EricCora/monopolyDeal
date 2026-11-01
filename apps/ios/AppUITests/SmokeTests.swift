@@ -31,8 +31,10 @@ final class GameplayUITests: XCTestCase {
         for _ in 0..<maxSteps {
             if winner.exists { return }
             if let control = firstExisting(["confirm.play", "chooser.0", "action.draw", "payment.auto"]) {
+                // Read this before tapping, because the button may be gone afterward.
+                let isAutoPay = control.identifier == "payment.auto"
                 control.tap()
-                if control.identifier == "payment.auto" {
+                if isAutoPay {
                     let submit = app.buttons["payment.submit"]
                     if submit.waitForExistence(timeout: 2) { submit.tap() }
                 }
@@ -43,7 +45,7 @@ final class GameplayUITests: XCTestCase {
                 continue
             }
             // Play a card if one is playable, otherwise end the turn.
-            let playable = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'hand.' AND value == 'playable'")).firstMatch
+            let playable = app.descendants(matching: .any).matching(NSPredicate(format: "identifier MATCHES 'hand\\\\.[0-9]+' AND value == 'playable'")).firstMatch
             if playable.exists {
                 playable.tap()
                 if firstExisting(["chooser.0", "confirm.play"]) != nil { continue }
@@ -122,7 +124,7 @@ final class GameplayUITests: XCTestCase {
         app.buttons["action.draw"].tap()
         XCTAssertTrue(app.buttons["action.pass"].waitForExistence(timeout: 5))
 
-        let hand = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'hand.'"))
+        let hand = app.descendants(matching: .any).matching(NSPredicate(format: "identifier MATCHES 'hand\\\\.[0-9]+'"))
         let countBefore = hand.count
         XCTAssertGreaterThan(countBefore, 1)
         let start = hand.element(boundBy: 0).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
@@ -140,13 +142,15 @@ final class GameplayUITests: XCTestCase {
         startPractice("Classic, Easy")
         app.buttons["action.draw"].tap()
         XCTAssertTrue(app.buttons["action.pass"].waitForExistence(timeout: 5))
-        let hand = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'hand.'"))
+        let hand = app.descendants(matching: .any).matching(NSPredicate(format: "identifier MATCHES 'hand\\\\.[0-9]+'"))
         let countBefore = hand.count
         hand.element(boundBy: 0).coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)).tap()
-        let played = NSPredicate { _, _ in
-            self.app.buttons["chooser.0"].exists || hand.count != countBefore
+        let deadline = Date.now.addingTimeInterval(5)
+        var played = false
+        while !played && Date.now < deadline {
+            played = app.buttons["chooser.0"].exists || hand.count != countBefore
         }
-        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: played, object: nil)], timeout: 5), .completed)
+        XCTAssertTrue(played, "A tap should play the card or open its options")
     }
 
     /// The bot's legal moves must never appear as the player's buttons.
@@ -161,7 +165,7 @@ final class GameplayUITests: XCTestCase {
         pass.tap()
         // Over the hand limit, the turn ends only after a discard.
         let discard = app.buttons["chooser.0"]
-        let hand = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'hand.' AND value == 'playable'"))
+        let hand = app.descendants(matching: .any).matching(NSPredicate(format: "identifier MATCHES 'hand\\\\.[0-9]+' AND value == 'playable'"))
         for _ in 0..<4 where hand.firstMatch.exists {
             hand.firstMatch.tap()
             if discard.waitForExistence(timeout: 2) { discard.tap() }

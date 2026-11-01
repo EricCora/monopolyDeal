@@ -23,6 +23,7 @@ enum Palette {
     static let danger = Color(hex: 0xE5484D)
     static let success = Color(hex: 0x30B47F)
     static let navy = Color(hex: 0x101B2D)
+    static let solidPanel = Color(hex: 0x1B2A41)
 }
 
 extension PropertyColor {
@@ -150,7 +151,46 @@ struct SplitMix {
 extension View {
     /// A Liquid Glass panel for floating controls.
     func glassPanel(cornerRadius: CGFloat = 22, tint: Color? = nil) -> some View {
-        glassEffect(tint.map { Glass.regular.tint($0) } ?? .regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        dealGlass(tint: tint, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    /// Liquid Glass, or a solid panel when the player has asked for Reduce Transparency
+    /// or Increase Contrast.
+    func dealGlass<S: InsettableShape>(tint: Color? = nil, interactive: Bool = false, in shape: S) -> some View {
+        modifier(DealGlass(tint: tint, interactive: interactive, shape: shape))
+    }
+}
+
+private struct DealGlass<S: InsettableShape>: ViewModifier {
+    var tint: Color?
+    var interactive: Bool
+    var shape: S
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        if reduceTransparency || contrast == .increased {
+            content
+                .background {
+                    shape.fill(Palette.solidPanel)
+                    if let tint { shape.fill(tint) }
+                }
+                .overlay(shape.strokeBorder(.white.opacity(contrast == .increased ? 0.8 : 0.22), lineWidth: 1))
+        } else {
+            let glass = tint.map { Glass.regular.tint($0) } ?? .regular
+            content.glassEffect(interactive ? glass.interactive() : glass, in: shape)
+        }
+    }
+}
+
+/// White text kept quieter than the main text, except under Increase Contrast.
+struct SoftWhite: ShapeStyle {
+    var opacity: Double
+
+    init(_ opacity: Double) { self.opacity = opacity }
+
+    func resolve(in environment: EnvironmentValues) -> Color {
+        .white.opacity(environment.colorSchemeContrast == .increased ? max(opacity, 0.92) : opacity)
     }
 }
 
@@ -186,10 +226,12 @@ struct SecondaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
             .padding(.horizontal, 14)
+            .padding(.vertical, 6)
             .frame(minHeight: 44)
             .frame(maxWidth: .infinity)
-            .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .dealGlass(interactive: true, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .opacity(isEnabled ? 1 : 0.45)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.snappy(duration: 0.16), value: configuration.isPressed)
@@ -203,7 +245,7 @@ struct SectionTitle: View {
         Text(text.uppercased())
             .font(.caption.weight(.heavy))
             .tracking(1.1)
-            .foregroundStyle(.white.opacity(0.62))
+            .foregroundStyle(SoftWhite(0.62))
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
