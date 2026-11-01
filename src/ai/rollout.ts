@@ -29,7 +29,7 @@ function evaluateState(state: GameState, playerId: PlayerId): number {
   const me = state.players.find((player) => player.id === playerId);
   if (!me) return -999;
 
-  const mySets = getSetCompletionCount(me);
+  const mySets = getSetCompletionCount(me, state.variant ?? 'classic');
   const myBank = me.bank.length;
   const myHand = me.hand.length;
   const myScore = mySets * 220 + myBank * 16 + myHand * 6;
@@ -37,7 +37,7 @@ function evaluateState(state: GameState, playerId: PlayerId): number {
   let bestOpponent = -Infinity;
   for (const player of state.players) {
     if (player.id === playerId) continue;
-    const score = getSetCompletionCount(player) * 200 + player.bank.length * 14 + player.hand.length * 5;
+    const score = getSetCompletionCount(player, state.variant ?? 'classic') * 200 + player.bank.length * 14 + player.hand.length * 5;
     if (score > bestOpponent) bestOpponent = score;
   }
 

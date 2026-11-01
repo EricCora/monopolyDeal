@@ -764,6 +764,14 @@
   font-weight: 700;
 }
 
+.player-debt-summary {
+  margin: 0.3rem 0 0;
+  color: #f1cf84;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .player-status-tags {
   margin: 0.35rem 0 0;
   padding: 0;

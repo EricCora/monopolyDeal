@@ -1,4 +1,4 @@
-import type { GameState } from '../engine';
+import { DEFAULT_RULESET, type GameState } from '../engine';
 import { defaultAchievementState, defaultDailyChallenge, ensureTodayDailyChallenge } from '../stats/retention';
 import type { AchievementStateV1, DailyChallengeV1, GrowthMetricEvent, GrowthMetricsV1, LifetimeStatsV1, MatchRecordV1 } from '../stats/types';
 import {
@@ -21,6 +21,24 @@ const ACHIEVEMENTS_KEY = 'monopolyDeal.achievements.v1';
 const DAILY_CHALLENGE_KEY = 'monopolyDeal.dailyChallenge.v1';
 const UI_PREFERENCES_KEY = 'monopolyDeal.uiPreferences.v1';
 const MAX_SAVED_GAME_SLOTS = 5;
+
+/** Additive state normalization keeps version 1 saves readable as the engine evolves. */
+function normalizeStoredGameState(state: GameState): GameState {
+  const clone = structuredClone(state) as GameState;
+  clone.variant = clone.variant === 'no_mercy' ? 'no_mercy' : 'classic';
+  if (clone.variant === 'no_mercy') clone.ruleset = { ...DEFAULT_RULESET };
+  clone.players = clone.players.map((player) => ({
+    ...player,
+    debts: player.debts ?? player.debtsOwed ?? [],
+    debtsOwed: player.debts ?? player.debtsOwed ?? [],
+    ...(clone.variant === 'no_mercy' ? {
+      debtChipsRemaining: player.debtChipsRemaining ?? 3,
+      debtChipsHeld: player.debtChipsHeld ?? player.debtChips ?? [],
+      debtChips: player.debtChipsHeld ?? player.debtChips ?? [],
+    } : {}),
+  }));
+  return clone;
+}
 
 export interface SavedGameV1 {
   version: 1;
@@ -76,7 +94,7 @@ export function saveActiveGame(state: GameState, matchMode: MatchMode = 'hot_sea
   const snapshot: SavedGameV1 = {
     version: 1,
     timestamp: Date.now(),
-    gameState: state,
+    gameState: normalizeStoredGameState(state),
     matchMode,
   };
   localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify(snapshot));
@@ -90,6 +108,7 @@ export function loadActiveGame(): SavedGameV1 | null {
     if (parsed.version !== 1) return null;
     return {
       ...parsed,
+      gameState: normalizeStoredGameState(parsed.gameState),
       matchMode: normalizeMatchMode(parsed.matchMode),
     };
   } catch {
@@ -121,7 +140,7 @@ function sanitizeSavedGameSlots(rawSlots: unknown): SavedGameSlotV1[] {
       name: candidate.name,
       createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
       updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now(),
-      gameState: candidate.gameState as GameState,
+      gameState: normalizeStoredGameState(candidate.gameState as GameState),
       matchMode: normalizeMatchMode(candidate.matchMode),
     });
   }
@@ -174,7 +193,7 @@ export function upsertSavedGameSlot(input: { id?: string; name?: string; gameSta
               ...slot,
               name: input.name?.trim() || slot.name,
               updatedAt: now,
-              gameState: input.gameState,
+              gameState: normalizeStoredGameState(input.gameState),
               matchMode: normalizeMatchMode(input.matchMode, slot.matchMode ?? 'hot_seat'),
             }
           : slot)),
@@ -193,7 +212,7 @@ export function upsertSavedGameSlot(input: { id?: string; name?: string; gameSta
     name: input.name?.trim() || saveSlotNameFallback(),
     createdAt: now,
     updatedAt: now,
-    gameState: input.gameState,
+    gameState: normalizeStoredGameState(input.gameState),
     matchMode: normalizeMatchMode(input.matchMode),
   };
 

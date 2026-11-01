@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { CardView } from './CardView';
+import type { GameVariant } from '../../cards/catalog';
 
 interface HandFanProps {
   cards: string[];
@@ -8,6 +9,7 @@ interface HandFanProps {
   onCardClick: (cardId: string) => void;
   interactive: boolean;
   fitMode?: 'auto' | 'fan' | 'rail';
+  gameVariant?: GameVariant;
 }
 
 const MIN_CARD_WIDTH = 88;
@@ -25,6 +27,7 @@ export function HandFan({
   onCardClick,
   interactive,
   fitMode = 'auto',
+  gameVariant = 'classic',
 }: HandFanProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -144,6 +147,7 @@ export function HandFan({
               playable={playableCardIds.has(cardId)}
               selected={selectedCardId === cardId}
               onClick={() => onCardClick(cardId)}
+              gameVariant={gameVariant}
             />
           </div>
         );

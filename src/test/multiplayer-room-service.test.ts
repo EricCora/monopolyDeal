@@ -17,6 +17,7 @@ import {
   sendRoomChat,
   sendRoomReaction,
   setRoomPreset,
+  setRoomVariant,
   setRoomTyping,
   setRoomReady,
   roomView,
@@ -66,6 +67,65 @@ function startReadyRoom(
 }
 
 describe('multiplayer room service lifecycle', () => {
+  it('selects No Mercy in the lobby, clears ready states, and masks remote hands after start', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const joined = joinRoom(room, 'Player 2');
+
+    setRoomReady(room, session.playerId, session.sessionToken, true);
+    setRoomReady(room, joined.playerId, joined.sessionToken, true);
+    setRoomVariant(room, session.playerId, session.sessionToken, 'no_mercy');
+    expect(room.variant).toBe('no_mercy');
+    expect(room.players.every((player) => !player.ready)).toBe(true);
+
+    setRoomReady(room, session.playerId, session.sessionToken, true);
+    setRoomReady(room, joined.playerId, joined.sessionToken, true);
+    startRoom(room, session.playerId, session.sessionToken, 7303);
+
+    expect(room.game?.variant).toBe('no_mercy');
+    expect(room.game?.players.every((player) => player.debtChipsRemaining === 3)).toBe(true);
+    const checkpoint = saveRoomCheckpoint(room, session.playerId, session.sessionToken, 'No Mercy checkpoint');
+    expect(checkpoint).toBeDefined();
+    expect(room.checkpoints[0].game.variant).toBe('no_mercy');
+    const hostView = roomView(room, session.playerId, session.sessionToken);
+    expect(hostView.variant).toBe('no_mercy');
+    expect(hostView.gameState?.players[1].hand.every((cardId) => cardId === '__hidden__')).toBe(true);
+  });
+
+  it('does not leak a private debt repayment card to uninvolved multiplayer viewers', () => {
+    const rooms = new Map<string, MultiplayerRoom>();
+    const { room, session } = createRoom(rooms, 'Host');
+    const debtor = joinRoom(room, 'Debtor');
+    const observer = joinRoom(room, 'Observer');
+    setRoomVariant(room, session.playerId, session.sessionToken, 'no_mercy');
+    startReadyRoom(room, session, 7304);
+    room.game!.pending = {
+      kind: 'debt_card',
+      payload: {
+        debtorPlayerId: debtor.playerId,
+        creditorPlayerId: session.playerId,
+        debtId: 'p2-chip-1',
+        cardId: 'money_15#private',
+      },
+    };
+
+    const creditorView = roomView(room, session.playerId, session.sessionToken);
+    const debtorView = roomView(room, debtor.playerId, debtor.sessionToken);
+    const observerView = roomView(room, observer.playerId, observer.sessionToken);
+    expect(creditorView.gameState?.pending?.kind).toBe('debt_card');
+    expect(debtorView.gameState?.pending?.kind).toBe('debt_card');
+    expect(observerView.gameState?.pending?.kind).toBe('debt_card');
+    if (creditorView.gameState?.pending?.kind === 'debt_card') {
+      expect(creditorView.gameState.pending.payload.cardId).toBe('money_15#private');
+    }
+    if (debtorView.gameState?.pending?.kind === 'debt_card') {
+      expect(debtorView.gameState.pending.payload.cardId).toBe('money_15#private');
+    }
+    if (observerView.gameState?.pending?.kind === 'debt_card') {
+      expect(observerView.gameState.pending.payload.cardId).toBe('__hidden__');
+    }
+  });
+
   it('starts five seats and preserves physical sets and presets through checkpoints', () => {
     const { room, session } = createRoom(new Map<string, MultiplayerRoom>(), 'Host');
     fillLobby(room);

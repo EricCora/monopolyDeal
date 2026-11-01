@@ -45,6 +45,10 @@ export function resolveEffect(state: GameState, effect: PendingEffect, events: G
     state.pending = { kind: 'rent', payload: effect.payload };
     return undefined;
   }
+  if (effect.kind === 'no_mercy') {
+    state.pending = { kind: 'no_mercy', payload: effect.payload };
+    return undefined;
+  }
   pushEvent(events, 'noop', 'No effect resolved.');
   return undefined;
 }
@@ -110,7 +114,8 @@ function legalForCounter(state: GameState, player: PlayerState): LegalAction[] {
   if (!state.pending || state.pending.kind !== 'counter') return [];
   const req = state.pending.payload;
   if (req.awaitingPlayerId !== player.id) return [];
-  const jsn = player.hand.filter((cardId) => getCardDefinition(cardId).actionKind === 'just_say_no');
+  const variant = state.variant ?? 'classic';
+  const jsn = player.hand.filter((cardId) => getCardDefinition(cardId, variant).actionKind === 'just_say_no');
   const actions: LegalAction[] = [
     {
       label: 'Resolve without Just Say No',
@@ -119,7 +124,7 @@ function legalForCounter(state: GameState, player: PlayerState): LegalAction[] {
   ];
   for (const cardId of jsn) {
     actions.push({
-      label: `Play Just Say No (${cardLabel(cardId)})`,
+      label: `Play Just Say No (${cardLabel(cardId, variant)})`,
       action: { type: 'counter_response', playerId: player.id, useJustSayNo: true, cardId },
     });
   }
@@ -129,10 +134,10 @@ function legalForCounter(state: GameState, player: PlayerState): LegalAction[] {
 function legalForPayment(state: GameState, player: PlayerState): LegalAction[] {
   if (!state.pending || state.pending.kind !== 'payment') return [];
   if (state.pending.payload.targetPlayerId !== player.id) return [];
-  const paymentOptions = generatePaymentOptions(player, state.pending.payload.amount);
+  const paymentOptions = generatePaymentOptions(player, state.pending.payload.amount, state.variant ?? 'classic');
   return paymentOptions.map((cards, idx) => ({
     label: cards.length
-      ? `Pay option ${idx + 1}: ${cards.map(cardLabel).join(', ')}`
+      ? `Pay option ${idx + 1}: ${cards.map((cardId) => cardLabel(cardId, state.variant ?? 'classic')).join(', ')}`
       : 'Cannot pay (no cards)',
     action: { type: 'pay_request', playerId: player.id, cards },
   }));
@@ -147,8 +152,9 @@ function legalForRentSelection(state: GameState, player: PlayerState): LegalActi
   for (const target of state.players) {
     if (target.id === player.id) continue;
     const requestedAmount = req.amount;
-    const collectibleCap = Math.min(requestedAmount, totalPayableValue(target));
-    const requiresPropertyTransfer = collectibleCap > totalBankValue(target);
+    const variant = state.variant ?? 'classic';
+    const collectibleCap = Math.min(requestedAmount, totalPayableValue(target, variant));
+    const requiresPropertyTransfer = collectibleCap > totalBankValue(target, variant);
     actions.push({
       label: `Charge ${target.name} rent for ${colorLabel(req.color)}`,
       action: {
@@ -178,15 +184,16 @@ function legalForSlyDealSelection(state: GameState, player: PlayerState): LegalA
   if (req.sourcePlayerId !== player.id) return [];
   const target = getPlayer(state, req.targetPlayerId);
   if (!target) return [];
+  const variant = state.variant ?? 'classic';
 
   const choices: LegalAction[] = [];
-  for (const movable of movablePropertyCards(target)) {
-    const def = getCardDefinition(movable.cardId);
+  for (const movable of movablePropertyCards(target, variant)) {
+    const def = getCardDefinition(movable.cardId, state.variant ?? 'classic');
     for (const destColor of PROPERTY_COLORS.filter((candidate) => canCardBePlacedInColor(def, candidate))) {
-      const setIds = openSetIds(player, destColor);
+      const setIds = openSetIds(player, destColor, variant);
       for (const setId of setIds) {
         choices.push({
-          label: `Take ${cardLabel(movable.cardId)} from ${target.name} to ${colorLabel(destColor)}`,
+          label: `Take ${cardLabel(movable.cardId, variant)} from ${target.name} to ${colorLabel(destColor)}`,
           action: {
             type: 'sly_deal_pick',
             playerId: player.id,
@@ -212,14 +219,15 @@ function legalForForcedDealSelection(state: GameState, player: PlayerState): Leg
   if (!source || !target) return [];
 
   const actions: LegalAction[] = [];
-  for (const own of movablePropertyCards(source)) {
-    for (const theirs of movablePropertyCards(target)) {
-      const takenCard = getCardDefinition(theirs.cardId);
+  const variant = state.variant ?? 'classic';
+  for (const own of movablePropertyCards(source, variant)) {
+    for (const theirs of movablePropertyCards(target, variant)) {
+      const takenCard = getCardDefinition(theirs.cardId, state.variant ?? 'classic');
       for (const destColor of PROPERTY_COLORS.filter((candidate) => canCardBePlacedInColor(takenCard, candidate))) {
-        const setIds = openSetIds(source, destColor);
+        const setIds = openSetIds(source, destColor, variant);
         for (const setId of setIds) {
           actions.push({
-            label: `Swap ${cardLabel(own.cardId)} for ${cardLabel(theirs.cardId)}`,
+            label: `Swap ${cardLabel(own.cardId, variant)} for ${cardLabel(theirs.cardId, variant)}`,
             action: {
               type: 'forced_deal_pick',
               playerId: player.id,
@@ -247,21 +255,22 @@ function legalForDealBreakerSelection(state: GameState, player: PlayerState): Le
   const target = getPlayer(state, req.targetPlayerId);
   if (!target) return [];
 
-  return completeSetColors(target).flatMap((color) => propertySets(target, color)
-    .filter((set) => isCompleteSet(target, color, set.setId))
+  const variant = state.variant ?? 'classic';
+  return completeSetColors(target, variant).flatMap((color) => propertySets(target, color, variant)
+    .filter((set) => isCompleteSet(target, color, set.setId, variant))
     .map((set) => ({
       label: `Take complete ${colorLabel(color)} set`,
       action: { type: 'deal_breaker_pick', playerId: player.id, color, setId: set.setId },
     })));
 }
 
-function openSetIds(player: PlayerState, color: PropertyColor): Array<string | undefined> {
-  const open = propertySets(player, color).filter((set) => {
+function openSetIds(player: PlayerState, color: PropertyColor, variant: 'classic' | 'no_mercy' = 'classic'): Array<string | undefined> {
+  const open = propertySets(player, color, variant).filter((set) => {
     const count = set.entries.filter((entry) => {
-      const kind = getCardDefinition(entry.cardId).kind;
+      const kind = getCardDefinition(entry.cardId, variant).kind;
       return kind === 'property' || kind === 'wild';
     }).length;
-    return count < PROPERTY_SET_SIZES[color] && !isCompleteSet(player, color, set.setId);
+    return count < PROPERTY_SET_SIZES[color] && !isCompleteSet(player, color, set.setId, variant);
   });
   return open.length > 0 ? open.map((set) => set.setId) : [undefined];
 }

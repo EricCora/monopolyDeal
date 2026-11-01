@@ -75,6 +75,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Experimental feature flags for AI opponents, AI coach hints, replay timeline, daily challenges, achievements, and custom rules
 - Custom rule limits are reflected in table prompts, discard counts, action rails, and AI pass timing
 - Auto-save + resume via `localStorage`
+- First-class `Classic` and `No Mercy` variants with variant-aware decks, multiplayer lobbies, saves, checkpoints, and rematches
 
 ## Classic Rules
 
@@ -83,6 +84,15 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - An any-color Wild on its own earns no rent. Wilds can only occupy supported colors, including after a Forced Deal.
 - Houses and Hotels attach to individual complete sets, excluding Railroads and Utilities. Each set allows one House and one Hotel; a Hotel requires a House.
 - Custom Classic play, hand-limit, and victory presets remain available.
+
+## No Mercy Rules
+
+- New Game and multiplayer lobbies let the host choose `No Mercy`; the choice is locked once play starts and automatically uses the official 2–5 player rules.
+- No Mercy uses its own reproducible 115-card playable deck (plus the physical reference cards), including the new action cards and the $15 money card. Classic's 106-card catalog remains unchanged.
+- Every player starts with three debt chips. After drawing, debts are settled before normal plays; each repayment card counts as one of the three plays. If a player cannot fully pay, all payable Bank/property cards transfer and one debt chip records the creditor.
+- Debt chips, Shack attachments, variant selection, and all No Mercy pending selections are carried through autosaves, checkpoints, reconnects, rematches, and deterministic replay state.
+- Every-color Wilds cannot complete a set by themselves or be used as payment. Shacks add $5 rent and move with the property they are attached to.
+- No Mercy action cards include Rent/Double Rent, Deal Breaker, Forced Debt, Go Again, Heist, Market Crash, Pass Go, Go Go!, Repossession, Shack, Super Sly Deal, Tax Collector, Tough Luck, Unfair Trade, Yoink!, and Just Say No. Global effects expose independent counter windows so one player's Just Say No does not cancel another player's outcome.
 
 ## Tech Stack
 

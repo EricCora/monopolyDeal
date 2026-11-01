@@ -1,11 +1,12 @@
 import type { SetupViewModel } from '../types';
-import type { BotDifficulty, PlayerController } from '../../engine';
+import type { BotDifficulty, GameVariant, PlayerController } from '../../engine';
 
 interface SetupScreenProps {
   setup: SetupViewModel;
   allowAiOpponents: boolean;
   allowCustomRules: boolean;
   onPlayerCountChange: (playerCount: number) => void;
+  onVariantChange?: (variant: GameVariant) => void;
   onPlayerNameChange: (index: number, value: string) => void;
   onPlayerControllerChange: (index: number, controller: PlayerController) => void;
   onPlayerDifficultyChange: (index: number, difficulty: BotDifficulty) => void;
@@ -19,6 +20,7 @@ export function SetupScreen({
   allowAiOpponents,
   allowCustomRules,
   onPlayerCountChange,
+  onVariantChange,
   onPlayerNameChange,
   onPlayerControllerChange,
   onPlayerDifficultyChange,
@@ -41,8 +43,17 @@ export function SetupScreen({
         </div>
         <aside className="setup-stage-note" aria-label="Match snapshot">
           <p className="setup-stage-label">Tonight&apos;s table</p>
-          <p>{setup.playerCount} seats · {setup.customRules.winCompleteSets} sets to win</p>
-          <p>{setup.customRules.maxPlaysPerTurn} plays each turn · {setup.customRules.maxHandAtEndTurn} card hand limit</p>
+          {setup.variant === 'no_mercy' ? (
+            <>
+              <p>{setup.playerCount} seats · No Mercy rules</p>
+              <p>3 sets to win · debt repayment before plays</p>
+            </>
+          ) : (
+            <>
+              <p>{setup.playerCount} seats · {setup.customRules.winCompleteSets} sets to win</p>
+              <p>{setup.customRules.maxPlaysPerTurn} plays each turn · {setup.customRules.maxHandAtEndTurn} card hand limit</p>
+            </>
+          )}
           <div className="setup-seat-preview" aria-label="Seat preview">
             {activeSeats.map((seat) => (
               <div key={`seat-preview-${seat.index + 1}`} className="setup-seat-chip">
@@ -57,6 +68,13 @@ export function SetupScreen({
       <div className="setup-workspace">
         <section className="setup-stage-panel" aria-label="Seat lineup">
           <div className="setup-stage-bar">
+            <label className="setup-player-count">
+              Game Variant
+              <select value={setup.variant ?? 'classic'} onChange={(event) => onVariantChange?.(event.target.value as GameVariant)}>
+                <option value="classic">Classic</option>
+                <option value="no_mercy">No Mercy</option>
+              </select>
+            </label>
             <label className="setup-player-count">
               Total Players
               <select value={setup.playerCount} onChange={(event) => onPlayerCountChange(Number(event.target.value))}>
@@ -114,7 +132,7 @@ export function SetupScreen({
           </div>
         </section>
 
-        {allowCustomRules ? (
+        {allowCustomRules && setup.variant !== 'no_mercy' ? (
           <section className="settings-section setup-rules-panel" aria-label="Custom rule options">
             <p className="setup-stage-label">House Rules</p>
             <h3>Dial the pace without changing the core flow.</h3>
@@ -158,7 +176,7 @@ export function SetupScreen({
       <div className="setup-launch-bar">
         <div className="setup-launch-copy">
           <p className="setup-stage-label">Ready to deal</p>
-          <p>{setup.playerCount} seats are staged for a {setup.customRules.winCompleteSets}-set match.</p>
+          <p>{setup.playerCount} seats are staged for a {setup.variant === 'no_mercy' ? 'No Mercy' : `${setup.customRules.winCompleteSets}-set`} match.</p>
         </div>
         <div className="actions setup-footer-actions">
           <button onClick={onStartMatch}>Start Match</button>

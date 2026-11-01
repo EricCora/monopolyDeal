@@ -24,6 +24,7 @@ import {
   sendRoomChat,
   sendRoomReaction,
   setRoomPreset,
+  setRoomVariant,
   setRoomTyping,
   setRoomReady,
   startRoom,
@@ -56,6 +57,7 @@ import {
   isNonEmptyTrimmedString,
   isOptionalFiniteNumber,
   isOptionalNonNegativeInteger,
+  isValidGameVariant,
   isValidMultiplayerAction,
   optionalTrimmedString,
 } from './validation.ts';
@@ -612,6 +614,16 @@ function registerSocketCommands(socket: Socket): void {
     return { ok: true };
   });
 
+  registerSocketCommand(socket, 'mp:cmd:variant', (room, binding, payload) => {
+    if (!isValidGameVariant(payload?.variant)) {
+      throw new Error('invalid_payload');
+    }
+    setRoomVariant(room, binding.seatId, binding.sessionToken, payload.variant, payload?.expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'variant_changed');
+    return { ok: true };
+  });
+
   registerSocketCommand(socket, 'mp:cmd:rematch', (room, binding, payload) => {
     const previousRuntimeState = room.roomRuntimeState;
     rematchRoom(room, binding.seatId, binding.sessionToken, payload?.expectedRevision);
@@ -958,7 +970,7 @@ const httpServer = createServer(async (req, res) => {
     }
 
     const match = path.match(
-      /^\/api\/multiplayer\/rooms\/([^/]+)(?:\/(join|reconnect|start|preset|rematch|action|leave|state|pause|resume|undo|reset-turn|checkpoints|events|ready|reaction|chat|typing))?(?:\/(save|load|delete))?$/,
+      /^\/api\/multiplayer\/rooms\/([^/]+)(?:\/(join|reconnect|start|preset|variant|rematch|action|leave|state|pause|resume|undo|reset-turn|checkpoints|events|ready|reaction|chat|typing))?(?:\/(save|load|delete))?$/,
     );
     if (!match) {
       writeJson(res, 404, { error: 'not_found' });
@@ -1139,6 +1151,7 @@ const httpServer = createServer(async (req, res) => {
       checkpointId?: unknown;
       expectedRevision?: unknown;
       presetId?: unknown;
+      variant?: unknown;
       ready?: unknown;
       reaction?: unknown;
       text?: unknown;
@@ -1199,6 +1212,18 @@ const httpServer = createServer(async (req, res) => {
       setRoomPreset(room, playerId, sessionToken, presetId as MultiplayerSessionPresetId, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'preset_changed');
+      writeJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (operation === 'variant') {
+      if (!isValidGameVariant(payload.variant)) {
+        writeJson(res, 400, { error: 'invalid_payload' });
+        return;
+      }
+      setRoomVariant(room, playerId, sessionToken, payload.variant, expectedRevision);
+      snapshotAll();
+      broadcastRoomEvent(room, 'variant_changed');
       writeJson(res, 200, { ok: true });
       return;
     }

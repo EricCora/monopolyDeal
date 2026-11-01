@@ -223,6 +223,29 @@ function pendingRequestBanner(game: GameState, playerId: string): PendingRequest
     };
   }
 
+  if (pending.kind === 'debt_card' && pending.payload.creditorPlayerId === playerId) {
+    return {
+      title: 'Debt Card Received',
+      detail: 'Resolve the received card into your Bank, collection, or immediate action before the debtor continues.',
+      tone: 'selection',
+    };
+  }
+
+  if (pending.kind === 'no_mercy') {
+    const req = pending.payload;
+    const actorId = req.step === 'heist_pick' || req.step === 'market_crash_pick' || req.step === 'tough_luck_choice'
+      ? req.sourcePlayerId : req.targetPlayerId;
+    if (actorId === playerId) {
+      return {
+        title: 'No Mercy Selection',
+        detail: req.step?.endsWith('_distribute')
+          ? 'Choose which player receives the next redistributed card.'
+          : 'Resolve the highlighted No Mercy effect to continue.',
+        tone: 'selection',
+      };
+    }
+  }
+
   return null;
 }
 
@@ -294,6 +317,7 @@ function promptKindLabel(kind: TurnPrompt['kind']): string {
   if (kind === 'response') return 'Response Step';
   if (kind === 'payment') return 'Payment Step';
   if (kind === 'selection') return 'Selection Step';
+  if (kind === 'debt') return 'Debt Repayment';
   return 'Discard Step';
 }
 
@@ -303,6 +327,7 @@ function promptSpotlightLabel(kind: TurnPrompt['kind']): string {
   if (kind === 'response') return 'Resolve the interrupt window';
   if (kind === 'payment') return 'Pay with bank or property cards';
   if (kind === 'selection') return 'Choose a valid target on the table';
+  if (kind === 'debt') return 'Repay outstanding debt before playing';
   return 'Discard down before passing the turn';
 }
 
@@ -312,6 +337,7 @@ function passShieldNote(kind: TurnPrompt['kind'], playerName: string): string {
   if (kind === 'response') return `${playerName} needs to see the table privately before resolving the counter window.`;
   if (kind === 'payment') return `${playerName} needs a private look at their bank and properties before settling payment.`;
   if (kind === 'selection') return `${playerName} needs a private look before choosing the highlighted target.`;
+  if (kind === 'debt') return `${playerName} must choose a card for each outstanding debt.`;
   return `Pass the device before revealing so ${playerName} can discard privately and finish the turn.`;
 }
 
@@ -321,6 +347,7 @@ function tableSurfaceFocusLabel(kind: TurnPrompt['kind']): string {
   if (kind === 'response') return 'Interrupt Window';
   if (kind === 'payment') return 'Settlement Pressure';
   if (kind === 'selection') return 'Target Lock';
+  if (kind === 'debt') return 'Debt Ledger';
   return 'Hand Cleanup';
 }
 
@@ -330,6 +357,7 @@ function tableSurfaceFocusNote(kind: TurnPrompt['kind']): string {
   if (kind === 'response') return 'An interrupt is on the stack. Resolve the counter window before the turn resumes.';
   if (kind === 'payment') return 'Bank and property lanes now carry the decision weight while the payment total updates.';
   if (kind === 'selection') return 'Highlighted lanes and cards are the valid targets until this effect resolves.';
+  if (kind === 'debt') return 'Resolve each debt chip before normal card plays begin.';
   return 'Trim the hand back to seven cards so the table can hand control to the next seat.';
 }
 
@@ -348,7 +376,9 @@ function pendingKindLabel(pending: GameState['pending']): string {
   if (pending.kind === 'rent') return 'Rent Target';
   if (pending.kind === 'sly_deal') return 'Sly Deal';
   if (pending.kind === 'forced_deal') return 'Forced Deal';
-  return 'Deal Breaker';
+  if (pending.kind === 'deal_breaker') return 'Deal Breaker';
+  if (pending.kind === 'debt_card') return 'Debt Repayment';
+  return 'No Mercy';
 }
 
 function eventTypeLabel(type: string): string {
@@ -398,6 +428,7 @@ interface DiscardPileCardProps {
   surfaceRef?: (node: HTMLElement | null) => void;
   highlighted?: boolean;
   highlightTone?: 'discard' | 'bank' | 'property' | 'wild' | null;
+  gameVariant?: GameState['variant'];
 }
 
 function DiscardPileCard({
@@ -407,6 +438,7 @@ function DiscardPileCard({
   surfaceRef,
   highlighted = false,
   highlightTone = null,
+  gameVariant = 'classic',
 }: DiscardPileCardProps) {
   const [discardBrowserOpen, setDiscardBrowserOpen] = useState(false);
   const hasCards = discardCount > 0;
@@ -439,7 +471,7 @@ function DiscardPileCard({
               className={`table-discard-preview-card ${index === 0 ? 'is-top' : 'is-back'}`}
               style={{ ['--discard-index' as string]: String(index) }}
             >
-              <CardView cardId={cardId} size="sm" faceUp={index === 0} />
+              <CardView cardId={cardId} size="sm" faceUp={index === 0} gameVariant={gameVariant} />
             </div>
           ))
         ) : (
@@ -452,7 +484,7 @@ function DiscardPileCard({
           <div className="table-discard-browser-scroll">
             {discardBrowserCardIds.map((cardId, index) => (
               <div key={`discard-browser-${cardId}-${index}`} className="table-discard-browser-item">
-                <CardView cardId={cardId} size="sm" />
+              <CardView cardId={cardId} size="sm" gameVariant={gameVariant} />
                 <span className="table-discard-browser-index">#{index + 1}</span>
               </div>
             ))}
@@ -1223,7 +1255,7 @@ export function GameTableScreen({
                     {stealAlert.sourceName} played {stealModeLabel(stealAlert.mode)} on {stealAlert.targetName}
                   </p>
                   <p className="table-steal-banner-detail">
-                    Moved cards: {stealAlert.cardIds.slice(0, 3).map(getCardDisplayName).join(', ')}
+                    Moved cards: {stealAlert.cardIds.slice(0, 3).map((cardId) => getCardDisplayName(cardId, game.variant ?? 'classic')).join(', ')}
                     {stealAlert.cardIds.length > 3 ? ` +${stealAlert.cardIds.length - 3} more` : ''}
                   </p>
                 </section>
@@ -1350,6 +1382,7 @@ export function GameTableScreen({
                 }}
                 highlighted={transitionTargetKey === 'discard'}
                 highlightTone={transitionTargetKey === 'discard' ? transitionTargetTone : null}
+                gameVariant={game.variant}
               />
             </div>
 
@@ -1467,10 +1500,15 @@ export function GameTableScreen({
                   <header>
                     <div className={seatToplineClassName}>
                       <p className="player-seat-eyebrow">{seatEyebrow}</p>
-                      <p className="player-seat-metrics">{player.hand.length} hand · {player.bank.length} bank · {getSetCompletionCount(player)} sets</p>
+                      <p className="player-seat-metrics">{player.hand.length} hand · {player.bank.length} bank · {getSetCompletionCount(player, game.variant ?? 'classic')} sets</p>
                     </div>
                     <h3>{player.name}</h3>
-                    <p>{getSetCompletionCount(player)} complete sets</p>
+                    <p>{getSetCompletionCount(player, game.variant ?? 'classic')} complete sets</p>
+                    {game.variant === 'no_mercy' ? (
+                      <p className="player-debt-summary" aria-label={`${player.name} debt chips`}>
+                        Debt chips: {player.debts?.length ?? player.debtsOwed?.length ?? 0} owed · {player.debtChipsHeld?.length ?? player.debtChips?.length ?? 0} held · {player.debtChipsRemaining ?? 0} available
+                      </p>
+                    ) : null}
                     <p className="player-status-summary">{playerStatusSummary}</p>
                     {playerStatusTags.length > 0 ? (
                       <ul className="player-status-tags" aria-label={`${player.name} status`}>
@@ -1565,7 +1603,7 @@ export function GameTableScreen({
                                     No payable cards available. Confirm shortfall payment to continue.
                                   </p>
                                 ) : selectedPaymentCards.length > 0 ? (
-                                  <p className="payment-selected">Selected: {selectedPaymentCards.map(getCardDisplayName).join(', ')}</p>
+                                  <p className="payment-selected">Selected: {selectedPaymentCards.map((cardId) => getCardDisplayName(cardId, game.variant ?? 'classic')).join(', ')}</p>
                                 ) : (
                                   <p className="payment-selected">Click cards in {player.name}&apos;s bank/properties to pay.</p>
                                 )}
@@ -1631,6 +1669,7 @@ export function GameTableScreen({
                             onCardClick={onCardClick}
                             interactive={handInteractive}
                             fitMode={handFitMode}
+                            gameVariant={game.variant}
                           />
                         ) : (
                           <p>Empty</p>
@@ -1666,6 +1705,7 @@ export function GameTableScreen({
                             playable={paymentSelectionEnabled}
                             selected={selectedPaymentCards.includes(cardId)}
                             onClick={() => onPaymentCardToggle(cardId)}
+                            gameVariant={game.variant}
                           />
                         ))
                       ) : (
@@ -1732,13 +1772,13 @@ export function GameTableScreen({
                                 {player.properties[color].length === 0 && laneIsMoveTarget ? (
                                   <p className="property-lane-empty">Empty lane</p>
                                 ) : null}
-                                {propertySets(player, color).flatMap((set, setIndex) => set.entries.map((entry) => {
+                                {propertySets(player, color, game.variant ?? 'classic').flatMap((set, setIndex) => set.entries.map((entry) => {
                                   const selectionCardPlayable = selectionCardPickingEnabled && (
                                     selectionPendingKind === 'deal_breaker'
                                       ? legalActions.some((item) => item.action.type === 'deal_breaker_pick'
                                         && item.action.color === color
                                         && (!item.action.setId || item.action.setId === set.setId))
-                                        && isCompletePropertySet(set.entries, color)
+                                        && isCompletePropertySet(set.entries, color, game.variant ?? 'classic')
                                       : selectionTargetCardIds.has(entry.cardId)
                                   );
                                   const moveWildSourcePlayable = canDirectWildMove
@@ -1769,7 +1809,8 @@ export function GameTableScreen({
                                             setSelectedMoveWildCardId((prev) => (prev === entry.cardId ? null : entry.cardId));
                                           }
                                         }}
-                                        annotation={`Set ${setIndex + 1} · ${isCompletePropertySet(set.entries, color) ? 'Complete' : 'Incomplete'}`}
+                                        gameVariant={game.variant}
+                                        annotation={`Set ${setIndex + 1} · ${isCompletePropertySet(set.entries, color, game.variant ?? 'classic') ? 'Complete' : 'Incomplete'}${entry.attachedToCardId ? ' · Shack attached' : ''}`}
                                       />
                                     </div>
                                   );

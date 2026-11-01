@@ -1,4 +1,4 @@
-import type { Action, GameState, LegalAction, PlayerId } from '../../src/engine';
+import type { Action, GameState, GameVariant, LegalAction, PlayerId } from '../../src/engine';
 import type { MultiplayerSessionPresetId } from '../../src/ui/experience';
 
 export type MultiplayerRoomStatus = 'lobby' | 'active' | 'finished';
@@ -46,6 +46,7 @@ export interface MultiplayerRoomView {
   started: boolean;
   winnerId?: PlayerId;
   presetId: MultiplayerSessionPresetId;
+  variant?: GameVariant;
   hostPlayerId: PlayerId;
   yourPlayerId: PlayerId;
   players: MultiplayerPlayerSummary[];
@@ -137,6 +138,10 @@ export interface SetRoomPresetRequest extends ReconnectRoomRequest {
   presetId: MultiplayerSessionPresetId;
 }
 
+export interface SetRoomVariantRequest extends ReconnectRoomRequest {
+  variant: GameVariant;
+}
+
 export type RematchRoomRequest = ReconnectRoomRequest;
 
 export interface ApplyRoomActionRequest extends ReconnectRoomRequest {
@@ -212,6 +217,7 @@ export type MultiplayerSocketCommandName =
   | 'mp:cmd:state'
   | 'mp:cmd:start'
   | 'mp:cmd:preset'
+  | 'mp:cmd:variant'
   | 'mp:cmd:rematch'
   | 'mp:cmd:action'
   | 'mp:cmd:leave'
@@ -261,6 +267,7 @@ export interface MultiplayerSocketCommandPayloadMap {
   'mp:cmd:state': { expectedRevision?: number };
   'mp:cmd:start': { seed?: number; checkpointId?: string; expectedRevision?: number };
   'mp:cmd:preset': { presetId: MultiplayerSessionPresetId; expectedRevision?: number };
+  'mp:cmd:variant': { variant: GameVariant; expectedRevision?: number };
   'mp:cmd:rematch': { expectedRevision?: number };
   'mp:cmd:action': { action: Action; expectedRevision?: number; clientStateVersion?: number; actionId?: string };
   'mp:cmd:leave': { expectedRevision?: number };
@@ -282,6 +289,7 @@ export interface MultiplayerSocketCommandResponseMap {
   'mp:cmd:state': MultiplayerRoomView;
   'mp:cmd:start': { ok: true };
   'mp:cmd:preset': { ok: true };
+  'mp:cmd:variant': { ok: true };
   'mp:cmd:rematch': { ok: true };
   'mp:cmd:action': { ok: true };
   'mp:cmd:leave': { ok: true };

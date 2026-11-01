@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getCardVisualModel } from '../cards';
+import type { GameVariant } from '../../cards/catalog';
 
 type CardSize = 'sm' | 'md' | 'lg';
 type CardVariant = 'standard' | 'premium';
@@ -19,6 +20,7 @@ interface CardViewProps {
   selected?: boolean;
   annotation?: string;
   onClick?: () => void;
+  gameVariant?: GameVariant;
 }
 
 export function CardView({
@@ -34,6 +36,7 @@ export function CardView({
   selected = false,
   annotation,
   onClick,
+  gameVariant = 'classic',
 }: CardViewProps) {
   if (!faceUp) {
     return (
@@ -49,7 +52,7 @@ export function CardView({
     );
   }
 
-  const model = getCardVisualModel(cardId);
+  const model = getCardVisualModel(cardId, gameVariant);
   const style: CSSProperties = {
     ['--card-accent' as string]: model.accent,
     ['--card-accent-split' as string]: model.splitAccent ?? model.accent,
