@@ -60,3 +60,12 @@ A hand, a board and opponents don't fit a phone's landscape height at a readable
 
 ## 2026-11-01: iOS build output stays out of the repo
 The project sits on a Desktop that syncs to iCloud, which uploads build folders and offloads files until they're read. `npm run ios:verify` builds in `~/Library/Caches/MonopolyDealBuild`.
+
+## 2026-11-01: A hard bot on iOS can move Wilds at most twice per turn
+Moving a Wild costs no play. The search sometimes keeps rating it highest, which freezes the game forever (seed 65, three-player No Mercy, turn 32). The web hard bot has the same bug and freezes at the same step; that fix hasn't been made.
+
+## 2026-11-01: The hard bot's search stops after 2.5 seconds on iOS
+A five-player Forced Deal can offer over 200 moves, which took up to 6.5 seconds on a Mac. Under the limit, moves are tried in heuristic order, so running out of time only drops the weakest. Games are no longer strictly repeatable move for move, which is acceptable because the hard bot isn't compared with the web bot.
+
+## 2026-11-01: A disconnected seat reclaims itself
+The server answers `invalid_session` both for a bad token and for a seat it marked disconnected, so the app tries to reconnect before treating the seat as lost.

@@ -147,6 +147,22 @@ public enum MonteCarlo {
         return evaluate(state, root)
     }
 
+    /// How many times a hard bot may reposition Wilds in one turn.
+    private static let maxWildMovesPerTurn = 2
+
+    /// Moving a Wild costs no play, so a bot whose simulations keep rating it highest would
+    /// never end its turn and the game would freeze. Past the limit, it has to do something else.
+    private static func allowedMoves(_ state: GameState, _ legalActions: [LegalAction]) -> [LegalAction] {
+        var wildMoves = 0
+        for event in state.history.reversed() {
+            if event.type == "draw" || event.type == "turn_passed" || event.type == "go_again" { break }
+            if event.type == "wild_move" { wildMoves += 1 }
+        }
+        guard wildMoves >= maxWildMovesPerTurn else { return legalActions }
+        let others = legalActions.filter { $0.action.type != .move_wild }
+        return others.isEmpty ? legalActions : others
+    }
+
     /// `timeBudget` limits how long the search runs. A Forced Deal can offer over 200 moves,
     /// so under a budget the most promising moves go first, and running out of time only
     /// drops the weakest. At least one move is always evaluated.
@@ -156,10 +172,10 @@ public enum MonteCarlo {
         var best: ScoredAction?
         let clock = ContinuousClock()
         let deadline = timeBudget.map { clock.now.advanced(by: $0) }
-        var candidates = legalActions
+        var candidates = allowedMoves(state, legalActions)
         if deadline != nil {
-            let byAction = Dictionary(legalActions.map { ($0.action, $0) }, uniquingKeysWith: { first, _ in first })
-            candidates = Heuristic.rank(state, actorId: actorId, legalActions: legalActions).compactMap { byAction[$0.action] }
+            let byAction = Dictionary(candidates.map { ($0.action, $0) }, uniquingKeysWith: { first, _ in first })
+            candidates = Heuristic.rank(state, actorId: actorId, legalActions: candidates).compactMap { byAction[$0.action] }
         }
         for legal in candidates {
             if let deadline, best != nil, clock.now >= deadline { break }
