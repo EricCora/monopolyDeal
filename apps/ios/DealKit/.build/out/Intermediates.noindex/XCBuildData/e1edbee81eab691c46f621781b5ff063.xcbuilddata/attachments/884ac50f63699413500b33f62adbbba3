@@ -1,0 +1,4 @@
+module DealAI {
+header "DealAI-Swift.h"
+export *
+}

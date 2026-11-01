@@ -1,0 +1,12 @@
+{
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Sources/DealEngine/Apply.swift" : {
+    "abi-baseline-json" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine.abi.json",
+    "const-values" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary.swiftconstvalues",
+    "dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary.d",
+    "diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary.dia",
+    "objc-header" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine-Swift.h",
+    "swiftdoc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine.swiftdoc",
+    "swiftmodule" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine.swiftmodule",
+    "swiftsourceinfo" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine.swiftsourceinfo"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "" : {
+    "const-values" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealOnline-t.build/Objects-normal/arm64/DealOnline-primary.swiftconstvalues",
+    "dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealOnline-t.build/Objects-normal/arm64/DealOnline-primary.d",
+    "diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealOnline-t.build/Objects-normal/arm64/DealOnline-primary.dia",
+    "emit-module-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealOnline-t.build/Objects-normal/arm64/DealOnline-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealOnline-t.build/Objects-normal/arm64/DealOnline-primary-emit-module.dia",
+    "pch" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealOnline-t.build/Objects-normal/arm64/DealOnline-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealOnline-t.build/Objects-normal/arm64/DealOnline-primary.swiftdeps"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Sources/DealOnline/Stub.swift" : {
+    "index-unit-output-path" : "/DealKit.build/Release/DealOnline-t.build/Objects-normal/arm64/Stub.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealOnline-t.build/Objects-normal/arm64/Stub.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealOnline-t.build/Objects-normal/arm64/Stub.o"
+  }
+}

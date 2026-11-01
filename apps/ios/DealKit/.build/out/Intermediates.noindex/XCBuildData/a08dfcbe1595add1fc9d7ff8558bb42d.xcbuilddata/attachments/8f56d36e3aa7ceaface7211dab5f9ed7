@@ -1,0 +1,4 @@
+module DealEngine {
+header "DealEngine-Swift.h"
+export *
+}

@@ -1,0 +1,31 @@
+{
+  "" : {
+    "const-values" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests-primary.swiftconstvalues",
+    "dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests-primary.d",
+    "diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests-primary.dia",
+    "emit-module-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests-primary-emit-module.dia",
+    "pch" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests-primary.swiftdeps"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/DerivedSources/resource_bundle_accessor.swift" : {
+    "index-unit-output-path" : "/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/resource_bundle_accessor.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/resource_bundle_accessor.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/resource_bundle_accessor.o"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/DerivedSources/test_entry_point.swift" : {
+    "index-unit-output-path" : "/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/test_entry_point.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/test_entry_point.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/test_entry_point.o"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Tests/DealKitTests/EngineConformanceTests.swift" : {
+    "index-unit-output-path" : "/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/EngineConformanceTests.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/EngineConformanceTests.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/EngineConformanceTests.o"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Tests/DealKitTests/EngineFuzzTests.swift" : {
+    "index-unit-output-path" : "/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/EngineFuzzTests.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/EngineFuzzTests.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/EngineFuzzTests.o"
+  }
+}

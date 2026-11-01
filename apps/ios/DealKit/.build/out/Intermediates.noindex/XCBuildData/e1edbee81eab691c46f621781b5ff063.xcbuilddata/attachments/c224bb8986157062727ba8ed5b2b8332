@@ -1,0 +1,16 @@
+{
+  "" : {
+    "const-values" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealAI-t.build/Objects-normal/arm64/DealAI-primary.swiftconstvalues",
+    "dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealAI-t.build/Objects-normal/arm64/DealAI-primary.d",
+    "diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealAI-t.build/Objects-normal/arm64/DealAI-primary.dia",
+    "emit-module-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealAI-t.build/Objects-normal/arm64/DealAI-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealAI-t.build/Objects-normal/arm64/DealAI-primary-emit-module.dia",
+    "pch" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealAI-t.build/Objects-normal/arm64/DealAI-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealAI-t.build/Objects-normal/arm64/DealAI-primary.swiftdeps"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Sources/DealAI/Heuristic.swift" : {
+    "index-unit-output-path" : "/DealKit.build/Release/DealAI-t.build/Objects-normal/arm64/Heuristic.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealAI-t.build/Objects-normal/arm64/Heuristic.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealAI-t.build/Objects-normal/arm64/Heuristic.o"
+  }
+}

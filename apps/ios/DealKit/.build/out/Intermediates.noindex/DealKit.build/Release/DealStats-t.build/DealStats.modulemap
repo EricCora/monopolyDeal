@@ -1,0 +1,4 @@
+module DealStats {
+header "DealStats-Swift.h"
+export *
+}

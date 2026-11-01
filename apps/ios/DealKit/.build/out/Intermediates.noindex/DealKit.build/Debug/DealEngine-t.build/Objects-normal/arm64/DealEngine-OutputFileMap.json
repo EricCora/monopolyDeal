@@ -1,0 +1,59 @@
+{
+  "" : {
+    "diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary.dia",
+    "emit-module-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary-emit-module.dia",
+    "pch" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary.swiftdeps"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Sources/DealEngine/Apply.swift" : {
+    "const-values" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Apply.swiftconstvalues",
+    "dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Apply.d",
+    "diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Apply.dia",
+    "index-unit-output-path" : "/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Apply.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Apply.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Apply.o",
+    "swift-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Apply.swiftdeps",
+    "swiftmodule" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Apply~partial.swiftmodule"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Sources/DealEngine/Catalog.swift" : {
+    "const-values" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Catalog.swiftconstvalues",
+    "dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Catalog.d",
+    "diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Catalog.dia",
+    "index-unit-output-path" : "/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Catalog.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Catalog.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Catalog.o",
+    "swift-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Catalog.swiftdeps",
+    "swiftmodule" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Catalog~partial.swiftmodule"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Sources/DealEngine/Core.swift" : {
+    "const-values" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Core.swiftconstvalues",
+    "dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Core.d",
+    "diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Core.dia",
+    "index-unit-output-path" : "/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Core.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Core.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Core.o",
+    "swift-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Core.swiftdeps",
+    "swiftmodule" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Core~partial.swiftmodule"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Sources/DealEngine/Legal.swift" : {
+    "const-values" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Legal.swiftconstvalues",
+    "dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Legal.d",
+    "diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Legal.dia",
+    "index-unit-output-path" : "/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Legal.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Legal.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Legal.o",
+    "swift-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Legal.swiftdeps",
+    "swiftmodule" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Legal~partial.swiftmodule"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Sources/DealEngine/Types.swift" : {
+    "const-values" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Types.swiftconstvalues",
+    "dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Types.d",
+    "diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Types.dia",
+    "index-unit-output-path" : "/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Types.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Types.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Types.o",
+    "swift-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Types.swiftdeps",
+    "swiftmodule" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Debug/DealEngine-t.build/Objects-normal/arm64/Types~partial.swiftmodule"
+  }
+}

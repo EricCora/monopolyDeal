@@ -1,0 +1,3466 @@
+{
+ "samples": [
+  {
+   "name": "classic-opening",
+   "state": {
+    "version": 1,
+    "createdAt": 1793548798693,
+    "updatedAt": 1793548798693,
+    "deckVersion": "v1",
+    "variant": "classic",
+    "ruleset": {
+     "winCompleteSets": 3,
+     "maxHandAtEndTurn": 7,
+     "maxPlaysPerTurn": 3
+    },
+    "players": [
+     {
+      "id": "p1",
+      "name": "Ann",
+      "controller": "human",
+      "botDifficulty": "easy",
+      "hand": [
+       "money_1#1",
+       "dark_blue_1#2",
+       "pink_1#3",
+       "green_1#2",
+       "forced_deal#2",
+       "money_1#2"
+      ],
+      "bank": [
+       "pass_go#3"
+      ],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [],
+       "orange": [],
+       "red": [],
+       "yellow": [],
+       "green": [],
+       "dark_blue": [],
+       "railroad": [],
+       "utility": []
+      }
+     },
+     {
+      "id": "p2",
+      "name": "O'Brien",
+      "controller": "human",
+      "botDifficulty": "easy",
+      "hand": [
+       "pass_go#8",
+       "money_4#1",
+       "money_1#4",
+       "house#1",
+       "rent_red_yellow#2"
+      ],
+      "bank": [],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [],
+       "orange": [],
+       "red": [],
+       "yellow": [],
+       "green": [],
+       "dark_blue": [],
+       "railroad": [],
+       "utility": []
+      }
+     },
+     {
+      "id": "p3",
+      "name": "Bot",
+      "controller": "bot",
+      "botDifficulty": "hard",
+      "hand": [
+       "house#2",
+       "wild_red_yellow#1",
+       "utility_1#1",
+       "money_2#4",
+       "forced_deal#3"
+      ],
+      "bank": [],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [],
+       "orange": [],
+       "red": [],
+       "yellow": [],
+       "green": [],
+       "dark_blue": [],
+       "railroad": [],
+       "utility": []
+      }
+     }
+    ],
+    "drawPile": [
+     "pink_1#2",
+     "rent_color#3",
+     "wild_light_blue_railroad#1",
+     "double_rent#2",
+     "money_4#2",
+     "brown_1#1",
+     "wild_brown_light_blue#1",
+     "pass_go#9",
+     "railroad_1#1",
+     "its_my_birthday#2",
+     "wild_all#1",
+     "orange_1#2",
+     "just_say_no#1",
+     "just_say_no#3",
+     "rent_pink_orange#1",
+     "rent_green_dark_blue#1",
+     "money_3#1",
+     "wild_railroad_utility#1",
+     "deal_breaker#2",
+     "double_rent#1",
+     "green_1#3",
+     "pass_go#2",
+     "rent_railroad_utility#2",
+     "its_my_birthday#3",
+     "sly_deal#3",
+     "orange_1#3",
+     "yellow_1#3",
+     "rent_red_yellow#1",
+     "wild_pink_orange#1",
+     "green_1#1",
+     "money_3#2",
+     "yellow_1#2",
+     "wild_pink_orange#2",
+     "orange_1#1",
+     "debt_collector#1",
+     "pass_go#10",
+     "forced_deal#1",
+     "railroad_1#4",
+     "pass_go#5",
+     "red_1#1",
+     "deal_breaker#1",
+     "dark_blue_1#1",
+     "just_say_no#2",
+     "light_blue_1#3",
+     "wild_red_yellow#2",
+     "red_1#2",
+     "money_2#3",
+     "yellow_1#1",
+     "red_1#3",
+     "rent_green_dark_blue#2",
+     "pink_1#1",
+     "money_1#5",
+     "railroad_1#2",
+     "rent_brown_light_blue#2",
+     "light_blue_1#2",
+     "rent_color#2",
+     "debt_collector#3",
+     "rent_railroad_utility#1",
+     "hotel#2",
+     "sly_deal#1",
+     "its_my_birthday#1",
+     "pass_go#1",
+     "money_4#3",
+     "rent_brown_light_blue#1",
+     "hotel#1",
+     "wild_blue_green#1",
+     "money_2#1",
+     "house#3",
+     "money_5#2",
+     "pass_go#4",
+     "rent_color#1",
+     "sly_deal#2",
+     "money_2#5",
+     "wild_all#2",
+     "debt_collector#2",
+     "wild_railroad_green#1",
+     "money_2#2",
+     "money_10#1",
+     "rent_pink_orange#2",
+     "light_blue_1#1",
+     "utility_1#2",
+     "railroad_1#3",
+     "pass_go#7",
+     "pass_go#6",
+     "money_1#6",
+     "brown_1#2",
+     "money_5#1",
+     "money_3#3",
+     "money_1#3"
+    ],
+    "discardPile": [],
+    "currentPlayerIndex": 0,
+    "turn": {
+     "phase": "action",
+     "playsUsed": 1,
+     "doubleRentMultiplier": 1,
+     "endingTurn": false
+    },
+    "pending": null,
+    "history": [
+     {
+      "timestamp": 1793548798693,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798693,
+      "type": "bank",
+      "message": "Ann banked Pass Go."
+     }
+    ],
+    "turnCount": 1
+   },
+   "legalByPlayer": [
+    "[{\"action\":{\"cardId\":\"money_1#1\",\"playerId\":\"p1\",\"type\":\"play_to_bank\"},\"label\":\"Bank M1\"},{\"action\":{\"cardId\":\"dark_blue_1#2\",\"color\":\"dark_blue\",\"playerId\":\"p1\",\"type\":\"play_property\"},\"label\":\"Play Dark Blue to Dark Blue\"},{\"action\":{\"cardId\":\"pink_1#3\",\"color\":\"pink\",\"playerId\":\"p1\",\"type\":\"play_property\"},\"label\":\"Play Pink to Pink\"},{\"action\":{\"cardId\":\"green_1#2\",\"color\":\"green\",\"playerId\":\"p1\",\"type\":\"play_property\"},\"label\":\"Play Green to Green\"},{\"action\":{\"cardId\":\"forced_deal#2\",\"playerId\":\"p1\",\"type\":\"play_to_bank\"},\"label\":\"Bank Forced Deal\"},{\"action\":{\"cardId\":\"money_1#2\",\"playerId\":\"p1\",\"type\":\"play_to_bank\"},\"label\":\"Bank M1\"},{\"action\":{\"playerId\":\"p1\",\"type\":\"pass_turn\"},\"label\":\"Pass turn\"}]",
+    "[]",
+    "[]"
+   ]
+  },
+  {
+   "name": "classic-midgame",
+   "state": {
+    "version": 1,
+    "createdAt": 1793548798693,
+    "updatedAt": 1793548798698,
+    "deckVersion": "v1",
+    "variant": "classic",
+    "ruleset": {
+     "winCompleteSets": 3,
+     "maxHandAtEndTurn": 7,
+     "maxPlaysPerTurn": 3
+    },
+    "players": [
+     {
+      "id": "p1",
+      "name": "Ann",
+      "controller": "human",
+      "botDifficulty": "easy",
+      "hand": [
+       "rent_railroad_utility#2"
+      ],
+      "bank": [
+       "money_1#1",
+       "money_2#3",
+       "forced_deal#2",
+       "pass_go#7",
+       "its_my_birthday#3",
+       "rent_railroad_utility#1",
+       "money_10#1",
+       "hotel#1"
+      ],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [],
+       "orange": [
+        {
+         "cardId": "orange_1#3",
+         "assignedColor": "orange",
+         "setId": "orange:auto-1"
+        }
+       ],
+       "red": [],
+       "yellow": [],
+       "green": [],
+       "dark_blue": [],
+       "railroad": [
+        {
+         "cardId": "wild_railroad_green#1",
+         "assignedColor": "railroad",
+         "setId": "railroad:auto-1"
+        }
+       ],
+       "utility": []
+      }
+     },
+     {
+      "id": "p2",
+      "name": "O'Brien",
+      "controller": "human",
+      "botDifficulty": "easy",
+      "hand": [
+       "just_say_no#3"
+      ],
+      "bank": [
+       "pass_go#2",
+       "money_1#5",
+       "house#3",
+       "house#2",
+       "house#1",
+       "pass_go#5",
+       "pass_go#3",
+       "money_4#1",
+       "rent_red_yellow#1"
+      ],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [
+        {
+         "cardId": "pink_1#1",
+         "assignedColor": "pink",
+         "setId": "pink:auto-1"
+        }
+       ],
+       "orange": [],
+       "red": [],
+       "yellow": [],
+       "green": [
+        {
+         "cardId": "green_1#1",
+         "assignedColor": "green",
+         "setId": "green:auto-1"
+        }
+       ],
+       "dark_blue": [],
+       "railroad": [
+        {
+         "cardId": "railroad_1#3",
+         "assignedColor": "railroad",
+         "setId": "railroad:auto-1"
+        }
+       ],
+       "utility": []
+      }
+     },
+     {
+      "id": "p3",
+      "name": "Bot",
+      "controller": "bot",
+      "botDifficulty": "hard",
+      "hand": [
+       "yellow_1#2",
+       "rent_pink_orange#1",
+       "rent_brown_light_blue#1",
+       "red_1#2"
+      ],
+      "bank": [
+       "sly_deal#1",
+       "sly_deal#2",
+       "money_1#6",
+       "rent_green_dark_blue#1",
+       "forced_deal#3",
+       "money_3#1",
+       "hotel#2"
+      ],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [],
+       "orange": [],
+       "red": [],
+       "yellow": [],
+       "green": [],
+       "dark_blue": [],
+       "railroad": [
+        {
+         "cardId": "railroad_1#1",
+         "assignedColor": "railroad",
+         "setId": "railroad:auto-1"
+        }
+       ],
+       "utility": [
+        {
+         "cardId": "wild_all#1",
+         "assignedColor": "utility",
+         "setId": "utility:auto-1"
+        }
+       ]
+      }
+     }
+    ],
+    "drawPile": [
+     "utility_1#1",
+     "red_1#1",
+     "railroad_1#2",
+     "rent_green_dark_blue#2",
+     "money_4#3",
+     "pass_go#4",
+     "wild_blue_green#1",
+     "money_3#3",
+     "rent_color#1",
+     "light_blue_1#3",
+     "rent_pink_orange#2",
+     "green_1#2",
+     "orange_1#2",
+     "brown_1#2",
+     "deal_breaker#1",
+     "its_my_birthday#2",
+     "rent_color#2",
+     "money_5#1",
+     "yellow_1#3",
+     "wild_light_blue_railroad#1",
+     "double_rent#1",
+     "sly_deal#3",
+     "wild_brown_light_blue#1",
+     "money_2#2",
+     "wild_pink_orange#2",
+     "wild_railroad_utility#1",
+     "utility_1#2",
+     "red_1#3",
+     "wild_red_yellow#2",
+     "light_blue_1#1",
+     "green_1#3",
+     "money_1#4",
+     "money_2#1",
+     "pink_1#3",
+     "money_1#3",
+     "money_5#2",
+     "brown_1#1",
+     "wild_all#2",
+     "debt_collector#1",
+     "light_blue_1#2",
+     "pass_go#1",
+     "rent_red_yellow#2",
+     "double_rent#2",
+     "rent_brown_light_blue#2",
+     "pink_1#2",
+     "pass_go#8",
+     "debt_collector#2",
+     "its_my_birthday#1",
+     "pass_go#6",
+     "money_2#5",
+     "deal_breaker#2",
+     "orange_1#1",
+     "dark_blue_1#1",
+     "wild_red_yellow#1",
+     "money_1#2",
+     "just_say_no#2",
+     "money_2#4",
+     "pass_go#10",
+     "yellow_1#1",
+     "money_4#2",
+     "rent_color#3",
+     "forced_deal#1",
+     "wild_pink_orange#1",
+     "just_say_no#1",
+     "dark_blue_1#2",
+     "money_3#2",
+     "railroad_1#4"
+    ],
+    "discardPile": [
+     "debt_collector#3",
+     "pass_go#9"
+    ],
+    "currentPlayerIndex": 2,
+    "turn": {
+     "phase": "draw",
+     "playsUsed": 0,
+     "doubleRentMultiplier": 1,
+     "endingTurn": false
+    },
+    "pending": null,
+    "history": [
+     {
+      "timestamp": 1793548798693,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798693,
+      "type": "bank",
+      "message": "Ann banked Sly Deal."
+     },
+     {
+      "timestamp": 1793548798693,
+      "type": "bank",
+      "message": "Ann banked Sly Deal."
+     },
+     {
+      "timestamp": 1793548798693,
+      "type": "bank",
+      "message": "Ann banked $1 Money."
+     },
+     {
+      "timestamp": 1793548798693,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798693,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798693,
+      "type": "property",
+      "message": "O'Brien placed Pink Property in Pink."
+     },
+     {
+      "timestamp": 1793548798693,
+      "type": "bank",
+      "message": "O'Brien banked Pass Go."
+     },
+     {
+      "timestamp": 1793548798693,
+      "type": "bank",
+      "message": "O'Brien banked $1 Money."
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "action",
+      "message": "Bot played Debt Collector on Ann."
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "pay",
+      "message": "Ann paid Bot $5 (Debt Collector)."
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "bank",
+      "message": "Bot banked $1 Money."
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "property",
+      "message": "Bot placed Railroad Property in Railroad."
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "bank",
+      "message": "Ann banked $2 Money."
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "bank",
+      "message": "Ann banked Forced Deal."
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "bank",
+      "message": "Ann banked Pass Go."
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798694,
+      "type": "bank",
+      "message": "O'Brien banked House."
+     },
+     {
+      "timestamp": 1793548798695,
+      "type": "property",
+      "message": "O'Brien placed Railroad Property in Railroad."
+     },
+     {
+      "timestamp": 1793548798695,
+      "type": "bank",
+      "message": "O'Brien banked House."
+     },
+     {
+      "timestamp": 1793548798695,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798695,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798695,
+      "type": "action",
+      "message": "Bot played Pass Go and drew 2.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "pass_go"
+      }
+     },
+     {
+      "timestamp": 1793548798695,
+      "type": "bank",
+      "message": "Bot banked Rent Green/Dark Blue."
+     },
+     {
+      "timestamp": 1793548798695,
+      "type": "bank",
+      "message": "Bot banked Forced Deal."
+     },
+     {
+      "timestamp": 1793548798695,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798696,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798696,
+      "type": "bank",
+      "message": "Ann banked It's My Birthday."
+     },
+     {
+      "timestamp": 1793548798696,
+      "type": "bank",
+      "message": "Ann banked Rent Railroad/Utility."
+     },
+     {
+      "timestamp": 1793548798696,
+      "type": "bank",
+      "message": "Ann banked $10 Money."
+     },
+     {
+      "timestamp": 1793548798696,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798696,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798696,
+      "type": "property",
+      "message": "O'Brien placed Green Property in Green."
+     },
+     {
+      "timestamp": 1793548798696,
+      "type": "bank",
+      "message": "O'Brien banked House."
+     },
+     {
+      "timestamp": 1793548798696,
+      "type": "bank",
+      "message": "O'Brien banked Pass Go."
+     },
+     {
+      "timestamp": 1793548798696,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798696,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798696,
+      "type": "bank",
+      "message": "Bot banked $3 Money."
+     },
+     {
+      "timestamp": 1793548798697,
+      "type": "property",
+      "message": "Bot placed Wild Card in Pink."
+     },
+     {
+      "timestamp": 1793548798697,
+      "type": "bank",
+      "message": "Bot banked Hotel."
+     },
+     {
+      "timestamp": 1793548798697,
+      "type": "wild_move",
+      "message": "Bot moved Wild Card to Railroad."
+     },
+     {
+      "timestamp": 1793548798697,
+      "type": "wild_move",
+      "message": "Bot moved Wild Card to Utility."
+     },
+     {
+      "timestamp": 1793548798697,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798697,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798697,
+      "type": "property",
+      "message": "Ann placed Wild Railroad/Green in Green."
+     },
+     {
+      "timestamp": 1793548798697,
+      "type": "property",
+      "message": "Ann placed Orange Property in Orange."
+     },
+     {
+      "timestamp": 1793548798697,
+      "type": "bank",
+      "message": "Ann banked Hotel."
+     },
+     {
+      "timestamp": 1793548798697,
+      "type": "wild_move",
+      "message": "Ann moved Wild Railroad/Green to Railroad."
+     },
+     {
+      "timestamp": 1793548798698,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798698,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798698,
+      "type": "bank",
+      "message": "O'Brien banked Pass Go."
+     },
+     {
+      "timestamp": 1793548798698,
+      "type": "bank",
+      "message": "O'Brien banked $4 Money."
+     },
+     {
+      "timestamp": 1793548798698,
+      "type": "bank",
+      "message": "O'Brien banked Rent Red/Yellow."
+     },
+     {
+      "timestamp": 1793548798698,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     }
+    ],
+    "turnCount": 12
+   },
+   "legalByPlayer": [
+    "[]",
+    "[]",
+    "[{\"action\":{\"playerId\":\"p3\",\"type\":\"draw_cards\"},\"label\":\"Draw cards\"}]"
+   ]
+  },
+  {
+   "name": "no-mercy-opening",
+   "state": {
+    "version": 1,
+    "createdAt": 1793548798698,
+    "updatedAt": 1793548798698,
+    "deckVersion": "v1",
+    "variant": "no_mercy",
+    "ruleset": {
+     "winCompleteSets": 3,
+     "maxHandAtEndTurn": 7,
+     "maxPlaysPerTurn": 3
+    },
+    "players": [
+     {
+      "id": "p1",
+      "name": "Ann",
+      "controller": "human",
+      "botDifficulty": "easy",
+      "hand": [
+       "money_1#1",
+       "deal_breaker#2",
+       "just_say_no#3",
+       "yellow_1#1",
+       "deal_breaker#1",
+       "double_rent_red_yellow#1"
+      ],
+      "bank": [],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [],
+       "orange": [],
+       "red": [],
+       "yellow": [],
+       "green": [
+        {
+         "cardId": "green_1#1",
+         "assignedColor": "green",
+         "setId": "green:auto-1"
+        }
+       ],
+       "dark_blue": [],
+       "railroad": [],
+       "utility": []
+      },
+      "debts": [],
+      "debtsOwed": [],
+      "debtChipsRemaining": 3,
+      "debtChipsHeld": [],
+      "debtChips": []
+     },
+     {
+      "id": "p2",
+      "name": "O'Brien",
+      "controller": "human",
+      "botDifficulty": "easy",
+      "hand": [
+       "money_3#2",
+       "pink_1#3",
+       "railroad_1#3",
+       "tough_luck#1",
+       "double_rent_any_color#2"
+      ],
+      "bank": [],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [],
+       "orange": [],
+       "red": [],
+       "yellow": [],
+       "green": [],
+       "dark_blue": [],
+       "railroad": [],
+       "utility": []
+      },
+      "debts": [],
+      "debtsOwed": [],
+      "debtChipsRemaining": 3,
+      "debtChipsHeld": [],
+      "debtChips": []
+     },
+     {
+      "id": "p3",
+      "name": "Bot",
+      "controller": "bot",
+      "botDifficulty": "hard",
+      "hand": [
+       "pass_go_go_go#4",
+       "double_rent_brown_light_blue#1",
+       "money_5#2",
+       "money_15#1",
+       "orange_1#1"
+      ],
+      "bank": [],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [],
+       "orange": [],
+       "red": [],
+       "yellow": [],
+       "green": [],
+       "dark_blue": [],
+       "railroad": [],
+       "utility": []
+      },
+      "debts": [],
+      "debtsOwed": [],
+      "debtChipsRemaining": 3,
+      "debtChipsHeld": [],
+      "debtChips": []
+     }
+    ],
+    "drawPile": [
+     "money_2#3",
+     "green_1#3",
+     "just_say_no#2",
+     "yellow_1#2",
+     "double_rent_any_color#3",
+     "pass_go_go_go#3",
+     "money_4#2",
+     "super_sly_deal#1",
+     "yoink#3",
+     "rent_pink_orange#1",
+     "pass_go_go_go#2",
+     "wild_all#2",
+     "tax_collector#2",
+     "wild_railroad_green#1",
+     "repossession#2",
+     "double_rent_any_color#1",
+     "money_2#1",
+     "repossession#1",
+     "money_1#2",
+     "double_rent_pink_orange#1",
+     "light_blue_1#1",
+     "railroad_1#2",
+     "dark_blue_1#1",
+     "dark_blue_1#2",
+     "green_1#2",
+     "deal_breaker#3",
+     "just_say_no#1",
+     "yoink#2",
+     "go_again#3",
+     "heist#3",
+     "heist#2",
+     "money_5#1",
+     "money_1#3",
+     "wild_pink_orange#2",
+     "money_1#5",
+     "go_again#1",
+     "red_1#1",
+     "money_3#1",
+     "orange_1#2",
+     "double_rent_green_dark_blue#1",
+     "shack#2",
+     "rent_red_yellow#1",
+     "utility_1#2",
+     "super_sly_deal#3",
+     "light_blue_1#3",
+     "market_crash#2",
+     "yellow_1#3",
+     "market_crash#1",
+     "tax_collector#1",
+     "forced_debt#2",
+     "wild_brown_light_blue#1",
+     "wild_red_yellow#2",
+     "red_1#2",
+     "shack#1",
+     "just_say_no#5",
+     "money_10#1",
+     "red_1#3",
+     "forced_debt#1",
+     "rent_any_color#3",
+     "wild_pink_orange#1",
+     "wild_light_blue_railroad#1",
+     "market_crash#3",
+     "money_3#3",
+     "double_rent_railroad_utility#1",
+     "wild_railroad_utility#1",
+     "forced_debt#3",
+     "pink_1#2",
+     "orange_1#3",
+     "tough_luck#3",
+     "heist#1",
+     "brown_1#1",
+     "go_again#2",
+     "utility_1#1",
+     "rent_any_color#1",
+     "shack#3",
+     "super_sly_deal#2",
+     "unfair_trade#1",
+     "rent_railroad_utility#1",
+     "money_4#1",
+     "wild_red_yellow#1",
+     "wild_all#1",
+     "brown_1#2",
+     "tough_luck#2",
+     "rent_any_color#2",
+     "wild_blue_green#1",
+     "railroad_1#4",
+     "money_2#2",
+     "pink_1#1",
+     "pass_go_go_go#1",
+     "rent_brown_light_blue#1",
+     "light_blue_1#2",
+     "rent_green_dark_blue#1",
+     "yoink#1",
+     "railroad_1#1",
+     "money_2#4",
+     "unfair_trade#2",
+     "just_say_no#4",
+     "money_1#4"
+    ],
+    "discardPile": [],
+    "currentPlayerIndex": 0,
+    "turn": {
+     "phase": "action",
+     "playsUsed": 1,
+     "doubleRentMultiplier": 1,
+     "endingTurn": false
+    },
+    "pending": null,
+    "history": [
+     {
+      "timestamp": 1793548798698,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798698,
+      "type": "property",
+      "message": "Ann placed Green Property in Green."
+     }
+    ],
+    "turnCount": 1
+   },
+   "legalByPlayer": [
+    "[{\"action\":{\"cardId\":\"money_1#1\",\"playerId\":\"p1\",\"type\":\"play_to_bank\"},\"label\":\"Bank M1\"},{\"action\":{\"cardId\":\"deal_breaker#2\",\"playerId\":\"p1\",\"type\":\"play_to_bank\"},\"label\":\"Bank Deal Breaker\"},{\"action\":{\"cardId\":\"just_say_no#3\",\"playerId\":\"p1\",\"type\":\"play_to_bank\"},\"label\":\"Bank Just Say No\"},{\"action\":{\"cardId\":\"yellow_1#1\",\"color\":\"yellow\",\"playerId\":\"p1\",\"type\":\"play_property\"},\"label\":\"Play Yellow to Yellow\"},{\"action\":{\"cardId\":\"deal_breaker#1\",\"playerId\":\"p1\",\"type\":\"play_to_bank\"},\"label\":\"Bank Deal Breaker\"},{\"action\":{\"cardId\":\"double_rent_red_yellow#1\",\"playerId\":\"p1\",\"type\":\"play_to_bank\"},\"label\":\"Bank Double Rent Red/Yellow\"},{\"action\":{\"playerId\":\"p1\",\"type\":\"pass_turn\"},\"label\":\"Pass turn\"}]",
+    "[]",
+    "[]"
+   ]
+  },
+  {
+   "name": "no-mercy-midgame",
+   "state": {
+    "version": 1,
+    "createdAt": 1793548798698,
+    "updatedAt": 1793548798707,
+    "deckVersion": "v1",
+    "variant": "no_mercy",
+    "ruleset": {
+     "winCompleteSets": 3,
+     "maxHandAtEndTurn": 7,
+     "maxPlaysPerTurn": 3
+    },
+    "players": [
+     {
+      "id": "p1",
+      "name": "Ann",
+      "controller": "human",
+      "botDifficulty": "easy",
+      "hand": [
+       "pass_go_go_go#1",
+       "red_1#1"
+      ],
+      "bank": [
+       "go_again#3",
+       "money_4#1",
+       "tax_collector#1",
+       "money_1#1",
+       "money_1#3"
+      ],
+      "properties": {
+       "brown": [],
+       "light_blue": [
+        {
+         "cardId": "light_blue_1#1",
+         "assignedColor": "light_blue",
+         "setId": "light_blue:auto-1"
+        },
+        {
+         "cardId": "wild_light_blue_railroad#1",
+         "assignedColor": "light_blue",
+         "setId": "light_blue:auto-1"
+        }
+       ],
+       "pink": [],
+       "orange": [
+        {
+         "cardId": "wild_pink_orange#2",
+         "assignedColor": "orange",
+         "setId": "orange:auto-1"
+        }
+       ],
+       "red": [],
+       "yellow": [
+        {
+         "cardId": "yellow_1#1",
+         "assignedColor": "yellow",
+         "setId": "yellow:auto-1"
+        }
+       ],
+       "green": [],
+       "dark_blue": [],
+       "railroad": [
+        {
+         "cardId": "wild_railroad_green#1",
+         "assignedColor": "railroad",
+         "setId": "railroad:auto-1"
+        },
+        {
+         "cardId": "railroad_1#1",
+         "assignedColor": "railroad",
+         "setId": "railroad:auto-1"
+        }
+       ],
+       "utility": []
+      },
+      "debts": [],
+      "debtsOwed": [],
+      "debtChipsRemaining": 3,
+      "debtChipsHeld": [],
+      "debtChips": []
+     },
+     {
+      "id": "p2",
+      "name": "O'Brien",
+      "controller": "human",
+      "botDifficulty": "easy",
+      "hand": [
+       "pink_1#3"
+      ],
+      "bank": [
+       "money_1#5",
+       "super_sly_deal#1",
+       "double_rent_railroad_utility#1",
+       "money_3#2",
+       "money_3#3",
+       "rent_pink_orange#1",
+       "just_say_no#2"
+      ],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [],
+       "orange": [],
+       "red": [],
+       "yellow": [],
+       "green": [],
+       "dark_blue": [],
+       "railroad": [],
+       "utility": []
+      },
+      "debts": [],
+      "debtsOwed": [],
+      "debtChipsRemaining": 3,
+      "debtChipsHeld": [],
+      "debtChips": []
+     },
+     {
+      "id": "p3",
+      "name": "Bot",
+      "controller": "bot",
+      "botDifficulty": "hard",
+      "hand": [
+       "yoink#2"
+      ],
+      "bank": [
+       "money_2#4",
+       "money_1#4",
+       "double_rent_any_color#1",
+       "go_again#2",
+       "double_rent_any_color#3",
+       "double_rent_green_dark_blue#1",
+       "money_15#1"
+      ],
+      "properties": {
+       "brown": [
+        {
+         "cardId": "brown_1#1",
+         "assignedColor": "brown",
+         "setId": "brown:auto-1"
+        },
+        {
+         "cardId": "shack#2",
+         "assignedColor": "brown",
+         "setId": "brown:auto-1",
+         "attachedToCardId": "brown_1#1"
+        }
+       ],
+       "light_blue": [],
+       "pink": [],
+       "orange": [
+        {
+         "cardId": "orange_1#1",
+         "assignedColor": "orange",
+         "setId": "orange:auto-1"
+        }
+       ],
+       "red": [],
+       "yellow": [],
+       "green": [],
+       "dark_blue": [],
+       "railroad": [],
+       "utility": [
+        {
+         "cardId": "wild_all#2",
+         "assignedColor": "utility",
+         "setId": "utility:auto-1"
+        }
+       ]
+      },
+      "debts": [],
+      "debtsOwed": [],
+      "debtChipsRemaining": 3,
+      "debtChipsHeld": [],
+      "debtChips": []
+     }
+    ],
+    "drawPile": [
+     "tough_luck#2",
+     "money_2#3",
+     "wild_pink_orange#1",
+     "green_1#1",
+     "yellow_1#2",
+     "repossession#1",
+     "brown_1#2",
+     "green_1#2",
+     "wild_blue_green#1",
+     "money_5#1",
+     "rent_brown_light_blue#1",
+     "repossession#2",
+     "light_blue_1#3",
+     "forced_debt#2",
+     "wild_brown_light_blue#1",
+     "wild_red_yellow#1",
+     "just_say_no#3",
+     "just_say_no#4",
+     "orange_1#3",
+     "double_rent_pink_orange#1",
+     "wild_railroad_utility#1",
+     "pink_1#2",
+     "rent_railroad_utility#1",
+     "money_3#1",
+     "utility_1#2",
+     "yellow_1#3",
+     "green_1#3",
+     "railroad_1#3",
+     "yoink#1",
+     "go_again#1",
+     "money_10#1",
+     "rent_green_dark_blue#1",
+     "shack#3",
+     "just_say_no#5",
+     "double_rent_brown_light_blue#1",
+     "money_2#2",
+     "super_sly_deal#2",
+     "pass_go_go_go#3",
+     "dark_blue_1#1",
+     "market_crash#2",
+     "shack#1",
+     "railroad_1#4",
+     "unfair_trade#2",
+     "tough_luck#3",
+     "money_1#2",
+     "pink_1#1",
+     "market_crash#1",
+     "super_sly_deal#3",
+     "heist#3",
+     "rent_red_yellow#1",
+     "orange_1#2",
+     "double_rent_any_color#2",
+     "deal_breaker#2",
+     "tough_luck#1",
+     "just_say_no#1",
+     "double_rent_red_yellow#1",
+     "wild_red_yellow#2",
+     "deal_breaker#1",
+     "red_1#3",
+     "dark_blue_1#2",
+     "money_4#2",
+     "light_blue_1#2",
+     "rent_any_color#1",
+     "money_5#2",
+     "pass_go_go_go#4",
+     "wild_all#1",
+     "pass_go_go_go#2",
+     "money_2#1",
+     "rent_any_color#3",
+     "deal_breaker#3",
+     "tax_collector#2",
+     "utility_1#1",
+     "railroad_1#2",
+     "red_1#2"
+    ],
+    "discardPile": [
+     "yoink#3",
+     "heist#1",
+     "forced_debt#3",
+     "rent_any_color#2",
+     "heist#2",
+     "forced_debt#1",
+     "unfair_trade#1",
+     "market_crash#3"
+    ],
+    "currentPlayerIndex": 0,
+    "turn": {
+     "phase": "action",
+     "playsUsed": 1,
+     "doubleRentMultiplier": 1,
+     "endingTurn": false
+    },
+    "pending": {
+     "kind": "counter",
+     "payload": {
+      "sourcePlayerId": "p1",
+      "targetPlayerId": "p3",
+      "actionCardId": "market_crash#3",
+      "effect": {
+       "kind": "no_mercy",
+       "payload": {
+        "sourcePlayerId": "p1",
+        "actionCardId": "market_crash#3",
+        "effect": "market_crash",
+        "targetPlayerIds": [
+         "p3"
+        ]
+       }
+      },
+      "chain": [],
+      "awaitingPlayerId": "p3"
+     }
+    },
+    "history": [
+     {
+      "timestamp": 1793548798698,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798698,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798698,
+      "type": "pay",
+      "message": "O'Brien paid Ann $0 (Yoink!)."
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "bank",
+      "message": "Ann banked Go Again."
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "bank",
+      "message": "Ann banked $4 Money."
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "debt_repaid",
+      "message": "O'Brien repaid Ann with Wild Light Blue/Railroad."
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "debt_card_resolved",
+      "message": "Ann resolved a received debt card."
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "bank",
+      "message": "O'Brien banked $3 Money."
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "heist",
+      "message": "O'Brien stole a bank card from Ann."
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "bank",
+      "message": "Bot banked $1 Money."
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "bank",
+      "message": "Bot banked Super Sly Deal."
+     },
+     {
+      "timestamp": 1793548798699,
+      "type": "bank",
+      "message": "Bot banked Tax Collector."
+     },
+     {
+      "timestamp": 1793548798700,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798700,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798700,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798700,
+      "type": "property",
+      "message": "Ann placed Wild Railroad/Green in Green."
+     },
+     {
+      "timestamp": 1793548798700,
+      "type": "property",
+      "message": "Ann placed Yellow Property in Yellow."
+     },
+     {
+      "timestamp": 1793548798700,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798700,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798700,
+      "type": "bank",
+      "message": "O'Brien banked $2 Money."
+     },
+     {
+      "timestamp": 1793548798700,
+      "type": "bank",
+      "message": "O'Brien banked $1 Money."
+     },
+     {
+      "timestamp": 1793548798700,
+      "type": "bank",
+      "message": "O'Brien banked Double Rent (Any Color)."
+     },
+     {
+      "timestamp": 1793548798700,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798700,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798701,
+      "type": "debt_repaid",
+      "message": "Bot repaid Ann with Rent (Any Color)."
+     },
+     {
+      "timestamp": 1793548798701,
+      "type": "action",
+      "message": "Ann played rent for Railroad at $1."
+     },
+     {
+      "timestamp": 1793548798701,
+      "type": "debt_card_resolved",
+      "message": "Ann played the received Rent (Any Color) immediately."
+     },
+     {
+      "timestamp": 1793548798701,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798701,
+      "type": "pay",
+      "message": "O'Brien paid Ann $1 (Rent (railroad))."
+     },
+     {
+      "timestamp": 1793548798701,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798701,
+      "type": "pay",
+      "message": "Bot paid Ann $1 (Rent (railroad))."
+     },
+     {
+      "timestamp": 1793548798701,
+      "type": "property",
+      "message": "Bot placed Brown Property in Brown."
+     },
+     {
+      "timestamp": 1793548798701,
+      "type": "property",
+      "message": "Bot attached a Shack to Brown."
+     },
+     {
+      "timestamp": 1793548798701,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798702,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798702,
+      "type": "property",
+      "message": "Ann placed Light Blue Property in Light Blue."
+     },
+     {
+      "timestamp": 1793548798702,
+      "type": "bank",
+      "message": "Ann banked $1 Money."
+     },
+     {
+      "timestamp": 1793548798702,
+      "type": "bank",
+      "message": "Ann banked Double Rent Railroad/Utility."
+     },
+     {
+      "timestamp": 1793548798702,
+      "type": "wild_move",
+      "message": "Ann moved Wild Light Blue/Railroad to Light Blue."
+     },
+     {
+      "timestamp": 1793548798702,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798702,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798702,
+      "type": "bank",
+      "message": "O'Brien banked Go Again."
+     },
+     {
+      "timestamp": 1793548798702,
+      "type": "bank",
+      "message": "O'Brien banked Double Rent (Any Color)."
+     },
+     {
+      "timestamp": 1793548798702,
+      "type": "bank",
+      "message": "O'Brien banked Double Rent Green/Dark Blue."
+     },
+     {
+      "timestamp": 1793548798702,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798703,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798703,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798703,
+      "type": "heist",
+      "message": "Bot stole a bank card from Ann."
+     },
+     {
+      "timestamp": 1793548798703,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798703,
+      "type": "heist",
+      "message": "Bot stole a bank card from O'Brien."
+     },
+     {
+      "timestamp": 1793548798703,
+      "type": "bank",
+      "message": "Bot banked $3 Money."
+     },
+     {
+      "timestamp": 1793548798703,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798703,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798703,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798704,
+      "type": "debt_repaid",
+      "message": "Ann repaid Bot with Unfair Trade."
+     },
+     {
+      "timestamp": 1793548798704,
+      "type": "debt_card_resolved",
+      "message": "Bot played the received Unfair Trade immediately."
+     },
+     {
+      "timestamp": 1793548798704,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798704,
+      "type": "bank",
+      "message": "Ann banked $1 Money."
+     },
+     {
+      "timestamp": 1793548798705,
+      "type": "property",
+      "message": "Ann placed Wild Pink/Orange in Orange."
+     },
+     {
+      "timestamp": 1793548798705,
+      "type": "wild_move",
+      "message": "Ann moved Wild Railroad/Green to Railroad."
+     },
+     {
+      "timestamp": 1793548798705,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798705,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798705,
+      "type": "bank",
+      "message": "O'Brien banked Rent Pink/Orange."
+     },
+     {
+      "timestamp": 1793548798705,
+      "type": "bank",
+      "message": "O'Brien banked Just Say No."
+     },
+     {
+      "timestamp": 1793548798705,
+      "type": "property",
+      "message": "O'Brien placed Railroad Property in Railroad."
+     },
+     {
+      "timestamp": 1793548798705,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798705,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798705,
+      "type": "property",
+      "message": "Bot placed Wild Card in Orange."
+     },
+     {
+      "timestamp": 1793548798706,
+      "type": "bank",
+      "message": "Bot banked $15 Money."
+     },
+     {
+      "timestamp": 1793548798706,
+      "type": "property",
+      "message": "Bot placed Orange Property in Orange."
+     },
+     {
+      "timestamp": 1793548798706,
+      "type": "wild_move",
+      "message": "Bot moved Wild Card to Red."
+     },
+     {
+      "timestamp": 1793548798706,
+      "type": "wild_move",
+      "message": "Bot moved Wild Card to Yellow."
+     },
+     {
+      "timestamp": 1793548798706,
+      "type": "wild_move",
+      "message": "Bot moved Wild Card to Green."
+     },
+     {
+      "timestamp": 1793548798706,
+      "type": "wild_move",
+      "message": "Bot moved Wild Card to Dark Blue."
+     },
+     {
+      "timestamp": 1793548798706,
+      "type": "wild_move",
+      "message": "Bot moved Wild Card to Railroad."
+     },
+     {
+      "timestamp": 1793548798706,
+      "type": "wild_move",
+      "message": "Bot moved Wild Card to Utility."
+     },
+     {
+      "timestamp": 1793548798707,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798707,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798707,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     }
+    ],
+    "turnCount": 13
+   },
+   "legalByPlayer": [
+    "[]",
+    "[]",
+    "[{\"action\":{\"playerId\":\"p3\",\"type\":\"counter_response\",\"useJustSayNo\":false},\"label\":\"Resolve without Just Say No\"}]"
+   ]
+  },
+  {
+   "name": "no-mercy-late",
+   "state": {
+    "version": 1,
+    "createdAt": 1793548798707,
+    "updatedAt": 1793548798724,
+    "deckVersion": "v1",
+    "variant": "no_mercy",
+    "ruleset": {
+     "winCompleteSets": 3,
+     "maxHandAtEndTurn": 7,
+     "maxPlaysPerTurn": 3
+    },
+    "players": [
+     {
+      "id": "p1",
+      "name": "Ann",
+      "controller": "human",
+      "botDifficulty": "easy",
+      "hand": [],
+      "bank": [
+       "market_crash#1",
+       "money_10#1",
+       "just_say_no#5",
+       "market_crash#3",
+       "money_3#1",
+       "market_crash#2",
+       "money_15#1",
+       "money_3#2"
+      ],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [],
+       "orange": [],
+       "red": [],
+       "yellow": [],
+       "green": [
+        {
+         "cardId": "green_1#2",
+         "assignedColor": "green",
+         "setId": "green:auto-1"
+        }
+       ],
+       "dark_blue": [],
+       "railroad": [
+        {
+         "cardId": "railroad_1#4",
+         "assignedColor": "railroad",
+         "setId": "railroad:auto-1"
+        }
+       ],
+       "utility": []
+      },
+      "debts": [],
+      "debtsOwed": [],
+      "debtChipsRemaining": 3,
+      "debtChipsHeld": [],
+      "debtChips": []
+     },
+     {
+      "id": "p2",
+      "name": "O'Brien",
+      "controller": "human",
+      "botDifficulty": "easy",
+      "hand": [
+       "wild_blue_green#1",
+       "light_blue_1#2"
+      ],
+      "bank": [
+       "double_rent_brown_light_blue#1",
+       "double_rent_pink_orange#1",
+       "forced_debt#1",
+       "money_1#1",
+       "money_1#5",
+       "money_2#4",
+       "pass_go_go_go#2",
+       "rent_red_yellow#1",
+       "double_rent_railroad_utility#1",
+       "double_rent_red_yellow#1",
+       "money_1#3",
+       "money_2#1",
+       "money_4#2"
+      ],
+      "properties": {
+       "brown": [],
+       "light_blue": [
+        {
+         "cardId": "wild_brown_light_blue#1",
+         "assignedColor": "light_blue",
+         "setId": "light_blue:auto-1"
+        },
+        {
+         "cardId": "wild_light_blue_railroad#1",
+         "assignedColor": "light_blue",
+         "setId": "light_blue:auto-1"
+        }
+       ],
+       "pink": [
+        {
+         "cardId": "pink_1#3",
+         "assignedColor": "pink",
+         "setId": "pink:stolen-pink:auto-1"
+        },
+        {
+         "cardId": "wild_pink_orange#2",
+         "assignedColor": "pink",
+         "setId": "pink:stolen-pink:auto-1"
+        },
+        {
+         "cardId": "wild_pink_orange#1",
+         "assignedColor": "pink",
+         "setId": "pink:stolen-pink:auto-1"
+        }
+       ],
+       "orange": [
+        {
+         "cardId": "orange_1#1",
+         "assignedColor": "orange",
+         "setId": "orange:auto-1"
+        }
+       ],
+       "red": [
+        {
+         "cardId": "red_1#3",
+         "assignedColor": "red",
+         "setId": "red:auto-1"
+        }
+       ],
+       "yellow": [
+        {
+         "cardId": "wild_red_yellow#1",
+         "assignedColor": "yellow",
+         "setId": "yellow:auto-1"
+        },
+        {
+         "cardId": "yellow_1#2",
+         "assignedColor": "yellow",
+         "setId": "yellow:auto-1"
+        }
+       ],
+       "green": [],
+       "dark_blue": [
+        {
+         "cardId": "dark_blue_1#1",
+         "assignedColor": "dark_blue",
+         "setId": "dark_blue:stolen-dark_blue:auto-1"
+        },
+        {
+         "cardId": "dark_blue_1#2",
+         "assignedColor": "dark_blue",
+         "setId": "dark_blue:stolen-dark_blue:auto-1"
+        }
+       ],
+       "railroad": [
+        {
+         "cardId": "railroad_1#2",
+         "assignedColor": "railroad",
+         "setId": "railroad:auto-1"
+        },
+        {
+         "cardId": "shack#3",
+         "assignedColor": "railroad",
+         "setId": "railroad:auto-1",
+         "attachedToCardId": "railroad_1#2"
+        }
+       ],
+       "utility": [
+        {
+         "cardId": "wild_railroad_utility#1",
+         "assignedColor": "utility",
+         "setId": "utility:auto-1"
+        },
+        {
+         "cardId": "utility_1#1",
+         "assignedColor": "utility",
+         "setId": "utility:auto-1"
+        }
+       ]
+      },
+      "debts": [],
+      "debtsOwed": [],
+      "debtChipsRemaining": 3,
+      "debtChipsHeld": [
+       {
+        "id": "p3-chip-1",
+        "chipId": "p3-chip-1",
+        "debtorPlayerId": "p3",
+        "creditorPlayerId": "p2",
+        "amount": 6,
+        "createdTurn": 19
+       }
+      ],
+      "debtChips": [
+       {
+        "id": "p3-chip-1",
+        "chipId": "p3-chip-1",
+        "debtorPlayerId": "p3",
+        "creditorPlayerId": "p2",
+        "amount": 6,
+        "createdTurn": 19
+       }
+      ]
+     },
+     {
+      "id": "p3",
+      "name": "Bot",
+      "controller": "bot",
+      "botDifficulty": "hard",
+      "hand": [
+       "money_2#3",
+       "yoink#3"
+      ],
+      "bank": [],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [],
+       "orange": [],
+       "red": [],
+       "yellow": [],
+       "green": [],
+       "dark_blue": [],
+       "railroad": [],
+       "utility": []
+      },
+      "debts": [
+       {
+        "id": "p3-chip-1",
+        "chipId": "p3-chip-1",
+        "debtorPlayerId": "p3",
+        "creditorPlayerId": "p2",
+        "amount": 6,
+        "createdTurn": 19
+       }
+      ],
+      "debtsOwed": [
+       {
+        "id": "p3-chip-1",
+        "chipId": "p3-chip-1",
+        "debtorPlayerId": "p3",
+        "creditorPlayerId": "p2",
+        "amount": 6,
+        "createdTurn": 19
+       }
+      ],
+      "debtChipsRemaining": 2,
+      "debtChipsHeld": [],
+      "debtChips": []
+     }
+    ],
+    "drawPile": [
+     "money_1#4",
+     "money_3#3",
+     "heist#1",
+     "wild_all#2",
+     "tax_collector#2",
+     "just_say_no#1",
+     "utility_1#2",
+     "money_2#2",
+     "money_1#2",
+     "forced_debt#3",
+     "yoink#1",
+     "double_rent_any_color#1",
+     "money_5#2",
+     "brown_1#2",
+     "repossession#2",
+     "shack#2",
+     "green_1#1",
+     "just_say_no#2",
+     "money_4#1",
+     "unfair_trade#1",
+     "pass_go_go_go#1",
+     "wild_railroad_green#1",
+     "rent_railroad_utility#1",
+     "rent_pink_orange#1",
+     "wild_red_yellow#2",
+     "light_blue_1#3",
+     "yoink#2",
+     "unfair_trade#2",
+     "money_5#1",
+     "yellow_1#3",
+     "pink_1#1",
+     "orange_1#2",
+     "green_1#3",
+     "red_1#2",
+     "wild_all#1",
+     "go_again#3",
+     "yellow_1#1",
+     "rent_any_color#2",
+     "red_1#1",
+     "rent_brown_light_blue#1",
+     "tax_collector#1",
+     "railroad_1#3",
+     "pass_go_go_go#3",
+     "rent_green_dark_blue#1",
+     "pink_1#2",
+     "deal_breaker#1",
+     "just_say_no#3",
+     "heist#2",
+     "double_rent_any_color#2",
+     "pass_go_go_go#4",
+     "shack#1",
+     "orange_1#3",
+     "light_blue_1#1",
+     "railroad_1#1",
+     "repossession#1",
+     "brown_1#1"
+    ],
+    "discardPile": [
+     "tough_luck#2",
+     "super_sly_deal#1",
+     "tough_luck#1",
+     "heist#3",
+     "just_say_no#4",
+     "forced_debt#2",
+     "double_rent_any_color#3",
+     "tough_luck#3",
+     "go_again#2",
+     "rent_any_color#3",
+     "super_sly_deal#2",
+     "deal_breaker#2",
+     "super_sly_deal#3",
+     "deal_breaker#3",
+     "go_again#1",
+     "double_rent_green_dark_blue#1",
+     "rent_any_color#1"
+    ],
+    "currentPlayerIndex": 1,
+    "turn": {
+     "phase": "finished",
+     "playsUsed": 2,
+     "doubleRentMultiplier": 1,
+     "endingTurn": false
+    },
+    "pending": null,
+    "history": [
+     {
+      "timestamp": 1793548798707,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798707,
+      "type": "bank",
+      "message": "Ann banked $1 Money."
+     },
+     {
+      "timestamp": 1793548798707,
+      "type": "bank",
+      "message": "Ann banked Double Rent Pink/Orange."
+     },
+     {
+      "timestamp": 1793548798707,
+      "type": "bank",
+      "message": "Ann banked Market Crash."
+     },
+     {
+      "timestamp": 1793548798707,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798707,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798708,
+      "type": "property",
+      "message": "O'Brien placed Railroad Property in Railroad."
+     },
+     {
+      "timestamp": 1793548798708,
+      "type": "property",
+      "message": "O'Brien placed Green Property in Green."
+     },
+     {
+      "timestamp": 1793548798708,
+      "type": "property",
+      "message": "O'Brien placed Railroad Property in Railroad."
+     },
+     {
+      "timestamp": 1793548798708,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798708,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798708,
+      "type": "bank",
+      "message": "Bot banked $3 Money."
+     },
+     {
+      "timestamp": 1793548798708,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798708,
+      "type": "bank",
+      "message": "Bot banked Rent Red/Yellow."
+     },
+     {
+      "timestamp": 1793548798708,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798708,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798708,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798709,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798709,
+      "type": "property",
+      "message": "Ann attached a Shack to Railroad."
+     },
+     {
+      "timestamp": 1793548798709,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798709,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798709,
+      "type": "bank",
+      "message": "O'Brien banked $10 Money."
+     },
+     {
+      "timestamp": 1793548798709,
+      "type": "property",
+      "message": "O'Brien placed Wild Pink/Orange in Pink."
+     },
+     {
+      "timestamp": 1793548798709,
+      "type": "bank",
+      "message": "O'Brien banked $2 Money."
+     },
+     {
+      "timestamp": 1793548798709,
+      "type": "wild_move",
+      "message": "O'Brien moved Wild Pink/Orange to Orange."
+     },
+     {
+      "timestamp": 1793548798709,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798709,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798709,
+      "type": "property",
+      "message": "Bot placed Yellow Property in Yellow."
+     },
+     {
+      "timestamp": 1793548798710,
+      "type": "property",
+      "message": "Bot placed Orange Property in Orange."
+     },
+     {
+      "timestamp": 1793548798710,
+      "type": "bank",
+      "message": "Bot banked $2 Money."
+     },
+     {
+      "timestamp": 1793548798710,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798710,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798710,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798710,
+      "type": "heist",
+      "message": "Ann stole a bank card from O'Brien."
+     },
+     {
+      "timestamp": 1793548798710,
+      "type": "counter",
+      "message": "Bot played Just Say No."
+     },
+     {
+      "timestamp": 1793548798710,
+      "type": "counter",
+      "message": "Action canceled for this target by Just Say No chain."
+     },
+     {
+      "timestamp": 1793548798710,
+      "type": "bank",
+      "message": "Ann banked Forced Debt."
+     },
+     {
+      "timestamp": 1793548798710,
+      "type": "bank",
+      "message": "Ann banked $4 Money."
+     },
+     {
+      "timestamp": 1793548798710,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798711,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798711,
+      "type": "bank",
+      "message": "O'Brien banked Just Say No."
+     },
+     {
+      "timestamp": 1793548798711,
+      "type": "property",
+      "message": "O'Brien placed Dark Blue Property in Dark Blue."
+     },
+     {
+      "timestamp": 1793548798711,
+      "type": "property",
+      "message": "O'Brien placed Wild Light Blue/Railroad in Railroad."
+     },
+     {
+      "timestamp": 1793548798711,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798711,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798711,
+      "type": "bank",
+      "message": "Bot banked Market Crash."
+     },
+     {
+      "timestamp": 1793548798711,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798711,
+      "type": "property",
+      "message": "Bot placed Pink Property in Pink."
+     },
+     {
+      "timestamp": 1793548798711,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798712,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798712,
+      "type": "bank",
+      "message": "Ann banked Pass Go, Go Go!."
+     },
+     {
+      "timestamp": 1793548798712,
+      "type": "action",
+      "message": "Ann played Double Rent for Railroad at $14."
+     },
+     {
+      "timestamp": 1793548798712,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798712,
+      "type": "pay",
+      "message": "O'Brien paid Ann $14 (Double Rent (railroad))."
+     },
+     {
+      "timestamp": 1793548798712,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798712,
+      "type": "pay",
+      "message": "Bot paid Ann $14 (Double Rent (railroad))."
+     },
+     {
+      "timestamp": 1793548798713,
+      "type": "property",
+      "message": "Ann placed Wild Pink/Orange in Orange."
+     },
+     {
+      "timestamp": 1793548798713,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798713,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798713,
+      "type": "debt_repaid",
+      "message": "O'Brien repaid Bot with Double Rent Red/Yellow."
+     },
+     {
+      "timestamp": 1793548798713,
+      "type": "debt_card_resolved",
+      "message": "Bot resolved a received debt card."
+     },
+     {
+      "timestamp": 1793548798713,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798714,
+      "type": "bank",
+      "message": "O'Brien banked $1 Money."
+     },
+     {
+      "timestamp": 1793548798714,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798714,
+      "type": "draw",
+      "message": "Bot drew 5 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 5,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798714,
+      "type": "go_again",
+      "message": "Bot gets another turn."
+     },
+     {
+      "timestamp": 1793548798714,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798714,
+      "type": "property",
+      "message": "Bot placed Utility Property in Utility."
+     },
+     {
+      "timestamp": 1793548798714,
+      "type": "property",
+      "message": "Bot placed Red Property in Red."
+     },
+     {
+      "timestamp": 1793548798714,
+      "type": "property",
+      "message": "Bot placed Wild Brown/Light Blue in Light Blue."
+     },
+     {
+      "timestamp": 1793548798715,
+      "type": "wild_move",
+      "message": "Bot moved Wild Brown/Light Blue to Brown."
+     },
+     {
+      "timestamp": 1793548798715,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798715,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798715,
+      "type": "action",
+      "message": "Ann played rent for Yellow at $2."
+     },
+     {
+      "timestamp": 1793548798715,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798715,
+      "type": "pay",
+      "message": "O'Brien paid Ann $2 (Rent (yellow))."
+     },
+     {
+      "timestamp": 1793548798715,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798715,
+      "type": "pay",
+      "message": "Bot paid Ann $2 (Rent (yellow))."
+     },
+     {
+      "timestamp": 1793548798716,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798716,
+      "type": "bank",
+      "message": "Ann banked Market Crash."
+     },
+     {
+      "timestamp": 1793548798716,
+      "type": "wild_move",
+      "message": "Ann moved Wild Brown/Light Blue to Light Blue."
+     },
+     {
+      "timestamp": 1793548798716,
+      "type": "wild_move",
+      "message": "Ann moved Wild Pink/Orange to Pink."
+     },
+     {
+      "timestamp": 1793548798716,
+      "type": "wild_move",
+      "message": "Ann moved Wild Pink/Orange to Pink."
+     },
+     {
+      "timestamp": 1793548798716,
+      "type": "wild_move",
+      "message": "Ann moved Wild Light Blue/Railroad to Light Blue."
+     },
+     {
+      "timestamp": 1793548798716,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798716,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798717,
+      "type": "property",
+      "message": "O'Brien placed Wild Red/Yellow in Red."
+     },
+     {
+      "timestamp": 1793548798717,
+      "type": "action",
+      "message": "O'Brien played Deal Breaker on Ann."
+     },
+     {
+      "timestamp": 1793548798717,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798717,
+      "type": "deal_breaker",
+      "message": "O'Brien stole Ann's pink set.",
+      "details": {
+       "kind": "property_steal",
+       "sourcePlayerId": "p2",
+       "targetPlayerId": "p1",
+       "cardIds": [
+        "pink_1#3",
+        "wild_pink_orange#1",
+        "wild_pink_orange#2"
+       ],
+       "mode": "deal_breaker"
+      }
+     },
+     {
+      "timestamp": 1793548798717,
+      "type": "bank",
+      "message": "O'Brien banked Double Rent Brown/Light Blue."
+     },
+     {
+      "timestamp": 1793548798717,
+      "type": "wild_move",
+      "message": "O'Brien moved Wild Pink/Orange to Orange."
+     },
+     {
+      "timestamp": 1793548798717,
+      "type": "wild_move",
+      "message": "O'Brien moved Wild Pink/Orange to Pink."
+     },
+     {
+      "timestamp": 1793548798718,
+      "type": "wild_move",
+      "message": "O'Brien moved Wild Red/Yellow to Yellow."
+     },
+     {
+      "timestamp": 1793548798718,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798718,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798718,
+      "type": "bank",
+      "message": "Bot banked $1 Money."
+     },
+     {
+      "timestamp": 1793548798718,
+      "type": "property",
+      "message": "Bot placed Wild Railroad/Utility in Railroad."
+     },
+     {
+      "timestamp": 1793548798718,
+      "type": "bank",
+      "message": "Bot banked Double Rent Railroad/Utility."
+     },
+     {
+      "timestamp": 1793548798718,
+      "type": "wild_move",
+      "message": "Bot moved Wild Railroad/Utility to Utility."
+     },
+     {
+      "timestamp": 1793548798718,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798719,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798719,
+      "type": "bank",
+      "message": "Ann banked $15 Money."
+     },
+     {
+      "timestamp": 1793548798719,
+      "type": "property",
+      "message": "Ann placed Dark Blue Property in Dark Blue."
+     },
+     {
+      "timestamp": 1793548798719,
+      "type": "bank",
+      "message": "Ann banked $3 Money."
+     },
+     {
+      "timestamp": 1793548798719,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798719,
+      "type": "draw",
+      "message": "O'Brien drew 5 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 5,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798719,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798720,
+      "type": "action",
+      "message": "O'Brien played Deal Breaker on Ann."
+     },
+     {
+      "timestamp": 1793548798720,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798720,
+      "type": "deal_breaker",
+      "message": "O'Brien stole Ann's dark_blue set.",
+      "details": {
+       "kind": "property_steal",
+       "sourcePlayerId": "p2",
+       "targetPlayerId": "p1",
+       "cardIds": [
+        "dark_blue_1#1",
+        "dark_blue_1#2"
+       ],
+       "mode": "deal_breaker"
+      }
+     },
+     {
+      "timestamp": 1793548798720,
+      "type": "go_again",
+      "message": "O'Brien gets another turn."
+     },
+     {
+      "timestamp": 1793548798720,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798720,
+      "type": "action",
+      "message": "O'Brien played Double Rent for Dark Blue at $16."
+     },
+     {
+      "timestamp": 1793548798721,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798722,
+      "type": "pay",
+      "message": "Ann paid O'Brien $16 (Double Rent (dark_blue))."
+     },
+     {
+      "timestamp": 1793548798723,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798723,
+      "type": "pay",
+      "message": "Bot paid O'Brien $10 (Double Rent (dark_blue))."
+     },
+     {
+      "timestamp": 1793548798723,
+      "type": "action",
+      "message": "O'Brien played rent for Dark Blue at $8."
+     },
+     {
+      "timestamp": 1793548798723,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798724,
+      "type": "pay",
+      "message": "Ann paid O'Brien $8 (Rent (dark_blue))."
+     }
+    ],
+    "turnCount": 19,
+    "winnerId": "p2"
+   },
+   "legalByPlayer": [
+    "[]",
+    "[]",
+    "[]"
+   ]
+  },
+  {
+   "name": "legacy-untagged",
+   "state": {
+    "version": 1,
+    "createdAt": 1793548798724,
+    "updatedAt": 1793548798727,
+    "deckVersion": "v1",
+    "players": [
+     {
+      "id": "p1",
+      "name": "Ann",
+      "controller": "human",
+      "botDifficulty": "easy",
+      "hand": [
+       "money_1#1",
+       "money_1#5",
+       "pink_1#2",
+       "red_1#3",
+       "money_2#2"
+      ],
+      "bank": [
+       "money_1#6",
+       "just_say_no#2",
+       "pass_go#5",
+       "money_2#1",
+       "rent_pink_orange#1"
+      ],
+      "properties": {
+       "brown": [
+        {
+         "cardId": "brown_1#2",
+         "assignedColor": "brown"
+        }
+       ],
+       "light_blue": [],
+       "pink": [],
+       "orange": [],
+       "red": [],
+       "yellow": [
+        {
+         "cardId": "yellow_1#3",
+         "assignedColor": "yellow"
+        }
+       ],
+       "green": [],
+       "dark_blue": [],
+       "railroad": [
+        {
+         "cardId": "railroad_1#1",
+         "assignedColor": "railroad"
+        }
+       ],
+       "utility": []
+      }
+     },
+     {
+      "id": "p2",
+      "name": "O'Brien",
+      "controller": "human",
+      "botDifficulty": "easy",
+      "hand": [
+       "green_1#1",
+       "house#1",
+       "deal_breaker#1"
+      ],
+      "bank": [
+       "rent_pink_orange#2",
+       "money_5#1"
+      ],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [],
+       "orange": [
+        {
+         "cardId": "orange_1#2",
+         "assignedColor": "orange"
+        }
+       ],
+       "red": [],
+       "yellow": [],
+       "green": [],
+       "dark_blue": [],
+       "railroad": [],
+       "utility": [
+        {
+         "cardId": "utility_1#1",
+         "assignedColor": "utility"
+        },
+        {
+         "cardId": "wild_all#2",
+         "assignedColor": "utility"
+        }
+       ]
+      }
+     },
+     {
+      "id": "p3",
+      "name": "Bot",
+      "controller": "bot",
+      "botDifficulty": "hard",
+      "hand": [
+       "deal_breaker#2",
+       "pass_go#1",
+       "money_5#2",
+       "debt_collector#3",
+       "sly_deal#1"
+      ],
+      "bank": [
+       "money_4#1",
+       "sly_deal#3"
+      ],
+      "properties": {
+       "brown": [],
+       "light_blue": [],
+       "pink": [
+        {
+         "cardId": "pink_1#1",
+         "assignedColor": "pink"
+        }
+       ],
+       "orange": [],
+       "red": [],
+       "yellow": [],
+       "green": [
+        {
+         "cardId": "green_1#3",
+         "assignedColor": "green"
+        }
+       ],
+       "dark_blue": [],
+       "railroad": [],
+       "utility": []
+      }
+     }
+    ],
+    "drawPile": [
+     "red_1#2",
+     "double_rent#1",
+     "hotel#1",
+     "dark_blue_1#1",
+     "debt_collector#1",
+     "red_1#1",
+     "money_2#4",
+     "money_3#2",
+     "forced_deal#2",
+     "rent_brown_light_blue#1",
+     "rent_green_dark_blue#1",
+     "wild_red_yellow#1",
+     "rent_red_yellow#2",
+     "orange_1#3",
+     "forced_deal#3",
+     "utility_1#2",
+     "wild_brown_light_blue#1",
+     "money_10#1",
+     "debt_collector#2",
+     "rent_railroad_utility#1",
+     "light_blue_1#3",
+     "brown_1#1",
+     "green_1#2",
+     "double_rent#2",
+     "forced_deal#1",
+     "pass_go#9",
+     "rent_green_dark_blue#2",
+     "yellow_1#1",
+     "money_3#1",
+     "money_4#2",
+     "dark_blue_1#2",
+     "its_my_birthday#3",
+     "wild_pink_orange#1",
+     "pass_go#7",
+     "money_1#3",
+     "just_say_no#3",
+     "house#3",
+     "rent_red_yellow#1",
+     "wild_railroad_utility#1",
+     "railroad_1#2",
+     "sly_deal#2",
+     "house#2",
+     "light_blue_1#2",
+     "its_my_birthday#1",
+     "pass_go#4",
+     "wild_pink_orange#2",
+     "light_blue_1#1",
+     "pass_go#8",
+     "money_2#3",
+     "rent_color#2",
+     "money_4#3",
+     "wild_red_yellow#2",
+     "wild_all#1",
+     "wild_blue_green#1",
+     "railroad_1#4",
+     "rent_brown_light_blue#2",
+     "orange_1#1",
+     "money_2#5",
+     "rent_color#1",
+     "hotel#2",
+     "yellow_1#2",
+     "money_3#3",
+     "money_1#2",
+     "wild_light_blue_railroad#1",
+     "wild_railroad_green#1",
+     "pass_go#6",
+     "pass_go#3",
+     "rent_color#3",
+     "money_1#4",
+     "just_say_no#1",
+     "railroad_1#3",
+     "rent_railroad_utility#2",
+     "pink_1#3"
+    ],
+    "discardPile": [
+     "pass_go#10",
+     "its_my_birthday#2",
+     "pass_go#2"
+    ],
+    "currentPlayerIndex": 0,
+    "turn": {
+     "phase": "action",
+     "playsUsed": 2,
+     "doubleRentMultiplier": 1,
+     "endingTurn": false
+    },
+    "pending": null,
+    "history": [
+     {
+      "timestamp": 1793548798724,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798724,
+      "type": "bank",
+      "message": "Ann banked $1 Money."
+     },
+     {
+      "timestamp": 1793548798724,
+      "type": "action",
+      "message": "Ann played Pass Go and drew 2.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "pass_go"
+      }
+     },
+     {
+      "timestamp": 1793548798724,
+      "type": "property",
+      "message": "Ann placed Brown Property in Brown."
+     },
+     {
+      "timestamp": 1793548798724,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798724,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798724,
+      "type": "bank",
+      "message": "O'Brien banked Rent Pink/Orange."
+     },
+     {
+      "timestamp": 1793548798724,
+      "type": "property",
+      "message": "O'Brien placed Utility Property in Utility."
+     },
+     {
+      "timestamp": 1793548798725,
+      "type": "property",
+      "message": "O'Brien placed Railroad Property in Railroad."
+     },
+     {
+      "timestamp": 1793548798725,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798725,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798725,
+      "type": "bank",
+      "message": "Bot banked $4 Money."
+     },
+     {
+      "timestamp": 1793548798725,
+      "type": "property",
+      "message": "Bot placed Green Property in Green."
+     },
+     {
+      "timestamp": 1793548798725,
+      "type": "bank",
+      "message": "Bot banked $2 Money."
+     },
+     {
+      "timestamp": 1793548798725,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798725,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798725,
+      "type": "bank",
+      "message": "Ann banked Just Say No."
+     },
+     {
+      "timestamp": 1793548798725,
+      "type": "bank",
+      "message": "Ann banked Pass Go."
+     },
+     {
+      "timestamp": 1793548798725,
+      "type": "action",
+      "message": "Ann played It's My Birthday."
+     },
+     {
+      "timestamp": 1793548798725,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798726,
+      "type": "pay",
+      "message": "O'Brien paid Ann $2 (It's My Birthday)."
+     },
+     {
+      "timestamp": 1793548798726,
+      "type": "counter",
+      "message": "Action resolved after counter chain."
+     },
+     {
+      "timestamp": 1793548798726,
+      "type": "pay",
+      "message": "Bot paid Ann $2 (It's My Birthday)."
+     },
+     {
+      "timestamp": 1793548798726,
+      "type": "turn_passed",
+      "message": "Ann ended the turn."
+     },
+     {
+      "timestamp": 1793548798726,
+      "type": "draw",
+      "message": "O'Brien drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p2",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798726,
+      "type": "property",
+      "message": "O'Brien placed Orange Property in Orange."
+     },
+     {
+      "timestamp": 1793548798726,
+      "type": "property",
+      "message": "O'Brien placed Wild Card in Pink."
+     },
+     {
+      "timestamp": 1793548798726,
+      "type": "bank",
+      "message": "O'Brien banked $5 Money."
+     },
+     {
+      "timestamp": 1793548798726,
+      "type": "wild_move",
+      "message": "O'Brien moved Wild Card to Dark Blue."
+     },
+     {
+      "timestamp": 1793548798726,
+      "type": "wild_move",
+      "message": "O'Brien moved Wild Card to Railroad."
+     },
+     {
+      "timestamp": 1793548798726,
+      "type": "wild_move",
+      "message": "O'Brien moved Wild Card to Utility."
+     },
+     {
+      "timestamp": 1793548798727,
+      "type": "turn_passed",
+      "message": "O'Brien ended the turn."
+     },
+     {
+      "timestamp": 1793548798727,
+      "type": "draw",
+      "message": "Bot drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798727,
+      "type": "bank",
+      "message": "Bot banked Sly Deal."
+     },
+     {
+      "timestamp": 1793548798727,
+      "type": "property",
+      "message": "Bot placed Pink Property in Pink."
+     },
+     {
+      "timestamp": 1793548798727,
+      "type": "action",
+      "message": "Bot played Pass Go and drew 2.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p3",
+       "count": 2,
+       "reason": "pass_go"
+      }
+     },
+     {
+      "timestamp": 1793548798727,
+      "type": "turn_passed",
+      "message": "Bot ended the turn."
+     },
+     {
+      "timestamp": 1793548798727,
+      "type": "draw",
+      "message": "Ann drew 2 cards.",
+      "details": {
+       "kind": "draw",
+       "playerId": "p1",
+       "count": 2,
+       "reason": "turn_draw"
+      }
+     },
+     {
+      "timestamp": 1793548798727,
+      "type": "property",
+      "message": "Ann placed Yellow Property in Yellow."
+     },
+     {
+      "timestamp": 1793548798727,
+      "type": "bank",
+      "message": "Ann banked Rent Pink/Orange."
+     }
+    ],
+    "turnCount": 7
+   },
+   "legalByPlayer": [
+    "[{\"action\":{\"cardId\":\"money_1#1\",\"playerId\":\"p1\",\"type\":\"play_to_bank\"},\"label\":\"Bank M1\"},{\"action\":{\"cardId\":\"money_1#5\",\"playerId\":\"p1\",\"type\":\"play_to_bank\"},\"label\":\"Bank M1\"},{\"action\":{\"cardId\":\"pink_1#2\",\"color\":\"pink\",\"playerId\":\"p1\",\"type\":\"play_property\"},\"label\":\"Play Pink to Pink\"},{\"action\":{\"cardId\":\"red_1#3\",\"color\":\"red\",\"playerId\":\"p1\",\"type\":\"play_property\"},\"label\":\"Play Red to Red\"},{\"action\":{\"cardId\":\"money_2#2\",\"playerId\":\"p1\",\"type\":\"play_to_bank\"},\"label\":\"Bank M2\"},{\"action\":{\"playerId\":\"p1\",\"type\":\"pass_turn\"},\"label\":\"Pass turn\"}]",
+    "[]",
+    "[]"
+   ]
+  }
+ ]
+}

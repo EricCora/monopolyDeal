@@ -1,0 +1,11 @@
+{
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/DerivedSources/resource_bundle_accessor.swift" : {
+    "abi-baseline-json" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests.abi.json",
+    "const-values" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests-primary.swiftconstvalues",
+    "dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests-primary.d",
+    "diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests-primary.dia",
+    "swiftdoc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests.swiftdoc",
+    "swiftmodule" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests.swiftmodule",
+    "swiftsourceinfo" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealKitTests-p.build/Objects-normal/arm64/DealKitTests.swiftsourceinfo"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "" : {
+    "const-values" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary.swiftconstvalues",
+    "dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary.d",
+    "diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary.dia",
+    "emit-module-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary-emit-module.dia",
+    "pch" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/DealEngine-primary.swiftdeps"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Sources/DealEngine/Apply.swift" : {
+    "index-unit-output-path" : "/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Apply.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Apply.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Apply.o"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Sources/DealEngine/Catalog.swift" : {
+    "index-unit-output-path" : "/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Catalog.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Catalog.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Catalog.o"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Sources/DealEngine/Core.swift" : {
+    "index-unit-output-path" : "/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Core.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Core.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Core.o"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Sources/DealEngine/Legal.swift" : {
+    "index-unit-output-path" : "/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Legal.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Legal.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Legal.o"
+  },
+  "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/Sources/DealEngine/Types.swift" : {
+    "index-unit-output-path" : "/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Types.o",
+    "llvm-bc" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Types.bc",
+    "object" : "/Users/Eric/Desktop/monopolyDeal/apps/ios/DealKit/.build/out/Intermediates.noindex/DealKit.build/Release/DealEngine-t.build/Objects-normal/arm64/Types.o"
+  }
+}
