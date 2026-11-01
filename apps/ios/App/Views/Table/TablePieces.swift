@@ -29,7 +29,7 @@ struct HandFan: View {
     @State private var isFanned = false
     @State private var focusedCard: String?
 
-    private static let holdDelay: Duration = .milliseconds(220)
+    private static let holdDelay: Duration = .milliseconds(132)
     private static let moveTolerance: CGFloat = 12
     private static let focusScale: CGFloat = 1.5
 
@@ -311,12 +311,19 @@ struct SetLane: View {
             )
             .shadow(color: lane.isComplete ? Palette.gold.opacity(0.55) : .clear, radius: 7)
 
-            Text(lane.isComplete ? "Complete" : "\(lane.entries.filter(isProperty).count)/\(lane.color.setSize)")
+            Text(laneStatus)
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(lane.isComplete ? Palette.gold : .white.opacity(0.7))
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(lane.color.label) set, \(lane.isComplete ? "complete" : "incomplete")")
+    }
+
+    /// A full lane of Wilds can still be incomplete, so "2/2" alone would look like a bug.
+    private var laneStatus: String {
+        if lane.isComplete { return "Complete" }
+        let count = lane.entries.filter(isProperty).count
+        return count >= lane.color.setSize ? "Needs a \(lane.color.label)" : "\(count)/\(lane.color.setSize)"
     }
 
     private func isProperty(_ entry: PropertyCardPlacement) -> Bool {
