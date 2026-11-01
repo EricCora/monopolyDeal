@@ -632,6 +632,25 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     sessionStorage.clear();
   });
 
+  it('offers no Resume after exiting a lobby, where exiting gives up the seat', async () => {
+    vi.useFakeTimers();
+    clientMocks.loadMultiplayerRoomState.mockResolvedValue(makeRoomView(1, { status: 'lobby', started: false }));
+    const { result } = renderHook(() => useMultiplayerRoom({ enabled: true, pushEnabled: false }));
+
+    await act(async () => {
+      await result.current.hostRoom();
+    });
+    await flushMicrotasks();
+    expect(result.current.recoveryEntry?.roomCode).toBeDefined();
+
+    await act(async () => {
+      await result.current.exitRoom();
+    });
+    await flushMicrotasks();
+
+    expect(result.current.recoveryEntry).toBeNull();
+  });
+
   it('exposes a recovery entry from the registry and resumes it on demand', async () => {
     vi.useFakeTimers();
     const now = Date.now();
