@@ -102,7 +102,7 @@ A native SwiftUI app lives in `apps/ios/`, with the same local and online featur
 open apps/ios/MonopolyDeal.xcodeproj
 ```
 
-To run it on an iPhone, choose your team under Signing & Capabilities for the MonopolyDeal target, select your phone, and press Run. iOS and browser players can share a room.
+To run it on an iPhone, select your phone in Xcode and press Run. iOS and browser players can share a room. See `apps/ios/README.md` for a device checklist.
 
 - Rules: `apps/ios/DealKit/Sources/DealEngine` mirrors `src/engine`. `npm run traces:record` records games from the TypeScript engine, and the Swift tests must reproduce them exactly.
 - Verification: `npm run ios:verify` runs the Swift tests, including full matches against a local room server, then builds the app and runs its UI tests.
