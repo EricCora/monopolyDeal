@@ -1,4 +1,4 @@
-import { getCardDefinition, type PropertyColor } from '../cards/catalog';
+import { getCardDefinition, type GameVariant, type PropertyColor } from '../cards/catalog';
 import { getSetCompletionCount, type GameEvent, type GameState, type PlayerState } from '../engine';
 import type { LifetimeStatsV1 } from './types';
 
@@ -132,13 +132,13 @@ function extractCardMentions(message: string): string[] {
   return mentions;
 }
 
-function cardMoneyValue(cardId: string): number {
-  const definition = getCardDefinition(cardId);
+function cardMoneyValue(cardId: string, variant: GameVariant = 'classic'): number {
+  const definition = getCardDefinition(cardId, variant);
   return definition.moneyValue ?? definition.value;
 }
 
-function totalZoneValue(cardIds: string[]): number {
-  return cardIds.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0);
+function totalZoneValue(cardIds: string[], variant: GameVariant = 'classic'): number {
+  return cardIds.reduce((sum, cardId) => sum + cardMoneyValue(cardId, variant), 0);
 }
 
 function countPropertyCards(player: PlayerState): number {
@@ -148,20 +148,21 @@ function countPropertyCards(player: PlayerState): number {
   );
 }
 
-function totalPropertyValue(player: PlayerState): number {
+function totalPropertyValue(player: PlayerState, variant: GameVariant = 'classic'): number {
   return (Object.keys(player.properties) as PropertyColor[]).reduce(
-    (sum, color) => sum + totalZoneValue(player.properties[color].map((card) => card.cardId)),
+    (sum, color) => sum + totalZoneValue(player.properties[color].map((card) => card.cardId), variant),
     0,
   );
 }
 
 function rankPlayers(state: GameState): RankedPlayer[] {
+  const variant = state.variant ?? 'classic';
   const ranked = state.players.map((player) => {
-    const completeSets = getSetCompletionCount(player);
-    const bankValue = totalZoneValue(player.bank);
+    const completeSets = getSetCompletionCount(player, variant);
+    const bankValue = totalZoneValue(player.bank, variant);
     const propertyCardCount = countPropertyCards(player);
     const handCount = player.hand.length;
-    const totalCardValue = bankValue + totalPropertyValue(player) + totalZoneValue(player.hand);
+    const totalCardValue = bankValue + totalPropertyValue(player, variant) + totalZoneValue(player.hand, variant);
     return {
       player,
       completeSets,

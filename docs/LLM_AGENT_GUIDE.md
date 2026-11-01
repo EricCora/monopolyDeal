@@ -15,7 +15,7 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - `src/engine/core.ts` centralizes reusable engine helper utilities (ruleset access, draw/shuffle, payment option generation, property move helpers).
   - Exports: `createGame`, `getLegalActions`, `applyAction`, `isGameOver`, `getNextPrompt`, `getSetCompletionCount`, `getSuggestedPaymentCards`.
 - `src/cards/`
-  - Card catalog, set sizes, rent scales, display helpers.
+  - Separate Classic and No Mercy card catalogs, set sizes, rent scales, and display helpers. `getCardCatalog(variant)` is the deck boundary; do not encode No Mercy as Classic house-rule toggles.
 - `src/persistence/`
   - `localStorage` read/write wrappers for active game, manual saved slots, stats, and UI preferences.
   - `UiPreferencesV1` includes additive `tableStyle` (`premium_tabletop` | `classic_green` | `neon_arcade`) with backward-compatible defaulting to the premium tabletop preset.
@@ -33,6 +33,7 @@ Purpose: give coding agents enough context to make correct, low-regression chang
   - Adds preset selection (`/preset`) and same-room rematch (`/rematch`) helpers; stale revisions still map to structured client errors.
   - Adds lobby-ready (`/ready`) and quick-reaction (`/reaction`) helpers.
   - Adds multiplayer chat (`/chat`) and typing heartbeat (`/typing`) helpers with user-facing error mappings (`chat_rate_limited`, `chat_too_long`, `chat_empty`).
+  - Lobby variant selection (`classic` / `no_mercy`) is host-controlled and ready-state invalidating; the selected variant is immutable after match start.
   - Adds live room event subscription (`/events`) with polling fallback behavior.
   - Adds LAN invite-origin discovery helper (`/api/multiplayer/dev/lan-origins`) used to copy shareable links when host is on localhost.
   - In local dev, Vite proxies `/api/multiplayer` to `http://localhost:8787` so LAN clients can use same-origin API calls from the UI host URL.
@@ -91,6 +92,8 @@ Purpose: give coding agents enough context to make correct, low-regression chang
 - Interrupt/interaction state (`pending`)
 - Event history (`history`)
 - Win marker (`winnerId`)
+- Variant (`classic` / `no_mercy`, omitted legacy snapshots normalize to Classic)
+- No Mercy debt ledger (`debts`/`debtsOwed`, creditor ids, chip ids, remaining chip count) and Shack attachment metadata
 
 ### Interaction model
 
@@ -101,6 +104,7 @@ Purpose: give coding agents enough context to make correct, low-regression chang
 - `sly_deal`
 - `forced_deal`
 - `deal_breaker`
+- `debt_card` and `no_mercy` selection flows
 
 Do not model multiple simultaneous pending effects.
 
@@ -130,6 +134,7 @@ UI layers (steal banners/highlights, draw animation) should prefer `details` and
 - Buildings (`house`, `hotel`) are treated as non-movable for property steal/swap flows.
 - Payment selection must satisfy requested amount when payer can cover; if payer cannot cover, all available bank/property cards must be paid.
 - If payer has no payable bank/property cards, an empty `pay_request.cards` submission is valid and resolves as a shortfall.
+- No Mercy debt repayment happens after draw and before normal plays; each repayment consumes one play. Every-color Wilds cannot complete a set alone or be used as payment, and Shacks add $5 rent while moving with their attached property.
 
 ## Change Playbooks
 

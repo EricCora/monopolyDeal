@@ -1,4 +1,5 @@
 import type { Action } from '../../../src/engine/index.ts';
+import type { GameVariant } from '../../../src/engine/index.ts';
 
 const PROPERTY_COLORS = new Set([
   'brown',
@@ -42,6 +43,11 @@ export function optionalTrimmedString(value: unknown): string | undefined {
   return value.trim();
 }
 
+/** Both first-class game variants are accepted by the hosted protocol. */
+export function isValidGameVariant(value: unknown): value is GameVariant {
+  return value === 'classic' || value === 'no_mercy';
+}
+
 export function isValidMultiplayerAction(value: unknown): value is Action {
   if (!isRecord(value)) return false;
   if (typeof value.type !== 'string') return false;
@@ -83,6 +89,30 @@ export function isValidMultiplayerAction(value: unknown): value is Action {
 
   if (value.type === 'pay_request') {
     return isCardIdList(value.cards);
+  }
+
+  if (value.type === 'repay_debt') {
+    return isNonEmptyTrimmedString(value.cardId)
+      && (value.debtId === undefined || isNonEmptyTrimmedString(value.debtId))
+      && (value.chipId === undefined || isNonEmptyTrimmedString(value.chipId))
+      && (value.creditorPlayerId === undefined || isNonEmptyTrimmedString(value.creditorPlayerId));
+  }
+
+  if (value.type === 'resolve_debt_card') {
+    return isNonEmptyTrimmedString(value.debtId)
+      && isNonEmptyTrimmedString(value.cardId)
+      && (value.mode === 'bank' || value.mode === 'property' || value.mode === 'action')
+      && (value.targetPlayerId === undefined || isNonEmptyTrimmedString(value.targetPlayerId))
+      && (value.color === undefined || isPropertyColor(value.color));
+  }
+
+  if (value.type === 'no_mercy_pick') {
+    return isNonEmptyTrimmedString(value.actionCardId)
+      && (value.targetPlayerId === undefined || isNonEmptyTrimmedString(value.targetPlayerId))
+      && (value.recipientPlayerId === undefined || isNonEmptyTrimmedString(value.recipientPlayerId))
+      && (value.cardId === undefined || isNonEmptyTrimmedString(value.cardId))
+      && (value.choice === undefined || ['property', 'money', 'action'].includes(String(value.choice)))
+      && (value.color === undefined || isPropertyColor(value.color));
   }
 
   if (value.type === 'sly_deal_pick') {

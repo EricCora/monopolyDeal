@@ -1,4 +1,4 @@
-import type { Action, GameState, LegalAction } from '../engine';
+import type { Action, GameState, GameVariant, LegalAction } from '../engine';
 import type { MultiplayerSessionPresetId } from '../ui/experience';
 
 export type MultiplayerRoomStatus = 'lobby' | 'active' | 'finished';
@@ -58,6 +58,7 @@ export interface MultiplayerRoomView {
   started: boolean;
   winnerId?: string;
   presetId: MultiplayerSessionPresetId;
+  variant?: GameVariant;
   hostPlayerId: string;
   yourPlayerId: string;
   players: MultiplayerPlayerSummary[];
@@ -197,7 +198,8 @@ export type MultiplayerSocketCommandName =
   | 'mp:cmd:typing'
   | 'mp:cmd:checkpoint_save'
   | 'mp:cmd:checkpoint_load'
-  | 'mp:cmd:checkpoint_delete';
+  | 'mp:cmd:checkpoint_delete'
+  | 'mp:cmd:variant';
 
 export type MultiplayerSocketEventName =
   | 'mp:evt:connected'
@@ -233,6 +235,7 @@ export interface MultiplayerSocketCommandPayloadMap {
   'mp:cmd:state': { expectedRevision?: number };
   'mp:cmd:start': { seed?: number; checkpointId?: string; expectedRevision?: number };
   'mp:cmd:preset': { presetId: MultiplayerSessionPresetId; expectedRevision?: number };
+  'mp:cmd:variant': { variant: GameVariant; expectedRevision?: number };
   'mp:cmd:rematch': { expectedRevision?: number };
   'mp:cmd:action': { action: Action; expectedRevision?: number; clientStateVersion?: number; actionId?: string };
   'mp:cmd:leave': { expectedRevision?: number };
@@ -254,6 +257,7 @@ export interface MultiplayerSocketCommandResponseMap {
   'mp:cmd:state': MultiplayerRoomView;
   'mp:cmd:start': { ok: true };
   'mp:cmd:preset': { ok: true };
+  'mp:cmd:variant': { ok: true };
   'mp:cmd:rematch': { ok: true };
   'mp:cmd:action': { ok: true };
   'mp:cmd:leave': { ok: true };

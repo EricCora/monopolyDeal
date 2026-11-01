@@ -1,4 +1,4 @@
-import type { Action } from '../engine';
+import type { Action, GameVariant } from '../engine';
 import { io, type Socket } from 'socket.io-client';
 import type {
   MultiplayerActionRejectedResponse,
@@ -399,6 +399,7 @@ export function multiplayerErrorMessage(code: string): string {
   if (code === 'room_not_finished') return 'Rematch is only available after the current match finishes.';
   if (code === 'rematch_requires_connected_players') return 'Everyone from the finished room must be connected before a rematch can start.';
   if (code === 'checkpoint_preset_mismatch') return 'That checkpoint does not match the currently selected preset.';
+  if (code === 'checkpoint_variant_mismatch') return 'That checkpoint does not match the currently selected variant.';
   if (code === 'room_paused') return 'The host paused this match.';
   if (code === 'revision_conflict') return 'Room state changed. Refreshing now.';
   if (code === 'action_rejected') return 'Action no longer applies to the latest room state. Syncing now.';
@@ -580,6 +581,27 @@ export async function setMultiplayerRoomPreset(
         playerId: session.playerId,
         sessionToken: session.sessionToken,
         presetId,
+        expectedRevision,
+      }),
+    }).then(() => undefined),
+  );
+}
+
+export async function setMultiplayerRoomVariant(
+  session: MultiplayerSession,
+  variant: GameVariant,
+  apiBase = getMultiplayerApiBase(),
+  expectedRevision?: number,
+): Promise<void> {
+  await runWithTransportFallback(
+    () => runSocketCommand(session, apiBase, 'mp:cmd:variant', { variant, expectedRevision }).then(() => undefined),
+    () => request<{ ok: true }>(`${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/variant`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: session.playerId,
+        sessionToken: session.sessionToken,
+        variant,
         expectedRevision,
       }),
     }).then(() => undefined),

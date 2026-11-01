@@ -8,16 +8,16 @@ export interface ScoredAction {
   reason: string;
 }
 
-function moneyValue(cardId: string): number {
-  const card = getCardDefinition(cardId);
+function moneyValue(cardId: string, variant: 'classic' | 'no_mercy' = 'classic'): number {
+  const card = getCardDefinition(cardId, variant);
   return card.moneyValue ?? card.value;
 }
 
 function currentPlayerScore(state: GameState, playerId: PlayerId): number {
   const player = state.players.find((entry) => entry.id === playerId);
   if (!player) return 0;
-  const sets = getSetCompletionCount(player);
-  const bankValue = player.bank.reduce((sum, cardId) => sum + moneyValue(cardId), 0);
+  const sets = getSetCompletionCount(player, state.variant ?? 'classic');
+  const bankValue = player.bank.reduce((sum, cardId) => sum + moneyValue(cardId, state.variant ?? 'classic'), 0);
   return sets * 100 + bankValue;
 }
 
@@ -29,7 +29,7 @@ function actionScore(state: GameState, actorId: PlayerId, item: LegalAction): Sc
   }
 
   if (action.type === 'discard_card') {
-    const value = moneyValue(action.cardId);
+    const value = moneyValue(action.cardId, state.variant ?? 'classic');
     return {
       action,
       label: item.label,
@@ -46,7 +46,7 @@ function actionScore(state: GameState, actorId: PlayerId, item: LegalAction): Sc
   }
 
   if (action.type === 'pay_request') {
-    const paid = action.cards.reduce((sum, cardId) => sum + moneyValue(cardId), 0);
+    const paid = action.cards.reduce((sum, cardId) => sum + moneyValue(cardId, state.variant ?? 'classic'), 0);
     return {
       action,
       label: item.label,
@@ -57,8 +57,8 @@ function actionScore(state: GameState, actorId: PlayerId, item: LegalAction): Sc
 
   if (action.type === 'play_property') {
     const actor = state.players.find((entry) => entry.id === actorId);
-    const beforeSets = actor ? getSetCompletionCount(actor) : 0;
-    const card = getCardDefinition(action.cardId);
+    const beforeSets = actor ? getSetCompletionCount(actor, state.variant ?? 'classic') : 0;
+    const card = getCardDefinition(action.cardId, state.variant ?? 'classic');
     const base = card.kind === 'property' ? 420 : 340;
     const completionBonus = beforeSets >= 2 ? 180 : 40;
     return {
@@ -73,13 +73,15 @@ function actionScore(state: GameState, actorId: PlayerId, item: LegalAction): Sc
     return {
       action,
       label: item.label,
-      score: 360,
+      // Wild repositioning is a free maintenance action. Keep it below Pass
+      // so bots cannot oscillate a wild between two legal lanes forever.
+      score: 5,
       reason: 'Moving a wild can optimize set completion and future rent value.' ,
     };
   }
 
   if (action.type === 'play_to_bank') {
-    const value = moneyValue(action.cardId);
+    const value = moneyValue(action.cardId, state.variant ?? 'classic');
     return {
       action,
       label: item.label,
@@ -89,7 +91,7 @@ function actionScore(state: GameState, actorId: PlayerId, item: LegalAction): Sc
   }
 
   if (action.type === 'play_action') {
-    const card = getCardDefinition(action.cardId);
+    const card = getCardDefinition(action.cardId, state.variant ?? 'classic');
     const kind = card.actionKind;
     const actionKindScore: Record<string, number> = {
       deal_breaker: 650,
@@ -104,6 +106,17 @@ function actionScore(state: GameState, actorId: PlayerId, item: LegalAction): Sc
       house: 360,
       hotel: 330,
       double_rent: 340,
+      forced_debt: 520,
+      go_again: 480,
+      heist: 500,
+      market_crash: 560,
+      repossession: 540,
+      shack: 320,
+      super_sly_deal: 620,
+      tax_collector: 500,
+      tough_luck: 470,
+      unfair_trade: 360,
+      yoink: 460,
     };
     const score = (kind ? actionKindScore[kind] : 300) + (item.requiresPropertyTransfer ? 40 : 0);
     return {
@@ -114,12 +127,21 @@ function actionScore(state: GameState, actorId: PlayerId, item: LegalAction): Sc
     };
   }
 
-  if (action.type === 'sly_deal_pick' || action.type === 'forced_deal_pick' || action.type === 'deal_breaker_pick') {
+  if (action.type === 'sly_deal_pick' || action.type === 'forced_deal_pick' || action.type === 'deal_breaker_pick' || action.type === 'no_mercy_pick') {
     return {
       action,
       label: item.label,
       score: 520,
       reason: 'Resolving a targeted property selection can swing set control.' ,
+    };
+  }
+
+  if (action.type === 'repay_debt' || action.type === 'resolve_debt_card') {
+    return {
+      action,
+      label: item.label,
+      score: 540,
+      reason: 'Clearing a required debt step keeps the turn moving legally.',
     };
   }
 
@@ -155,7 +177,7 @@ export function chooseHeuristicAction(state: GameState, actorId: PlayerId, legal
   const top = ranked[0];
   const actorStrength = currentPlayerScore(state, actorId);
   if (top.action.type === 'pass_turn' && actorStrength < 180) {
-    const better = ranked.find((entry) => entry.action.type !== 'pass_turn');
+    const better = ranked.find((entry) => entry.action.type !== 'pass_turn' && entry.action.type !== 'move_wild');
     if (better) return better;
   }
   return top;

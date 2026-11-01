@@ -4,7 +4,9 @@ import {
   formatPropertyColor,
   getCardDefinition,
   getCardDisplayName,
+  isEveryColorWild,
   type CardDefinition,
+  type GameVariant,
   type PropertyColor,
 } from '../cards/catalog';
 import type {
@@ -25,6 +27,31 @@ export const DEFAULT_RULESET: RulesetV1 = {
 };
 
 export const PROPERTY_COLORS = Object.keys(PROPERTY_SET_SIZES) as PropertyColor[];
+
+/** Legacy v1 snapshots have no variant field and are always Classic. */
+export function gameVariant(state: Pick<GameState, 'variant'>): GameVariant {
+  return state.variant === 'no_mercy' ? 'no_mercy' : 'classic';
+}
+export const getGameVariant = gameVariant;
+
+/** Normalize persisted v1 snapshots. Missing variant fields are legacy Classic. */
+export function normalizeGameState(input: GameState): GameState {
+  const state = structuredClone(input) as GameState;
+  const variant: GameVariant = state.variant === 'no_mercy' ? 'no_mercy' : 'classic';
+  state.variant = variant;
+  if (variant === 'no_mercy') state.ruleset = { ...DEFAULT_RULESET };
+  state.players = state.players.map((player) => ({
+    ...player,
+    debts: player.debts ?? player.debtsOwed ?? [],
+    debtsOwed: player.debts ?? player.debtsOwed ?? [],
+    ...(variant === 'no_mercy' ? {
+      debtChipsRemaining: player.debtChipsRemaining ?? 3,
+      debtChipsHeld: player.debtChipsHeld ?? player.debtChips ?? [],
+      debtChips: player.debtChipsHeld ?? player.debtChips ?? [],
+    } : {}),
+  }));
+  return state;
+}
 
 export function now(): number {
   return Date.now();
@@ -68,7 +95,7 @@ export function cloneState(state: GameState): GameState {
 }
 
 export function ruleset(state: GameState): RulesetV1 {
-  return state.ruleset ?? DEFAULT_RULESET;
+  return state.variant === 'no_mercy' ? DEFAULT_RULESET : state.ruleset ?? DEFAULT_RULESET;
 }
 
 export function pushEvent(events: GameEvent[], type: string, message: string, details?: GameEvent['details']): void {
@@ -119,29 +146,29 @@ export interface PropertySetView {
   entries: PropertyCardPlacement[];
 }
 
-function isPropertyCardPlacement(entry: PropertyCardPlacement): boolean {
-  const kind = getCardDefinition(entry.cardId).kind;
+function isPropertyCardPlacement(entry: PropertyCardPlacement, variant: GameVariant = 'classic'): boolean {
+  const kind = getCardDefinition(entry.cardId, variant).kind;
   return kind === 'property' || kind === 'wild';
 }
 
-function isStandardPropertyPlacement(entry: PropertyCardPlacement): boolean {
-  return getCardDefinition(entry.cardId).kind === 'property';
+function isStandardPropertyPlacement(entry: PropertyCardPlacement, variant: GameVariant = 'classic'): boolean {
+  return getCardDefinition(entry.cardId, variant).kind === 'property';
 }
 
-function propertyCount(set: PropertySetView): number {
-  return set.entries.filter(isPropertyCardPlacement).length;
+function propertyCount(set: PropertySetView, variant: GameVariant = 'classic'): number {
+  return set.entries.filter((entry) => isPropertyCardPlacement(entry, variant)).length;
 }
 
-function setHasStandardProperty(set: PropertySetView): boolean {
-  return set.entries.some(isStandardPropertyPlacement);
+function setHasStandardProperty(set: PropertySetView, variant: GameVariant = 'classic'): boolean {
+  return set.entries.some((entry) => isStandardPropertyPlacement(entry, variant));
 }
 
-function setHasBuilding(set: PropertySetView, actionKind: 'house' | 'hotel'): boolean {
-  return set.entries.some((entry) => getCardDefinition(entry.cardId).actionKind === actionKind);
+function setHasBuilding(set: PropertySetView, actionKind: 'house' | 'hotel' | 'shack', variant: GameVariant = 'classic'): boolean {
+  return set.entries.some((entry) => getCardDefinition(entry.cardId, variant).actionKind === actionKind);
 }
 
-function isRainbowWild(entry: PropertyCardPlacement): boolean {
-  const definition = getCardDefinition(entry.cardId);
+function isRainbowWild(entry: PropertyCardPlacement, variant: GameVariant = 'classic'): boolean {
+  const definition = getCardDefinition(entry.cardId, variant);
   return definition.kind === 'wild' && (definition.colors?.length ?? 0) >= PROPERTY_COLORS.length;
 }
 
@@ -154,8 +181,9 @@ export function allocatePropertySetId(
   player: PlayerState,
   color: PropertyColor,
   preferred = `${color}:auto`,
+  variant: GameVariant = 'classic',
 ): string {
-  const used = new Set(propertySets(player, color).map((set) => set.setId));
+  const used = new Set(propertySets(player, color, variant).map((set) => set.setId));
   if (!used.has(preferred)) return preferred;
   let suffix = 2;
   while (used.has(`${preferred}-${suffix}`)) suffix += 1;
@@ -167,7 +195,7 @@ export function allocatePropertySetId(
  * assigned deterministically, with standard properties considered before wilds
  * so a wild-only lane can never become a complete set by accident.
  */
-export function propertySets(player: PlayerState, color: PropertyColor): PropertySetView[] {
+export function propertySets(player: PlayerState, color: PropertyColor, variant: GameVariant = 'classic'): PropertySetView[] {
   const entries = player.properties[color] ?? [];
   const required = PROPERTY_SET_SIZES[color];
   const groups: PropertySetView[] = [];
@@ -199,9 +227,9 @@ export function propertySets(player: PlayerState, color: PropertyColor): Propert
 
   const untagged = entries.filter((entry) => !entry.setId);
   const chooseOpenGroup = (preferStandard: boolean): PropertySetView => {
-    const open = groups.filter((group) => propertyCount(group) < required);
+    const open = groups.filter((group) => propertyCount(group, variant) < required);
     if (preferStandard) {
-      const withStandard = open.find(setHasStandardProperty);
+      const withStandard = open.find((set) => setHasStandardProperty(set, variant));
       if (withStandard) return withStandard;
     }
     return open[0] ?? createGroup();
@@ -209,16 +237,16 @@ export function propertySets(player: PlayerState, color: PropertyColor): Propert
 
   // Process standard properties first. This makes a legacy [wild, wild,
   // standard] lane become one standard-backed set plus one excess wild.
-  for (const entry of untagged.filter(isStandardPropertyPlacement)) {
+  for (const entry of untagged.filter((entry) => isStandardPropertyPlacement(entry, variant))) {
     chooseOpenGroup(false).entries.push(entry);
   }
-  for (const entry of untagged.filter((entry) => isPropertyCardPlacement(entry) && !isStandardPropertyPlacement(entry))) {
+  for (const entry of untagged.filter((entry) => isPropertyCardPlacement(entry, variant) && !isStandardPropertyPlacement(entry, variant))) {
     chooseOpenGroup(true).entries.push(entry);
   }
-  for (const entry of untagged.filter((entry) => !isPropertyCardPlacement(entry))) {
+  for (const entry of untagged.filter((entry) => !isPropertyCardPlacement(entry, variant))) {
     const eligible = groups.find((group) =>
-      propertyCount(group) >= required
-      && !setHasBuilding(group, getCardDefinition(entry.cardId).actionKind as 'house' | 'hotel'),
+      propertyCount(group, variant) >= required
+      && !setHasBuilding(group, getCardDefinition(entry.cardId, variant).actionKind as 'house' | 'hotel' | 'shack', variant),
     );
     (eligible ?? groups[0] ?? createGroup()).entries.push(entry);
   }
@@ -227,16 +255,16 @@ export function propertySets(player: PlayerState, color: PropertyColor): Propert
 }
 
 /** Materialize deterministic IDs for a player before mutating a property lane. */
-export function normalizePropertySets(player: PlayerState): void {
+export function normalizePropertySets(player: PlayerState, variant: GameVariant = 'classic'): void {
   for (const color of PROPERTY_COLORS) {
-    for (const set of propertySets(player, color)) {
+    for (const set of propertySets(player, color, variant)) {
       for (const entry of set.entries) entry.setId = set.setId;
     }
   }
 }
 
-export function getPropertySetEntries(player: PlayerState, color: PropertyColor, setId?: string): PropertyCardPlacement[] {
-  const sets = propertySets(player, color);
+export function getPropertySetEntries(player: PlayerState, color: PropertyColor, setId?: string, variant: GameVariant = 'classic'): PropertyCardPlacement[] {
+  const sets = propertySets(player, color, variant);
   if (setId) return sets.find((set) => set.setId === setId)?.entries ?? [];
   return sets[0]?.entries ?? [];
 }
@@ -245,15 +273,21 @@ export function findPropertySetIdByCard(
   player: PlayerState,
   color: PropertyColor,
   cardId: string,
+  variant: GameVariant = 'classic',
 ): string | undefined {
-  return propertySets(player, color)
+  return propertySets(player, color, variant)
     .find((set) => set.entries.some((entry) => entry.cardId === cardId))?.setId;
 }
 
-export function isCompletePropertySet(entries: PropertyCardPlacement[], color: PropertyColor): boolean {
+export function isCompletePropertySet(entries: PropertyCardPlacement[], color: PropertyColor, variant: GameVariant = 'classic'): boolean {
   const required = PROPERTY_SET_SIZES[color];
-  const properties = entries.filter(isPropertyCardPlacement);
-  return properties.length >= required && properties.some(isStandardPropertyPlacement);
+  const properties = entries.filter((entry) => isPropertyCardPlacement(entry, variant));
+  if (properties.length < required) return false;
+  // Classic requires a standard property. No Mercy permits two-colour wilds,
+  // but two or more every-colour wilds cannot complete a set on their own.
+  return variant === 'no_mercy'
+    ? properties.some((entry) => !isEveryColorWild(entry.cardId, variant))
+    : properties.some((entry) => isStandardPropertyPlacement(entry, variant));
 }
 
 export function isBuildingPlacementLegal(
@@ -261,25 +295,58 @@ export function isBuildingPlacementLegal(
   color: PropertyColor,
   actionKind: 'house' | 'hotel',
   setId?: string,
+  variant: GameVariant = 'classic',
 ): boolean {
   if (color === 'railroad' || color === 'utility') return false;
-  const sets = propertySets(player, color);
-  const eligible = sets.filter((set) => isCompletePropertySet(set.entries, color));
+  const sets = propertySets(player, color, variant);
+  const eligible = sets.filter((set) => isCompletePropertySet(set.entries, color, variant));
   const target = setId
     ? eligible.find((set) => set.setId === setId)
-    : eligible.find((set) => !setHasBuilding(set, actionKind)
-      && (actionKind !== 'hotel' || setHasBuilding(set, 'house')));
+    : eligible.find((set) => !setHasBuilding(set, actionKind, variant)
+      && (actionKind !== 'hotel' || setHasBuilding(set, 'house', variant)));
   if (!target) return false;
-  if (setHasBuilding(target, actionKind)) return false;
-  if (actionKind === 'hotel' && !setHasBuilding(target, 'house')) return false;
+  if (setHasBuilding(target, actionKind, variant)) return false;
+  if (actionKind === 'hotel' && !setHasBuilding(target, 'house', variant)) return false;
   return true;
 }
 
-export function addToProperty(player: PlayerState, cardId: string, color: PropertyColor, setId?: string): void {
-  normalizePropertySets(player);
-  const card = getCardDefinition(cardId);
+export function isShackPlacementLegal(
+  player: PlayerState,
+  color: PropertyColor,
+  setId?: string,
+  attachedToCardId?: string,
+  variant: GameVariant = 'classic',
+): boolean {
+  const target = setId ? propertySets(player, color, variant).find((set) => set.setId === setId) : propertySets(player, color, variant)[0];
+  if (!target) return false;
+  const properties = target.entries.filter((entry) => isPropertyCardPlacement(entry, variant));
+  if (properties.length === 0) return false;
+  // No Mercy allows one Shack on each loose property, but a completed
+  // property set may contain only one Shack total.
+  if (variant === 'no_mercy'
+    && isCompletePropertySet(target.entries, color, variant)
+    && target.entries.some((entry) => getCardDefinition(entry.cardId, variant).actionKind === 'shack')) {
+    return false;
+  }
+  if (attachedToCardId) {
+    return properties.some((entry) => entry.cardId === attachedToCardId)
+      && !target.entries.some((entry) => entry.attachedToCardId === attachedToCardId);
+  }
+  return properties.some((entry) => !target.entries.some((attachment) => attachment.attachedToCardId === entry.cardId));
+}
+
+export function addToProperty(
+  player: PlayerState,
+  cardId: string,
+  color: PropertyColor,
+  setId?: string,
+  attachedToCardId?: string,
+  variant: GameVariant = 'classic',
+): void {
+  normalizePropertySets(player, variant);
+  const card = getCardDefinition(cardId, variant);
   const required = PROPERTY_SET_SIZES[color];
-  const sets = propertySets(player, color);
+  const sets = propertySets(player, color, variant);
   let target = setId ? sets.find((set) => set.setId === setId) : undefined;
   // An explicit set id is a physical-group instruction. If this is a newly
   // transferred set, create that group before the normal "first open set"
@@ -287,24 +354,24 @@ export function addToProperty(player: PlayerState, cardId: string, color: Proper
   if (!target && setId) target = { setId, entries: [] };
 
   if (!target && card.kind === 'building') {
-    target = sets.find((set) => isCompletePropertySet(set.entries, color)
+    target = sets.find((set) => isCompletePropertySet(set.entries, color, variant)
       && color !== 'railroad'
       && color !== 'utility'
-      && !setHasBuilding(set, card.actionKind as 'house' | 'hotel'));
+      && !setHasBuilding(set, card.actionKind as 'house' | 'hotel', variant));
   }
   if (!target && card.kind !== 'building') {
-    const open = sets.filter((set) => propertyCount(set) < required);
+    const open = sets.filter((set) => propertyCount(set, variant) < required);
     target = card.kind === 'wild'
-      ? open.find(setHasStandardProperty) ?? open[0]
+      ? open.find((set) => setHasStandardProperty(set, variant)) ?? open[0]
       : open[0];
     if (!target && card.kind === 'property') {
       // A standard property can complete a wild-only group. Move one excess
       // wild into its own group first so the original group remains physical.
-      const wildOnly = sets.find((set) => !setHasStandardProperty(set) && propertyCount(set) >= required);
+      const wildOnly = sets.find((set) => !setHasStandardProperty(set, variant) && propertyCount(set, variant) >= required);
       let excessWild: PropertyCardPlacement | undefined;
       for (let index = (wildOnly?.entries.length ?? 0) - 1; index >= 0; index -= 1) {
         const entry = wildOnly?.entries[index];
-        if (entry && getCardDefinition(entry.cardId).kind === 'wild') {
+        if (entry && getCardDefinition(entry.cardId, variant).kind === 'wild') {
           excessWild = entry;
           break;
         }
@@ -326,7 +393,7 @@ export function addToProperty(player: PlayerState, cardId: string, color: Proper
     while (used.has(nextId)) nextId = generatedSetId(color, ++index);
     target = { setId: setId ?? nextId, entries: [] };
   }
-  player.properties[color].push({ cardId, assignedColor: color, setId: target.setId });
+  player.properties[color].push({ cardId, assignedColor: color, setId: target.setId, ...(attachedToCardId ? { attachedToCardId } : {}) });
 }
 
 export function removePropertyCard(
@@ -342,59 +409,73 @@ export function removePropertyCard(
   return card;
 }
 
-export function cardMoneyValue(cardId: string): number {
-  const card = getCardDefinition(cardId);
+export function attachedPropertyCards(
+  player: PlayerState,
+  color: PropertyColor,
+  cardId: string,
+  setId?: string,
+): PropertyCardPlacement[] {
+  return (player.properties[color] ?? []).filter((entry) =>
+    entry.attachedToCardId === cardId && (!setId || entry.setId === setId),
+  );
+}
+
+export function cardMoneyValue(cardId: string, variant: GameVariant = 'classic'): number {
+  const card = getCardDefinition(cardId, variant);
   return card.moneyValue ?? card.value;
 }
 
-export function cardLabel(cardId: string): string {
-  return getCardDisplayName(cardId);
+export function cardLabel(cardId: string, variant: GameVariant = 'classic'): string {
+  return getCardDisplayName(cardId, variant);
 }
 
 export function colorLabel(color: PropertyColor): string {
   return formatPropertyColor(color);
 }
 
-export function countCompleteSets(player: PlayerState): number {
+export function countCompleteSets(player: PlayerState, variant: GameVariant = 'classic'): number {
   // Monopoly Deal's victory condition counts completed color groups. Multiple
   // physical groups of one color still matter for protection and rent, but
   // cannot satisfy multiple victory slots.
-  return PROPERTY_COLORS.filter((color) => isCompleteSet(player, color)).length;
+  return PROPERTY_COLORS.filter((color) => isCompleteSet(player, color, undefined, variant)).length;
 }
 
-export function isCompleteSet(player: PlayerState, color: PropertyColor, setId?: string): boolean {
-  const sets = propertySets(player, color);
+export function isCompleteSet(player: PlayerState, color: PropertyColor, setId?: string, variant: GameVariant = 'classic'): boolean {
+  const sets = propertySets(player, color, variant);
   if (setId) {
     const set = sets.find((candidate) => candidate.setId === setId);
-    return set ? isCompletePropertySet(set.entries, color) : false;
+    return set ? isCompletePropertySet(set.entries, color, variant) : false;
   }
-  return sets.some((set) => isCompletePropertySet(set.entries, color));
+  return sets.some((set) => isCompletePropertySet(set.entries, color, variant));
 }
 
-export function getRentAmount(player: PlayerState, color: PropertyColor): number {
+export function getRentAmount(player: PlayerState, color: PropertyColor, variant: GameVariant = 'classic'): number {
   const rentCard = CARD_DEFINITIONS.find((card) => card.actionKind === 'rent' && card.rentMatrix?.[color]);
   const scale = rentCard?.rentMatrix?.[color] ?? [1];
-  const amounts = propertySets(player, color)
-    .filter((set) => set.entries.some((entry) => isPropertyCardPlacement(entry) && !isRainbowWild(entry)))
+  const amounts = propertySets(player, color, variant)
+    .filter((set) => set.entries.some((entry) => isPropertyCardPlacement(entry, variant) && !isRainbowWild(entry, variant)))
     .map((set) => {
-      const propertyCount = set.entries.filter(isPropertyCardPlacement).length;
+      const propertyCount = set.entries.filter((entry) => isPropertyCardPlacement(entry, variant)).length;
       const base = scale[Math.min(propertyCount, scale.length) - 1] ?? scale[scale.length - 1] ?? 1;
-      const houseBonus = setHasBuilding(set, 'house') ? 3 : 0;
-      const hotelBonus = setHasBuilding(set, 'hotel') ? 4 : 0;
-      return base + houseBonus + hotelBonus;
+      const houseBonus = setHasBuilding(set, 'house', variant) ? 3 : 0;
+      const hotelBonus = setHasBuilding(set, 'hotel', variant) ? 4 : 0;
+      const shackBonus = variant === 'no_mercy'
+        ? set.entries.filter((entry) => getCardDefinition(entry.cardId, variant).actionKind === 'shack').length * 5
+        : 0;
+      return base + houseBonus + hotelBonus + shackBonus;
     });
   // A rainbow wild in an otherwise empty color lane has no rent value.
   return amounts.length > 0 ? Math.max(...amounts) : 0;
 }
 
-export function movablePropertyCards(player: PlayerState): Array<{ color: PropertyColor; cardId: string; setId?: string }> {
+export function movablePropertyCards(player: PlayerState, variant: GameVariant = 'classic'): Array<{ color: PropertyColor; cardId: string; setId?: string }> {
   const options: Array<{ color: PropertyColor; cardId: string; setId?: string }> = [];
   for (const color of PROPERTY_COLORS) {
-    for (const set of propertySets(player, color)) {
-      const protectedSet = isCompletePropertySet(set.entries, color);
+    for (const set of propertySets(player, color, variant)) {
+      const protectedSet = isCompletePropertySet(set.entries, color, variant);
       for (const entry of set.entries) {
-        const def = getCardDefinition(entry.cardId);
-        if (def.actionKind === 'house' || def.actionKind === 'hotel') continue;
+        const def = getCardDefinition(entry.cardId, variant);
+        if (def.actionKind === 'house' || def.actionKind === 'hotel' || def.actionKind === 'shack') continue;
         if (protectedSet) continue;
         options.push({ color, cardId: entry.cardId, setId: set.setId });
       }
@@ -403,29 +484,30 @@ export function movablePropertyCards(player: PlayerState): Array<{ color: Proper
   return options;
 }
 
-export function totalBankValue(player: PlayerState): number {
-  return player.bank.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0);
+export function totalBankValue(player: PlayerState, variant: GameVariant = 'classic'): number {
+  return player.bank.reduce((sum, cardId) => sum + cardMoneyValue(cardId, variant), 0);
 }
 
-export function totalPayableValue(player: PlayerState): number {
+export function totalPayableValue(player: PlayerState, variant: GameVariant = 'classic'): number {
+  const payable = (cardId: string) => variant === 'no_mercy' && isEveryColorWild(cardId, variant) ? 0 : cardMoneyValue(cardId, variant);
   const propertyValue = PROPERTY_COLORS.flatMap((color) => player.properties[color].map((entry) => entry.cardId))
-    .reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0);
-  return totalBankValue(player) + propertyValue;
+    .reduce((sum, cardId) => sum + payable(cardId), 0);
+  return player.bank.reduce((sum, cardId) => sum + payable(cardId), 0) + propertyValue;
 }
 
-export function completeSetColors(player: PlayerState): PropertyColor[] {
-  return PROPERTY_COLORS.filter((color) => isCompleteSet(player, color));
+export function completeSetColors(player: PlayerState, variant: GameVariant = 'classic'): PropertyColor[] {
+  return PROPERTY_COLORS.filter((color) => isCompleteSet(player, color, undefined, variant));
 }
 
-export function generatePaymentOptions(player: PlayerState, targetAmount: number): string[][] {
+export function generatePaymentOptions(player: PlayerState, targetAmount: number, variant: GameVariant = 'classic'): string[][] {
   const allCards = [
     ...player.bank,
     ...PROPERTY_COLORS.flatMap((color) => player.properties[color].map((entry) => entry.cardId)),
-  ];
+  ].filter((cardId) => !(variant === 'no_mercy' && isEveryColorWild(cardId, variant)));
   if (allCards.length === 0) return [[]];
 
   const sorted = [...allCards].sort((left, right) => {
-    const valueDelta = cardMoneyValue(left) - cardMoneyValue(right);
+    const valueDelta = cardMoneyValue(left, variant) - cardMoneyValue(right, variant);
     if (valueDelta !== 0) return valueDelta;
     return left.localeCompare(right);
   });
@@ -443,7 +525,7 @@ export function generatePaymentOptions(player: PlayerState, targetAmount: number
   };
 
   for (const cardId of sorted) {
-    if (cardMoneyValue(cardId) === targetAmount) {
+    if (cardMoneyValue(cardId, variant) === targetAmount) {
       addOption([cardId]);
     }
   }
@@ -457,7 +539,7 @@ export function generatePaymentOptions(player: PlayerState, targetAmount: number
     if (index >= sorted.length) return;
 
     selected.push(sorted[index]);
-    backtrack(index + 1, selected, total + cardMoneyValue(sorted[index]));
+    backtrack(index + 1, selected, total + cardMoneyValue(sorted[index], variant));
     selected.pop();
 
     backtrack(index + 1, selected, total);
@@ -467,8 +549,8 @@ export function generatePaymentOptions(player: PlayerState, targetAmount: number
   if (options.length === 0) addOption(sorted);
 
   options.sort((left, right) => {
-    const leftTotal = left.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0);
-    const rightTotal = right.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0);
+    const leftTotal = left.reduce((sum, cardId) => sum + cardMoneyValue(cardId, variant), 0);
+    const rightTotal = right.reduce((sum, cardId) => sum + cardMoneyValue(cardId, variant), 0);
     const leftMeets = leftTotal >= targetAmount;
     const rightMeets = rightTotal >= targetAmount;
     if (leftMeets !== rightMeets) return leftMeets ? -1 : 1;
@@ -504,24 +586,24 @@ export function canCardBeBanked(card: CardDefinition): boolean {
     || card.kind === 'building';
 }
 
-function hasPlayableRentCard(player: PlayerState, excludedCardId?: string): boolean {
+function hasPlayableRentCard(player: PlayerState, excludedCardId?: string, variant: GameVariant = 'classic'): boolean {
   for (const handCardId of player.hand) {
     if (handCardId === excludedCardId) continue;
-    const handCard = getCardDefinition(handCardId);
+    const handCard = getCardDefinition(handCardId, variant);
     if (handCard.kind !== 'action') continue;
     if (handCard.actionKind !== 'rent' && handCard.actionKind !== 'rent_wild') continue;
     const allowedColors = Object.keys(handCard.rentMatrix ?? {}) as PropertyColor[];
-    if (allowedColors.some((color) => getRentAmount(player, color) > 0)) {
+    if (allowedColors.some((color) => getRentAmount(player, color, variant) > 0)) {
       return true;
     }
   }
   return false;
 }
 
-export function canPlayDoubleRent(state: GameState, player: PlayerState, excludedCardId: string): boolean {
+export function canPlayDoubleRent(state: GameState, player: PlayerState, excludedCardId: string, variant: GameVariant = gameVariant(state)): boolean {
   const hasPlayBudgetForCombo = state.turn.playsUsed <= ruleset(state).maxPlaysPerTurn - 2;
   if (!hasPlayBudgetForCombo) return false;
-  return hasPlayableRentCard(player, excludedCardId);
+  return hasPlayableRentCard(player, excludedCardId, variant);
 }
 
 export function discard(state: GameState, cardId: string): void {
@@ -563,7 +645,7 @@ export function consumePlay(state: GameState): void {
 }
 
 export function checkWinner(state: GameState): void {
-  const winner = state.players.find((player) => countCompleteSets(player) >= ruleset(state).winCompleteSets);
+  const winner = state.players.find((player) => countCompleteSets(player, state.variant ?? 'classic') >= ruleset(state).winCompleteSets);
   if (winner) {
     state.winnerId = winner.id;
     state.turn.phase = 'finished';

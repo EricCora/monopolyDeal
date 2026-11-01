@@ -6,8 +6,10 @@ import {
   getNextPrompt,
   getSetCompletionCount,
   isGameOver,
+  normalizeGameState,
   type Action,
   type GameState,
+  type GameVariant,
   type PlayerConfig,
   type PlayerId,
 } from '../../../src/engine/index.ts';
@@ -48,6 +50,7 @@ const CHAT_COOLDOWN_MS = 700;
 const MAX_CHAT_MESSAGE_LENGTH = 280;
 const TYPING_TTL_MS = 4_500;
 export const ROOM_REACTION_OPTIONS: MultiplayerReaction[] = ['nice', 'wow', 'gg', 'oops'];
+const DEFAULT_GAME_VARIANT: GameVariant = 'classic';
 
 export function resolveReconnectWindowMs(configuredGraceMs?: string): number {
   const parsed = Number(configuredGraceMs);
@@ -57,7 +60,7 @@ export function resolveReconnectWindowMs(configuredGraceMs?: string): number {
   return RECONNECT_WINDOW_V1_DEFAULT_MS;
 }
 
-type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
+type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild' | 'repay_debt';
 
 interface RoomParticipant {
   id: PlayerId;
@@ -100,6 +103,7 @@ export interface MultiplayerRoom {
   hostPlayerId: PlayerId;
   status: MultiplayerRoomStatus;
   presetId: MultiplayerSessionPresetId;
+  variant: GameVariant;
   players: RoomParticipant[];
   game: GameState | null;
   paused: boolean;
@@ -149,6 +153,22 @@ export interface PruneInactiveRoomsResult {
 
 export function normalizeRoomForRuntime(room: MultiplayerRoom): MultiplayerRoom {
   room.presetId = normalizeMultiplayerSessionPreset(room.presetId, DEFAULT_MULTIPLAYER_SESSION_PRESET);
+  // A started game's variant is authoritative. Lobby snapshots use the room
+  // field, while legacy snapshots with neither field default to Classic.
+  room.variant = normalizeGameVariant(room.game?.variant ?? room.variant, DEFAULT_GAME_VARIANT);
+  if (room.variant === 'no_mercy') room.presetId = DEFAULT_MULTIPLAYER_SESSION_PRESET;
+  if (room.game) {
+    room.game = normalizeGameState({ ...room.game, variant: room.variant });
+  }
+  room.turnSnapshots = Array.isArray(room.turnSnapshots)
+    ? room.turnSnapshots.map((snapshot) => normalizeGameState(snapshot))
+    : [];
+  room.checkpoints = Array.isArray(room.checkpoints)
+    ? room.checkpoints.map((checkpoint) => ({
+        ...checkpoint,
+        game: normalizeGameState(checkpoint.game),
+      }))
+    : [];
   room.activityFeed = Array.isArray(room.activityFeed) ? room.activityFeed : [];
   room.nextActivityId = Number.isFinite(room.nextActivityId)
     ? Math.max(Number(room.nextActivityId), room.activityFeed.length + 1)
@@ -216,6 +236,10 @@ export function normalizeRoomForRuntime(room: MultiplayerRoom): MultiplayerRoom 
       }
     : undefined;
   return room;
+}
+
+function normalizeGameVariant(input: unknown, fallback: GameVariant = DEFAULT_GAME_VARIANT): GameVariant {
+  return input === 'no_mercy' ? 'no_mercy' : input === 'classic' ? 'classic' : fallback;
 }
 
 function nowMs(): number {
@@ -634,7 +658,7 @@ function roomPlayerSummary(room: MultiplayerRoom): MultiplayerPlayerSummary[] {
       name: player.name,
       handCount: player.hand.length,
       bankCount: player.bank.length,
-      completeSets: getSetCompletionCount(player),
+      completeSets: getSetCompletionCount(player, room.game?.variant ?? room.variant),
       connected: Boolean(entry?.connected),
       connectionState: entry?.connectionState ?? (entry?.connected ? 'connected' : 'disconnected'),
       disconnectedAt: entry?.disconnectedAt ?? null,
@@ -663,6 +687,15 @@ function maskForViewer(state: GameState, viewerId: PlayerId): GameState {
   for (const player of clone.players) {
     if (player.id === viewerId) continue;
     player.hand = Array.from({ length: player.hand.length }, () => '__hidden__');
+  }
+  // A debt repayment card is still a private hand choice until the receiving
+  // player resolves it. The debtor and creditor need the identity; every other
+  // multiplayer client only needs to know that a resolution is pending.
+  if (clone.pending?.kind === 'debt_card') {
+    const { debtorPlayerId, creditorPlayerId } = clone.pending.payload;
+    if (viewerId !== debtorPlayerId && viewerId !== creditorPlayerId) {
+      clone.pending.payload.cardId = '__hidden__';
+    }
   }
   // The draw pile is ordered hidden information too. Preserve its length for
   // deck-count UI while never exposing card identities or order to clients.
@@ -707,6 +740,10 @@ function canViewerRematchRoom(room: MultiplayerRoom, viewerId: PlayerId): boolea
 
 function checkpointRulesMatchPreset(room: MultiplayerRoom, checkpoint: RoomCheckpoint): boolean {
   return multiplayerSessionPresetRulesMatch(room.presetId, checkpoint.game.ruleset ?? DEFAULT_RULESET);
+}
+
+function checkpointMatchesVariant(room: MultiplayerRoom, checkpoint: RoomCheckpoint): boolean {
+  return normalizeGameVariant(checkpoint.game.variant) === room.variant;
 }
 
 function resetRoomForFreshMatch(room: MultiplayerRoom): void {
@@ -773,18 +810,21 @@ function isReversibleActionType(actionType: Action['type']): actionType is Rever
     || actionType === 'play_to_bank'
     || actionType === 'play_property'
     || actionType === 'play_action'
-    || actionType === 'move_wild';
+    || actionType === 'move_wild'
+    || actionType === 'repay_debt';
 }
 
 function shouldRetainTurnSnapshots(nextState: GameState, nextPromptPlayerId: string): boolean {
   if (isGameOver(nextState).done) return false;
-  if (nextState.turn.phase !== 'action') return false;
+  if (nextState.turn.phase !== 'action' && !(nextState.variant === 'no_mercy' && nextState.turn.phase === 'debt')) return false;
   if (nextState.players[nextState.currentPlayerIndex]?.id !== nextPromptPlayerId) return false;
   if (!nextState.pending) return true;
   return nextState.pending.kind === 'rent'
     || nextState.pending.kind === 'sly_deal'
     || nextState.pending.kind === 'forced_deal'
-    || nextState.pending.kind === 'deal_breaker';
+    || nextState.pending.kind === 'deal_breaker'
+    || nextState.pending.kind === 'debt_card'
+    || nextState.pending.kind === 'no_mercy';
 }
 
 function actionDedupeKey(playerId: PlayerId, actionId: string, action: Action): string {
@@ -901,6 +941,7 @@ export function createRoom(
     hostPlayerId: playerId,
     status: 'lobby',
     presetId: DEFAULT_MULTIPLAYER_SESSION_PRESET,
+    variant: DEFAULT_GAME_VARIANT,
     players: [{
       id: playerId,
       name: sanitizeName(hostName, 'Host'),
@@ -1060,6 +1101,9 @@ export function startRoom(
     if (!checkpointRulesMatchPreset(room, checkpoint)) {
       throw new Error('checkpoint_preset_mismatch');
     }
+    if (!checkpointMatchesVariant(room, checkpoint)) {
+      throw new Error('checkpoint_variant_mismatch');
+    }
     room.game = structuredClone(checkpoint.game);
   } else {
     room.game = createGame({
@@ -1067,6 +1111,7 @@ export function startRoom(
       deckVersion: 'v1',
       seed,
       ruleset: getMultiplayerSessionPresetRuleset(room.presetId),
+      variant: room.variant,
     });
   }
   resetRoomForFreshMatch(room);
@@ -1272,7 +1317,7 @@ export function saveRoomCheckpoint(
     id: randomCheckpointId(),
     name: sanitizeCheckpointName(name),
     savedAt: nowMs(),
-    game: structuredClone(game),
+    game: normalizeGameState(structuredClone(game)),
   };
   room.checkpoints.push(checkpoint);
   appendActivity(room, 'checkpoint', `${player.name} saved checkpoint "${checkpoint.name}".`, { playerId });
@@ -1293,6 +1338,12 @@ export function loadRoomCheckpoint(
   requireHost(room, playerId);
   requireGame(room);
   const checkpoint = findCheckpoint(room, checkpointId);
+  if (!checkpointMatchesVariant(room, checkpoint)) {
+    throw new Error('checkpoint_variant_mismatch');
+  }
+  if (!checkpointRulesMatchPreset(room, checkpoint)) {
+    throw new Error('checkpoint_preset_mismatch');
+  }
   room.game = structuredClone(checkpoint.game);
   room.turnSnapshots = [];
   room.recentActionIds = [];
@@ -1336,6 +1387,7 @@ export function setRoomPreset(
   assertReconnectWindowOpen(player);
   requireConnectedPlayer(player);
   requireHost(room, playerId);
+  if (room.variant === 'no_mercy') throw new Error('variant_rules_locked');
   if (room.status === 'active') {
     throw new Error('room_started');
   }
@@ -1351,6 +1403,31 @@ export function setRoomPreset(
     `${player.name} switched the room preset to ${getMultiplayerSessionPresetDefinition(nextPresetId).label}.`,
     { playerId },
   );
+  commitMutation(room);
+  return room;
+}
+
+export function setRoomVariant(
+  room: MultiplayerRoom,
+  playerId: PlayerId,
+  sessionToken: string,
+  variant: GameVariant,
+  expectedRevision?: number,
+): MultiplayerRoom {
+  ensureExpectedRevision(room, expectedRevision);
+  const player = requireSession(room, playerId, sessionToken);
+  assertReconnectWindowOpen(player);
+  requireConnectedPlayer(player);
+  requireHost(room, playerId);
+  if (room.status !== 'lobby' || room.game) {
+    throw new Error('room_started');
+  }
+  const nextVariant = normalizeGameVariant(variant, room.variant);
+  if (room.variant === nextVariant) return room;
+  room.variant = nextVariant;
+  if (nextVariant === 'no_mercy') room.presetId = DEFAULT_MULTIPLAYER_SESSION_PRESET;
+  clearAllReadyStates(room);
+  appendActivity(room, 'lobby', `${player.name} switched the room variant to ${nextVariant}.`, { playerId });
   commitMutation(room);
   return room;
 }
@@ -1407,6 +1484,7 @@ export function rematchRoom(
     players: room.players.map((entry) => ({ id: entry.id, name: entry.name })),
     deckVersion: 'v1',
     ruleset: getMultiplayerSessionPresetRuleset(room.presetId),
+    variant: room.variant,
   });
   resetRoomForFreshMatch(room);
   appendActivity(room, 'match', `Rematch started with ${getMultiplayerSessionPresetDefinition(room.presetId).label}.`);
@@ -1537,6 +1615,7 @@ export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken
     started,
     winnerId: status.done ? status.winnerId : undefined,
     presetId: room.presetId,
+    variant: room.variant,
     hostPlayerId: room.hostPlayerId,
     yourPlayerId: viewerId,
     players: roomPlayerSummary(room),

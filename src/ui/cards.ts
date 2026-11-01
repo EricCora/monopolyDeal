@@ -1,4 +1,4 @@
-import { formatPropertyColor, getCardDefinition, getRentScale, getSetSize, type CardDefinition, type PropertyColor } from '../cards/catalog';
+import { formatPropertyColor, getCardDefinition, getRentScale, getSetSize, type CardDefinition, type GameVariant, type PropertyColor } from '../cards/catalog';
 import dealBreakerIcon from './assets/icons/deal_breaker.svg';
 import debtCollectorIcon from './assets/icons/debt_collector.svg';
 import doubleRentIcon from './assets/icons/double_rent.svg';
@@ -52,6 +52,10 @@ const ACTION_ICON_BY_KIND = {
   hotel: hotelIcon,
 } as const;
 
+// No Mercy adds action cards before dedicated artwork exists; use the generic
+// action motif while preserving the card's title and rules text.
+const ACTION_ICON_BY_KIND_EXTENDED: Partial<Record<string, string>> = ACTION_ICON_BY_KIND;
+
 function normalizeColor(color: PropertyColor): string {
   return color.replace('_', '-');
 }
@@ -85,7 +89,7 @@ function actionBadgeFromCard(card: CardDefinition): string | undefined {
 
 function actionIconFromCard(card: CardDefinition): string | undefined {
   if (!card.actionKind) return undefined;
-  return ACTION_ICON_BY_KIND[card.actionKind] ?? undefined;
+  return ACTION_ICON_BY_KIND_EXTENDED[card.actionKind] ?? undefined;
 }
 
 function roleTagFromCard(card: CardDefinition): Pick<CardVisualModel, 'roleTag' | 'roleTagClass'> {
@@ -189,8 +193,8 @@ function themeFromCard(card: CardDefinition): { themeClass: string; accent: stri
   return { themeClass: 'theme-action', accent: 'var(--card-action)' };
 }
 
-export function getCardVisualModel(cardId: string): CardVisualModel {
-  const card = getCardDefinition(cardId);
+export function getCardVisualModel(cardId: string, variant: GameVariant = 'classic'): CardVisualModel {
+  const card = getCardDefinition(cardId, variant);
   const theme = themeFromCard(card);
   const setSize = card.kind === 'property' ? getSetSize(card.color!) : undefined;
   const rentScale = card.kind === 'property' ? getRentScale(card.color!) : undefined;

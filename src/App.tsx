@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { formatPropertyColor, getCardDefinition, type PropertyColor } from './cards/catalog';
+import { formatPropertyColor, getCardDefinition, isEveryColorWild, type GameVariant, type PropertyColor } from './cards/catalog';
 import { propertySets, isCompletePropertySet } from './engine/core';
 import { buildCoachHint, chooseHeuristicAction, chooseMonteCarloAction } from './ai';
 import {
@@ -134,10 +134,11 @@ type TableActionHint =
     }
   | null;
 
-type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild';
+type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild' | 'repay_debt';
 
 function initialSetup(): SetupViewModel {
   return {
+    variant: 'classic',
     playerCount: 2,
     playerNames: ['Player 1', 'Player 2', 'Player 3', 'Player 4', 'Player 5'],
     playerControllers: ['human', 'human', 'human', 'human', 'human'],
@@ -167,19 +168,19 @@ function actionVariantId(action: Action): string {
   return JSON.stringify(action);
 }
 
-function actionCardName(action: Action): string {
+function actionCardName(action: Action, variant: GameVariant = 'classic'): string {
   if (action.type !== 'play_action') return 'Action';
-  return getCardDefinition(action.cardId).name;
+  return getCardDefinition(action.cardId, variant).name;
 }
 
-function cardMoneyValue(cardId: string): number {
-  const def = getCardDefinition(cardId);
+function cardMoneyValue(cardId: string, variant: GameVariant = 'classic'): number {
+  const def = getCardDefinition(cardId, variant);
   return def.moneyValue ?? def.value;
 }
 
-function canonicalizePaymentCards(cardIds: string[]): string[] {
+function canonicalizePaymentCards(cardIds: string[], variant: GameVariant = 'classic'): string[] {
   return [...cardIds].sort((left, right) => {
-    const valueDelta = cardMoneyValue(left) - cardMoneyValue(right);
+    const valueDelta = cardMoneyValue(left, variant) - cardMoneyValue(right, variant);
     if (valueDelta !== 0) return valueDelta;
     return left.localeCompare(right);
   });
@@ -202,15 +203,17 @@ function isReversibleActionType(actionType: Action['type']): actionType is Rever
     || actionType === 'play_to_bank'
     || actionType === 'play_property'
     || actionType === 'play_action'
-    || actionType === 'move_wild';
+    || actionType === 'move_wild'
+    || actionType === 'repay_debt';
 }
 
 function shouldRetainTurnSnapshots(nextState: GameState, nextPromptPlayerId: string): boolean {
   if (isGameOver(nextState).done) return false;
-  if (nextState.turn.phase !== 'action') return false;
+  if (nextState.turn.phase !== 'action' && !(nextState.variant === 'no_mercy' && nextState.turn.phase === 'debt')) return false;
   if (nextState.players[nextState.currentPlayerIndex]?.id !== nextPromptPlayerId) return false;
   if (!nextState.pending) return true;
-  return nextState.pending.kind === 'rent' || nextState.pending.kind === 'sly_deal' || nextState.pending.kind === 'forced_deal' || nextState.pending.kind === 'deal_breaker';
+  return nextState.pending.kind === 'rent' || nextState.pending.kind === 'sly_deal' || nextState.pending.kind === 'forced_deal' || nextState.pending.kind === 'deal_breaker'
+    || nextState.pending.kind === 'debt_card' || nextState.pending.kind === 'no_mercy';
 }
 
 function formatDuration(seconds: number): string {
@@ -440,6 +443,7 @@ function App() {
     runAction: runMultiplayerAction,
     setReady: setMultiplayerReadyState,
     setRoomPreset: setMultiplayerRoomPreset,
+    setRoomVariant: setMultiplayerRoomVariant,
     rematchMatch: rematchMultiplayerMatch,
     sendReaction: sendMultiplayerReactionAction,
     sendChatMessage: sendMultiplayerChatMessageAction,
@@ -540,7 +544,7 @@ function App() {
 
   const describeCardAction = useCallback((action: Action): string => {
     if (action.type === 'play_to_bank') {
-      const def = getCardDefinition(action.cardId);
+      const def = getCardDefinition(action.cardId, game?.variant ?? 'classic');
       return `Bank as $${def.moneyValue ?? def.value}`;
     }
 
@@ -553,7 +557,7 @@ function App() {
       if (action.color && targetName) return `Use on ${targetName} (${colorLabel(action.color)} rent)`;
       if (targetName) return `Use on ${targetName}`;
       if (action.color) return `Charge rent on ${colorLabel(action.color)}`;
-      return `Play ${getCardDefinition(action.cardId).name}`;
+      return `Play ${getCardDefinition(action.cardId, game?.variant ?? 'classic').name}`;
     }
 
     if (action.type === 'counter_response' && action.useJustSayNo) {
@@ -561,7 +565,7 @@ function App() {
     }
 
     return 'Play card';
-  }, [playerNameById]);
+  }, [game?.variant, playerNameById]);
 
   const cardActionVariants = useMemo(() => {
     const variants = new Map<string, CardActionVariant[]>();
@@ -591,7 +595,7 @@ function App() {
     [legalActions],
   );
   const isMandatoryPrompt = Boolean(
-    prompt && (prompt.kind === 'payment' || prompt.kind === 'selection' || prompt.kind === 'response' || prompt.kind === 'discard'),
+    prompt && (prompt.kind === 'payment' || prompt.kind === 'debt' || prompt.kind === 'selection' || prompt.kind === 'response' || prompt.kind === 'discard'),
   );
   const maxPlaysPerTurn = maxPlaysPerTurnFor(game);
   const maxHandAtEndTurn = maxHandAtEndTurnFor(game);
@@ -684,6 +688,7 @@ function App() {
   const multiplayerIsMandatoryPrompt = Boolean(
     multiplayerPrompt
       && (multiplayerPrompt.kind === 'payment'
+        || multiplayerPrompt.kind === 'debt'
         || multiplayerPrompt.kind === 'selection'
         || multiplayerPrompt.kind === 'response'
         || multiplayerPrompt.kind === 'discard'),
@@ -833,19 +838,21 @@ function App() {
     const propertyCards = (Object.keys(multiplayerPendingPaymentPlayer.properties) as PropertyColor[]).flatMap((color) =>
       multiplayerPendingPaymentPlayer.properties[color].map((entry) => entry.cardId),
     );
-    return [...multiplayerPendingPaymentPlayer.bank, ...propertyCards];
-  }, [multiplayerPendingPaymentPlayer]);
+    const variant = multiplayerGame?.variant ?? multiplayerRoomView?.variant ?? 'classic';
+    return [...multiplayerPendingPaymentPlayer.bank, ...propertyCards]
+      .filter((cardId) => !(variant === 'no_mercy' && isEveryColorWild(cardId, variant)));
+  }, [multiplayerGame?.variant, multiplayerPendingPaymentPlayer, multiplayerRoomView?.variant]);
   const multiplayerSelectedPaymentCards = useMemo(
     () => selectedPaymentCards.filter((cardId) => multiplayerPendingPaymentCardIds.includes(cardId)),
     [multiplayerPendingPaymentCardIds, selectedPaymentCards],
   );
   const multiplayerSelectedPaymentTotal = useMemo(
-    () => multiplayerSelectedPaymentCards.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
-    [multiplayerSelectedPaymentCards],
+    () => multiplayerSelectedPaymentCards.reduce((sum, cardId) => sum + cardMoneyValue(cardId, multiplayerGame?.variant ?? multiplayerRoomView?.variant ?? 'classic'), 0),
+    [multiplayerGame?.variant, multiplayerRoomView?.variant, multiplayerSelectedPaymentCards],
   );
   const multiplayerTotalPayableValue = useMemo(
-    () => multiplayerPendingPaymentCardIds.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
-    [multiplayerPendingPaymentCardIds],
+    () => multiplayerPendingPaymentCardIds.reduce((sum, cardId) => sum + cardMoneyValue(cardId, multiplayerGame?.variant ?? multiplayerRoomView?.variant ?? 'classic'), 0),
+    [multiplayerGame?.variant, multiplayerRoomView?.variant, multiplayerPendingPaymentCardIds],
   );
   const multiplayerPaymentCanSubmit = multiplayerPendingPayment
     ? multiplayerTotalPayableValue < multiplayerPendingPayment.amount
@@ -1030,20 +1037,22 @@ function App() {
     const propertyCards = (Object.keys(pendingPaymentPlayer.properties) as PropertyColor[]).flatMap((color) =>
       pendingPaymentPlayer.properties[color].map((entry) => entry.cardId),
     );
-    return [...pendingPaymentPlayer.bank, ...propertyCards];
-  }, [pendingPaymentPlayer]);
+    const variant = game?.variant ?? 'classic';
+    return [...pendingPaymentPlayer.bank, ...propertyCards]
+      .filter((cardId) => !(variant === 'no_mercy' && isEveryColorWild(cardId, variant)));
+  }, [game?.variant, pendingPaymentPlayer]);
   const selectedLocalPaymentCards = useMemo(
     () => selectedPaymentCards.filter((cardId) => pendingPaymentCardIds.includes(cardId)),
     [pendingPaymentCardIds, selectedPaymentCards],
   );
 
   const selectedPaymentTotal = useMemo(
-    () => selectedLocalPaymentCards.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
-    [selectedLocalPaymentCards],
+    () => selectedLocalPaymentCards.reduce((sum, cardId) => sum + cardMoneyValue(cardId, game?.variant ?? 'classic'), 0),
+    [game?.variant, selectedLocalPaymentCards],
   );
   const totalPayableValue = useMemo(
-    () => pendingPaymentCardIds.reduce((sum, cardId) => sum + cardMoneyValue(cardId), 0),
-    [pendingPaymentCardIds],
+    () => pendingPaymentCardIds.reduce((sum, cardId) => sum + cardMoneyValue(cardId, game?.variant ?? 'classic'), 0),
+    [game?.variant, pendingPaymentCardIds],
   );
   const paymentCanSubmit = pendingPayment
     ? totalPayableValue < pendingPayment.amount
@@ -1138,8 +1147,9 @@ function App() {
     setTurnSnapshots([]);
   }, []);
 
-  const startGameWithPlayers = useCallback((players: PlayerConfig[], options?: { seed?: number; ruleset?: GameConfig['ruleset']; mode?: MatchMode }) => {
+  const startGameWithPlayers = useCallback((players: PlayerConfig[], options?: { seed?: number; ruleset?: GameConfig['ruleset']; mode?: MatchMode; variant?: GameConfig['variant'] }) => {
     const config: GameConfig = { players, deckVersion: 'v1' };
+    if (options?.variant === 'no_mercy') config.variant = 'no_mercy';
     if (typeof options?.seed === 'number') config.seed = options.seed;
     if (options?.ruleset) config.ruleset = options.ruleset;
     const nextGame = createGame(config);
@@ -1158,7 +1168,8 @@ function App() {
       botDifficulty: setup.botDifficulties[index] ?? 'easy',
     }));
     startGameWithPlayers(players, {
-      ruleset: uiPreferences.experimental.customRules ? sanitizeRuleset(setup.customRules) : undefined,
+      variant: setup.variant,
+      ruleset: setup.variant === 'classic' && uiPreferences.experimental.customRules ? sanitizeRuleset(setup.customRules) : undefined,
     });
   };
 
@@ -1389,14 +1400,17 @@ function App() {
     if (!uiPreferences.confirmRiskyActions) return false;
     if (action.type !== 'play_action') return false;
     const highImpactActionKinds = new Set(['rent', 'rent_wild', 'debt_collector', 'sly_deal', 'forced_deal', 'deal_breaker']);
-    const cardDef = getCardDefinition(action.cardId);
+    const variant = mode === 'multiplayer'
+      ? multiplayerGame?.variant ?? multiplayerRoomView?.variant ?? 'classic'
+      : game?.variant ?? 'classic';
+    const cardDef = getCardDefinition(action.cardId, variant);
     const kind = cardDef.actionKind ?? null;
     const shouldConfirm = source ? Boolean(source.requiresConfirmation) : kind != null && highImpactActionKinds.has(kind);
     if (!shouldConfirm) return false;
     setRiskyActionConfirmation({
       action,
       mode,
-      label: actionCardName(action),
+      label: actionCardName(action, variant),
       riskLevel: source?.riskLevel ?? (kind === 'forced_deal' || kind === 'deal_breaker' ? 'high' : 'medium'),
       previewText:
         source?.previewText ??
@@ -1558,8 +1572,8 @@ function App() {
       return;
     }
 
-    const def = getCardDefinition(cardId);
-    const cardLabel = def.kind === 'money' ? `$${def.value}` : def.name;
+    const def = getCardDefinition(cardId, game?.variant ?? 'classic');
+    const cardLabel = def.kind === 'money' ? `$${def.moneyValue ?? def.value}` : def.name;
     setChooser({ cardId, cardLabel, variants });
   };
 
@@ -1575,7 +1589,7 @@ function App() {
     runAction({
       type: 'pay_request',
       playerId: pendingPayment.targetPlayerId,
-      cards: canonicalizePaymentCards(selectedLocalPaymentCards),
+      cards: canonicalizePaymentCards(selectedLocalPaymentCards, game?.variant ?? 'classic'),
     });
   };
 
@@ -1592,8 +1606,8 @@ function App() {
       runMultiplayerActionWithConfirmation(variants[0].action, variants[0]);
       return;
     }
-    const def = getCardDefinition(cardId);
-    const cardLabel = def.kind === 'money' ? `$${def.value}` : def.name;
+    const def = getCardDefinition(cardId, multiplayerGame?.variant ?? multiplayerRoomView?.variant ?? 'classic');
+    const cardLabel = def.kind === 'money' ? `$${def.moneyValue ?? def.value}` : def.name;
     setChooser({ cardId, cardLabel, variants });
   };
 
@@ -1634,7 +1648,7 @@ function App() {
       }
       setChooser({
         cardId,
-        cardLabel: getCardDefinition(cardId).name,
+        cardLabel: getCardDefinition(cardId, mode === 'multiplayer' ? multiplayerGame?.variant ?? multiplayerRoomView?.variant ?? 'classic' : game?.variant ?? 'classic').name,
         variants: matches.map((item, index) => ({
           id: `selection-${index}-${actionVariantId(item.action)}`,
           label: item.label,
@@ -1647,8 +1661,9 @@ function App() {
     if (pending.kind === 'deal_breaker') {
       const activeGame = mode === 'multiplayer' ? multiplayerGame : game;
       const owner = activeGame?.players.find((player) => player.id === ownerPlayerId);
-      const clickedSet = owner && propertySets(owner, color).find((set) => set.entries.some((entry) => entry.cardId === cardId));
-      if (!clickedSet || !isCompletePropertySet(clickedSet.entries, color)) return;
+      const variant = activeGame?.variant ?? 'classic';
+      const clickedSet = owner && propertySets(owner, color, variant).find((set) => set.entries.some((entry) => entry.cardId === cardId));
+      if (!clickedSet || !isCompletePropertySet(clickedSet.entries, color, variant)) return;
       const selected = legalPool.find((entry) => entry.action.type === 'deal_breaker_pick'
         && entry.action.color === color
         && (!entry.action.setId || entry.action.setId === clickedSet.setId));
@@ -1686,7 +1701,7 @@ function App() {
       }
       setChooser({
         cardId,
-        cardLabel: getCardDefinition(cardId).name,
+        cardLabel: getCardDefinition(cardId, mode === 'multiplayer' ? multiplayerGame?.variant ?? multiplayerRoomView?.variant ?? 'classic' : game?.variant ?? 'classic').name,
         variants: matches.map((item, index) => ({
           id: `selection-${index}-${actionVariantId(item.action)}`,
           label: item.label,
@@ -1701,7 +1716,7 @@ function App() {
     runMultiplayerActionWithConfirmation({
       type: 'pay_request',
       playerId: multiplayerPendingPayment.targetPlayerId,
-      cards: canonicalizePaymentCards(multiplayerSelectedPaymentCards),
+      cards: canonicalizePaymentCards(multiplayerSelectedPaymentCards, multiplayerGame?.variant ?? multiplayerRoomView?.variant ?? 'classic'),
     });
   };
 
@@ -1826,7 +1841,8 @@ function App() {
       })),
       {
         mode: localMatchMode === 'daily_challenge' ? 'hot_seat' : localMatchMode,
-        ruleset: uiPreferences.experimental.customRules ? game.ruleset : undefined,
+        variant: game.variant,
+        ruleset: game.variant === 'classic' && uiPreferences.experimental.customRules ? game.ruleset : undefined,
       },
     );
     setIsSharing(false);
@@ -1918,8 +1934,9 @@ function App() {
         <SetupScreen
           setup={setup}
           allowAiOpponents={uiPreferences.experimental.aiOpponents}
-          allowCustomRules={uiPreferences.experimental.customRules}
+          allowCustomRules={uiPreferences.experimental.customRules && setup.variant === 'classic'}
           onPlayerCountChange={(playerCount) => setSetup((prev) => ({ ...prev, playerCount }))}
+          onVariantChange={(variant) => setSetup((prev) => ({ ...prev, variant }))}
           onPlayerNameChange={(index, value) => {
             setSetup((prev) => {
               const nextNames = [...prev.playerNames];
@@ -2200,6 +2217,9 @@ function App() {
           }}
           onSetRoomPreset={(presetId) => {
             void setMultiplayerRoomPreset(presetId);
+          }}
+          onSetRoomVariant={(variant) => {
+            void setMultiplayerRoomVariant(variant);
           }}
           onCopyInviteLink={() => {
             recordGrowthMetric('multiplayer_invite_copied');

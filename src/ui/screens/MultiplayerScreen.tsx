@@ -8,6 +8,7 @@ import type {
   MultiplayerSession,
 } from '../../network/multiplayerTypes';
 import type { MultiplayerRecoveryEntry } from '../../persistence/multiplayerRecovery';
+import type { GameVariant } from '../../engine';
 import {
   MULTIPLAYER_SESSION_PRESET_OPTIONS,
   getMultiplayerSessionPresetDefinition,
@@ -57,6 +58,7 @@ interface MultiplayerScreenProps {
   onRunAction: (index: number) => void;
   onSetReady: (ready: boolean) => void;
   onSetRoomPreset?: (presetId: MultiplayerSessionPresetId) => void;
+  onSetRoomVariant?: (variant: GameVariant) => void;
   onCopyInviteLink: () => void;
   onRefresh: () => void;
   onLeaveRoom: () => void;
@@ -237,6 +239,7 @@ export function MultiplayerScreen({
   onRunAction,
   onSetReady,
   onSetRoomPreset,
+  onSetRoomVariant,
   onCopyInviteLink,
   onRefresh,
   onLeaveRoom,
@@ -748,11 +751,20 @@ export function MultiplayerScreen({
               <div className="multiplayer-lobby-top">
                 {selectedPreset ? (
                   <section className="multiplayer-entry-card multiplayer-preset-card" aria-label="Room preset">
+                    {!roomView.started ? (
+                      <label>
+                        Variant
+                        <select value={roomView.variant ?? 'classic'} onChange={(event) => onSetRoomVariant?.(event.target.value as GameVariant)} disabled={loading || !isHost || !onSetRoomVariant}>
+                          <option value="classic">Classic</option>
+                          <option value="no_mercy">No Mercy</option>
+                        </select>
+                      </label>
+                    ) : <p>Variant: {(roomView.variant ?? 'classic') === 'no_mercy' ? 'No Mercy' : 'Classic'}</p>}
                     <p className="setup-stage-label">Preset</p>
                     <h4>{selectedPreset.label}</h4>
                     <p>{selectedPreset.shortDescription}</p>
                     <p className="multiplayer-lobby-status">{selectedPreset.readySummary}</p>
-                    <div className="actions multiplayer-primary-actions">
+                    {(roomView.variant ?? 'classic') === 'classic' ? <div className="actions multiplayer-primary-actions">
                       {MULTIPLAYER_SESSION_PRESET_OPTIONS.map((option) => {
                         const definition = getMultiplayerSessionPresetDefinition(option.value);
                         return (
@@ -767,7 +779,7 @@ export function MultiplayerScreen({
                           </button>
                         );
                       })}
-                    </div>
+                    </div> : <p className="multiplayer-lobby-status">Official No Mercy rules · 2–5 players</p>}
                   </section>
                 ) : null}
                 <div className="multiplayer-lobby-side">

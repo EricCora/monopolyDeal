@@ -22,6 +22,7 @@ import {
   sendMultiplayerChatMessage,
   sendMultiplayerReaction,
   setMultiplayerRoomPreset,
+  setMultiplayerRoomVariant,
   setMultiplayerTyping,
   setMultiplayerReady,
   startMultiplayerRoom,
@@ -58,6 +59,7 @@ import {
 } from '../persistence/multiplayerRecovery';
 import type { GrowthMetricEvent } from '../stats';
 import { normalizeMultiplayerSessionPreset, type MultiplayerSessionPresetId } from '../ui/experience';
+import type { GameVariant } from '../engine';
 
 interface UseMultiplayerRoomOptions {
   enabled: boolean;
@@ -170,6 +172,7 @@ function isStaleSessionCode(code: string): code is MultiplayerRecoveryReason {
 function normalizeRoomViewPayload(loaded: MultiplayerRoomView): MultiplayerRoomView {
   return {
     ...loaded,
+    variant: loaded.variant ?? 'classic',
     presetId: normalizeMultiplayerSessionPreset(loaded.presetId),
     players: loaded.players.map((player) => ({
       ...player,
@@ -603,6 +606,7 @@ export function useMultiplayerRoom({
     session,
     setErrorFromCode,
     setRecoveredUiState,
+    upsertRecoveryFromSession,
   ]);
 
   const reconnectSessionSingleFlight = useCallback((
@@ -822,7 +826,7 @@ export function useMultiplayerRoom({
     } finally {
       setLoading(false);
     }
-  }, [apiBase, clearError, onMetricEvent, playerName, refreshRoom, setErrorFromCode]);
+  }, [apiBase, clearError, onMetricEvent, playerName, refreshRoom, setErrorFromCode, upsertRecoveryFromSession]);
 
   const joinRoom = useCallback(async (): Promise<boolean> => {
     setLoading(true);
@@ -1063,6 +1067,23 @@ export function useMultiplayerRoom({
       await refreshRoom(current);
     } catch (presetError) {
       const code = presetError instanceof Error ? presetError.message : 'request_failed';
+      setErrorFromCode(code);
+      await refreshOnRevisionConflict(code, current);
+    } finally {
+      setLoading(false);
+    }
+  }, [apiBase, clearError, expectedRevision, refreshOnRevisionConflict, refreshRoom, session, setErrorFromCode]);
+
+  const setRoomVariant = useCallback(async (variant: GameVariant) => {
+    const current = session;
+    if (!current) return;
+    setLoading(true);
+    clearError();
+    try {
+      await setMultiplayerRoomVariant(current, variant, apiBase, expectedRevision);
+      await refreshRoom(current);
+    } catch (variantError) {
+      const code = variantError instanceof Error ? variantError.message : 'request_failed';
       setErrorFromCode(code);
       await refreshOnRevisionConflict(code, current);
     } finally {
@@ -1576,6 +1597,7 @@ export function useMultiplayerRoom({
     runAction,
     setReady,
     setRoomPreset,
+    setRoomVariant,
     rematchMatch,
     sendReaction,
     sendChatMessage,
