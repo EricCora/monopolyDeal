@@ -921,9 +921,11 @@ export function useMultiplayerRoom({
     setLoading(true);
     // Leaving a lobby gives up the seat, so there is nothing left to resume.
     const dropSession = forgetSession || roomView?.status === 'lobby';
-    const operationVersion = dropSession ? nextSessionOperationVersion() : sessionOperationVersionRef.current;
+    // Bumping the version stops a poll already in flight from undoing this.
+    const operationVersion = nextSessionOperationVersion();
     try {
-      await leaveMultiplayerRoom(current, apiBase, false, expectedRevision, forgetSession);
+      // A stale revision must not cancel giving up the seat, since local state clears regardless.
+      await leaveMultiplayerRoom(current, apiBase, false, dropSession ? undefined : expectedRevision, forgetSession);
     } catch {
       // Best-effort leave; local cleanup still proceeds.
     } finally {
@@ -1565,6 +1567,11 @@ export function useMultiplayerRoom({
   const forgetStoredRoom = useCallback(() => {
     const target = primaryRecoveryEntry;
     if (!target) return;
+    const storedSession = canResumeRecoveryEntry(target) ? recoveryEntryToSession(target) : null;
+    if (storedSession) {
+      // Best effort, as the seat times out anyway. Forgetting shouldn't make the others wait.
+      leaveMultiplayerRoom(storedSession, apiBase, false, undefined, true).catch(() => undefined);
+    }
     deleteRecoveryEntry({
       roomCode: target.roomCode,
       seatId: target.seatId,
@@ -1581,7 +1588,7 @@ export function useMultiplayerRoom({
     }
     setRecoveryNotice(null);
     clearError();
-  }, [clearError, clearSession, deleteRecoveryEntry, joinCode, playerName, primaryRecoveryEntry, session?.roomCode]);
+  }, [apiBase, clearError, clearSession, deleteRecoveryEntry, joinCode, playerName, primaryRecoveryEntry, session?.roomCode]);
 
   return {
     apiBase,

@@ -156,11 +156,33 @@ function legalDebtActions(state: GameState, player: PlayerState): LegalAction[] 
 }
 
 /**
+ * Cancel every debt to or from a player leaving the match, while they are still
+ * in `state.players`. A debt to someone who is gone can never be repaid, and its
+ * repayment would be the debtor's only legal action.
+ */
+export function releaseDebtsInvolving(state: GameState, playerId: PlayerId): void {
+  if (gameVariant(state) !== 'no_mercy') return;
+  const leaving = getPlayer(state, playerId);
+  if (!leaving) return;
+  const leavingChipIds = new Set(debtsFor(leaving).map((debt) => debt.chipId ?? debt.id));
+  for (const player of state.players) {
+    const owed = debtsFor(player);
+    const kept = owed.filter((debt) => debt.creditorPlayerId !== playerId);
+    player.debts = kept;
+    player.debtsOwed = kept;
+    player.debtChipsRemaining = Math.min(3, (player.debtChipsRemaining ?? 0) + owed.length - kept.length);
+    const held = (player.debtChipsHeld ?? player.debtChips ?? []).filter((chip) => !leavingChipIds.has(chip.chipId ?? chip.id));
+    player.debtChipsHeld = held;
+    player.debtChips = held;
+  }
+}
+
+/**
  * Leave the debt phase once nothing more can be repaid this turn. A debt that
  * is still owed carries over; staying in the phase would leave the player with
  * no legal action at all.
  */
-function settleDebtPhase(state: GameState): void {
+export function settleDebtPhase(state: GameState): void {
   if (gameVariant(state) !== 'no_mercy' || state.turn.phase !== 'debt' || state.pending) return;
   const current = getCurrentPlayer(state);
   if (debtsFor(current).length === 0

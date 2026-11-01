@@ -684,7 +684,7 @@ export function checkWinner(state: GameState): void {
 }
 
 /** Cards in transit inside a pending effect would otherwise vanish with it. */
-function discardCardsHeldByPending(state: GameState): void {
+export function discardCardsHeldByPending(state: GameState): void {
   const pending = state.pending;
   if (pending?.kind === 'debt_card') discard(state, pending.payload.cardId);
   if (pending?.kind === 'no_mercy') {

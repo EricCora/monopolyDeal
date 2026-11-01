@@ -17,7 +17,7 @@ import {
   type PlayerConfig,
   type PlayerController,
 } from './engine';
-import { actionRevealedDeckCards } from './engine/undoPolicy';
+import { actionRevealedDeckCards, appendTurnSnapshot } from './engine/undoPolicy';
 import {
   clearLifetimeStats,
   clearMatchHistory,
@@ -1372,7 +1372,7 @@ function App() {
       setRevealedPlayerId(null);
     }
     if (snapshotBeforeAction) {
-      setTurnSnapshots((prev) => [...prev, snapshotBeforeAction]);
+      setTurnSnapshots((prev) => appendTurnSnapshot(prev, snapshotBeforeAction));
     }
     if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId)
       || (game && actionRevealedDeckCards(game, result.state, action.type))) {

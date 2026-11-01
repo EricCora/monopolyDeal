@@ -1,8 +1,11 @@
 import { randomBytes, randomInt } from 'node:crypto';
-import { actionRevealedDeckCards } from '../../../src/engine/undoPolicy.ts';
+import { actionRevealedDeckCards, appendTurnSnapshot } from '../../../src/engine/undoPolicy.ts';
 import {
   applyAction,
   createGame,
+  discardCardsHeldByPending,
+  releaseDebtsInvolving,
+  settleDebtPhase,
   DEFAULT_RULESET,
   getLegalActions,
   getNextPrompt,
@@ -40,9 +43,8 @@ import type {
 const RECONNECT_WINDOW_V1_DEFAULT_MS = 90_000;
 const RECONNECT_WINDOW_MS = resolveReconnectWindowMs(process.env.MP_RECONNECT_GRACE_MS);
 // A page refresh must not cost a lobby seat, but an empty seat shouldn't hold up the host for long.
+const MATCH_SEED_RANGE = 1_000_000_000;
 const LOBBY_RECONNECT_WINDOW_MS = Math.min(RECONNECT_WINDOW_MS, 30_000);
-// Free moves like Wild swaps snapshot the whole game, so a turn's undo history needs a ceiling.
-const MAX_TURN_SNAPSHOTS = 32;
 // Keep lobby heartbeat grace long enough for frequent tab switching during local beta sessions.
 const STALE_CONNECTION_LOBBY_MS = 1.5 * 60 * 1000;
 // Active/finished matches should reflect disconnect presence quickly even if unload signals are dropped.
@@ -464,6 +466,7 @@ function retireTimedOutPlayerFromGame(room: MultiplayerRoom, playerId: PlayerId)
   const oldCurrentIndex = game.currentPlayerIndex;
   const retired = game.players[playerIndex];
 
+  releaseDebtsInvolving(game, playerId);
   game.discardPile.push(
     ...retired.hand,
     ...retired.bank,
@@ -474,6 +477,7 @@ function retireTimedOutPlayerFromGame(room: MultiplayerRoom, playerId: PlayerId)
   room.turnSnapshots = [];
   room.checkpoints = [];
   if (pendingReferencesPlayer(game.pending, playerId)) {
+    discardCardsHeldByPending(game);
     game.pending = null;
   }
 
@@ -488,6 +492,7 @@ function retireTimedOutPlayerFromGame(room: MultiplayerRoom, playerId: PlayerId)
   } else {
     game.currentPlayerIndex = playerIndex < oldCurrentIndex ? oldCurrentIndex - 1 : oldCurrentIndex;
     if (game.currentPlayerIndex >= game.players.length) game.currentPlayerIndex = 0;
+    settleDebtPhase(game);
   }
   game.updatedAt = nowMs();
   return true;
@@ -501,6 +506,7 @@ function endMatchAfterLastOpponentTimeout(room: MultiplayerRoom, expiredPlayerId
   if (survivor) {
     game.winnerId = survivor.id;
   }
+  discardCardsHeldByPending(game);
   game.pending = null;
   game.turn.phase = 'finished';
   room.status = 'finished';
@@ -637,6 +643,8 @@ export function markSeatTimedOutIfExpired(
       }
       resolveDisconnectPauseStateAfterTimeout(room);
     }
+  } else if (room.status === 'finished') {
+    resolveDisconnectPauseStateAfterTimeout(room);
   }
   incrementRevision(room);
   incrementEventId(room);
@@ -1123,6 +1131,8 @@ export function startRoom(
   if (room.status !== 'lobby') {
     throw new Error('room_started');
   }
+  // A seat left behind here would block every rematch, since prune skips started rooms.
+  reclaimDisconnectedLobbyParticipants(room, nowMs(), 'expired');
   const activePlayers = connectedLobbyPlayers(room);
   if (activePlayers.length < 2) {
     throw new Error('minimum_players_required');
@@ -1150,7 +1160,7 @@ export function startRoom(
     room.game = createGame({
       players,
       deckVersion: 'v1',
-      seed,
+      seed: seed ?? randomInt(MATCH_SEED_RANGE),
       ruleset: getMultiplayerSessionPresetRuleset(room.presetId),
       variant: room.variant,
     });
@@ -1263,9 +1273,7 @@ export function applyRoomAction(
 
   const shouldSnapshot = isReversibleActionType(action.type) && getNextPrompt(game).playerId === playerId;
   if (shouldSnapshot) {
-    room.turnSnapshots.push(structuredClone(game));
-    // Keep the first entry, which is what Reset Turn restores.
-    if (room.turnSnapshots.length > MAX_TURN_SNAPSHOTS) room.turnSnapshots.splice(1, 1);
+    room.turnSnapshots = appendTurnSnapshot(room.turnSnapshots, structuredClone(game));
   }
 
   const result = applyAction(game, action);
@@ -1527,6 +1535,7 @@ export function rematchRoom(
   room.game = createGame({
     players: room.players.map((entry) => ({ id: entry.id, name: entry.name })),
     deckVersion: 'v1',
+    seed: randomInt(MATCH_SEED_RANGE),
     ruleset: getMultiplayerSessionPresetRuleset(room.presetId),
     variant: room.variant,
   });
