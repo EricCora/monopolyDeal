@@ -156,6 +156,21 @@ function legalDebtActions(state: GameState, player: PlayerState): LegalAction[] 
 }
 
 /**
+ * Leave the debt phase once nothing more can be repaid this turn. A debt that
+ * is still owed carries over; staying in the phase would leave the player with
+ * no legal action at all.
+ */
+function settleDebtPhase(state: GameState): void {
+  if (gameVariant(state) !== 'no_mercy' || state.turn.phase !== 'debt' || state.pending) return;
+  const current = getCurrentPlayer(state);
+  if (debtsFor(current).length === 0
+    || current.hand.length === 0
+    || state.turn.playsUsed >= ruleset(state).maxPlaysPerTurn) {
+    state.turn.phase = 'action';
+  }
+}
+
+/**
  * A debt card is resolved immediately by its creditor. Build a temporary
  * action window for that player so the normal legal-action generator remains
  * the single source of truth for target and color choices, without changing
@@ -797,12 +812,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
       if (!nested.state.winnerId) {
         nested.state.currentPlayerIndex = originalCurrentPlayerIndex;
         nested.state.turn = originalTurn;
-        if (nested.state.variant === 'no_mercy'
-          && !nested.state.pending
-          && nested.state.turn.phase === 'debt'
-          && debtsFor(getCurrentPlayer(nested.state)).length === 0) {
-          nested.state.turn.phase = 'action';
-        }
+        settleDebtPhase(nested.state);
       }
       const resolvedEvent: GameEvent = {
         timestamp: now(),
@@ -1629,12 +1639,7 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
   checkWinner(state);
 
   progressNoMercy(state, events);
-  if (gameVariant(state) === 'no_mercy'
-    && state.turn.phase === 'debt'
-    && !state.pending
-    && debtsFor(getCurrentPlayer(state)).length === 0) {
-    state.turn.phase = 'action';
-  }
+  settleDebtPhase(state);
 
   if (events.length > 0) {
     state.history.push(...events);

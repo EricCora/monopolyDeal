@@ -360,7 +360,12 @@ export function addToProperty(
       && !setHasBuilding(set, card.actionKind as 'house' | 'hotel', variant));
   }
   if (!target && card.kind !== 'building') {
-    const open = sets.filter((set) => propertyCount(set, variant) < required);
+    // A complete No Mercy set may hold only one Shack, so a card that would
+    // complete a set carrying two starts a new physical set instead.
+    const open = sets.filter((set) => propertyCount(set, variant) < required
+      && !(variant === 'no_mercy'
+        && propertyCount(set, variant) + 1 >= required
+        && set.entries.filter((entry) => getCardDefinition(entry.cardId, variant).actionKind === 'shack').length > 1));
     target = card.kind === 'wild'
       ? open.find((set) => setHasStandardProperty(set, variant)) ?? open[0]
       : open[0];
@@ -637,7 +642,31 @@ export function finishTurn(state: GameState, events: GameEvent[]): RuleError | u
   state.turn = { phase: 'draw', playsUsed: 0, doubleRentMultiplier: 1, endingTurn: false };
   state.turnCount += 1;
   pushEvent(events, 'turn_passed', `${current.name} ended their turn.`);
+  endGameIfDeckExhausted(state, events);
   return undefined;
+}
+
+/**
+ * With every card out of the deck, the discard pile and all hands, no player
+ * can ever act again. Award the game on complete sets, then on table value,
+ * with seat order as the final tie-break so the result stays deterministic.
+ */
+function endGameIfDeckExhausted(state: GameState, events: GameEvent[]): void {
+  if (state.pending || state.winnerId) return;
+  if (state.drawPile.length > 0 || state.discardPile.length > 0) return;
+  if (state.players.some((player) => player.hand.length > 0)) return;
+  const variant = state.variant ?? 'classic';
+  const tableValue = (player: PlayerState) => [
+    ...player.bank,
+    ...Object.values(player.properties).flat().map((entry) => entry.cardId),
+  ].reduce((total, cardId) => total + getCardDefinition(cardId, variant).value, 0);
+  const ranked = [...state.players].sort((left, right) => (
+    countCompleteSets(right, variant) - countCompleteSets(left, variant)
+    || tableValue(right) - tableValue(left)
+  ));
+  state.winnerId = ranked[0].id;
+  state.turn.phase = 'finished';
+  pushEvent(events, 'game_over', `The deck ran out. ${ranked[0].name} wins on complete sets and table value.`);
 }
 
 export function consumePlay(state: GameState): void {
@@ -649,6 +678,16 @@ export function checkWinner(state: GameState): void {
   if (winner) {
     state.winnerId = winner.id;
     state.turn.phase = 'finished';
+    discardCardsHeldByPending(state);
     state.pending = null;
+  }
+}
+
+/** Cards in transit inside a pending effect would otherwise vanish with it. */
+function discardCardsHeldByPending(state: GameState): void {
+  const pending = state.pending;
+  if (pending?.kind === 'debt_card') discard(state, pending.payload.cardId);
+  if (pending?.kind === 'no_mercy') {
+    for (const item of pending.payload.redistribution ?? []) discard(state, item.cardId);
   }
 }
