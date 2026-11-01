@@ -153,6 +153,30 @@ final class GameplayUITests: XCTestCase {
         XCTAssertTrue(played, "A tap should play the card or open its options")
     }
 
+    /// iPad can turn sideways, and the table has to keep working when it does.
+    func testIPadTableWorksInLandscape() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "iPhone stays in portrait.")
+        launch(seed: 11)
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        startPractice("Classic, Easy")
+        let draw = app.buttons["action.draw"]
+        XCTAssertTrue(draw.isHittable)
+        draw.tap()
+        let pass = app.buttons["action.pass"]
+        XCTAssertTrue(pass.waitForExistence(timeout: 5))
+        XCTAssertTrue(pass.isHittable)
+        let hand = app.descendants(matching: .any).matching(NSPredicate(format: "identifier MATCHES 'hand\\\\.[0-9]+'"))
+        XCTAssertGreaterThan(hand.count, 1)
+        for index in 0..<hand.count {
+            XCTAssertTrue(app.frame.contains(hand.element(boundBy: index).frame), "Card \(index) is off the screen")
+        }
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "iPad landscape"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
     /// The bot's legal moves must never appear as the player's buttons.
     func testOpponentsTurnOffersNoDrawOrEndTurn() throws {
         // A long pause keeps the bot's turn on screen for the whole check.

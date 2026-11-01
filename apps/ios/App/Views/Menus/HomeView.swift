@@ -62,6 +62,8 @@ struct HomeView: View {
                 .lineLimit(1)
             Text("Collect three sets. Trust no one.")
                 .font(.subheadline.weight(.medium))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SoftWhite(0.74))
         }
     }
@@ -112,7 +114,7 @@ struct HomeView: View {
             .buttonStyle(PrimaryButtonStyle())
             .accessibilityIdentifier("home.newGame")
 
-            HStack(spacing: 10) {
+            (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))) {
                 Button {
                     practiceOptions = true
                 } label: {
@@ -205,6 +207,7 @@ struct HomeView: View {
 
 struct SetupView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         @Bindable var app = app
@@ -268,8 +271,9 @@ struct SetupView: View {
 
     private func playerRow(_ index: Int) -> some View {
         @Bindable var app = app
+        let line = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
         return VStack(spacing: 8) {
-            HStack(spacing: 8) {
+            line {
                 PlayerAvatar(name: app.setup.names[index], isBot: app.setup.controllers[index] == .bot)
                 TextField("Player \(index + 1)", text: $app.setup.names[index])
                     .textInputAutocapitalization(.words)

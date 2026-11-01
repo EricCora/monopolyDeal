@@ -6,6 +6,7 @@ import SwiftUI
 /// Host a room, join one by code, or return to the room you were in.
 struct OnlineHomeView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var joinCode = ""
 
     private var nameIsSet: Bool { !app.preferences.onlineName.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -72,7 +73,7 @@ struct OnlineHomeView: View {
 
                     VStack(spacing: 8) {
                         SectionTitle(text: "Join a Room")
-                        HStack(spacing: 8) {
+                        (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))) {
                             TextField("Room code", text: $joinCode)
                                 .textInputAutocapitalization(.characters)
                                 .autocorrectionDisabled()
@@ -86,7 +87,7 @@ struct OnlineHomeView: View {
                                 Task { await app.joinRoom(code: joinCode) }
                             }
                             .buttonStyle(PrimaryButtonStyle())
-                            .frame(width: 96)
+                            .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : 96)
                             .disabled(!nameIsSet || joinCode.isEmpty || app.onlineBusy)
                             .accessibilityIdentifier("online.join")
                         }

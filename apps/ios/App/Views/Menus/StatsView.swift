@@ -5,6 +5,7 @@ import SwiftUI
 /// Match history, lifetime stats, achievements and the daily challenge.
 struct StatsView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var playerFilter: String?
     @State private var winnerFilter: String?
     @State private var range = DateRange.all
@@ -78,7 +79,7 @@ struct StatsView: View {
     }
 
     private var filters: some View {
-        HStack(spacing: 8) {
+        (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))) {
             Menu {
                 Picker("Player", selection: $playerFilter) {
                     Text("All Players").tag(String?.none)

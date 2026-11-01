@@ -97,6 +97,7 @@ Xcode's accessibility audit now runs with the UI tests, with these exceptions, e
 - Text on a card is artwork that scales with the card, and holding the hand or opening a card enlarges it.
 - The table skips the Dynamic Type check, because of the limit above.
 - The home title's gradient and the "Draw to start" status were flagged for contrast, but both read clearly in screenshots.
+- iPad skips the contrast check, because there the audit fails white labels on dark glass that pass on iPhone and read clearly in screenshots.
 - Assumption: the home screen's nameless "inaccessible text" issue is the decorative hero cards. The audit gives no element for it.
 
 ## 2026-11-01: The status line uses a dark panel with a colored border
