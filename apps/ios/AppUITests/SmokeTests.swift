@@ -63,7 +63,8 @@ final class GameplayUITests: XCTestCase {
         let practice = app.buttons["home.practice"]
         XCTAssertTrue(practice.waitForExistence(timeout: 20))
         practice.tap()
-        let button = app.buttons[option]
+        // The dialog can expose its button more than once, so take the first match.
+        let button = app.buttons[option].firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         button.tap()
         XCTAssertTrue(app.buttons["action.draw"].waitForExistence(timeout: 10))
@@ -112,6 +113,62 @@ final class GameplayUITests: XCTestCase {
         XCTAssertTrue(app.buttons["home.continue"].waitForExistence(timeout: 20))
         app.buttons["home.continue"].tap()
         XCTAssertTrue(app.buttons["action.pass"].waitForExistence(timeout: 5))
+    }
+
+    /// Holding spreads the hand to read it, sliding moves along it, and letting go plays nothing.
+    func testHoldingTheHandDoesNotPlayACard() throws {
+        launch(seed: 11)
+        startPractice("Classic, Easy")
+        app.buttons["action.draw"].tap()
+        XCTAssertTrue(app.buttons["action.pass"].waitForExistence(timeout: 5))
+
+        let hand = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'hand.'"))
+        let countBefore = hand.count
+        XCTAssertGreaterThan(countBefore, 1)
+        let start = hand.element(boundBy: 0).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+        let end = hand.element(boundBy: countBefore - 1).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+        start.press(forDuration: 1.0, thenDragTo: end, withVelocity: 40, thenHoldForDuration: 6)
+
+        XCTAssertEqual(hand.count, countBefore, "Holding must not play a card")
+        XCTAssertFalse(app.buttons["chooser.0"].exists, "Holding must not open the play options")
+        XCTAssertFalse(app.buttons["action.undo"].exists && hand.count != countBefore)
+    }
+
+    /// A quick tap still plays, so the hold gesture hasn't taken over the hand.
+    func testTappingACardStillOpensItsOptions() throws {
+        launch(seed: 11)
+        startPractice("Classic, Easy")
+        app.buttons["action.draw"].tap()
+        XCTAssertTrue(app.buttons["action.pass"].waitForExistence(timeout: 5))
+        let hand = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'hand.'"))
+        let countBefore = hand.count
+        hand.element(boundBy: 0).coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)).tap()
+        let played = NSPredicate { _, _ in
+            self.app.buttons["chooser.0"].exists || hand.count != countBefore
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: played, object: nil)], timeout: 5), .completed)
+    }
+
+    /// The bot's legal moves must never appear as the player's buttons.
+    func testOpponentsTurnOffersNoDrawOrEndTurn() throws {
+        // A long pause keeps the bot's turn on screen for the whole check.
+        app.launchArguments = ["-seed", "11", "-botDelayMs", "30000", "-storeDirectory", "uitest-\(UUID().uuidString)"]
+        app.launch()
+        startPractice("Classic, Easy")
+        app.buttons["action.draw"].tap()
+        let pass = app.buttons["action.pass"]
+        XCTAssertTrue(pass.waitForExistence(timeout: 5))
+        pass.tap()
+        // Over the hand limit, the turn ends only after a discard.
+        let discard = app.buttons["chooser.0"]
+        let hand = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'hand.' AND value == 'playable'"))
+        for _ in 0..<4 where hand.firstMatch.exists {
+            hand.firstMatch.tap()
+            if discard.waitForExistence(timeout: 2) { discard.tap() }
+        }
+        XCTAssertTrue(app.staticTexts["House Bot's turn"].waitForExistence(timeout: 10), "It should be the bot's turn")
+        XCTAssertFalse(app.buttons["action.pass"].exists, "End Turn was offered on the bot's turn")
+        XCTAssertFalse(app.buttons["action.draw"].exists, "Draw was offered on the bot's turn")
     }
 
     func testMenusOpen() throws {
