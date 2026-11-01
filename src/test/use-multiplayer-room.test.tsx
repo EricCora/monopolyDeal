@@ -718,6 +718,19 @@ describe('useMultiplayerRoom reconnect + sync behavior', () => {
     );
   });
 
+  it('does not let another player\'s Ready at the same moment cancel this one', async () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useMultiplayerRoom({ enabled: true, pushEnabled: false }));
+    await act(async () => {
+      await result.current.hostRoom();
+    });
+    await flushMicrotasks();
+    await act(async () => {
+      await result.current.setReady(true);
+    });
+    expect(clientMocks.setMultiplayerReady).toHaveBeenCalledWith(expect.anything(), true, expect.anything(), undefined);
+  });
+
   it('exposes a recovery entry from the registry and resumes it on demand', async () => {
     vi.useFakeTimers();
     const now = Date.now();

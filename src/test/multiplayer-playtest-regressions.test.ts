@@ -177,6 +177,27 @@ describe('retiring a seat in No Mercy', () => {
   });
 });
 
+describe('a host away from the lobby sharing the invite', () => {
+  it('keeps the seat past 30 seconds', () => {
+    const { rooms, room, session } = lobby();
+    disconnectRoomSeat(room, session.playerId, session.sessionToken);
+    pruneInactiveRooms(rooms, Date.now() + 60_000);
+    expect(room.players.some((player) => player.id === session.playerId)).toBe(true);
+    reconnectRoom(room, session.playerId, session.sessionToken);
+    expect(room.hostPlayerId).toBe(session.playerId);
+  });
+
+  it('stops holding up Start after 30 seconds, and the absent seat does not join the match', () => {
+    const { room, session, others: [first, second] } = lobby();
+    for (const seat of [session, first, second]) setRoomReady(room, seat.playerId, seat.sessionToken, true);
+    disconnectRoomSeat(room, second.playerId, second.sessionToken);
+    room.players.find((player) => player.id === second.playerId)!.disconnectedAt = Date.now() - 31_000;
+    startRoom(room, session.playerId, session.sessionToken);
+    expect(room.players.map((player) => player.id)).toEqual([session.playerId, first.playerId]);
+    expect(room.game!.players.map((player) => player.id)).toEqual([session.playerId, first.playerId]);
+  });
+});
+
 describe('starting past a lapsed lobby seat', () => {
   it('removes a seat whose window expired before the next prune', () => {
     const { room, session, others: [first, second] } = lobby();
