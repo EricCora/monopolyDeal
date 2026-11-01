@@ -310,8 +310,13 @@ struct TableView: View {
 
     // MARK: Action bar
 
-    private var drawAction: LegalAction? { session.legalActions.first { $0.action.type == .draw_cards } }
-    private var passAction: LegalAction? { session.legalActions.first { $0.action.type == .pass_turn } }
+    // A local game's legal actions belong to whoever it's waiting on, which may be a bot.
+    private var drawAction: LegalAction? {
+        session.isViewersPrompt ? session.legalActions.first { $0.action.type == .draw_cards } : nil
+    }
+    private var passAction: LegalAction? {
+        session.isViewersPrompt ? session.legalActions.first { $0.action.type == .pass_turn } : nil
+    }
 
     private var actionBar: some View {
         HStack(spacing: 8) {
