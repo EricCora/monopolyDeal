@@ -75,9 +75,6 @@ struct TableView: View {
             }
         }
         .overlay { pauseOverlay }
-        // The hand sits at the bottom edge, where iOS would otherwise hold touches back
-        // to see whether they're a home swipe.
-        .defersSystemGestures(on: .bottom)
         // Every state change animates here, so a bot's or another player's move glides too.
         .animation(cardsAnimate ? .snappy(duration: 0.42) : nil, value: session.game?.updatedAt)
         .sheet(item: Binding(get: { ui.chooser }, set: { ui.chooser = $0 })) { chooser in

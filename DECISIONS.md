@@ -75,3 +75,6 @@ Eric reviewed this while playing on iOS and kept the rule. The app now says why,
 
 ## 2026-11-01: The iOS hand reacts to a hold after 60 ms
 Spreading starts before a tap has ended, so a touch released within 250 ms without moving still counts as a tap. Slower thresholds felt laggy on a real phone.
+
+## 2026-11-01: The iOS hand uses a UIKit touch recognizer instead of a SwiftUI gesture
+Timing on an iPhone 18 Pro Max showed SwiftUI's `DragGesture(minimumDistance: 0)` delivering a resting finger about 700 ms late, and a tap only when the finger lifted. A `UIGestureRecognizer` on the same view got touches about 17 ms after they happened. The delay's source wasn't identified. A hold now responds as soon as the finger lands, at 60 ms.

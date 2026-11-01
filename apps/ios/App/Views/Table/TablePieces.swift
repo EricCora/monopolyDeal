@@ -2,8 +2,51 @@ import DealEngine
 import DealOnline
 import DealStats
 import SwiftUI
+import UIKit
 
 // MARK: Hand
+
+/// Reports touches on the hand the moment they happen. SwiftUI's own drag gesture was
+/// measured on an iPhone delivering a resting finger about 700 ms late, which made holding
+/// feel broken. A UIKit recognizer sees the touch directly.
+struct HandTouch: UIGestureRecognizerRepresentable {
+    enum Phase { case began, moved, ended, cancelled }
+
+    var onChange: (Phase, CGPoint) -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> Recognizer {
+        let recognizer = Recognizer()
+        recognizer.cancelsTouchesInView = false
+        recognizer.delaysTouchesBegan = false
+        recognizer.delaysTouchesEnded = false
+        return recognizer
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: Recognizer, context: Context) {
+        let location = context.converter.localLocation
+        switch recognizer.state {
+        case .began: onChange(.began, location)
+        case .changed: onChange(.moved, location)
+        case .ended: onChange(.ended, location)
+        case .cancelled, .failed: onChange(.cancelled, location)
+        default: break
+        }
+    }
+
+    final class Recognizer: UIGestureRecognizer {
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            guard state == .possible, let touch = touches.first else {
+                touches.forEach { ignore($0, for: event) }
+                return
+            }
+            state = .began
+        }
+
+        override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) { state = .changed }
+        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) { state = .ended }
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) { state = .cancelled }
+    }
+}
 
 /// The viewer's hand as an arc of cards. Cards overlap more as the hand grows, so it
 /// always fits the screen. Tap to play, or drag a card up onto the table. Hold to spread
@@ -25,7 +68,8 @@ struct HandFan: View {
     @State private var dealtCount: Int?
     /// The card the current touch started on.
     @State private var touchedCard: String?
-    @State private var touchStart = Date.distantPast
+    @State private var touchStartTime: CFTimeInterval = 0
+    @State private var touchStartLocation: CGPoint = .zero
     @State private var holdTask: Task<Void, Never>?
     @State private var isFanned = false
     @State private var focusedCard: String?
@@ -82,7 +126,9 @@ struct HandFan: View {
             }
             .frame(width: width, height: geometry.size.height)
             .contentShape(Rectangle())
-            .gesture(handGesture(width: width, playable: playable))
+            .gesture(HandTouch { phase, location in
+                handleTouch(phase, at: location, width: width, playable: playable)
+            })
         }
         .frame(height: cardWidth * CardView.aspect + 8)
         .accessibilityElement(children: .contain)
@@ -101,55 +147,60 @@ struct HandFan: View {
         return min(max(center, half), max(half, width - half))
     }
 
-    /// One gesture covers the whole hand, so a held finger can slide from card to card.
-    private func handGesture(width: CGFloat, playable: Set<String>) -> some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                if touchedCard == nil, holdTask == nil {
-                    touchedCard = cardIndex(atX: value.startLocation.x, width: width).map { cards[$0] }
-                    touchStart = value.time
-                    let startX = value.startLocation.x
-                    holdTask = Task {
-                        try? await Task.sleep(for: Self.holdDelay)
-                        if !Task.isCancelled { beginHold(atX: startX, width: width) }
-                    }
-                }
-                if isFanned {
-                    let next = nearestCard(toX: value.location.x, width: width)
-                    if next != focusedCard {
-                        withAnimation(.snappy(duration: 0.16)) { focusedCard = next }
-                    }
-                    return
-                }
-                let distance = hypot(value.translation.width, value.translation.height)
-                guard distance > Self.moveTolerance else { return }
-                holdTask?.cancel()
-                if let touchedCard, playable.contains(touchedCard) {
-                    dragging = touchedCard
-                    dragOffset = value.translation
-                }
+    /// One recognizer covers the whole hand, so a held finger can slide from card to card.
+    private func handleTouch(_ phase: HandTouch.Phase, at location: CGPoint, width: CGFloat, playable: Set<String>) {
+        let translation = CGSize(width: location.x - touchStartLocation.x, height: location.y - touchStartLocation.y)
+        let distance = hypot(translation.width, translation.height)
+        switch phase {
+        case .began:
+            touchStartLocation = location
+            touchStartTime = CACurrentMediaTime()
+            touchedCard = cardIndex(atX: location.x, width: width).map { cards[$0] }
+            holdTask?.cancel()
+            holdTask = Task {
+                try? await Task.sleep(for: Self.holdDelay)
+                if !Task.isCancelled { beginHold(atX: location.x, width: width) }
             }
-            .onEnded { value in
-                holdTask?.cancel()
-                holdTask = nil
-                let card = touchedCard
-                touchedCard = nil
-                let distance = hypot(value.translation.width, value.translation.height)
-                if isFanned {
-                    endHold()
-                    let wasTap = value.time.timeIntervalSince(touchStart) < Self.tapWindow && distance <= Self.moveTolerance
-                    if wasTap, let card { actions.tapHandCard(card) }
-                    return
+        case .moved:
+            if isFanned {
+                let next = nearestCard(toX: location.x, width: width)
+                if next != focusedCard {
+                    withAnimation(.snappy(duration: 0.16)) { focusedCard = next }
                 }
-                let released = dragging != nil && value.translation.height < -90
-                withAnimation(.snappy(duration: 0.28)) {
-                    dragging = nil
-                    dragOffset = .zero
-                }
-                if let card, released || distance <= Self.moveTolerance {
-                    actions.tapHandCard(card)
-                }
+                return
             }
+            guard distance > Self.moveTolerance else { return }
+            holdTask?.cancel()
+            if let touchedCard, playable.contains(touchedCard) {
+                dragging = touchedCard
+                dragOffset = translation
+            }
+        case .ended:
+            holdTask?.cancel()
+            holdTask = nil
+            let card = touchedCard
+            touchedCard = nil
+            if isFanned {
+                endHold()
+                let wasTap = CACurrentMediaTime() - touchStartTime < Self.tapWindow && distance <= Self.moveTolerance
+                if wasTap, let card { actions.tapHandCard(card) }
+                return
+            }
+            let released = dragging != nil && translation.height < -90
+            withAnimation(.snappy(duration: 0.28)) {
+                dragging = nil
+                dragOffset = .zero
+            }
+            if let card, released || distance <= Self.moveTolerance {
+                actions.tapHandCard(card)
+            }
+        case .cancelled:
+            withAnimation(.snappy(duration: 0.28)) {
+                dragging = nil
+                dragOffset = .zero
+            }
+            endHold()
+        }
     }
 
     private func beginHold(atX x: CGFloat, width: CGFloat) {
