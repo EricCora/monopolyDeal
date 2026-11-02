@@ -54,6 +54,7 @@ final class TableUI {
     /// The card another player just played, shown large for a moment.
     var spotlight: PlaySpotlight?
     var noStamp: JustSayNoStamp?
+    var showBank = false
     /// Bumped each time the viewer completes a set, to start the celebration.
     var setBurstToken = 0
     var setBanner: String?
@@ -82,9 +83,33 @@ struct TableActions {
 
     /// Everything the hand card can do right now, in the order the rules list it.
     func options(forHandCard cardId: String) -> [CardOption] {
-        session.legalActions.enumerated().compactMap { index, legal in
+        let options: [CardOption] = session.legalActions.enumerated().compactMap { index, legal in
             guard Self.handCardId(legal.action) == cardId else { return nil }
             return CardOption(id: index, label: describe(legal), detail: legal.previewText, legal: legal)
+        }
+        return orderingRent(options)
+    }
+
+    /// What a rent charge would earn, or nil for anything else.
+    private func rentEarned(_ option: CardOption) -> Int? {
+        let action = option.legal.action
+        guard action.type == .play_action, let color = action.color, let cardId = action.cardId, let viewer = session.viewer,
+              let kind = Catalog.lookup(cardId, session.variant)?.actionKind, kind == .rent || kind == .rent_wild else { return nil }
+        return Engine.getRentAmount(viewer, color, session.variant)
+    }
+
+    /// Puts a rent card's colors in order of what they'd earn, and says how much. Other options keep their place.
+    private func orderingRent(_ options: [CardOption]) -> [CardOption] {
+        let rents = options.enumerated()
+            .compactMap { index, option in rentEarned(option).map { (index: index, option: option, rent: $0) } }
+            .sorted { $0.rent != $1.rent ? $0.rent > $1.rent : $0.index < $1.index }
+        var next = 0
+        return options.map { option in
+            guard rentEarned(option) != nil else { return option }
+            var placed = rents[next].option
+            placed.detail = "Earns $\(rents[next].rent). \(placed.detail ?? "")".trimmingCharacters(in: .whitespaces)
+            next += 1
+            return placed
         }
     }
 

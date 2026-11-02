@@ -251,11 +251,14 @@ struct SetupView: View {
                         .pickerStyle(.segmented)
                         .accessibilityIdentifier("setup.speed")
                         Text(app.setup.speedMode
-                            ? "45 seconds a turn. When time runs out, a bot moves for you."
+                            ? "When time runs out, a bot moves for you."
                             : "A clock shows how long each turn is taking, with no limit.")
                             .font(.footnote)
                             .foregroundStyle(SoftWhite(0.7))
                             .frame(maxWidth: .infinity, alignment: .leading)
+                        if app.setup.speedMode {
+                            TurnTimerSlider(seconds: app.setup.speedSeconds) { app.setup.speedSeconds = $0 }
+                        }
                         Picker("Match length", selection: $app.setup.bestOfThree) {
                             Text("Single Game").tag(false)
                             Text("Best of Three").tag(true)

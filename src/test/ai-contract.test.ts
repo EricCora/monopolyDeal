@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildCoachHint, chooseHeuristicAction, chooseMonteCarloAction, rankHeuristicActions } from '../ai';
 import { getCardDefinition } from '../cards/catalog';
-import { applyAction, createGame, getLegalActions, getNextPrompt, type Action, type GameState, type LegalAction } from '../engine';
+import { applyAction, createGame, getLegalActions, getNextPrompt, isGameOver, type Action, type GameState, type LegalAction } from '../engine';
 
 function sameAction(left: Action, right: Action): boolean {
   return JSON.stringify(left) === JSON.stringify(right);

@@ -16,6 +16,7 @@ struct GameSetup {
     var maxHandAtEndTurn = 7
     var maxPlaysPerTurn = 3
     var speedMode = false
+    var speedSeconds = 45
     var bestOfThree = false
 
     var ruleset: Ruleset {
@@ -158,6 +159,7 @@ final class AppModel {
             onFeedback: { [weak self] tone in self?.feedback(tone) }
         )
         if let delay = launch.botDelay { match.botDelay = delay }
+        if let seconds = options.speedSeconds { match.speedTurnSeconds = Double(seconds) }
         if let seconds = launch.speedTurnSeconds { match.speedTurnSeconds = seconds }
         localMatch = match
         #if DEBUG
@@ -179,7 +181,7 @@ final class AppModel {
     func startFromSetup() {
         let hasBot = setup.players.contains { $0.controller == .bot }
         let ruleset = setup.variant == .classic && preferences.customRulesEnabled ? setup.ruleset : nil
-        let options = MatchOptions(speed: setup.speedMode, series: setup.bestOfThree ? MatchSeries() : nil)
+        let options = MatchOptions(speed: setup.speedMode, speedSeconds: setup.speedSeconds, series: setup.bestOfThree ? MatchSeries() : nil)
         newGame(players: setup.players, variant: setup.variant, ruleset: ruleset, mode: hasBot ? .practice : .hot_seat, options: options)
     }
 
@@ -223,7 +225,7 @@ final class AppModel {
             PlayerConfig(id: $0.id, name: $0.name, controller: $0.controller ?? .human, botDifficulty: $0.botDifficulty ?? .easy)
         }
         let ruleset = game.variant == .classic ? game.ruleset : nil
-        let options = MatchOptions(speed: match.options.speed, series: match.options.series?.next)
+        let options = MatchOptions(speed: match.options.speed, speedSeconds: match.options.speedSeconds, series: match.options.series?.next)
         newGame(players: players, variant: game.resolvedVariant, ruleset: ruleset, mode: match.mode == .daily_challenge ? .practice : match.mode, options: options)
     }
 

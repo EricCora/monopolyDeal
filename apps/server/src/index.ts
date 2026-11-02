@@ -1201,6 +1201,7 @@ const httpServer = createServer(async (req, res) => {
     const raw = await collectBody(req, MAX_JSON_BODY_BYTES);
     const payload = JSON.parse(raw || '{}') as {
       op?: unknown;
+      targetSeatId?: unknown;
       difficulty?: unknown;
       botDifficulty?: unknown;
       playerName?: unknown;
@@ -1321,10 +1322,10 @@ const httpServer = createServer(async (req, res) => {
     if (operation === 'bots') {
       const op = optionalTrimmedString(payload.op);
       const difficulty = (optionalTrimmedString(payload.difficulty) ?? 'easy') as BotDifficulty;
-      const seatId = optionalTrimmedString(payload.seatId) as PlayerId | undefined;
+      const targetSeatId = optionalTrimmedString(payload.targetSeatId) as PlayerId | undefined;
       if (op === 'add') addRoomBot(room, playerId, sessionToken, difficulty);
-      else if (op === 'remove' && seatId) removeRoomBot(room, playerId, sessionToken, seatId);
-      else if (op === 'difficulty' && seatId) setSeatBotDifficulty(room, playerId, sessionToken, seatId, difficulty);
+      else if (op === 'remove' && targetSeatId) removeRoomBot(room, playerId, sessionToken, targetSeatId);
+      else if (op === 'difficulty' && targetSeatId) setSeatBotDifficulty(room, playerId, sessionToken, targetSeatId, difficulty);
       else throw new Error('invalid_payload');
       snapshotAll();
       broadcastRoomEvent(room, 'options_changed');

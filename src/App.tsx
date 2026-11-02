@@ -2323,7 +2323,7 @@ function App() {
             void rematchMultiplayerMatch();
           } : undefined}
           onBackToLobby={multiplayerRoomView.role !== 'spectator' ? () => setLobbyAfterGame(multiplayerGame.createdAt) : undefined}
-          onSetBotDifficulty={multiplayerIsHost ? (seatId, difficulty) => void manageMultiplayerBots({ op: 'difficulty', seatId, difficulty }) : undefined}
+          onSetBotDifficulty={multiplayerIsHost ? (seatId, difficulty) => void manageMultiplayerBots({ op: 'difficulty', targetSeatId: seatId, difficulty }) : undefined}
           seatDifficulties={Object.fromEntries(multiplayerRoomView.players.map((player) => [player.id, player.botDifficulty ?? 'easy']))}
           onExitMultiplayer={() => {
             void exitMultiplayerRoom();

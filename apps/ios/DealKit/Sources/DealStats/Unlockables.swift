@@ -146,11 +146,14 @@ public struct MatchSeries: Codable, Hashable, Sendable {
 /// Speed and series, tied to the game they were chosen for.
 public struct MatchOptions: Codable, Hashable, Sendable {
     public var speed = false
+    /// How long a Speed turn lasts: 30, 45 or 60.
+    public var speedSeconds: Int?
     public var series: MatchSeries?
     public var gameCreatedAt: Double = 0
 
-    public init(speed: Bool = false, series: MatchSeries? = nil) {
+    public init(speed: Bool = false, speedSeconds: Int? = nil, series: MatchSeries? = nil) {
         self.speed = speed
+        self.speedSeconds = speedSeconds
         self.series = series
     }
 }

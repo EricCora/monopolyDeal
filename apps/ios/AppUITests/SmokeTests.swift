@@ -219,6 +219,13 @@ final class GameplayUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["postgame.winner"].waitForExistence(timeout: 5))
     }
 
+    func testRentAndTimerControlsAppear() throws {
+        launch(seed: 5)
+        app.buttons["home.newGame"].firstMatch.tap()
+        app.segmentedControls["setup.speed"].buttons["Speed"].tap()
+        XCTAssertTrue(app.sliders["timer.slider"].waitForExistence(timeout: 3))
+    }
+
     func testMenusOpen() throws {
         launch(seed: 3)
         for (button, title) in [("home.saved", "Saved Games"), ("home.stats", "Stats"), ("home.settings", "Settings"), ("home.online", "Online")] {

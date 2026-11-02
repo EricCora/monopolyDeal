@@ -123,6 +123,7 @@ struct PostGameView: View {
     var newUnlocks: [String] = []
     var series: MatchSeries?
     var onWatchReplay: (() -> Void)?
+    var closeTitle = "Done"
     var onPrimary: () -> Void
     var onClose: () -> Void
 
@@ -298,7 +299,7 @@ struct PostGameView: View {
                     .buttonStyle(SecondaryButtonStyle())
                     .accessibilityIdentifier("postgame.share")
                 }
-                Button("Done", action: onClose)
+                Button(closeTitle, action: onClose)
                     .buttonStyle(SecondaryButtonStyle())
                     .accessibilityIdentifier("postgame.done")
             }

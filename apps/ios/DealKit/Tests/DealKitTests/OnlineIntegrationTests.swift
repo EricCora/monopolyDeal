@@ -423,6 +423,25 @@ final class OnlineIntegrationTests: XCTestCase {
         XCTAssertTrue(Engine.isGameOver(try XCTUnwrap(rebuilt.last)).done)
     }
 
+    func testTheHostCanChangeAndRemoveABotWithoutLosingTheirSeat() async throws {
+        let session = try await client.createRoom(playerName: "Host")
+        let host = RoomConnection(client: client, session: session)
+        await host.connect()
+        defer { host.stop() }
+        let added = await host.run { client, session, _ in try await client.addBot(session, difficulty: .easy) }
+        XCTAssertTrue(added)
+        let bot = try XCTUnwrap(host.view?.players.first { $0.isBot == true })
+        XCTAssertEqual(bot.botDifficulty, .easy)
+        let botId = bot.id
+        let changed = await host.run { client, session, _ in try await client.setBotDifficulty(session, seatId: botId, difficulty: .hard) }
+        XCTAssertTrue(changed)
+        XCTAssertNil(host.endedReason)
+        XCTAssertEqual(host.view?.players.first { $0.id == botId }?.botDifficulty, .hard)
+        let removed = await host.run { client, session, _ in try await client.removeBot(session, seatId: botId) }
+        XCTAssertTrue(removed)
+        XCTAssertEqual(host.view?.players.count, 1)
+    }
+
     func testABotPlaysADroppedSeatWhenTheRoomAsks() async throws {
         let hostSession = try await client.createRoom(playerName: "Host")
         let host = RoomConnection(client: client, session: hostSession)

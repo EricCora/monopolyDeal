@@ -59,6 +59,8 @@ extension RoomReaction {
 public struct RoomOptions: Codable, Hashable, Sendable {
     /// A dropped seat plays on as a bot instead of pausing the room.
     public var botFill: Bool
+    /// How a bot covering a dropped seat plays, until the host picks for that seat.
+    public var botDifficulty: BotDifficulty?
     /// Seconds per turn before a bot moves for the player. Nil shows a count-up clock only.
     public var turnTimerSeconds: Int?
     public var bestOf: Int
@@ -95,6 +97,10 @@ public struct RoomPlayer: Codable, Hashable, Sendable, Identifiable {
     public var reconnectDeadlineMs: Double
     public var isHost: Bool
     public var ready: Bool
+    /// A bot added to the room, rather than one covering for someone.
+    public var isBot: Bool?
+    /// How a bot plays this seat, if one does.
+    public var botDifficulty: BotDifficulty?
 }
 
 public struct RoomActivity: Codable, Hashable, Sendable, Identifiable {

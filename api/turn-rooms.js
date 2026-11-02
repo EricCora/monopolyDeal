@@ -4663,10 +4663,10 @@ async function handleTurnRoomRequest(request, store, notifier2) {
         case "bots": {
           const op = optionalTrimmedString(body.op);
           const difficulty = optionalTrimmedString(body.difficulty) ?? "easy";
-          const seatId = optionalTrimmedString(body.seatId);
+          const targetSeatId = optionalTrimmedString(body.targetSeatId);
           if (op === "add") addRoomBot(room, playerId, sessionToken, difficulty);
-          else if (op === "remove" && seatId) removeRoomBot(room, playerId, sessionToken, seatId);
-          else if (op === "difficulty" && seatId) setSeatBotDifficulty(room, playerId, sessionToken, seatId, difficulty);
+          else if (op === "remove" && targetSeatId) removeRoomBot(room, playerId, sessionToken, targetSeatId);
+          else if (op === "difficulty" && targetSeatId) setSeatBotDifficulty(room, playerId, sessionToken, targetSeatId, difficulty);
           else throw new Error("invalid_payload");
           return null;
         }

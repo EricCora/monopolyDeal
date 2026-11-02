@@ -102,13 +102,20 @@ struct TableView: View {
                     .presentationBackground(.ultraThinMaterial)
             }
         }
+        .sheet(isPresented: $ui.showBank) {
+            if let viewer = session.viewer {
+                BankSheet(player: viewer, variant: session.variant)
+                    .presentationDetents([.height(280), .medium])
+                    .presentationBackground(.ultraThinMaterial)
+            }
+        }
         .sheet(isPresented: $ui.showDiscards) {
             DiscardBrowser(cards: session.game?.discardPile ?? [], variant: session.variant)
                 .presentationDetents([.medium])
                 .presentationBackground(.ultraThinMaterial)
         }
         .sheet(isPresented: $ui.showLog) {
-            EventLogSheet(events: session.game?.history ?? [])
+            EventLogSheet(events: session.game?.history ?? [], playerNames: session.game?.players.map(\.name) ?? [])
                 .presentationDetents([.medium, .large])
                 .presentationBackground(.ultraThinMaterial)
         }

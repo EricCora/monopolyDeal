@@ -301,7 +301,7 @@ struct PlayerBoard: View {
             }
             ScrollView([.horizontal, .vertical], showsIndicators: false) {
                 HStack(alignment: .top, spacing: 10) {
-                    BankStack(cards: player.bank, variant: session.variant, cardWidth: cardWidth, space: space, onTap: { actions.ui.inspectedCard = $0 })
+                    BankStack(cards: player.bank, variant: session.variant, cardWidth: cardWidth, space: space, onTap: { _ in actions.ui.showBank = true })
                     ForEach(lanes, id: \.id) { lane in
                         SetLane(lane: lane, variant: session.variant, cardWidth: cardWidth, space: space) { cardId in
                             actions.tapBoardCard(cardId, in: lane.color)
@@ -730,6 +730,31 @@ struct OpponentBoardSheet: View {
     var player: PlayerState
     var session: any TableSession
 
+    private var online: OnlineMatch? { session as? OnlineMatch }
+
+    /// The host picks how a bot plays, whether it's a bot seat or covering for someone who dropped.
+    @ViewBuilder
+    private var botDifficulty: some View {
+        if let online, let view = online.view, view.isHost, player.controller == .bot || online.botSeatIds.contains(player.id),
+           let seat = view.players.first(where: { $0.id == player.id }) {
+            VStack(alignment: .leading, spacing: 6) {
+                SectionTitle(text: "Bot Difficulty")
+                Picker("Bot difficulty", selection: Binding(
+                    get: { seat.botDifficulty ?? .easy },
+                    set: { difficulty in
+                        let seatId = player.id
+                        Task { await online.connection.run { client, session, _ in try await client.setBotDifficulty(session, seatId: seatId, difficulty: difficulty) } }
+                    }
+                )) {
+                    Text("Easy").tag(BotDifficulty.easy)
+                    Text("Hard").tag(BotDifficulty.hard)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("opponent.difficulty")
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -741,8 +766,8 @@ struct OpponentBoardSheet: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    SectionTitle(text: "Bank")
-                    BankStack(cards: player.bank, variant: session.variant, cardWidth: 72, space: nil) { _ in }
+                    botDifficulty
+                    BankFan(cards: player.bank, variant: session.variant)
                     SectionTitle(text: "Properties")
                     let lanes = BoardLane.lanes(for: player, variant: session.variant)
                     if lanes.isEmpty {
@@ -885,22 +910,163 @@ struct PlaySpotlightView: View {
 
 struct EventLogSheet: View {
     var events: [GameEvent]
+    var playerNames: [String]
+
+    @State private var filter = Filter.all
+
+    private enum Filter: String, CaseIterable {
+        case all = "All", actions = "Actions", money = "Money", property = "Property"
+
+        func allows(_ entry: LogEntry) -> Bool {
+            switch self {
+            case .all: true
+            case .actions: entry.tone == .action
+            case .money: entry.tone == .money
+            case .property: entry.tone == .property
+            }
+        }
+    }
+
+    private var turns: [LogTurn] {
+        GameLogModel.turns(events, playerNames: playerNames).compactMap { turn in
+            var next = turn
+            next.entries = turn.entries.filter(filter.allows)
+            return next.entries.isEmpty ? nil : next
+        }
+    }
 
     var body: some View {
         NavigationStack {
-            List(Array(events.enumerated().reversed()), id: \.offset) { _, event in
-                Text(displayText(event.message))
-                    .font(.subheadline)
-                    .listRowBackground(Color.clear)
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    Picker("Show", selection: $filter) {
+                        ForEach(Filter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("log.filter")
+                    ForEach(turns) { turn in
+                        LogTurnCard(turn: turn)
+                    }
+                }
+                .padding(16)
             }
-            .scrollContentBackground(.hidden)
             .overlay {
-                if events.isEmpty {
-                    ContentUnavailableView("Nothing yet", systemImage: "list.bullet", description: Text("Moves appear here as they happen."))
+                if turns.isEmpty {
+                    ContentUnavailableView("Nothing yet", systemImage: "list.bullet")
                 }
             }
             .navigationTitle("Game Log")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .accessibilityIdentifier("log")
+    }
+}
+
+private struct LogTurnCard: View {
+    var turn: LogTurn
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                if let name = turn.playerName { PlayerAvatar(name: name, isBot: false) }
+                Text(turn.playerName ?? "Table")
+                    .font(.subheadline.weight(.bold))
+                Spacer()
+                Text(turn.isCurrent ? "Now" : "Turn \(turn.number)")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(turn.isCurrent ? Palette.gold : Color.secondary)
+            }
+            ForEach(turn.entries) { entry in
+                HStack(alignment: .top, spacing: 9) {
+                    Image(systemName: entry.symbol)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(tint(entry))
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(tint(entry).opacity(0.2)))
+                    text(entry)
+                        .font(.subheadline)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.06)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(turn.isCurrent ? Palette.gold.opacity(0.7) : Color.white.opacity(0.1), lineWidth: 1)
+        )
+    }
+
+    private func text(_ entry: LogEntry) -> Text {
+        let message = displayText(entry.message)
+        guard let actor = entry.actor, message.hasPrefix(actor) else { return Text(message) }
+        return Text(actor).fontWeight(.bold) + Text(message.dropFirst(actor.count))
+    }
+
+    private func tint(_ entry: LogEntry) -> Color {
+        switch entry.tone {
+        case .money: Palette.success
+        case .property: Color(hex: 0x6DB8F2)
+        case .action: Color(hex: 0xB892FF)
+        case .turn, .neutral: .white.opacity(0.7)
+        }
+    }
+}
+
+/// A bank laid out so every card can be read. Tapping the pile spreads it, and the row scrolls.
+struct BankFan: View {
+    var cards: [String]
+    var variant: GameVariant
+    var startsOpen = false
+
+    @State private var open: Bool?
+
+    private var isOpen: Bool { open ?? startsOpen }
+    private var total: Int { cards.reduce(0) { $0 + Engine.cardMoneyValue($1, variant) } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionTitle(text: "Bank $\(total)")
+            if cards.isEmpty {
+                Text("Nothing banked.").foregroundStyle(.secondary)
+            } else if isOpen {
+                ScrollView(.horizontal, showsIndicators: true) {
+                    HStack(spacing: 10) {
+                        ForEach(cards, id: \.self) { CardView(cardId: $0, variant: variant, width: 112) }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .accessibilityIdentifier("bank.fan")
+            } else {
+                Button {
+                    withAnimation(.snappy) { open = true }
+                } label: {
+                    ZStack(alignment: .topLeading) {
+                        ForEach(Array(cards.enumerated()), id: \.element) { index, cardId in
+                            CardView(cardId: cardId, variant: variant, width: 88)
+                                .shadow(color: .black.opacity(0.25), radius: 1.5, y: 1)
+                                .offset(x: CGFloat(index) * 9)
+                        }
+                    }
+                    .padding(.trailing, CGFloat(cards.count - 1) * 9)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Spread out all \(cards.count) bank cards")
+                .accessibilityIdentifier("bank.pile")
+            }
+        }
+    }
+}
+
+struct BankSheet: View {
+    var player: PlayerState
+    var variant: GameVariant
+
+    var body: some View {
+        BankFan(cards: player.bank, variant: variant, startsOpen: true)
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

@@ -200,13 +200,27 @@ public struct RoomClient: Sendable {
     }
 
     /// Only the options passed change. `turnTimerSeconds` of nil leaves the timer alone; use `clearTurnTimer` to remove it.
-    public func setOptions(_ session: RoomSession, botFill: Bool? = nil, turnTimerSeconds: Int? = nil, clearTurnTimer: Bool = false, bestOf: Int? = nil, expectedRevision: Int?) async throws {
+    public func setOptions(_ session: RoomSession, botFill: Bool? = nil, botDifficulty: BotDifficulty? = nil, turnTimerSeconds: Int? = nil, clearTurnTimer: Bool = false, bestOf: Int? = nil, expectedRevision: Int?) async throws {
         var extra: [String: Any] = [:]
         if let botFill { extra["botFill"] = botFill }
+        if let botDifficulty { extra["botDifficulty"] = botDifficulty.rawValue }
         if let turnTimerSeconds { extra["turnTimerSeconds"] = turnTimerSeconds }
         if clearTurnTimer { extra["turnTimerSeconds"] = NSNull() }
         if let bestOf { extra["bestOf"] = bestOf }
         try await command(session, "options", expectedRevision: expectedRevision, extra: extra)
+    }
+
+    public func addBot(_ session: RoomSession, difficulty: BotDifficulty) async throws {
+        try await command(session, "bots", expectedRevision: nil, extra: ["op": "add", "difficulty": difficulty.rawValue])
+    }
+
+    public func removeBot(_ session: RoomSession, seatId: PlayerId) async throws {
+        try await command(session, "bots", expectedRevision: nil, extra: ["op": "remove", "targetSeatId": seatId])
+    }
+
+    /// Works during a match too, for a bot seat or for a bot covering a dropped player.
+    public func setBotDifficulty(_ session: RoomSession, seatId: PlayerId, difficulty: BotDifficulty) async throws {
+        try await command(session, "bots", expectedRevision: nil, extra: ["op": "difficulty", "targetSeatId": seatId, "difficulty": difficulty.rawValue])
     }
 
     public func setReady(_ session: RoomSession, ready: Bool, expectedRevision: Int?) async throws {

@@ -1,5 +1,6 @@
 import XCTest
 @testable import DealEngine
+@testable import DealStats
 
 /// Mirrors `src/test/set-rules.test.ts`.
 final class SetRulesTests: XCTestCase {
@@ -126,5 +127,24 @@ final class AutoDecisionTests: XCTestCase {
         state.players[0].properties[.pink] = place(.pink, "pink_1#a")
         XCTAssertEqual(Engine.suggestedPaymentCards(state, playerId: "p1", amount: 2), ["pink_1#a"])
         XCTAssertTrue(Engine.suggestedPaymentCards(state, playerId: "p1", amount: 4).contains("pink_1#a"))
+    }
+}
+
+final class GameLogModelTests: XCTestCase {
+    private func event(_ type: String, _ message: String) -> GameEvent {
+        try! JSONDecoder().decode(GameEvent.self, from: JSONSerialization.data(withJSONObject: ["timestamp": 1, "type": type, "message": message]))
+    }
+
+    func testGroupsByTurnNewestFirstAndNamesWhoPlayed() {
+        let turns = GameLogModel.turns([
+            event("draw", "Ann drew 2 cards."),
+            event("turn_passed", "Ann ended their turn."),
+            event("draw", "Bot 10 drew 2 cards."),
+        ], playerNames: ["Ann", "Bot 1", "Bot 10"])
+        XCTAssertEqual(turns.map(\.number), [2, 1])
+        XCTAssertEqual(turns[0].playerName, "Bot 10")
+        XCTAssertTrue(turns[0].isCurrent)
+        XCTAssertFalse(turns[1].isCurrent)
+        XCTAssertEqual(turns[1].entries.first?.message, "Ann ended their turn.")
     }
 }

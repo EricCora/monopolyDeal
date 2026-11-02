@@ -883,9 +883,9 @@ export function MultiplayerScreen({
                           label={`${player.name} plays`}
                           value={player.botDifficulty ?? 'easy'}
                           disabled={loading}
-                          onChange={(difficulty) => onManageBots({ op: 'difficulty', seatId: player.id, difficulty })}
+                          onChange={(difficulty) => onManageBots({ op: 'difficulty', targetSeatId: player.id, difficulty })}
                         />
-                        <button type="button" className="glass-button" disabled={loading} onClick={() => onManageBots({ op: 'remove', seatId: player.id })}>
+                        <button type="button" className="glass-button" disabled={loading} onClick={() => onManageBots({ op: 'remove', targetSeatId: player.id })}>
                           Remove
                         </button>
                       </div>

@@ -105,3 +105,45 @@ struct ReactionFlightView: View {
         .accessibilityHidden(true)
     }
 }
+
+/// How long a Speed turn lasts: a slider with three stops.
+struct TurnTimerSlider: View {
+    var seconds: Int
+    var onChange: (Int) -> Void
+
+    private static let stops = [30, 45, 60]
+
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text("Seconds per turn").font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("\(seconds)")
+                    .font(.subheadline.weight(.heavy).monospacedDigit())
+                    .foregroundStyle(Palette.gold)
+            }
+            .foregroundStyle(.white)
+            Slider(
+                value: Binding(get: { Double(seconds) }, set: { onChange(Int($0)) }),
+                in: 30...60,
+                step: 15
+            )
+            .tint(Palette.gold)
+            .accessibilityLabel("Seconds per turn")
+            .accessibilityValue("\(seconds) seconds")
+            .accessibilityIdentifier("timer.slider")
+            HStack {
+                ForEach(Array(Self.stops.enumerated()), id: \.offset) { index, stop in
+                    if index > 0 { Spacer() }
+                    Text("\(stop)")
+                        .font(.caption2.weight(stop == seconds ? .heavy : .medium))
+                        .foregroundStyle(stop == seconds ? Palette.gold : Color.white.opacity(0.6))
+                }
+            }
+            .accessibilityHidden(true)
+        }
+        .padding(12)
+        .glassPanel(cornerRadius: 14)
+    }
+}
+

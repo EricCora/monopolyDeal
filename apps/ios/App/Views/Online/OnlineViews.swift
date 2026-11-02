@@ -163,6 +163,8 @@ struct OnlineGameView: View {
     @State private var confirmForget = false
     @State private var replay: ReplayRequest?
     @State private var replayFailed = false
+    /// The finished game this player has left the results of. Its results come back with the next game.
+    @State private var lobbyAfterGame: Double?
 
     private var reducedEffects: Bool { app.preferences.reducedEffects }
 
@@ -233,6 +235,8 @@ struct OnlineGameView: View {
             RoomEndedView(message: view.endedMessage) {
                 Task { await app.forgetRoom() }
             }
+        } else if view.isFinished, !view.isSpectator, lobbyAfterGame == match.game?.createdAt {
+            RoomLobbyView(match: match, onChat: { showChat = true }, onForget: { confirmForget = true })
         } else if let summary = match.summary, let game = match.game, view.isFinished {
             PostGameView(
                 summary: summary,
@@ -242,8 +246,9 @@ struct OnlineGameView: View {
                 newUnlocks: match.newUnlocks,
                 series: match.series,
                 onWatchReplay: view.replayAvailable == true ? { watchReplay() } : nil,
+                closeTitle: "Back to Lobby",
                 onPrimary: { rematchTapped(view) },
-                onClose: { Task { await app.exitRoom() } }
+                onClose: { lobbyAfterGame = game.createdAt }
             )
         } else if view.started, view.gameState != nil {
             TableView(session: match, extras: AnyView(roomBar(view))) {
@@ -573,7 +578,7 @@ struct RoomLobbyView: View {
             SectionTitle(text: "Players (\(view.players.count)/5)")
             ForEach(view.players) { player in
                 HStack(spacing: 10) {
-                    PlayerAvatar(name: player.name, isBot: false)
+                    PlayerAvatar(name: player.name, isBot: player.isBot == true)
                     Text(player.name)
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.white)
@@ -587,7 +592,11 @@ struct RoomLobbyView: View {
                         Text("You").font(.caption2.weight(.heavy)).foregroundStyle(SoftWhite(0.6))
                     }
                     Spacer()
-                    if !player.connected {
+                    if player.isBot == true {
+                        Text(player.botDifficulty == .hard ? "Hard Bot" : "Easy Bot")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(SoftWhite(0.75))
+                    } else if !player.connected {
                         Label("Away", systemImage: "wifi.slash")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(Palette.danger)
@@ -636,6 +645,8 @@ struct RoomLobbyView: View {
                     .font(.caption)
                     .foregroundStyle(SoftWhite(0.7))
             }
+            botSeats(view)
+            if view.turnBased != true {
             Toggle(isOn: Binding(
                 get: { view.options?.botFill ?? false },
                 set: { value in
@@ -645,6 +656,19 @@ struct RoomLobbyView: View {
                 optionLabel("Bots fill empty seats", detail: "A dropped player's seat plays on until they come back.")
             }
             .accessibilityIdentifier("room.botFill")
+            if view.options?.botFill == true {
+                Picker("Those bots play", selection: Binding(
+                    get: { view.options?.botDifficulty ?? .easy },
+                    set: { difficulty in
+                        Task { await match.connection.run { client, session, revision in try await client.setOptions(session, botDifficulty: difficulty, expectedRevision: revision) } }
+                    }
+                )) {
+                    Text("Easy").tag(BotDifficulty.easy)
+                    Text("Hard").tag(BotDifficulty.hard)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("room.botFillDifficulty")
+            }
             Toggle(isOn: Binding(
                 get: { view.options?.turnTimerSeconds != nil },
                 set: { value in
@@ -655,9 +679,15 @@ struct RoomLobbyView: View {
                     }
                 }
             )) {
-                optionLabel("Speed mode", detail: "45 seconds a turn, then a bot moves for you.")
+                optionLabel("Speed mode", detail: "When time runs out, a bot moves for you.")
             }
             .accessibilityIdentifier("room.speed")
+            if let seconds = view.options?.turnTimerSeconds {
+                TurnTimerSlider(seconds: seconds) { next in
+                    Task { await match.connection.run { client, session, revision in try await client.setOptions(session, turnTimerSeconds: next, expectedRevision: revision) } }
+                }
+            }
+            }
             Toggle(isOn: Binding(
                 get: { (view.options?.bestOf ?? 1) == 3 },
                 set: { value in
@@ -691,6 +721,47 @@ struct RoomLobbyView: View {
         }
         .padding(14)
         .glassPanel(cornerRadius: 18)
+    }
+
+    @ViewBuilder
+    private func botSeats(_ view: RoomView) -> some View {
+        SectionTitle(text: "Bots")
+        ForEach(view.players.filter { $0.isBot == true }) { bot in
+            HStack(spacing: 8) {
+                Text(bot.name)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Picker("\(bot.name) plays", selection: Binding(
+                    get: { bot.botDifficulty ?? .easy },
+                    set: { difficulty in
+                        let id = bot.id
+                        Task { await match.connection.run { client, session, _ in try await client.setBotDifficulty(session, seatId: id, difficulty: difficulty) } }
+                    }
+                )) {
+                    Text("Easy").tag(BotDifficulty.easy)
+                    Text("Hard").tag(BotDifficulty.hard)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 150)
+                .accessibilityIdentifier("room.botDifficulty")
+                Button {
+                    let id = bot.id
+                    Task { await match.connection.run { client, session, _ in try await client.removeBot(session, seatId: id) } }
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(SoftWhite(0.7))
+                }
+                .accessibilityLabel("Remove \(bot.name)")
+            }
+        }
+        Button {
+            Task { await match.connection.run { client, session, _ in try await client.addBot(session, difficulty: .easy) } }
+        } label: {
+            Label("Add a Bot", systemImage: "plus.circle.fill")
+        }
+        .buttonStyle(SecondaryButtonStyle())
+        .disabled(view.players.count >= 5)
+        .accessibilityIdentifier("room.addBot")
     }
 
     private func optionLabel(_ title: String, detail: String) -> some View {
@@ -733,14 +804,24 @@ struct RoomLobbyView: View {
             .accessibilityIdentifier("room.ready")
             if view.isHost {
                 Button {
-                    Task { await match.connection.run { client, session, revision in try await client.start(session, expectedRevision: revision) } }
+                    // Between matches, the next game starts as a rematch.
+                    let between = view.isFinished
+                    Task {
+                        await match.connection.run { client, session, revision in
+                            if between {
+                                try await client.rematch(session, expectedRevision: revision)
+                            } else {
+                                try await client.start(session, expectedRevision: revision)
+                            }
+                        }
+                    }
                 } label: {
-                    Label("Start Match", systemImage: "play.fill")
+                    Label(view.isFinished ? "Start Next Game" : "Start Match", systemImage: "play.fill")
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(!view.canStart)
+                .disabled(!(view.canStart || view.canRematch))
                 .accessibilityIdentifier("room.start")
-                if !view.canStart {
+                if !(view.canStart || view.canRematch) {
                     Text("Everyone needs to be here and ready, with at least 2 players.")
                         .font(.caption)
                         .foregroundStyle(SoftWhite(0.65))

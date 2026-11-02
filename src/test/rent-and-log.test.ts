@@ -14,11 +14,12 @@ describe('a rent card with several colors', () => {
       label: `Charge ${color}`,
       action: { type: 'play_action', playerId: 'p1', cardId: 'rent_color#a', color, targetPlayerId: 'p2' } as Action,
     });
-    const bank = { label: 'Bank', action: { type: 'play_to_bank', playerId: 'p1', cardId: 'rent_color#a' } as Action };
+    const bank: { label: string; action: Action; description?: string } = { label: 'Bank', action: { type: 'play_to_bank', playerId: 'p1', cardId: 'rent_color#a' } as Action };
     const ordered = orderRentChoices([bank, rent('brown'), rent('light_blue'), rent('red')], game, 'p1', 'classic');
     expect(ordered.map((choice) => choice.label)).toEqual(['Bank', 'Charge red', 'Charge brown', 'Charge light_blue']);
-    expect(ordered[1].description).toContain('$3');
-    expect((ordered[0] as { description?: string }).description).toBeUndefined();
+    const described = ordered as Array<{ description?: string }>;
+    expect(described[1].description).toContain('$3');
+    expect(described[0].description).toBeUndefined();
   });
 });
 
