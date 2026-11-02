@@ -221,3 +221,33 @@ export function getCardVisualModel(cardId: string, variant: GameVariant = 'class
     splitAccent: theme.splitAccent,
   };
 }
+
+/** The one-line reminder printed on the card. Mirrors `CardText.summary` in `CardView.swift`. */
+export function cardSummary(card: CardDefinition): string {
+  switch (card.actionKind) {
+    case 'pass_go': return card.id === 'pass_go_go_go' ? 'Draw back up to 7 cards.' : 'Draw 2 extra cards.';
+    case 'rent': return 'Charge rent on one color.';
+    case 'rent_wild': return 'All players pay rent.';
+    case 'double_rent': return card.rentMatrix ? 'All players pay double.' : 'Doubles your next rent.';
+    case 'debt_collector': return 'One player pays you $5.';
+    case 'its_my_birthday': return 'Everyone pays you $2.';
+    case 'sly_deal': return 'Steal a property not in a full set.';
+    case 'forced_deal': return 'Swap a property with a player.';
+    case 'deal_breaker': return 'Steal a complete set.';
+    case 'house': return 'Adds $3 rent to a full set.';
+    case 'hotel': return 'Adds $4 rent. Needs a House.';
+    case 'shack': return 'Adds $5 rent to a property.';
+    case 'go_again': return 'Take another turn.';
+    case 'forced_debt': return 'Give a player a debt chip.';
+    case 'heist': return 'Steal a Bank card from everyone.';
+    case 'market_crash': return 'Take a property from everyone.';
+    case 'repossession': return 'They keep 1 property, and give away the rest.';
+    case 'super_sly_deal': return 'Take one color from everyone.';
+    case 'tax_collector': return 'They keep 1 Bank card, and give away the rest.';
+    case 'tough_luck': return 'Take one card type from a hand.';
+    case 'unfair_trade': return 'Swap Banks with a player.';
+    case 'yoink': return 'One player pays you $10.';
+    case 'just_say_no': return 'Cancel an action against you.';
+    default: return '';
+  }
+}

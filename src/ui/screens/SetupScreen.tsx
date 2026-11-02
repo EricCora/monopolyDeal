@@ -1,5 +1,7 @@
 import type { SetupViewModel } from '../types';
 import type { BotDifficulty, GameVariant, PlayerController } from '../../engine';
+import { Icon } from '../components/icons';
+import { PlayerAvatar } from '../table/tablePieces';
 
 interface SetupScreenProps {
   setup: SetupViewModel;
@@ -15,6 +17,69 @@ interface SetupScreenProps {
   onBack: () => void;
 }
 
+interface SegmentedProps<T extends string | number> {
+  label: string;
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+}
+
+/** A segmented control over a real select, which stays focusable for the keyboard and screen readers. */
+function Segmented<T extends string | number>({ label, value, options, onChange }: SegmentedProps<T>) {
+  return (
+    <div className="segmented">
+      <label className="sr-only">
+        {label}
+        <select
+          value={value}
+          onChange={(event) => {
+            const chosen = options.find((option) => String(option.value) === event.target.value);
+            if (chosen) onChange(chosen.value);
+          }}
+        >
+          {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+      </label>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          className={option.value === value ? 'is-selected' : ''}
+          aria-hidden="true"
+          tabIndex={-1}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+interface RuleStepperProps {
+  title: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+}
+
+function RuleStepper({ title, label, value, min, max, onChange }: RuleStepperProps) {
+  return (
+    <div className="rule-stepper glass-panel">
+      <label>
+        <span>{title}: {value}</span>
+        <input className="sr-only" aria-label={label} type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      </label>
+      <div className="rule-stepper-buttons">
+        <button type="button" aria-hidden="true" tabIndex={-1} disabled={value <= min} onClick={() => onChange(value - 1)}>−</button>
+        <button type="button" aria-hidden="true" tabIndex={-1} disabled={value >= max} onClick={() => onChange(value + 1)}>+</button>
+      </div>
+    </div>
+  );
+}
+
 export function SetupScreen({
   setup,
   allowAiOpponents,
@@ -28,161 +93,99 @@ export function SetupScreen({
   onStartMatch,
   onBack,
 }: SetupScreenProps) {
-  const activeSeats = setup.playerNames.slice(0, setup.playerCount).map((name, index) => ({
-    name: name.trim() || `Player ${index + 1}`,
-    index,
-  }));
+  const variant = setup.variant ?? 'classic';
 
   return (
-    <section className="panel setup-screen card-enter">
-      <div className="setup-header">
-        <div className="setup-header-copy">
-          <p className="setup-kicker">Hot Seat</p>
-          <h2>Set The Table</h2>
-          <p className="setup-subtitle">Build your local pass-and-play table, assign each seat, and lock the pace before the first draw.</p>
-        </div>
-        <aside className="setup-stage-note" aria-label="Match snapshot">
-          <p className="setup-stage-label">Tonight&apos;s table</p>
-          {setup.variant === 'no_mercy' ? (
-            <>
-              <p>{setup.playerCount} seats · No Mercy rules</p>
-              <p>3 sets to win · debt repayment before plays</p>
-            </>
-          ) : (
-            <>
-              <p>{setup.playerCount} seats · {setup.customRules.winCompleteSets} sets to win</p>
-              <p>{setup.customRules.maxPlaysPerTurn} plays each turn · {setup.customRules.maxHandAtEndTurn} card hand limit</p>
-            </>
-          )}
-          <div className="setup-seat-preview" aria-label="Seat preview">
-            {activeSeats.map((seat) => (
-              <div key={`seat-preview-${seat.index + 1}`} className="setup-seat-chip">
-                <span className="setup-seat-chip-number">{seat.index + 1}</span>
-                <span className="setup-seat-chip-name">{seat.name}</span>
-              </div>
-            ))}
-          </div>
-        </aside>
+    <section className="menu-screen setup-screen card-enter">
+      <header className="menu-nav">
+        <button type="button" className="icon-button" onClick={onBack} aria-label="Back"><Icon name="back" /></button>
+        <h2 aria-label="Set The Table">New Game</h2>
+      </header>
+
+      <div className="sr-only" aria-label="Match snapshot">
+        {variant === 'no_mercy' ? (
+          <>
+            <p>{setup.playerCount} seats · No Mercy rules</p>
+            <p>3 sets to win · debt repayment before plays</p>
+          </>
+        ) : (
+          <>
+            <p>{setup.playerCount} seats · {setup.customRules.winCompleteSets} sets to win</p>
+            <p>{setup.customRules.maxPlaysPerTurn} plays each turn · {setup.customRules.maxHandAtEndTurn} card hand limit</p>
+          </>
+        )}
+        <p>Set The Table</p>
       </div>
 
-      <div className="setup-workspace">
-        <section className="setup-stage-panel" aria-label="Seat lineup">
-          <div className="setup-stage-bar">
-            <label className="setup-player-count">
-              Game Variant
-              <select value={setup.variant ?? 'classic'} onChange={(event) => onVariantChange?.(event.target.value as GameVariant)}>
-                <option value="classic">Classic</option>
-                <option value="no_mercy">No Mercy</option>
-              </select>
-            </label>
-            <label className="setup-player-count">
-              Total Players
-              <select value={setup.playerCount} onChange={(event) => onPlayerCountChange(Number(event.target.value))}>
-                <option value={2}>2</option>
-                <option value={3}>3</option>
-                <option value={4}>4</option>
-                <option value={5}>5</option>
-              </select>
-            </label>
-            <p className="setup-stage-helper">Pass one device around the table and reveal only the active seat when it is time to act.</p>
-          </div>
+      <section className="menu-section">
+        <p className="section-title">Game</p>
+        <Segmented<GameVariant>
+          label="Game Variant"
+          value={variant}
+          options={[{ value: 'classic', label: 'Classic' }, { value: 'no_mercy', label: 'No Mercy' }]}
+          onChange={(value) => onVariantChange?.(value)}
+        />
+        <p className="menu-note">
+          {variant === 'classic'
+            ? 'The original: 106 cards and three sets to win.'
+            : '115 cards, debt chips, Shacks and far nastier action cards.'}
+        </p>
+      </section>
 
-          <div className="setup-player-grid">
-            {setup.playerNames.slice(0, setup.playerCount).map((name, index) => {
-              const controller = setup.playerControllers[index] ?? 'human';
-              const difficulty = setup.botDifficulties[index] ?? 'easy';
-              return (
-                <div key={`player-name-${index + 1}`} className="setup-player-card">
-                  <p className="setup-seat-label">Seat {index + 1}</p>
-                  <label>
-                    Player {index + 1} Name
-                    <input value={name} onChange={(event) => onPlayerNameChange(index, event.target.value)} />
+      <section className="menu-section" aria-label="Seat lineup">
+        <p className="section-title">Players</p>
+        <Segmented<number>
+          label="Total Players"
+          value={setup.playerCount}
+          options={[2, 3, 4, 5].map((count) => ({ value: count, label: String(count) }))}
+          onChange={onPlayerCountChange}
+        />
+        {setup.playerNames.slice(0, setup.playerCount).map((name, index) => {
+          const controller = setup.playerControllers[index] ?? 'human';
+          const difficulty = setup.botDifficulties[index] ?? 'easy';
+          return (
+            <div key={`player-name-${index + 1}`} className="setup-player-card glass-panel">
+              <div className="setup-player-line">
+                <PlayerAvatar name={name || `P${index + 1}`} isBot={controller === 'bot'} />
+                <label className="setup-player-name">
+                  <span className="sr-only">Player {index + 1} Name</span>
+                  <input value={name} placeholder={`Player ${index + 1}`} onChange={(event) => onPlayerNameChange(index, event.target.value)} />
+                </label>
+                {allowAiOpponents ? (
+                  <label className="setup-player-controller">
+                    <span className="sr-only">Controller</span>
+                    <select value={controller} onChange={(event) => onPlayerControllerChange(index, event.target.value as PlayerController)}>
+                      <option value="human">Human</option>
+                      <option value="bot">Bot</option>
+                    </select>
                   </label>
-
-                  {allowAiOpponents ? (
-                    <>
-                      <label>
-                        Controller
-                        <select
-                          value={controller}
-                          onChange={(event) => onPlayerControllerChange(index, event.target.value as PlayerController)}
-                        >
-                          <option value="human">Human</option>
-                          <option value="bot">Bot</option>
-                        </select>
-                      </label>
-
-                      {controller === 'bot' ? (
-                        <label>
-                          Bot Difficulty
-                          <select
-                            value={difficulty}
-                            onChange={(event) => onPlayerDifficultyChange(index, event.target.value as BotDifficulty)}
-                          >
-                            <option value="easy">Easy (Heuristic)</option>
-                            <option value="hard">Hard (Rollout)</option>
-                          </select>
-                        </label>
-                      ) : null}
-                    </>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {allowCustomRules && setup.variant !== 'no_mercy' ? (
-          <section className="settings-section setup-rules-panel" aria-label="Custom rule options">
-            <p className="setup-stage-label">House Rules</p>
-            <h3>Dial the pace without changing the core flow.</h3>
-            <p className="setup-rules-copy">Use the defaults for a standard match night or tweak the limits for shorter, sharper rounds.</p>
-            <div className="setup-rules-grid">
-              <label>
-                Win Sets
-                <input
-                  type="number"
-                  min={2}
-                  max={5}
-                  value={setup.customRules.winCompleteSets}
-                  onChange={(event) => onChangeCustomRule('winCompleteSets', Number(event.target.value))}
+                ) : null}
+              </div>
+              {allowAiOpponents && controller === 'bot' ? (
+                <Segmented<BotDifficulty>
+                  label="Bot Difficulty"
+                  value={difficulty}
+                  options={[{ value: 'easy', label: 'Easy' }, { value: 'hard', label: 'Hard' }]}
+                  onChange={(value) => onPlayerDifficultyChange(index, value)}
                 />
-              </label>
-              <label>
-                Hand Limit At End Turn
-                <input
-                  type="number"
-                  min={4}
-                  max={12}
-                  value={setup.customRules.maxHandAtEndTurn}
-                  onChange={(event) => onChangeCustomRule('maxHandAtEndTurn', Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Max Plays Per Turn
-                <input
-                  type="number"
-                  min={1}
-                  max={6}
-                  value={setup.customRules.maxPlaysPerTurn}
-                  onChange={(event) => onChangeCustomRule('maxPlaysPerTurn', Number(event.target.value))}
-                />
-              </label>
+              ) : null}
             </div>
-          </section>
-        ) : null}
-      </div>
+          );
+        })}
+      </section>
 
-      <div className="setup-launch-bar">
-        <div className="setup-launch-copy">
-          <p className="setup-stage-label">Ready to deal</p>
-          <p>{setup.playerCount} seats are staged for a {setup.variant === 'no_mercy' ? 'No Mercy' : `${setup.customRules.winCompleteSets}-set`} match.</p>
-        </div>
-        <div className="actions setup-footer-actions">
-          <button onClick={onStartMatch}>Start Match</button>
-          <button onClick={onBack}>Back</button>
-        </div>
-      </div>
+      {allowCustomRules && variant !== 'no_mercy' ? (
+        <section className="menu-section" aria-label="Custom rule options">
+          <p className="section-title">House Rules</p>
+          <RuleStepper title="Sets to win" label="Win Sets" value={setup.customRules.winCompleteSets} min={2} max={5} onChange={(value) => onChangeCustomRule('winCompleteSets', value)} />
+          <RuleStepper title="Hand limit" label="Hand Limit At End Turn" value={setup.customRules.maxHandAtEndTurn} min={4} max={12} onChange={(value) => onChangeCustomRule('maxHandAtEndTurn', value)} />
+          <RuleStepper title="Plays per turn" label="Max Plays Per Turn" value={setup.customRules.maxPlaysPerTurn} min={1} max={6} onChange={(value) => onChangeCustomRule('maxPlaysPerTurn', value)} />
+        </section>
+      ) : null}
+
+      <button type="button" className="primary-button" onClick={onStartMatch} aria-label="Start Match: Deal the Cards">
+        <Icon name="spade" /> Deal the Cards
+      </button>
     </section>
   );
 }

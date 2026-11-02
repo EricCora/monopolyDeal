@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react';
+import type { GameVariant } from '../../cards/catalog';
 import { ActionLabelText } from './ActionLabelText';
+import { CardView } from './CardView';
+import { Icon } from './icons';
 
 export interface ActionVariantView {
   id: string;
@@ -12,11 +15,14 @@ interface PlayChooserProps {
   cardLabel?: string;
   options: ActionVariantView[];
   title?: string;
+  /** Why the card can't do what it's meant for, when only something lesser is on offer. */
+  note?: string | null;
+  gameVariant?: GameVariant;
   onChoose: (id: string) => void;
   onClose: () => void;
 }
 
-export function PlayChooser({ cardId, cardLabel, options, title = 'Choose Play', onChoose, onClose }: PlayChooserProps) {
+export function PlayChooser({ cardId, cardLabel, options, title, note, gameVariant = 'classic', onChoose, onClose }: PlayChooserProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const priorFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
@@ -63,9 +69,9 @@ export function PlayChooser({ cardId, cardLabel, options, title = 'Choose Play',
   }, []);
 
   return (
-    <div className="play-chooser-overlay" role="presentation" onClick={onClose}>
+    <div className="sheet-overlay play-chooser-overlay" role="presentation" onClick={onClose}>
       <div
-        className="play-chooser"
+        className="sheet play-chooser"
         role="dialog"
         aria-modal="true"
         aria-label={`Choose how to play ${cardLabel ?? cardId}`}
@@ -73,22 +79,23 @@ export function PlayChooser({ cardId, cardLabel, options, title = 'Choose Play',
         onClick={(event) => event.stopPropagation()}
       >
         <header className="play-chooser-head">
-          <p className="play-chooser-kicker">Card Choice</p>
-          <h3>{title}</h3>
-          <p>{cardLabel ?? cardId}</p>
+          <CardView cardId={cardId} width={124} gameVariant={gameVariant} decorative />
+          <h3>{title ?? cardLabel ?? cardId}</h3>
         </header>
+        {note ? (
+          <p className="play-chooser-note"><Icon name="info" /> {note}</p>
+        ) : null}
         <div className="play-options">
           {options.map((option, index) => (
             <button key={option.id} type="button" className="play-option" onClick={() => onChoose(option.id)}>
               <span className="play-option-label-row">
-                <span className="play-option-index" aria-hidden="true">{index + 1}.</span>
+                <span className="play-option-index sr-only">{index + 1}.</span>
                 <ActionLabelText text={option.label} />
               </span>
               {option.description ? <small>{option.description}</small> : null}
             </button>
           ))}
         </div>
-        <p className="play-chooser-note">Pick the destination that best fits the current turn plan.</p>
         <button type="button" className="play-cancel" onClick={onClose}>
           Cancel
         </button>

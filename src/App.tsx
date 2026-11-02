@@ -78,6 +78,7 @@ import {
   type MatchMode,
 } from './ui/experience';
 import { GameTableScreen } from './ui/screens/GameTableScreen';
+import { shouldAskFirst, type CardInput } from './ui/tapPolicy';
 import { HomeScreen } from './ui/screens/HomeScreen';
 import { PostGameScreen } from './ui/screens/PostGameScreen';
 import { SavedGamesScreen } from './ui/screens/SavedGamesScreen';
@@ -402,6 +403,11 @@ function App() {
   }, [applyDevFixture, history.length, uiPreferences.devModeEnabled]);
 
   const prompt = useMemo(() => (game ? getNextPrompt(game) : null), [game]);
+  const homeActiveGame = useMemo(() => {
+    if (screen !== 'home') return null;
+    const saved = loadActiveGame();
+    return saved ? { players: saved.gameState.players.map((player) => player.name), turn: saved.gameState.turnCount } : null;
+  }, [screen]);
   const currentGameId = game ? gameIdentity(game) : null;
   const isPaused = Boolean(game && uiPreferences.gamePaused && uiPreferences.pausedGameId === currentGameId);
   const reduceCelebrationEffects = uiPreferences.reducedEffects;
@@ -1184,18 +1190,18 @@ function App() {
     setError(null);
   }, []);
 
-  const startPracticeGame = useCallback(() => {
+  const startPracticeGame = useCallback((variant: GameVariant = 'classic', botDifficulty: BotDifficulty = 'easy') => {
     setSetup((prev) => ({
       ...prev,
       playerCount: 2,
       playerNames: ['You', 'House Bot', prev.playerNames[2] ?? 'Player 3', prev.playerNames[3] ?? 'Player 4', prev.playerNames[4] ?? 'Player 5'],
       playerControllers: ['human', 'bot', prev.playerControllers[2] ?? 'human', prev.playerControllers[3] ?? 'human', prev.playerControllers[4] ?? 'human'],
-      botDifficulties: ['easy', 'easy', prev.botDifficulties[2] ?? 'easy', prev.botDifficulties[3] ?? 'easy', prev.botDifficulties[4] ?? 'easy'],
+      botDifficulties: ['easy', botDifficulty, prev.botDifficulties[2] ?? 'easy', prev.botDifficulties[3] ?? 'easy', prev.botDifficulties[4] ?? 'easy'],
     }));
     startGameWithPlayers([
       { id: 'p1', name: 'You', controller: 'human', botDifficulty: 'easy' },
-      { id: 'p2', name: 'House Bot', controller: 'bot', botDifficulty: 'easy' },
-    ], { mode: 'practice' });
+      { id: 'p2', name: 'House Bot', controller: 'bot', botDifficulty },
+    ], { mode: 'practice', variant });
   }, [startGameWithPlayers]);
 
   const startDailyChallengeMatch = useCallback(() => {
@@ -1559,7 +1565,7 @@ function App() {
     setError(null);
   };
 
-  const handleCardClick = (cardId: string) => {
+  const handleCardClick = (cardId: string, input: CardInput = 'pointer') => {
     if (isPaused) return;
     if (!game || !prompt) return;
     if (isGameOver(game).done) return;
@@ -1571,7 +1577,7 @@ function App() {
 
     setSelectedCardId(cardId);
 
-    if (variants.length === 1) {
+    if (variants.length === 1 && !shouldAskFirst(cardId, variants[0].action, input, game?.variant ?? 'classic')) {
       runActionWithConfirmation(variants[0].action, variants[0]);
       return;
     }
@@ -1597,7 +1603,7 @@ function App() {
     });
   };
 
-  const handleMultiplayerCardClick = (cardId: string) => {
+  const handleMultiplayerCardClick = (cardId: string, input: CardInput = 'pointer') => {
     if (!multiplayerGame || !multiplayerPrompt || !multiplayerRoomView) return;
     if (multiplayerPrompt.playerId !== multiplayerRoomView.yourPlayerId) return;
     if (isGameOver(multiplayerGame).done) return;
@@ -1606,7 +1612,8 @@ function App() {
     const variants = multiplayerCardActionVariants.get(cardId) ?? [];
     if (variants.length === 0) return;
     setSelectedCardId(cardId);
-    if (variants.length === 1) {
+    const multiplayerVariant = multiplayerGame?.variant ?? multiplayerRoomView?.variant ?? 'classic';
+    if (variants.length === 1 && !shouldAskFirst(cardId, variants[0].action, input, multiplayerVariant)) {
       runMultiplayerActionWithConfirmation(variants[0].action, variants[0]);
       return;
     }
@@ -1920,6 +1927,9 @@ function App() {
           showAchievements={uiPreferences.experimental.achievements}
           achievementSummary={{ unlocked: unlockedAchievements.length, total: 4 }}
           showMultiplayer={true}
+          activeGame={homeActiveGame}
+          reducedEffects={uiPreferences.reducedEffects || prefersReducedMotion}
+          onOpenRules={() => setShowRulesDrawer(true)}
           onNewGame={openHotSeatSetup}
           onStartPracticeGame={startPracticeGame}
           onStartDailyChallenge={startDailyChallengeMatch}
@@ -1984,6 +1994,7 @@ function App() {
           tableActionHint={tableActionHint}
           isPaused={isPaused}
           reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
+          onFeedback={emitFeedback}
           legalActions={legalActions}
           contextualActions={contextualActions}
           revealedPlayerId={activeRevealedPlayerId}
@@ -2051,6 +2062,7 @@ function App() {
           isMultiplayerChatOpen={multiplayerChatOpen}
           isPaused={multiplayerRoomView.paused}
           reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
+          onFeedback={emitFeedback}
           pauseReasonText={
             multiplayerRoomView.roomRuntimeState === 'ended_timeout'
               ? (multiplayerRoomView.endedReason === 'host_timeout'
@@ -2377,7 +2389,7 @@ function App() {
         />
       ) : null}
 
-      {(screen === 'game' || screen === 'multiplayer') && showRulesDrawer ? <RulesDrawer onClose={() => setShowRulesDrawer(false)} /> : null}
+      {(screen === 'home' || screen === 'game' || screen === 'multiplayer') && showRulesDrawer ? <RulesDrawer onClose={() => setShowRulesDrawer(false)} /> : null}
 
     </GameShell>
   );

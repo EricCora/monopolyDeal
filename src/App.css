@@ -1,14 +1,7 @@
-@import './ui/theme/tokens.css';
+@import '@fontsource-variable/nunito/wght.css';
 @import './ui/theme/base.css';
 @import './ui/theme/components/cards.css';
 @import './ui/theme/components/layout.css';
-@import './ui/theme/components/dialogs.css';
-@import './ui/theme/components/events.css';
-@import './ui/theme/components/stats.css';
-@import './ui/theme/screens/home.css';
+@import './ui/theme/table.css';
+@import './ui/theme/menus.css';
 @import './ui/theme/screens/setup.css';
-@import './ui/theme/screens/game.css';
-@import './ui/theme/screens/postgame.css';
-@import './ui/theme/screens/stats.css';
-@import './ui/theme/screens/settings.css';
-@import './ui/theme/screens/saved-games.css';

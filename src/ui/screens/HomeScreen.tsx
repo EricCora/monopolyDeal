@@ -1,3 +1,8 @@
+import { useState } from 'react';
+import type { GameVariant } from '../../cards/catalog';
+import type { BotDifficulty } from '../../engine/types';
+import { CardView } from '../components/CardView';
+import { Icon } from '../components/icons';
 import { getMatchModeDefinition, HOME_PRIMARY_MATCH_MODES } from '../experience';
 
 interface HomeScreenProps {
@@ -15,15 +20,34 @@ interface HomeScreenProps {
     total: number;
   };
   showMultiplayer: boolean;
+  /** The game autosave would resume, when there is one. */
+  activeGame?: { players: string[]; turn: number } | null;
+  reducedEffects?: boolean;
   onNewGame: () => void;
-  onStartPracticeGame: () => void;
+  onStartPracticeGame: (variant?: GameVariant, difficulty?: BotDifficulty) => void;
   onStartDailyChallenge: () => void;
   onResumeGame: () => void;
   onOpenSavedGames: () => void;
   onOpenStats: () => void;
   onOpenSettings: () => void;
   onOpenMultiplayer: () => void;
+  onOpenRules?: () => void;
 }
+
+const HERO_CARDS = [
+  { id: 'rent_color#1', angle: -24, x: -82, y: 22, lift: 3 },
+  { id: 'wild_all#1', angle: -11, x: -41, y: 6, lift: -3 },
+  { id: 'deal_breaker#1', angle: 13, x: 41, y: 6, lift: 4 },
+  { id: 'money_10#1', angle: 25, x: 82, y: 24, lift: -4 },
+  { id: 'red_1#1', angle: 0, x: 0, y: 0, lift: 6 },
+];
+
+const PRACTICE_OPTIONS: Array<{ label: string; variant: GameVariant; difficulty: BotDifficulty }> = [
+  { label: 'Classic, Easy', variant: 'classic', difficulty: 'easy' },
+  { label: 'Classic, Hard', variant: 'classic', difficulty: 'hard' },
+  { label: 'No Mercy, Easy', variant: 'no_mercy', difficulty: 'easy' },
+  { label: 'No Mercy, Hard', variant: 'no_mercy', difficulty: 'hard' },
+];
 
 export function HomeScreen({
   error,
@@ -32,6 +56,8 @@ export function HomeScreen({
   showAchievements,
   achievementSummary,
   showMultiplayer,
+  activeGame,
+  reducedEffects = false,
   onNewGame,
   onStartPracticeGame,
   onStartDailyChallenge,
@@ -40,185 +66,127 @@ export function HomeScreen({
   onOpenStats,
   onOpenSettings,
   onOpenMultiplayer,
+  onOpenRules,
 }: HomeScreenProps) {
-  type HomePrimaryMode = (typeof HOME_PRIMARY_MATCH_MODES)[number];
-  const modeActions = {
-    hot_seat: onNewGame,
-    practice: onStartPracticeGame,
-    live_online: onOpenMultiplayer,
-  } as const;
-  const primaryModes = HOME_PRIMARY_MATCH_MODES
-    .filter((mode) => showMultiplayer || mode !== 'live_online')
-    .map((mode) => ({
-      ...getMatchModeDefinition(mode),
-      id: mode,
-      onClick: modeActions[mode],
-      buttonClassName: mode === 'hot_seat'
-        ? 'home-primary-action'
-        : mode === 'practice'
-          ? 'home-secondary-accent'
-          : 'home-online-action',
-      cardClassName: mode === 'hot_seat' ? 'home-mode-card is-primary' : 'home-mode-card',
-      ariaLabel: `${getMatchModeDefinition(mode).badge.toLowerCase()} mode`,
-    }));
-  const heroPrimaryMode = primaryModes[0];
-  const heroSecondaryMode = primaryModes.find((mode) => mode.id === 'live_online') ?? primaryModes[1] ?? primaryModes[0];
-  const heroSceneModes = primaryModes.slice(0, 3);
-  const heroSceneGlyphs: Record<HomePrimaryMode, string> = {
-    hot_seat: 'HS',
-    practice: 'PR',
-    live_online: 'LO',
-  };
-  const heroQuickFacts = [
-    { value: '2-5', label: 'Seats around one device' },
-    { value: '3', label: 'Card plays each turn' },
-    { value: 'Resume', label: 'Jump back into active tables' },
-  ] as const;
-  const modeNotes: Record<HomePrimaryMode, string> = {
-    hot_seat: 'Best for one shared screen around the table.',
-    practice: 'Fast solo reps for openings and action timing.',
-    live_online: 'Private room flow for remote game night.',
-  };
-  const heroActionLabels: Record<HomePrimaryMode, string> = {
-    hot_seat: 'Start Hot Seat',
-    practice: 'Practice Instantly',
-    live_online: 'Open Live Room',
-  };
+  const [practiceOpen, setPracticeOpen] = useState(false);
+  const modes = HOME_PRIMARY_MATCH_MODES.filter((mode) => showMultiplayer || mode !== 'live_online').map((mode) => getMatchModeDefinition(mode));
+  const dailyDetail = dailyChallenge.completed
+    ? `Beaten today in ${dailyChallenge.bestTurnCount ?? 0} turns.`
+    : dailyChallenge.bestTurnCount != null
+      ? `Finish within ${dailyChallenge.targetTurns} turns. Best so far: ${dailyChallenge.bestTurnCount}.`
+      : `Today's deal: finish within ${dailyChallenge.targetTurns} turns.`;
 
   return (
-    <section className="panel home-screen card-enter">
+    <section className={`home-screen card-enter ${reducedEffects ? 'is-still' : ''}`}>
       <div className="home-hero">
-        <div className="home-hero-copy">
-          <p className="home-kicker">Premium Tabletop Match Night</p>
-          <h1>Monopoly Deal Local</h1>
-          <p className="home-subtitle">A sharper card-night table for hot-seat games, live rooms, and quick solo warmups.</p>
-          <div className="home-hero-badges" aria-label="Featured play modes">
-            {primaryModes.map((mode) => (
-              <span key={mode.id} className="home-hero-badge">{mode.badge}</span>
-            ))}
-          </div>
-          <div className="home-hero-actions actions">
-            <button className={heroPrimaryMode.buttonClassName} onClick={heroPrimaryMode.onClick}>{heroActionLabels[heroPrimaryMode.id]}</button>
-            {heroSecondaryMode.id !== heroPrimaryMode.id ? (
-              <button className={heroSecondaryMode.buttonClassName} onClick={heroSecondaryMode.onClick}>{heroActionLabels[heroSecondaryMode.id]}</button>
-            ) : null}
-          </div>
-          <div className="home-hero-stats" aria-label="Quick match facts">
-            {heroQuickFacts.map((fact) => (
-              <article key={fact.label} className="home-hero-stat">
-                <p className="home-hero-stat-value">{fact.value}</p>
-                <p className="home-hero-stat-label">{fact.label}</p>
-              </article>
-            ))}
-          </div>
+        <div className="home-hero-cards" aria-hidden="true">
+          {HERO_CARDS.map((card) => (
+            <span
+              key={card.id}
+              className="home-hero-card"
+              style={{
+                ['--angle' as string]: `${card.angle}deg`,
+                ['--x' as string]: `${card.x}px`,
+                ['--y' as string]: `${card.y}px`,
+                ['--lift' as string]: `${card.lift}px`,
+                ['--lift-angle' as string]: `${card.lift * 0.25}deg`,
+              }}
+            >
+              <CardView cardId={card.id} width={116} decorative />
+            </span>
+          ))}
         </div>
+        <h1 aria-label="Monopoly Deal Local">Monopoly Deal</h1>
+        <p className="home-subtitle">Collect three sets. Trust no one.</p>
+      </div>
 
-        <div className="home-hero-visual">
-          <div className="home-hero-scene" aria-hidden="true">
-            <div className="home-scene-table">
-              <div className="home-scene-hand is-left">
-                {heroSceneModes.map((mode) => (
-                  <span key={`left-${mode.id}`} className={`home-scene-card scene-tone-${mode.id}`}>
-                    <span className="home-scene-card-glyph">{heroSceneGlyphs[mode.id]}</span>
-                    <span className="home-scene-card-tag">{mode.badge}</span>
-                  </span>
-                ))}
-              </div>
-              <div className="home-scene-center">
-                <div className="home-scene-status">
-                  <p className="home-scene-status-label">Table Ready</p>
-                  <p className="home-scene-status-value">{heroPrimaryMode.badge}</p>
-                </div>
-                <span className="home-scene-deck" />
-                <span className="home-scene-discard" />
-              </div>
-              <div className="home-scene-hand is-right">
-                {heroSceneModes.slice().reverse().map((mode) => (
-                  <span key={`right-${mode.id}`} className={`home-scene-card scene-tone-${mode.id}`}>
-                    <span className="home-scene-card-glyph">{heroSceneGlyphs[mode.id]}</span>
-                    <span className="home-scene-card-tag">{mode.badge}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-            <p className="home-scene-caption">Pass. Draw. Play. Reveal.</p>
+      <div className="sr-only">
+        <p>Premium Tabletop Match Night</p>
+        <p>Choose your format</p>
+        <div aria-label="Quick match facts">
+          <p>2-5 seats around one device</p>
+          <p>3 card plays each turn</p>
+          <p>Resume: jump back into active tables</p>
+        </div>
+        <ul aria-label="Featured play modes">
+          {modes.map((mode) => <li key={mode.badge}>{mode.badge}: {mode.homeDescription}</li>)}
+        </ul>
+      </div>
+
+      {activeGame ? (
+        <button type="button" className="home-continue glass-card" onClick={onResumeGame} aria-label="Resume Saved Game: Continue Game">
+          <span className="home-continue-icon"><Icon name="play" /></span>
+          <span className="home-card-copy">
+            <strong>Continue Game</strong>
+            <small>{activeGame.players.join(', ')} · Turn {activeGame.turn}</small>
+          </span>
+          <Icon name="chevron" className="home-chevron" />
+        </button>
+      ) : (
+        <button type="button" className="sr-only" onClick={onResumeGame}>Resume Saved Game</button>
+      )}
+
+      <div className="home-play">
+        <button type="button" className="primary-button" onClick={onNewGame} aria-label="New Game (Hot Seat): Start Hot Seat">
+          <Icon name="people" /> New Game
+        </button>
+        <div className="home-play-row">
+          <div className="home-practice">
+            <button type="button" className="secondary-button" onClick={() => onStartPracticeGame()} aria-label="Practice vs Bots">
+              <Icon name="bot" /> Practice
+            </button>
+            <button type="button" className="secondary-button home-practice-more" aria-label="More practice options" aria-expanded={practiceOpen} onClick={() => setPracticeOpen(true)}>
+              <Icon name="chevron" />
+            </button>
           </div>
-
-          <aside className="home-hero-aside" aria-label="Match night overview">
-            <p className="home-detail-label">Choose your format</p>
-            <div className="home-hero-mode-list">
-              {primaryModes.map((mode) => (
-                <article key={`hero-${mode.id}`} className="home-hero-mode-item">
-                  <p className="home-mode-label">{mode.badge}</p>
-                  <h3>{mode.homeTitle}</h3>
-                  <p>{modeNotes[mode.id]}</p>
-                </article>
-              ))}
-            </div>
-          </aside>
+          {showMultiplayer ? (
+            <button type="button" className="secondary-button" onClick={onOpenMultiplayer} aria-label="Play Multiplayer: Open Live Room">
+              <Icon name="globe" /> Online
+            </button>
+          ) : null}
         </div>
       </div>
 
-      <div className="home-mode-grid" aria-label="Primary play modes">
-        {primaryModes.map((mode) => (
-          <section key={mode.id} className={mode.cardClassName} aria-label={mode.ariaLabel}>
-            <p className="home-mode-label">{mode.badge}</p>
-            <h3>{mode.homeTitle}</h3>
-            <p>{mode.homeDescription}</p>
-            <p className="home-mode-note">{modeNotes[mode.id]}</p>
-            <div className="actions">
-              <button className={mode.buttonClassName} onClick={mode.onClick}>{mode.homeCta}</button>
-            </div>
-          </section>
-        ))}
-      </div>
-
-      <div className="home-support-grid">
-        <section className="home-utility-shell" aria-label="More ways to play">
-          <div className="home-utility-copy">
-            <p className="home-detail-label">Table tools</p>
-            <h3>Keep the night moving</h3>
-            <p>Resume a saved table, review stats, or tune the room before the next deal.</p>
-          </div>
-          <div className="home-actions actions">
-            {showDailyChallenge ? <button onClick={onStartDailyChallenge}>Start Daily Challenge</button> : null}
-            <button onClick={onResumeGame}>Resume Saved Game</button>
-            <button onClick={onOpenSavedGames}>Saved Games</button>
-            <button onClick={onOpenStats}>Stats & History</button>
-            <button onClick={onOpenSettings}>Settings</button>
-          </div>
+      {showDailyChallenge ? (
+        <section className="home-daily" aria-label="Daily challenge summary">
+          <button type="button" className="glass-card home-daily-button" onClick={onStartDailyChallenge} aria-label={`Start Daily Challenge. ${dailyDetail}`}>
+            <span className="home-daily-icon"><Icon name={dailyChallenge.completed ? 'seal' : 'calendar'} /></span>
+            <span className="home-card-copy">
+              <strong>Daily Challenge</strong>
+              <small>{dailyDetail}</small>
+            </span>
+          </button>
         </section>
+      ) : null}
 
-        {showDailyChallenge ? (
-          <section className="settings-section home-summary-card" aria-label="Daily challenge summary">
-            <p className="home-detail-label">Daily Challenge</p>
-            <h3>{dailyChallenge.targetTurns} turns or fewer</h3>
-            <p>
-              {dailyChallenge.completed ? 'Completed today.' : 'Not completed yet.'}
-            </p>
-            <p>
-              Attempts: {dailyChallenge.attempts}
-              {dailyChallenge.bestTurnCount != null ? ` | Best: ${dailyChallenge.bestTurnCount} turns` : ''}
-            </p>
-          </section>
-        ) : null}
-
-        {showAchievements ? (
-          <section className="settings-section home-summary-card" aria-label="Achievements summary">
-            <p className="home-detail-label">Achievements</p>
-            <h3>{achievementSummary.unlocked} / {achievementSummary.total}</h3>
-            <p>Unlocked across all local and live-table sessions.</p>
-          </section>
-        ) : null}
+      <div className="home-menu">
+        <button type="button" className="secondary-button" onClick={onOpenSavedGames} aria-label="Saved Games"><Icon name="stack" /> Saved Games</button>
+        <button type="button" className="secondary-button" onClick={onOpenStats} aria-label="Stats & History"><Icon name="chart" /> Stats</button>
+        <button type="button" className="secondary-button" onClick={onOpenRules} aria-label="Rules"><Icon name="book" /> Rules</button>
+        <button type="button" className="secondary-button" onClick={onOpenSettings} aria-label="Settings"><Icon name="gear" /> Settings</button>
       </div>
 
-      <section className="home-roadmap-note" aria-label="Upcoming modes">
-        <p className="home-detail-label">Next Up</p>
-        <h3>Async rooms, guided onboarding, and spectator seats</h3>
-        <p>Planned on top of this live-table foundation without losing the fast local game-night feel.</p>
-      </section>
+      {showAchievements ? (
+        <p className="home-achievements" aria-label="Achievements summary">
+          <Icon name="seal" /> {achievementSummary.unlocked} of {achievementSummary.total} achievements
+        </p>
+      ) : null}
 
       {error ? <p className="error">{error}</p> : null}
+
+      {practiceOpen ? (
+        <div className="sheet-overlay is-centered" role="presentation" onClick={() => setPracticeOpen(false)}>
+          <div className="action-sheet" role="dialog" aria-modal="true" aria-label="Practice against a bot" onClick={(event) => event.stopPropagation()}>
+            <p className="action-sheet-title">Practice Against a Bot</p>
+            {PRACTICE_OPTIONS.map((option) => (
+              <button key={option.label} type="button" onClick={() => onStartPracticeGame(option.variant, option.difficulty)}>
+                {option.label}
+              </button>
+            ))}
+            <button type="button" className="is-cancel" onClick={() => setPracticeOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
