@@ -1,5 +1,6 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { chooseHeuristicAction } from '../../../src/ai/heuristic.ts';
+import { chooseMonteCarloAction } from '../../../src/ai/rollout.ts';
 import { actionRevealedDeckCards, appendTurnSnapshot } from '../../../src/engine/undoPolicy.ts';
 import {
   applyAction,
@@ -18,6 +19,8 @@ import {
   type GameVariant,
   type PlayerConfig,
   type PlayerId,
+  type BotDifficulty,
+  type LegalAction,
 } from '../../../src/engine/index.ts';
 import {
   DEFAULT_MULTIPLAYER_SESSION_PRESET,
@@ -88,6 +91,10 @@ export function resolveReconnectWindowMs(configuredGraceMs?: string): number {
 type ReversibleActionType = 'draw_cards' | 'play_to_bank' | 'play_property' | 'play_action' | 'move_wild' | 'repay_debt';
 
 interface RoomParticipant {
+  /** Sits at the table from the start. It's always connected and ready, and nobody holds its token. */
+  isBot?: boolean;
+  /** How a bot plays this seat, whether it was added as one or is covering for a dropped player. */
+  botDifficulty?: BotDifficulty;
   id: PlayerId;
   name: string;
   sessionToken: string;
@@ -203,10 +210,12 @@ export function normalizeRoomForRuntime(room: MultiplayerRoom): MultiplayerRoom 
   room.presetId = normalizeMultiplayerSessionPreset(room.presetId, DEFAULT_MULTIPLAYER_SESSION_PRESET);
   // A started game's variant is authoritative. Lobby snapshots use the room
   // field, while legacy snapshots with neither field default to Classic.
-  room.variant = normalizeGameVariant(room.game?.variant ?? room.variant, DEFAULT_GAME_VARIANT);
+  // Between matches the host may already have picked the next game's variant.
+  const pickedForNextGame = room.status === 'finished' && room.variant;
+  room.variant = normalizeGameVariant(pickedForNextGame ? room.variant : room.game?.variant ?? room.variant, DEFAULT_GAME_VARIANT);
   if (room.variant === 'no_mercy') room.presetId = DEFAULT_MULTIPLAYER_SESSION_PRESET;
   if (room.game) {
-    room.game = normalizeGameState({ ...room.game, variant: room.variant });
+    room.game = normalizeGameState({ ...room.game, variant: pickedForNextGame ? room.game.variant : room.variant });
   }
   room.turnSnapshots = Array.isArray(room.turnSnapshots)
     ? room.turnSnapshots.map((snapshot) => normalizeGameState(snapshot))
@@ -578,13 +587,13 @@ function migrateHost(room: MultiplayerRoom): { previousHostId: PlayerId; nextHos
   const currentHost = findPlayer(room, room.hostPlayerId);
   if (currentHost?.connected) return null;
 
-  const connectedCandidate = room.players.find((player) => player.connected);
+  const connectedCandidate = room.players.find((player) => player.connected && !player.isBot);
   if (connectedCandidate) {
     room.hostPlayerId = connectedCandidate.id;
     return room.hostPlayerId === previousHostId ? null : { previousHostId, nextHostId: room.hostPlayerId };
   }
 
-  const fallback = room.players[0];
+  const fallback = room.players.find((player) => !player.isBot);
   if (fallback) {
     room.hostPlayerId = fallback.id;
     return room.hostPlayerId === previousHostId ? null : { previousHostId, nextHostId: room.hostPlayerId };
@@ -688,7 +697,7 @@ export function markSeatTimedOutIfExpired(
       // An expired host cannot resume host-only controls. Promote a connected
       // survivor so a 3-4 player match remains operable.
       if (isHostSeat(room, player.id)) {
-        const nextHost = room.players.find((candidate) => candidate.id !== player.id && candidate.connected);
+        const nextHost = room.players.find((candidate) => candidate.id !== player.id && candidate.connected && !candidate.isBot);
         if (nextHost) {
           room.hostPlayerId = nextHost.id;
           appendActivity(room, 'host', `${nextHost.name} is now host.`, { playerId: nextHost.id });
@@ -710,6 +719,11 @@ export function markSeatTimedOutIfExpired(
   };
 }
 
+function botSummary(room: MultiplayerRoom, entry: RoomParticipant | undefined): Pick<MultiplayerPlayerSummary, 'isBot' | 'botDifficulty'> {
+  if (!entry) return {};
+  return { isBot: entry.isBot === true, botDifficulty: seatBotDifficulty(room, entry) };
+}
+
 function roomPlayerSummary(room: MultiplayerRoom): MultiplayerPlayerSummary[] {
   if (!room.game) {
     return room.players.map((entry) => ({
@@ -725,10 +739,11 @@ function roomPlayerSummary(room: MultiplayerRoom): MultiplayerPlayerSummary[] {
       reconnectDeadlineMs: entry.reconnectDeadlineMs,
       isHost: entry.id === room.hostPlayerId,
       ready: entry.ready,
+      ...botSummary(room, entry),
     }));
   }
 
-  return room.game.players.map((player) => {
+  const inGame = room.game.players.map((player) => {
     const entry = findPlayer(room, player.id);
     return {
       id: player.id,
@@ -743,8 +758,26 @@ function roomPlayerSummary(room: MultiplayerRoom): MultiplayerPlayerSummary[] {
       reconnectDeadlineMs: entry?.reconnectDeadlineMs ?? room.updatedAt,
       isHost: player.id === room.hostPlayerId,
       ready: Boolean(entry?.ready),
+      ...botSummary(room, entry),
     };
   });
+  // Someone who joined between matches isn't in the finished game yet.
+  const joined = room.players.filter((entry) => !room.game?.players.some((player) => player.id === entry.id));
+  return [...inGame, ...joined.map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+    handCount: 0,
+    bankCount: 0,
+    completeSets: 0,
+    connected: entry.connected,
+    connectionState: entry.connectionState,
+    disconnectedAt: entry.disconnectedAt,
+    lastSeenAt: entry.lastSeenAt,
+    reconnectDeadlineMs: entry.reconnectDeadlineMs,
+    isHost: entry.id === room.hostPlayerId,
+    ready: entry.ready,
+    ...botSummary(room, entry),
+  }))];
 }
 
 function canonicalizeCardIds(cardIds: string[]): string[] {
@@ -795,18 +828,38 @@ function allConnectedPlayersReady(room: MultiplayerRoom): boolean {
 
 function allRoomPlayersConnectedAndReady(room: MultiplayerRoom): boolean {
   // A seat a bot is playing doesn't hold up the next game.
-  if (room.options?.botFill) return room.players.length >= 2 && room.players.every((player) => !player.connected || player.ready);
-  return room.players.length >= 2 && room.players.every((player) => player.connected && player.ready);
+  const seats = rematchSeats(room);
+  const covered = (player: RoomParticipant) => !player.connected && room.options?.botFill === true;
+  return seats.length >= 2 && seats.every((player) => covered(player) || (player.connected && player.ready));
+}
+
+/** Who plays the next game. Someone who left a finished room a while ago doesn't hold it up. */
+function rematchSeats(room: MultiplayerRoom, now = nowMs()): RoomParticipant[] {
+  if (room.options?.botFill) return room.players;
+  return room.players.filter((player) => player.connected || now - (player.disconnectedAt ?? 0) < LOBBY_START_HOLD_MS);
 }
 
 function allRoomPlayersConnected(room: MultiplayerRoom): boolean {
   if (room.options?.botFill) return room.players.length >= 2;
-  return room.players.length >= 2 && room.players.every((player) => player.connected);
+  const seats = rematchSeats(room);
+  return seats.length >= 2 && seats.every((player) => player.connected);
+}
+
+function gameSeats(players: RoomParticipant[]): PlayerConfig[] {
+  return players.map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+    ...(entry.isBot ? { controller: 'bot' as const, botDifficulty: entry.botDifficulty ?? 'easy' } : {}),
+  }));
+}
+
+function seatBotDifficulty(room: MultiplayerRoom, seat: RoomParticipant): BotDifficulty {
+  return seat.botDifficulty ?? room.options?.botDifficulty ?? 'easy';
 }
 
 function clearAllReadyStates(room: MultiplayerRoom): void {
   room.players.forEach((player) => {
-    player.ready = false;
+    player.ready = player.isBot === true;
   });
 }
 
@@ -843,7 +896,7 @@ function resetRoomForFreshMatch(room: MultiplayerRoom): void {
 }
 
 function removeLobbyParticipant(room: MultiplayerRoom, playerId: PlayerId): boolean {
-  if (room.status !== 'lobby') return false;
+  if (room.status !== 'lobby' && room.status !== 'finished') return false;
   const player = findPlayer(room, playerId);
   if (!player) return false;
   const nextPlayers = room.players.filter((entry) => entry.id !== playerId);
@@ -1058,16 +1111,50 @@ export function nextRoomAutomation(room: MultiplayerRoom): RoomAutomation | null
   if (!game || room.turnBased || room.paused || room.roomRuntimeState === 'ended_timeout') return null;
   if (isGameOver(game).done) return null;
   // With nobody left at the table, the bots wait rather than finish the game alone.
-  if (!room.players.some((player) => player.connected)) return null;
+  if (!room.players.some((player) => player.connected && !player.isBot)) return null;
   const playerId = getNextPrompt(game).playerId;
   const seat = findPlayer(room, playerId);
-  if (room.options?.botFill && seat && !seat.connected) {
+  if (seat?.isBot || (room.options?.botFill && seat && !seat.connected)) {
     return { at: (room.turnClock?.playerId === playerId ? room.turnClock.startedAt : nowMs()) + BOT_SEAT_DELAY_MS, playerId, reason: 'bot_seat' };
   }
   if (room.turnClock?.playerId === playerId && room.turnClock.deadlineMs) {
     return { at: room.turnClock.deadlineMs, playerId, reason: 'timer' };
   }
   return null;
+}
+
+/** The search gets a time limit because the room server runs everything on one thread. */
+const HARD_BOT_BUDGET_MS = 900;
+
+function chooseBotAction(game: GameState, playerId: PlayerId, legal: LegalAction[], difficulty: BotDifficulty): Action {
+  const choice = difficulty === 'hard'
+    ? chooseMonteCarloAction(game, playerId, legal, { simulations: 18, depth: 11, timeBudgetMs: HARD_BOT_BUDGET_MS })
+    : chooseHeuristicAction(game, playerId, legal);
+  return choice && legal.some((entry) => JSON.stringify(entry.action) === JSON.stringify(choice.action))
+    ? choice.action
+    : legal[0].action;
+}
+
+/**
+ * Plays any bot seats that are up, for a turn-by-turn room. Nothing runs between requests there,
+ * so bots move as part of the request that reached them, and all of it costs one save.
+ */
+export function playTurnRoomBots(room: MultiplayerRoom): void {
+  if (!room.turnBased) return;
+  const startedAt = nowMs();
+  for (let step = 0; step < 400; step += 1) {
+    const game = room.game;
+    if (!game || room.paused || isGameOver(game).done) return;
+    const playerId = getNextPrompt(game).playerId;
+    const seat = findPlayer(room, playerId);
+    if (!seat?.isBot) return;
+    const legal = getLegalActions(game, playerId);
+    if (legal.length === 0) return;
+    // The function has a hard time limit, so a long run of hard moves finishes on easy ones.
+    const difficulty = nowMs() - startedAt < 6_000 ? seatBotDifficulty(room, seat) : 'easy';
+    applyGameAction(room, game, chooseBotAction(game, playerId, legal, difficulty));
+    commitMutation(room);
+  }
 }
 
 /**
@@ -1080,10 +1167,8 @@ export function runRoomAutomation(room: MultiplayerRoom, now = nowMs()): boolean
   const game = room.game;
   const legal = getLegalActions(game, next.playerId);
   if (legal.length === 0) return false;
-  const choice = chooseHeuristicAction(game, next.playerId, legal);
-  const action = choice && legal.some((entry) => JSON.stringify(entry.action) === JSON.stringify(choice.action))
-    ? choice.action
-    : legal[0].action;
+  const seat = findPlayer(room, next.playerId);
+  const action = chooseBotAction(game, next.playerId, legal, next.reason === 'bot_seat' && seat ? seatBotDifficulty(room, seat) : 'easy');
   if (next.reason === 'timer') {
     appendActivity(room, 'system', `Time ran out, so a bot moved for ${playerDisplayName(room, next.playerId)}.`, { playerId: next.playerId });
   }
@@ -1112,11 +1197,80 @@ export function setRoomOptions(
   if (room.turnBased && (changes.botFill || changes.turnTimerSeconds)) throw new Error('option_not_supported');
   if (changes.turnTimerSeconds != null && !ALLOWED_TURN_TIMERS.includes(changes.turnTimerSeconds)) throw new Error('invalid_payload');
   if (changes.bestOf != null && changes.bestOf !== 1 && changes.bestOf !== 3) throw new Error('invalid_payload');
+  if (changes.botDifficulty != null && !BOT_DIFFICULTIES.includes(changes.botDifficulty)) throw new Error('invalid_payload');
   room.options = {
     botFill: changes.botFill ?? room.options?.botFill ?? false,
+    botDifficulty: changes.botDifficulty ?? room.options?.botDifficulty ?? 'easy',
     turnTimerSeconds: changes.turnTimerSeconds !== undefined ? changes.turnTimerSeconds : room.options?.turnTimerSeconds ?? null,
     bestOf: changes.bestOf ?? room.options?.bestOf ?? 1,
   };
+  commitMutation(room);
+  return room;
+}
+
+const BOT_DIFFICULTIES: BotDifficulty[] = ['easy', 'hard'];
+
+/** Seats a bot beside the people in the room, before the match or between matches. */
+export function addRoomBot(
+  room: MultiplayerRoom,
+  playerId: PlayerId,
+  sessionToken: string,
+  difficulty: BotDifficulty = 'easy',
+): MultiplayerRoom {
+  requireSession(room, playerId, sessionToken);
+  requireHost(room, playerId);
+  if (room.status === 'active') throw new Error('room_started');
+  if (!BOT_DIFFICULTIES.includes(difficulty)) throw new Error('invalid_payload');
+  if (room.players.length >= 5) throw new Error('room_full');
+  const id = nextAvailableLobbyPlayerId(room);
+  const now = nowMs();
+  const name = uniqueSeatName(room, `Bot ${room.players.filter((entry) => entry.isBot).length + 1}`);
+  room.players.push({
+    id,
+    name,
+    sessionToken: randomToken(),
+    isBot: true,
+    botDifficulty: difficulty,
+    connected: true,
+    connectionState: 'connected',
+    disconnectedAt: null,
+    lastSeenAt: now,
+    reconnectDeadlineMs: now + BOT_SEAT_RECLAIM_MS,
+    ready: true,
+    lastReactionAt: 0,
+    lastChatAt: 0,
+  });
+  appendActivity(room, 'lobby', `${name} joined the table.`, { playerId: id });
+  commitMutation(room);
+  return room;
+}
+
+export function removeRoomBot(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, botId: PlayerId): MultiplayerRoom {
+  requireSession(room, playerId, sessionToken);
+  requireHost(room, playerId);
+  if (room.status === 'active') throw new Error('room_started');
+  const bot = findPlayer(room, botId);
+  if (!bot?.isBot) throw new Error('seat_not_found');
+  room.players = room.players.filter((entry) => entry.id !== botId);
+  appendActivity(room, 'lobby', `${bot.name} left the table.`, { playerId: botId });
+  commitMutation(room);
+  return room;
+}
+
+/** Works during a match too, for a bot seat or for a bot covering a dropped player. */
+export function setSeatBotDifficulty(
+  room: MultiplayerRoom,
+  playerId: PlayerId,
+  sessionToken: string,
+  seatId: PlayerId,
+  difficulty: BotDifficulty,
+): MultiplayerRoom {
+  requireSession(room, playerId, sessionToken);
+  requireHost(room, playerId);
+  if (!BOT_DIFFICULTIES.includes(difficulty)) throw new Error('invalid_payload');
+  const seat = findPlayer(room, seatId);
+  if (!seat) throw new Error('seat_not_found');
+  seat.botDifficulty = difficulty;
   commitMutation(room);
   return room;
 }
@@ -1250,7 +1404,8 @@ export function createRoom(
 }
 
 export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSessionResponse {
-  if (room.status !== 'lobby' || room.game) {
+  // Between matches a finished room works like a lobby, so friends can still join.
+  if (room.status === 'active' || (room.status === 'lobby' && room.game)) {
     throw new Error('room_started');
   }
   reclaimDisconnectedLobbyParticipants(room, nowMs(), room.players.length >= 5 ? 'all' : 'expired');
@@ -1348,7 +1503,8 @@ export function leaveRoom(
   }
   const player = requireSession(room, playerId, sessionToken);
   ensureExpectedRevision(room, expectedRevision);
-  if (room.status === 'lobby') {
+  // Leaving for good between matches frees the seat, the same as leaving a lobby.
+  if (room.status === 'lobby' || (room.status === 'finished' && options.abandon)) {
     if (removeLobbyParticipant(room, player.id)) {
       incrementRevision(room);
     }
@@ -1395,7 +1551,7 @@ export function startRoom(
   }
   // A seat left behind here would block every rematch, since prune skips started rooms.
   reclaimDisconnectedLobbyParticipants(room, nowMs(), 'all');
-  const players: PlayerConfig[] = activePlayers.map((player) => ({ id: player.id, name: player.name }));
+  const players = gameSeats(activePlayers);
   if (checkpointId) {
     const checkpoint = findCheckpoint(room, checkpointId);
     const lobbyPlayerById = new Map(activePlayers.map((entry) => [entry.id, entry.name]));
@@ -1717,7 +1873,7 @@ export function setRoomVariant(
   assertReconnectWindowOpen(player);
   requireConnectedPlayer(player);
   requireHost(room, playerId);
-  if (room.status !== 'lobby' || room.game) {
+  if (room.status === 'active') {
     throw new Error('room_started');
   }
   const nextVariant = normalizeGameVariant(variant, room.variant);
@@ -1778,8 +1934,9 @@ export function rematchRoom(
   if (!allRoomPlayersConnectedAndReady(room)) {
     throw new Error('players_not_ready');
   }
+  room.players = rematchSeats(room);
   room.game = createGame({
-    players: room.players.map((entry) => ({ id: entry.id, name: entry.name })),
+    players: gameSeats(room.players),
     deckVersion: 'v1',
     seed: randomInt(MATCH_SEED_RANGE),
     ruleset: getMultiplayerSessionPresetRuleset(room.presetId),
@@ -1957,11 +2114,11 @@ export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken
 
 function roomViewExtras(room: MultiplayerRoom): Partial<MultiplayerRoomView> {
   return {
-    options: room.options ?? { botFill: false, turnTimerSeconds: null, bestOf: 1 },
+    options: { botDifficulty: 'easy', ...(room.options ?? { botFill: false, turnTimerSeconds: null, bestOf: 1 }) },
     turnClock: room.turnClock ?? undefined,
     series: room.series ?? undefined,
     botSeatIds: room.options?.botFill && room.status === 'active'
-      ? room.players.filter((player) => !player.connected).map((player) => player.id)
+      ? room.players.filter((player) => !player.connected && !player.isBot).map((player) => player.id)
       : [],
     spectatorCount: room.spectators?.length ?? 0,
     turnBased: room.turnBased === true,
@@ -2015,7 +2172,7 @@ export function pruneInactiveRooms(rooms: Map<string, MultiplayerRoom>, now = no
     pruneExpiredTyping(room, now);
     const staleConnectionMs = room.status === 'lobby' ? STALE_CONNECTION_LOBBY_MS : STALE_CONNECTION_MATCH_MS;
     const staleConnectedPlayers = room.players.filter((player) => (
-      player.connected && now - player.lastSeenAt > staleConnectionMs
+      player.connected && !player.isBot && now - player.lastSeenAt > staleConnectionMs
     ));
     for (const player of staleConnectedPlayers) {
       if (room.status === 'lobby') {

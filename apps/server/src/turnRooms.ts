@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto';
-import { getNextPrompt, isGameOver, type PlayerId } from '../../../src/engine/index.ts';
+import { getNextPrompt, isGameOver, type BotDifficulty, type PlayerId } from '../../../src/engine/index.ts';
 import type { MultiplayerSessionPresetId } from '../../../src/ui/experience.ts';
 import type { ActionRejectedResponse, ResumeRoomResponse } from '../../../packages/shared/multiplayer.ts';
 import {
@@ -26,6 +26,10 @@ import {
   setRoomReady,
   setRoomVariant,
   startRoom,
+  addRoomBot,
+  playTurnRoomBots,
+  removeRoomBot,
+  setSeatBotDifficulty,
   TURN_ROOM_CODE_LENGTH,
   undoRoomAction,
   watchRoom,
@@ -197,6 +201,7 @@ async function mutateRoom(
     if (!stored) return fail(404, 'room_not_found');
     const previousPrompt = promptPlayerId(stored.room);
     const result = change(stored.room);
+    playTurnRoomBots(stored.room);
     if (await store.save(stored.room, stored.version)) {
       await tellNextPlayer(stored.room, previousPrompt, store, notifier);
       return ok(result ?? { ok: true });
@@ -223,7 +228,7 @@ export async function handleTurnRoomRequest(
     }
 
     const match = path.match(
-      /^\/api\/multiplayer\/rooms\/([^/]+)\/(join|watch|reconnect|start|preset|variant|options|rematch|action|leave|state|replay|pause|resume|undo|reset-turn|checkpoints|ready|reaction|chat|typing|push)(?:\/(save|load|delete))?$/,
+      /^\/api\/multiplayer\/rooms\/([^/]+)\/(join|watch|reconnect|start|preset|variant|options|bots|rematch|action|leave|state|replay|pause|resume|undo|reset-turn|checkpoints|ready|reaction|chat|typing|push)(?:\/(save|load|delete))?$/,
     );
     if (!match) return fail(404, 'not_found');
     const code = decodeURIComponent(match[1]).toUpperCase();
@@ -304,10 +309,21 @@ export async function handleTurnRoomRequest(
         case 'options':
           setRoomOptions(room, playerId, sessionToken, {
             ...(body.botFill !== undefined ? { botFill: body.botFill === true } : {}),
+            ...(body.botDifficulty !== undefined ? { botDifficulty: body.botDifficulty as BotDifficulty } : {}),
             ...(body.turnTimerSeconds !== undefined ? { turnTimerSeconds: body.turnTimerSeconds as number | null } : {}),
             ...(body.bestOf !== undefined ? { bestOf: body.bestOf as 1 | 3 } : {}),
           }, expectedRevision);
           return null;
+        case 'bots': {
+          const op = optionalTrimmedString(body.op);
+          const difficulty = (optionalTrimmedString(body.difficulty) ?? 'easy') as BotDifficulty;
+          const seatId = optionalTrimmedString(body.seatId) as PlayerId | undefined;
+          if (op === 'add') addRoomBot(room, playerId, sessionToken, difficulty);
+          else if (op === 'remove' && seatId) removeRoomBot(room, playerId, sessionToken, seatId);
+          else if (op === 'difficulty' && seatId) setSeatBotDifficulty(room, playerId, sessionToken, seatId, difficulty);
+          else throw new Error('invalid_payload');
+          return null;
+        }
         case 'rematch':
           rematchRoom(room, playerId, sessionToken, expectedRevision);
           return null;

@@ -14,6 +14,8 @@ interface RolloutOptions {
   simulations?: number;
   depth?: number;
   seed?: number;
+  /** Stops simulating after this long and decides on what it has. */
+  timeBudgetMs?: number;
 }
 
 function makeRand(seed: number): () => number {
@@ -119,6 +121,8 @@ export function chooseMonteCarloAction(
 ): RolloutDecision | null {
   if (legalActions.length === 0) return null;
 
+  const startedAt = Date.now();
+  const outOfTime = () => options.timeBudgetMs != null && Date.now() - startedAt > options.timeBudgetMs;
   const simulations = options.simulations ?? 16;
   const depth = options.depth ?? 10;
   const rand = makeRand(options.seed ?? state.turnCount + state.history.length + 17);
@@ -132,11 +136,12 @@ export function chooseMonteCarloAction(
     const immediate = chooseHeuristicAction(state, actorId, [legal]);
     let total = immediate?.score ?? 0;
 
-    for (let i = 0; i < simulations; i += 1) {
+    let ran = 0;
+    for (; ran < simulations && !outOfTime(); ran += 1) {
       total += rolloutSimulation(first.state, actorId, depth, rand);
     }
 
-    const average = total / (simulations + 1);
+    const average = total / (ran + 1);
     const candidate: RolloutDecision = {
       action: legal.action,
       label: legal.label,

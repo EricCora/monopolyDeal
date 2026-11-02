@@ -3,6 +3,9 @@ import { networkInterfaces } from 'node:os';
 import { parse } from 'node:url';
 import { Server as SocketIOServer, type Socket } from 'socket.io';
 import {
+  addRoomBot,
+  removeRoomBot,
+  setSeatBotDifficulty,
   applyRoomAction,
   createRoom,
   deleteRoomCheckpoint,
@@ -44,7 +47,7 @@ import { flushSnapshots, loadSnapshots, saveSnapshots } from './persistence/snap
 import { redactSensitiveToken } from './logging.ts';
 import { createMemoryTurnStore, handleTurnRoomRequest } from './turnRooms.ts';
 import { collectBody, RequestBodyError, SlidingWindowRateLimiter } from './httpSafeguards.ts';
-import type { PlayerId } from '../../../src/engine/index.ts';
+import type { BotDifficulty, PlayerId } from '../../../src/engine/index.ts';
 import type { MultiplayerSessionPresetId } from '../../../src/ui/experience.ts';
 import type {
   ActionRejectedResponse,
@@ -1014,7 +1017,7 @@ const httpServer = createServer(async (req, res) => {
     }
 
     const match = path.match(
-      /^\/api\/multiplayer\/rooms\/([^/]+)(?:\/(join|watch|reconnect|start|preset|variant|options|rematch|action|leave|state|replay|pause|resume|undo|reset-turn|checkpoints|events|ready|reaction|chat|typing))?(?:\/(save|load|delete))?$/,
+      /^\/api\/multiplayer\/rooms\/([^/]+)(?:\/(join|watch|reconnect|start|preset|variant|options|bots|rematch|action|leave|state|replay|pause|resume|undo|reset-turn|checkpoints|events|ready|reaction|chat|typing))?(?:\/(save|load|delete))?$/,
     );
     if (!match) {
       writeJson(res, 404, { error: 'not_found' });
@@ -1197,6 +1200,9 @@ const httpServer = createServer(async (req, res) => {
 
     const raw = await collectBody(req, MAX_JSON_BODY_BYTES);
     const payload = JSON.parse(raw || '{}') as {
+      op?: unknown;
+      difficulty?: unknown;
+      botDifficulty?: unknown;
       playerName?: unknown;
       seatId?: unknown;
       resumeToken?: unknown;
@@ -1302,11 +1308,27 @@ const httpServer = createServer(async (req, res) => {
     if (operation === 'options') {
       setRoomOptions(room, playerId, sessionToken, {
         ...(payload.botFill !== undefined ? { botFill: payload.botFill === true } : {}),
+        ...(payload.botDifficulty !== undefined ? { botDifficulty: payload.botDifficulty as BotDifficulty } : {}),
         ...(payload.turnTimerSeconds !== undefined ? { turnTimerSeconds: payload.turnTimerSeconds as number | null } : {}),
         ...(payload.bestOf !== undefined ? { bestOf: payload.bestOf as 1 | 3 } : {}),
       }, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'options_changed');
+      writeJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (operation === 'bots') {
+      const op = optionalTrimmedString(payload.op);
+      const difficulty = (optionalTrimmedString(payload.difficulty) ?? 'easy') as BotDifficulty;
+      const seatId = optionalTrimmedString(payload.seatId) as PlayerId | undefined;
+      if (op === 'add') addRoomBot(room, playerId, sessionToken, difficulty);
+      else if (op === 'remove' && seatId) removeRoomBot(room, playerId, sessionToken, seatId);
+      else if (op === 'difficulty' && seatId) setSeatBotDifficulty(room, playerId, sessionToken, seatId, difficulty);
+      else throw new Error('invalid_payload');
+      snapshotAll();
+      broadcastRoomEvent(room, 'options_changed');
+      scheduleRoomAutomation(room);
       writeJson(res, 200, { ok: true });
       return;
     }

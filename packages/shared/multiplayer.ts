@@ -1,4 +1,4 @@
-import type { Action, GameState, GameVariant, LegalAction, PlayerId } from '../../src/engine';
+import type { Action, BotDifficulty, GameState, GameVariant, LegalAction, PlayerId } from '../../src/engine';
 import type { MultiplayerSessionPresetId } from '../../src/ui/experience';
 
 export type MultiplayerRoomStatus = 'lobby' | 'active' | 'finished';
@@ -21,6 +21,10 @@ export interface MultiplayerPlayerSummary {
   reconnectDeadlineMs: number;
   isHost: boolean;
   ready: boolean;
+  /** A bot added to the room, rather than one covering for someone. */
+  isBot?: boolean;
+  /** How a bot plays this seat, if one does. */
+  botDifficulty?: BotDifficulty;
 }
 
 export interface MultiplayerActivityFeedItem {
@@ -46,6 +50,8 @@ export type MultiplayerSeriesLength = 1 | 3;
 export interface MultiplayerRoomOptions {
   /** A dropped seat plays on as a bot instead of pausing the room. */
   botFill: boolean;
+  /** How a bot covering a dropped seat plays, until the host picks for that seat. */
+  botDifficulty?: BotDifficulty;
   /** Seconds per turn before a bot moves for the player. Null shows a count-up clock only. */
   turnTimerSeconds: number | null;
   bestOf: MultiplayerSeriesLength;
