@@ -1,4 +1,9 @@
 import { Icon } from '../components/icons';
+import { loadTurnRooms } from '../../persistence/turnRooms';
+import { canUseTurnPush, enableTurnPush, type TurnPushResult } from '../../network/turnPush';
+
+const SPEED_TURN_SECONDS = 45;
+
 import { useEffect, useMemo, useState } from 'react';
 import { isLanResolvableHost, listMultiplayerLanOrigins } from '../../network/multiplayerClient';
 import type {
@@ -6,6 +11,7 @@ import type {
   MultiplayerConnectionUiState,
   MultiplayerPushState,
   MultiplayerRoomView,
+  MultiplayerRoomOptions,
   MultiplayerSession,
 } from '../../network/multiplayerTypes';
 import type { MultiplayerRecoveryEntry } from '../../persistence/multiplayerRecovery';
@@ -54,6 +60,10 @@ interface MultiplayerScreenProps {
   onPlayerNameChange: (value: string) => void;
   onJoinCodeChange: (value: string) => void;
   onHostRoom: () => void;
+  onHostTurnRoom?: () => void;
+  onWatchRoom?: () => void;
+  onOpenTurnRoom?: (session: MultiplayerSession) => void;
+  onSetRoomOptions?: (changes: Partial<MultiplayerRoomOptions>) => void;
   onJoinRoom: () => void;
   onStartMatch: (checkpointId?: string) => void;
   onRunAction: (index: number) => void;
@@ -235,6 +245,10 @@ export function MultiplayerScreen({
   onPlayerNameChange,
   onJoinCodeChange,
   onHostRoom,
+  onHostTurnRoom,
+  onWatchRoom,
+  onOpenTurnRoom,
+  onSetRoomOptions,
   onJoinRoom,
   onStartMatch,
   onRunAction,
@@ -287,6 +301,13 @@ export function MultiplayerScreen({
     }, COPY_NOTICE_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
   }, [copyNotice]);
+
+  const [turnRooms] = useState(() => (typeof localStorage === 'undefined' ? [] : loadTurnRooms()));
+  const [pushStatus, setPushStatus] = useState<TurnPushResult | null>(null);
+  const enableNotifications = async () => {
+    if (!session) return;
+    setPushStatus(await enableTurnPush(session).catch((): TurnPushResult => 'unavailable'));
+  };
 
   const copyRoomCode = () => {
     if (!session) return;
@@ -653,7 +674,13 @@ export function MultiplayerScreen({
                 <button type="button" className="cta-primary" onClick={onHostRoom} disabled={loading} aria-label="Host Multiplayer Game (Live Online)">
                   Host a Room
                 </button>
+                {onHostTurnRoom ? (
+                  <button type="button" onClick={onHostTurnRoom} disabled={loading}>
+                    Host a Turn-by-Turn Room
+                  </button>
+                ) : null}
               </div>
+              {onHostTurnRoom ? <p className="menu-note">A turn-by-turn room stays open for days, and everyone plays when they&apos;re free.</p> : null}
             </section>
 
             <section className="multiplayer-entry-card" aria-label="Join room">
@@ -672,8 +699,26 @@ export function MultiplayerScreen({
                 <button type="button" className="cta-primary" onClick={onJoinRoom} disabled={loading || joinCode.trim().length < 4} aria-label="Join Multiplayer Game (Live Online)">
                   Join
                 </button>
+                {onWatchRoom ? (
+                  <button type="button" onClick={onWatchRoom} disabled={loading || joinCode.trim().length < 4} aria-label="Watch this room as a spectator">
+                    Watch
+                  </button>
+                ) : null}
               </div>
             </section>
+
+            {turnRooms.length > 0 && onOpenTurnRoom ? (
+              <section className="multiplayer-entry-card" aria-label="Your turn-by-turn rooms">
+                <p className="setup-stage-label">Your turn-by-turn rooms</p>
+                <div className="turn-room-list">
+                  {turnRooms.map((entry) => (
+                    <button key={entry.roomCode} type="button" onClick={() => onOpenTurnRoom(entry)} disabled={loading}>
+                      Room {entry.roomCode}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </div>
         </>
       ) : (
@@ -682,6 +727,8 @@ export function MultiplayerScreen({
             <div className="multiplayer-room-hero-main">
               <div className="multiplayer-room-heading">
                 <h3>Room {session.roomCode}</h3>
+                {roomView?.turnBased ? <p className="room-kind-note">Turn-by-turn room. It stays open for days, and everyone plays when they&apos;re free.</p> : null}
+                {roomView?.role === 'spectator' ? <p className="room-kind-note">You&apos;re watching. Every hand stays hidden.</p> : null}
                 <div className="multiplayer-status-strip" aria-label="Room connection status">
                   <span className={`multiplayer-status-pill ${connectionTone(connectionState)}`}>
                     {connectionLabel(connectionState)}
@@ -796,6 +843,51 @@ export function MultiplayerScreen({
                         );
                       })}
                     </div> : <p className="multiplayer-lobby-status">Official No Mercy rules · 2–5 players</p>}
+                  </section>
+                ) : null}
+                {!roomView.started && roomView.role !== 'spectator' ? (
+                  <section className="multiplayer-entry-card room-options-card" aria-label="Room options">
+                    <p className="setup-stage-label">Room Options</p>
+                    {!roomView.turnBased ? (
+                      <>
+                        <label className="room-option-toggle">
+                          <span>Bots fill empty seats<small>A dropped player&apos;s seat plays on until they come back.</small></span>
+                          <input
+                            type="checkbox"
+                            checked={roomView.options?.botFill ?? false}
+                            disabled={loading || !isHost || !onSetRoomOptions}
+                            onChange={(event) => onSetRoomOptions?.({ botFill: event.target.checked })}
+                          />
+                        </label>
+                        <label className="room-option-toggle">
+                          <span>Speed mode<small>45 seconds a turn, then a bot moves for you.</small></span>
+                          <input
+                            type="checkbox"
+                            checked={roomView.options?.turnTimerSeconds != null}
+                            disabled={loading || !isHost || !onSetRoomOptions}
+                            onChange={(event) => onSetRoomOptions?.({ turnTimerSeconds: event.target.checked ? SPEED_TURN_SECONDS : null })}
+                          />
+                        </label>
+                      </>
+                    ) : null}
+                    <label className="room-option-toggle">
+                      <span>Best of three<small>First to win two games takes the series.</small></span>
+                      <input
+                        type="checkbox"
+                        checked={(roomView.options?.bestOf ?? 1) === 3}
+                        disabled={loading || !isHost || !onSetRoomOptions}
+                        onChange={(event) => onSetRoomOptions?.({ bestOf: event.target.checked ? 3 : 1 })}
+                      />
+                    </label>
+                    {roomView.turnBased && session && canUseTurnPush() ? (
+                      <div className="actions">
+                        <button type="button" onClick={() => void enableNotifications()} disabled={pushStatus === 'enabled'}>
+                          {pushStatus === 'enabled' ? 'Notifications On' : "Notify Me When It's My Turn"}
+                        </button>
+                      </div>
+                    ) : null}
+                    {pushStatus === 'denied' ? <p className="menu-note">Notifications are blocked for this site in your browser settings.</p> : null}
+                    {pushStatus === 'unavailable' ? <p className="menu-note">Notifications aren&apos;t set up on this server yet.</p> : null}
                   </section>
                 ) : null}
                 <div className="multiplayer-lobby-side">

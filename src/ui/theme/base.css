@@ -88,6 +88,28 @@ body {
   --accent: #4de3ff;
 }
 
+.game-shell.table-style-sunset-lounge {
+  --mesh-0: #2a1124; --mesh-1: #5a1f33; --mesh-2: #301030;
+  --mesh-3: #7a2f33; --mesh-4: #b5552f; --mesh-5: #6e2345;
+  --mesh-6: #1d0d22; --mesh-7: #4a1a33; --mesh-8: #1a0b1f;
+  --accent: #ffc27a;
+}
+
+.game-shell.table-style-royal-velvet {
+  --mesh-0: #1c0b2e; --mesh-1: #351352; --mesh-2: #1e0c35;
+  --mesh-3: #4a1a6b; --mesh-4: #6d2a8f; --mesh-5: #421861;
+  --mesh-6: #130723; --mesh-7: #2c0f45; --mesh-8: #10061e;
+  --accent: #e7c6ff;
+}
+
+.game-shell.table-style-midnight-vault {
+  --mesh-0: #05070d; --mesh-1: #0c111c; --mesh-2: #06080f;
+  --mesh-3: #12182a; --mesh-4: #1f2740; --mesh-5: #101627;
+  --mesh-6: #030409; --mesh-7: #0a0e18; --mesh-8: #020308;
+  --felt-opacity: 0.06;
+  --accent: #e9c46a;
+}
+
 .game-shell::before,
 .game-shell::after {
   content: '';

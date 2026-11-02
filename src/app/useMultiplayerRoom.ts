@@ -43,6 +43,7 @@ import type {
   MultiplayerRoomRuntimeState,
   MultiplayerRoomView,
   MultiplayerRoomSessionResponse,
+  MultiplayerRoomOptions,
   MultiplayerSession,
   MultiplayerTransportMode,
 } from '../network/multiplayerTypes';
@@ -60,9 +61,14 @@ import {
   type MultiplayerRecoveryEntry,
   type MultiplayerRecoveryState,
 } from '../persistence/multiplayerRecovery';
+import { createTurnBasedRoom, setMultiplayerRoomOptions, watchMultiplayerRoom } from '../network/roomFeatures';
+import { isTurnRoomCode } from '../network/roomRouting';
+import { forgetTurnRoom, rememberTurnRoom } from '../persistence/turnRooms';
 import type { GrowthMetricEvent } from '../stats';
 import { normalizeMultiplayerSessionPreset, type MultiplayerSessionPresetId } from '../ui/experience';
 import type { GameVariant } from '../engine';
+
+const TURN_ROOM_POLL_MS = 12_000;
 
 interface UseMultiplayerRoomOptions {
   enabled: boolean;
@@ -794,7 +800,7 @@ export function useMultiplayerRoom({
     if (session && roomView) markRoomLiveInTab(session.roomCode);
   }, [roomView, session]);
 
-  const hostRoom = useCallback(async (): Promise<boolean> => {
+  const hostRoom = useCallback(async (mode: 'live' | 'turn' = 'live'): Promise<boolean> => {
     setLoading(true);
     setConnectionState('connecting');
     setConnectionUiStateOverride(null);
@@ -802,7 +808,7 @@ export function useMultiplayerRoom({
     try {
       reconnectAutoRetryBlockedRef.current = false;
       const nextName = sanitizeName(playerName);
-      const created = await createMultiplayerRoom(nextName, apiBase);
+      const created = mode === 'turn' ? await createTurnBasedRoom(nextName) : await createMultiplayerRoom(nextName, apiBase);
       const identities = resolveSessionIdentityFields(created);
       if (!identities) {
         throw new Error('invalid_session');
@@ -822,6 +828,12 @@ export function useMultiplayerRoom({
       setSession(nextSession);
       upsertRecoveryFromSession(nextSession);
       setRecoveryNotice(null);
+      if (mode === 'turn') {
+        rememberTurnRoom(nextSession);
+      } else {
+        // New live rooms let a bot cover a dropped seat. The host can turn it off in the lobby.
+        await setMultiplayerRoomOptions(nextSession, { botFill: true }, apiBase).catch(() => undefined);
+      }
       await refreshRoom(nextSession);
       onMetricEvent?.('multiplayer_host_started');
       onMetricEvent?.('lan_room_hosted');
@@ -835,6 +847,75 @@ export function useMultiplayerRoom({
       setLoading(false);
     }
   }, [apiBase, clearError, onMetricEvent, playerName, refreshRoom, setErrorFromCode, upsertRecoveryFromSession]);
+
+  /** Takes a place in the room's audience, with every hand hidden. */
+  const watchRoom = useCallback(async (): Promise<boolean> => {
+    setLoading(true);
+    setConnectionState('connecting');
+    setConnectionUiStateOverride(null);
+    clearError();
+    try {
+      const nextName = sanitizeName(playerName);
+      const watched = await watchMultiplayerRoom(sanitizeRoomCode(joinCode), nextName, apiBase);
+      const identities = resolveSessionIdentityFields(watched);
+      if (!identities) throw new Error('invalid_session');
+      const nextSession: MultiplayerSession = {
+        version: 1,
+        roomCode: watched.roomCode,
+        seatId: identities.seatId,
+        resumeToken: identities.resumeToken,
+        playerId: identities.playerId,
+        sessionToken: identities.sessionToken,
+        playerName: nextName || 'Spectator',
+        reconnectDeadlineMs: watched.reconnectDeadlineMs,
+      };
+      setSession(nextSession);
+      setRecoveryNotice(null);
+      await refreshRoom(nextSession);
+      return true;
+    } catch (watchError) {
+      setErrorFromCode(watchError instanceof Error ? watchError.message : 'request_failed');
+      setConnectionState('disconnected');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [apiBase, clearError, joinCode, playerName, refreshRoom, setErrorFromCode]);
+
+  /** Returns to a turn-by-turn room from the list of rooms this browser is in. */
+  const openTurnRoom = useCallback(async (saved: MultiplayerSession): Promise<boolean> => {
+    setLoading(true);
+    clearError();
+    try {
+      setSession(saved);
+      setJoinCode(saved.roomCode);
+      await refreshRoom(saved);
+      return true;
+    } catch (openError) {
+      const code = openError instanceof Error ? openError.message : 'request_failed';
+      if (code === 'room_not_found' || code === 'invalid_session') forgetTurnRoom(saved.roomCode);
+      setSession(null);
+      setErrorFromCode(code);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [clearError, refreshRoom, setErrorFromCode]);
+
+  const setRoomOptions = useCallback(async (changes: Partial<MultiplayerRoomOptions>) => {
+    const current = session;
+    if (!current) return;
+    setLoading(true);
+    clearError();
+    try {
+      await setMultiplayerRoomOptions(current, changes, apiBase);
+      await refreshRoom(current);
+    } catch (optionsError) {
+      setErrorFromCode(optionsError instanceof Error ? optionsError.message : 'request_failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [apiBase, clearError, refreshRoom, session, setErrorFromCode]);
 
   const joinRoom = useCallback(async (): Promise<boolean> => {
     setLoading(true);
@@ -880,6 +961,7 @@ export function useMultiplayerRoom({
       setSession(nextSession);
       upsertRecoveryFromSession(nextSession);
       setRecoveryNotice(null);
+      if (isTurnRoomCode(nextSession.roomCode)) rememberTurnRoom(nextSession);
       await refreshRoom(nextSession);
       onMetricEvent?.('multiplayer_join_success');
       onMetricEvent?.('lan_room_joined');
@@ -1487,8 +1569,14 @@ export function useMultiplayerRoom({
 
   useEffect(() => {
     if (!enabled || !session) return;
-    const effectivePollIntervalMs = pushState === 'connected' ? Math.max(pollIntervalMs, 8_000) : pollIntervalMs;
+    // A turn-by-turn room reads free storage each time, so it checks gently, and only when
+    // someone's looking.
+    const isTurnRoom = isTurnRoomCode(session.roomCode);
+    const effectivePollIntervalMs = isTurnRoom
+      ? TURN_ROOM_POLL_MS
+      : pushState === 'connected' ? Math.max(pollIntervalMs, 8_000) : pollIntervalMs;
     const timer = window.setInterval(() => {
+      if (isTurnRoom && document.visibilityState !== 'visible') return;
       refreshRoom().catch(async (refreshError) => {
         const code = refreshError instanceof Error ? refreshError.message : 'request_failed';
         if (connectionState !== 'disconnected' && isTransportReconnectableError(code)) {
@@ -1618,6 +1706,9 @@ export function useMultiplayerRoom({
     clearHostChangeNotice: () => setHostChangeNotice(null),
     isHost,
     hostRoom,
+    watchRoom,
+    openTurnRoom,
+    setRoomOptions,
     joinRoom,
     startMatch,
     runAction,

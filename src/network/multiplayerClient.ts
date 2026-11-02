@@ -17,6 +17,7 @@ import type {
   MultiplayerSession,
 } from './multiplayerTypes';
 import type { MultiplayerSessionPresetId } from '../ui/experience';
+import { isTurnRoomCode, routeRoomRequest, usesRequestsOnly } from './roomRouting';
 
 function normalizeApiBase(input: string): string {
   return input.endsWith('/') ? input.slice(0, -1) : input;
@@ -283,7 +284,7 @@ async function runSocketCommand<Name extends MultiplayerSocketCommandName>(
   command: Name,
   payload: MultiplayerSocketCommandPayloadMap[Name],
 ): Promise<MultiplayerSocketCommandResponseMap[Name]> {
-  if (!canAttemptSocketTransport()) {
+  if (!canAttemptSocketTransport() || usesRequestsOnly(session)) {
     throw createTransportError('request_failed', { transportFailure: true });
   }
   if (typeof window === 'undefined') {
@@ -418,6 +419,8 @@ export function multiplayerErrorMessage(code: string): string {
   if (code === 'chat_rate_limited') return 'Chat message sent too quickly. Please wait a moment.';
   if (code === 'chat_too_long') return 'Chat message is too long.';
   if (code === 'chat_empty') return 'Chat message cannot be empty.';
+  if (code === 'option_not_supported') return 'Turn-by-turn rooms can\'t use bots or a turn timer.';
+  if (code === 'replay_not_available') return 'There\'s no replay for this game.';
   if (code === 'push_disabled') return 'Live room updates are disabled for this server.';
   if (code === 'network_unavailable' || code === 'request_failed') return 'Couldn\'t connect right now. Retrying...';
   return 'Could not complete multiplayer request. Please try again.';
@@ -440,7 +443,7 @@ async function parseJson<T>(response: Response): Promise<T> {
 
 async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   try {
-    const response = await fetch(input, init);
+    const response = await fetch(routeRoomRequest(input), init);
     return parseJson<T>(response);
   } catch (error) {
     if (error instanceof Error && error.message) {
@@ -1013,7 +1016,9 @@ export function subscribeMultiplayerRoomEvents(
   apiBase = getMultiplayerApiBase(),
   lastEventId?: number,
 ): MultiplayerRoomEventSubscription {
-  if (!canAttemptSocketTransport()) {
+  // Nothing stays running for a turn-by-turn room, so there's no stream to listen to.
+  if (isTurnRoomCode(session.roomCode)) throw new Error('push_not_supported');
+  if (!canAttemptSocketTransport() || usesRequestsOnly(session)) {
     return subscribeRoomEventsViaEventSource(session, handlers, apiBase, lastEventId);
   }
   if (typeof window === 'undefined') {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { UiPreferencesV1 } from '../../persistence/storage';
 import { Icon } from '../components/icons';
-import { TABLE_STYLE_OPTIONS } from '../experience';
+import { cardBackOptions, tableStyleOptions } from '../unlockables';
 
 type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
 
@@ -15,6 +15,8 @@ interface SettingsScreenProps {
   onChangeTextScale: (value: UiPreferencesV1['textScale']) => void;
   onChangeTableDensity: (value: UiPreferencesV1['tableDensity']) => void;
   onChangeTableStyle: (value: UiPreferencesV1['tableStyle']) => void;
+  onChangeCardBack?: (value: string) => void;
+  unlockProgress?: { wins: number; actions: number; quickWins: number };
   onToggleConfirmRiskyActions: (enabled: boolean) => void;
   onToggleRulesDrawerHints: (enabled: boolean) => void;
   onToggleExperimentalFlag: (flag: keyof UiPreferencesV1['experimental'], enabled: boolean) => void;
@@ -42,6 +44,8 @@ export function SettingsScreen({
   onChangeTextScale,
   onChangeTableDensity,
   onChangeTableStyle,
+  onChangeCardBack,
+  unlockProgress = { wins: 0, actions: 0, quickWins: 0 },
   onToggleConfirmRiskyActions,
   onToggleRulesDrawerHints,
   onToggleExperimentalFlag,
@@ -88,11 +92,25 @@ export function SettingsScreen({
           <label className="settings-field">
             <span>Table Style</span>
             <select value={uiPreferences.tableStyle} onChange={(event) => onChangeTableStyle(event.target.value as UiPreferencesV1['tableStyle'])}>
-              {TABLE_STYLE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+              {tableStyleOptions(unlockProgress).map((option) => (
+                <option key={option.value} value={option.value} disabled={!option.unlocked}>
+                  {option.unlocked ? option.label : `${option.label} (${option.needs})`}
+                </option>
               ))}
             </select>
           </label>
+          {onChangeCardBack ? (
+            <label className="settings-field">
+              <span>Card Back</span>
+              <select value={uiPreferences.cardBack ?? 'classic_red'} onChange={(event) => onChangeCardBack(event.target.value)}>
+                {cardBackOptions(unlockProgress).map((option) => (
+                  <option key={option.value} value={option.value} disabled={!option.unlocked}>
+                    {option.unlocked ? option.label : `${option.label} (${option.needs})`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label className="settings-field">
             <span>Text Scale</span>
             <select value={uiPreferences.textScale} onChange={(event) => onChangeTextScale(event.target.value as UiPreferencesV1['textScale'])}>

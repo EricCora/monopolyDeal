@@ -931,6 +931,25 @@
   color: var(--soft-65);
 }
 
+.stats-replay {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+}
+
+.stats-replay small {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--soft-65);
+}
+
+.postgame-series {
+  text-align: center;
+}
+
 /* Game log */
 .events-panel {
   width: 100%;

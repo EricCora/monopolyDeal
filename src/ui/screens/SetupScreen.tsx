@@ -13,6 +13,8 @@ interface SetupScreenProps {
   onPlayerControllerChange: (index: number, controller: PlayerController) => void;
   onPlayerDifficultyChange: (index: number, difficulty: BotDifficulty) => void;
   onChangeCustomRule: (rule: keyof SetupViewModel['customRules'], value: number) => void;
+  onSpeedModeChange?: (enabled: boolean) => void;
+  onBestOfChange?: (bestOf: 1 | 3) => void;
   onStartMatch: () => void;
   onBack: () => void;
 }
@@ -90,6 +92,8 @@ export function SetupScreen({
   onPlayerControllerChange,
   onPlayerDifficultyChange,
   onChangeCustomRule,
+  onSpeedModeChange,
+  onBestOfChange,
   onStartMatch,
   onBack,
 }: SetupScreenProps) {
@@ -173,6 +177,35 @@ export function SetupScreen({
           );
         })}
       </section>
+
+      {onSpeedModeChange || onBestOfChange ? (
+        <section className="menu-section" aria-label="Match options">
+          <p className="section-title">Pace</p>
+          {onSpeedModeChange ? (
+            <>
+              <Segmented<'normal' | 'speed'>
+                label="Turn Timer"
+                value={setup.speedMode ? 'speed' : 'normal'}
+                options={[{ value: 'normal', label: 'No Limit' }, { value: 'speed', label: 'Speed' }]}
+                onChange={(value) => onSpeedModeChange(value === 'speed')}
+              />
+              <p className="menu-note">
+                {setup.speedMode
+                  ? '45 seconds a turn. When time runs out, a bot moves for you.'
+                  : 'A clock shows how long each turn is taking, with no limit.'}
+              </p>
+            </>
+          ) : null}
+          {onBestOfChange ? (
+            <Segmented<1 | 3>
+              label="Match Length"
+              value={setup.bestOf ?? 1}
+              options={[{ value: 1, label: 'Single Game' }, { value: 3, label: 'Best of Three' }]}
+              onChange={onBestOfChange}
+            />
+          ) : null}
+        </section>
+      ) : null}
 
       {allowCustomRules && variant !== 'no_mercy' ? (
         <section className="menu-section" aria-label="Custom rule options">

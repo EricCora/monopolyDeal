@@ -4,6 +4,9 @@ export const TABLE_STYLE_OPTIONS = [
   { value: 'premium_tabletop', label: 'Premium Tabletop' },
   { value: 'classic_green', label: 'Classic Felt' },
   { value: 'neon_arcade', label: 'Neon Arcade' },
+  { value: 'sunset_lounge', label: 'Sunset Lounge' },
+  { value: 'royal_velvet', label: 'Royal Velvet' },
+  { value: 'midnight_vault', label: 'Midnight Vault' },
 ] as const;
 
 export type TableStylePreset = typeof TABLE_STYLE_OPTIONS[number]['value'];

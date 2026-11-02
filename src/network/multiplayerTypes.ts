@@ -81,6 +81,38 @@ export interface MultiplayerRoomView {
   chatMessages: MultiplayerChatMessage[];
   typingPlayerIds: string[];
   lastEventId: number;
+  role?: 'player' | 'spectator';
+  options?: MultiplayerRoomOptions;
+  turnClock?: MultiplayerTurnClock;
+  series?: MultiplayerSeriesState;
+  botSeatIds?: string[];
+  spectatorCount?: number;
+  turnBased?: boolean;
+  replayAvailable?: boolean;
+}
+
+export interface MultiplayerRoomOptions {
+  botFill: boolean;
+  turnTimerSeconds: number | null;
+  bestOf: 1 | 3;
+}
+
+export interface MultiplayerTurnClock {
+  playerId: string;
+  startedAt: number;
+  deadlineMs: number | null;
+}
+
+export interface MultiplayerSeriesState {
+  bestOf: 1 | 3;
+  wins: Record<string, number>;
+  gameNumber: number;
+  winnerId?: string;
+}
+
+export interface MultiplayerReplayLog {
+  initial: GameState;
+  actions: Action[];
 }
 
 export interface MultiplayerCheckpointSummary {
@@ -199,7 +231,8 @@ export type MultiplayerSocketCommandName =
   | 'mp:cmd:checkpoint_save'
   | 'mp:cmd:checkpoint_load'
   | 'mp:cmd:checkpoint_delete'
-  | 'mp:cmd:variant';
+  | 'mp:cmd:variant'
+  | 'mp:cmd:options';
 
 export type MultiplayerSocketEventName =
   | 'mp:evt:connected'
@@ -236,6 +269,7 @@ export interface MultiplayerSocketCommandPayloadMap {
   'mp:cmd:start': { seed?: number; checkpointId?: string; expectedRevision?: number };
   'mp:cmd:preset': { presetId: MultiplayerSessionPresetId; expectedRevision?: number };
   'mp:cmd:variant': { variant: GameVariant; expectedRevision?: number };
+  'mp:cmd:options': Partial<MultiplayerRoomOptions> & { expectedRevision?: number };
   'mp:cmd:rematch': { expectedRevision?: number };
   'mp:cmd:action': { action: Action; expectedRevision?: number; clientStateVersion?: number; actionId?: string };
   'mp:cmd:leave': { expectedRevision?: number; abandon?: boolean };
@@ -258,6 +292,7 @@ export interface MultiplayerSocketCommandResponseMap {
   'mp:cmd:start': { ok: true };
   'mp:cmd:preset': { ok: true };
   'mp:cmd:variant': { ok: true };
+  'mp:cmd:options': { ok: true };
   'mp:cmd:rematch': { ok: true };
   'mp:cmd:action': { ok: true };
   'mp:cmd:leave': { ok: true };

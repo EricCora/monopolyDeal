@@ -7,6 +7,7 @@ interface GameShellProps {
   textScale?: 'normal' | 'large';
   highContrast?: boolean;
   tableStyle?: TableStylePreset;
+  cardBack?: string;
 }
 
 export function GameShell({
@@ -15,10 +16,11 @@ export function GameShell({
   textScale = 'normal',
   highContrast = false,
   tableStyle = DEFAULT_TABLE_STYLE,
+  cardBack = 'classic_red',
 }: GameShellProps) {
   return (
     <main
-      className={`game-shell text-scale-${textScale} table-style-${tableStyle.replace('_', '-')} ${highContrast ? 'is-high-contrast' : ''} ${screenClassName ?? ''}`}
+      className={`game-shell text-scale-${textScale} table-style-${tableStyle.replace('_', '-')} card-back-${cardBack.replace('_', '-')} ${highContrast ? 'is-high-contrast' : ''} ${screenClassName ?? ''}`}
     >
       <div className="game-shell-inner">{children}</div>
       <footer className="game-shell-footer">

@@ -223,3 +223,43 @@
     flex: 1 1 100%;
   }
 }
+
+.room-kind-note {
+  font-size: 0.8rem;
+  color: var(--soft-75);
+}
+
+.room-options-card {
+  gap: 2px;
+}
+
+.room-option-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px 0;
+  border-top: 1px solid var(--hairline);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.room-option-toggle small {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--soft-65);
+}
+
+.room-option-toggle input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+.turn-room-list {
+  display: grid;
+  gap: 8px;
+}

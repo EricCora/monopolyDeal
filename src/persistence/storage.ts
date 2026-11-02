@@ -68,6 +68,8 @@ export interface UiPreferencesV1 {
   tableStyle: TableStylePreset;
   /** The coach simulates ahead instead of using the quick heuristic. Local games only. */
   hardCoach?: boolean;
+  /** An earned card back. Absent means the classic one. */
+  cardBack?: string;
   textScale: 'normal' | 'large';
   confirmRiskyActions: boolean;
   showRulesDrawerHints: boolean;
@@ -523,6 +525,7 @@ export function loadUiPreferences(): UiPreferencesV1 {
       tableDensity: density,
       tableStyle,
       ...(parsed.hardCoach ? { hardCoach: true } : {}),
+      ...(typeof parsed.cardBack === 'string' ? { cardBack: parsed.cardBack } : {}),
       textScale,
       confirmRiskyActions: parsed.confirmRiskyActions !== false,
       showRulesDrawerHints: parsed.showRulesDrawerHints !== false,

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import type { AchievementId, DailyChallengeV1, GrowthMetricsV1, LifetimeStatsV1, MatchRecordV1 } from '../../stats';
+import type { StoredReplay } from '../../persistence/replays';
 import { Icon, type IconName } from '../components/icons';
 
 const StatsDashboard = lazy(() =>
@@ -12,6 +13,8 @@ interface StatsScreenProps {
   growthMetrics: GrowthMetricsV1;
   unlockedAchievements?: AchievementId[];
   dailyChallenge?: DailyChallengeV1;
+  replays?: StoredReplay[];
+  onWatchReplay?: (replay: StoredReplay) => void;
   onBack: () => void;
 }
 
@@ -22,7 +25,7 @@ const ACHIEVEMENTS: Array<{ id: AchievementId; label: string; detail: string; ic
   { id: 'quick_win', label: 'Quick Win', detail: 'Win within 12 turns.', icon: 'pass_go' },
 ];
 
-export function StatsScreen({ history, lifetime, growthMetrics, unlockedAchievements = [], dailyChallenge, onBack }: StatsScreenProps) {
+export function StatsScreen({ history, lifetime, growthMetrics, unlockedAchievements = [], dailyChallenge, replays = [], onWatchReplay, onBack }: StatsScreenProps) {
   const extras = (
     <>
       <section className="stats-progress" aria-label="Achievements">
@@ -48,6 +51,17 @@ export function StatsScreen({ history, lifetime, growthMetrics, unlockedAchievem
           <small>
             {dailyChallenge.attempts} attempts · Best: {dailyChallenge.bestTurnCount != null ? `${dailyChallenge.bestTurnCount} turns` : 'none yet'} · {dailyChallenge.completed ? 'Done' : 'Not done yet'}
           </small>
+        </section>
+      ) : null}
+      {replays.length > 0 && onWatchReplay ? (
+        <section className="stats-progress" aria-label="Replays">
+          <p className="section-title">Replays</p>
+          {replays.map((replay) => (
+            <button key={replay.id} type="button" className="stats-replay" onClick={() => onWatchReplay(replay)}>
+              <Icon name="pass_go" />
+              <span>{replay.title}<small>{new Date(replay.endedAt).toLocaleString()}</small></span>
+            </button>
+          ))}
         </section>
       ) : null}
     </>

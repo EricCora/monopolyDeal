@@ -21,6 +21,9 @@ interface PostGameScreenProps {
   formatDuration: (seconds: number) => string;
   onToggleReduceEffects: (enabled: boolean) => void;
   onStartRematch: () => void;
+  series?: { bestOf: number; wins: Record<string, number>; gameNumber: number; winnerId?: string } | null;
+  newUnlocks?: string[];
+  onWatchReplay?: () => void;
   onShareImage: () => void;
   onOpenSetup: () => void;
   onOpenStats: () => void;
@@ -59,6 +62,9 @@ export function PostGameScreen({
   formatDuration,
   onToggleReduceEffects,
   onStartRematch,
+  series = null,
+  newUnlocks = [],
+  onWatchReplay,
   onShareImage,
   onOpenSetup,
   onOpenStats,
@@ -81,6 +87,23 @@ export function PostGameScreen({
         </h2>
         <p className="postgame-meta">{plural(postGameSummary.turnCount, 'turn')} · {formatDuration(postGameSummary.durationSec)}</p>
       </header>
+
+      {series ? (
+        <p className="series-score postgame-series">
+          {series.winnerId
+            ? `${postGameSummary.players.find((row) => row.playerId === series.winnerId)?.name ?? 'Someone'} takes the series: `
+            : `Best of ${series.bestOf}, game ${series.gameNumber}: `}
+          {postGameSummary.players.map((row) => `${row.name} ${series.wins[row.playerId] ?? 0}`).join(', ')}
+        </p>
+      ) : null}
+
+      {newUnlocks.length > 0 ? (
+        <section className="postgame-achievements" aria-label="New unlocks">
+          <ul>
+            {newUnlocks.map((label) => <li key={label}><Icon name="sparkles" /> {label} unlocked</li>)}
+          </ul>
+        </section>
+      ) : null}
 
       {showAchievements && recentAchievementUnlockLabels.length > 0 ? (
         <section className="postgame-achievements" aria-labelledby="achievements-title">
@@ -119,7 +142,10 @@ export function PostGameScreen({
       </section>
 
       <div className="postgame-actions">
-        <button type="button" className="primary-button postgame-primary-action" onClick={onStartRematch} disabled={!game}>Play Rematch</button>
+        <button type="button" className="primary-button postgame-primary-action" onClick={onStartRematch} disabled={!game}>{series && !series.winnerId ? 'Next Game' : 'Play Rematch'}</button>
+        {onWatchReplay ? (
+          <button type="button" className="secondary-button" onClick={onWatchReplay}><Icon name="pass_go" /> Watch Replay</button>
+        ) : null}
         <div className="postgame-action-row">
           <button type="button" className="secondary-button" onClick={onShareImage} disabled={isSharing} aria-label={isSharing ? 'Preparing...' : 'Share Brag Image'}>
             <Icon name="share" /> {isSharing ? 'Preparing...' : 'Share'}

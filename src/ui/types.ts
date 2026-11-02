@@ -11,6 +11,9 @@ export interface SetupViewModel {
     maxHandAtEndTurn: number;
     maxPlaysPerTurn: number;
   };
+  /** 45 seconds a turn, then a bot moves. Without it the clock only counts up. */
+  speedMode?: boolean;
+  bestOf?: 1 | 3;
 }
 
 export interface ActionRailEntry {

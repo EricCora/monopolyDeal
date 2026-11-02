@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'monopoly-deal-shell-v2';
+const CACHE_VERSION = 'monopoly-deal-shell-v3';
 const APP_SHELL = ['/', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -55,4 +55,33 @@ self.addEventListener('fetch', (event) => {
       });
     }),
   );
+});
+
+// Turn-by-turn rooms: "it's your turn" notifications.
+self.addEventListener('push', (event) => {
+  let notification = { title: "It's your turn", body: 'Your move in Monopoly Deal.', url: '/', tag: 'turn' };
+  try {
+    notification = { ...notification, ...event.data.json() };
+  } catch {
+    // Show the general message.
+  }
+  event.waitUntil(self.registration.showNotification(notification.title, {
+    body: notification.body,
+    tag: notification.tag,
+    icon: '/icons/app-icon-192.png',
+    data: { url: notification.url },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url ?? '/';
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+    const open = windows.find((entry) => new URL(entry.url).origin === self.location.origin);
+    if (open) {
+      open.navigate(url);
+      return open.focus();
+    }
+    return self.clients.openWindow(url);
+  }));
 });

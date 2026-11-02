@@ -79,6 +79,10 @@ import {
 } from './ui/experience';
 import { GameTableScreen } from './ui/screens/GameTableScreen';
 import { shouldAskFirst, type CardInput } from './ui/tapPolicy';
+import { ReplayScreen } from './ui/screens/ReplayScreen';
+import { newlyUnlocked } from './ui/unlockables';
+import { loadActiveReplay, loadReplays, saveActiveReplay, saveReplay, type GameReplayLog } from './persistence/replays';
+import { fetchMultiplayerReplay } from './network/roomFeatures';
 import { HomeScreen } from './ui/screens/HomeScreen';
 import { PostGameScreen } from './ui/screens/PostGameScreen';
 import { SavedGamesScreen } from './ui/screens/SavedGamesScreen';
@@ -93,7 +97,28 @@ import { resolveMultiplayerFeatureFlags } from './network/multiplayerClient';
 import type { RiskyActionConfirmation, SetupViewModel, ShareStatus } from './ui/types';
 import './App.css';
 
-type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over' | 'multiplayer';
+type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over' | 'multiplayer' | 'replay';
+
+const SPEED_TURN_MS = 45_000;
+/** After a timed-out move, how soon the bot takes any next step of the same turn. */
+const TIMED_OUT_STEP_MS = 1_500;
+const LOCAL_MATCH_KEY = 'monopolyDeal.localMatch.v1';
+
+interface LocalMatchOptions {
+  speed: boolean;
+  series: { bestOf: 1 | 3; wins: Record<string, number>; gameNumber: number; winnerId?: string } | null;
+}
+
+const NO_MATCH_OPTIONS: LocalMatchOptions = { speed: false, series: null };
+
+function loadLocalMatch(gameCreatedAt: number): LocalMatchOptions {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_MATCH_KEY) ?? 'null') as (LocalMatchOptions & { gameCreatedAt: number }) | null;
+    return parsed?.gameCreatedAt === gameCreatedAt ? { speed: parsed.speed, series: parsed.series } : NO_MATCH_OPTIONS;
+  } catch {
+    return NO_MATCH_OPTIONS;
+  }
+}
 type SettingsBackScreen = 'home' | 'game' | 'multiplayer';
 type SavedGamesBackScreen = 'home' | 'game';
 type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
@@ -285,6 +310,13 @@ function App() {
   const [recentAchievementUnlocks, setRecentAchievementUnlocks] = useState<AchievementId[]>([]);
   const [savedSlots, setSavedSlots] = useState<SavedGameSlotV1[]>(() => loadSavedGames().slots);
   const [chooser, setChooser] = useState<PlayChooserState | null>(null);
+  const [localMatch, setLocalMatch] = useState<LocalMatchOptions>(NO_MATCH_OPTIONS);
+  const [localClock, setLocalClock] = useState<{ playerId: string; startedAt: number; deadlineMs: number | null } | null>(null);
+  const [newUnlocks, setNewUnlocks] = useState<string[]>([]);
+  const [replayView, setReplayView] = useState<{ log: GameReplayLog; returnTo: Screen } | null>(null);
+  const replayLogRef = useRef<GameReplayLog | null>(null);
+  /** Log length when each undo snapshot was taken, so undo can rewind the log too. */
+  const replayMarksRef = useRef<number[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [selectedPaymentCards, setSelectedPaymentCards] = useState<string[]>([]);
   const [forcedDealSelection, setForcedDealSelection] = useState<ForcedDealSelectionState | null>(null);
@@ -447,6 +479,9 @@ function App() {
     isHost: multiplayerIsHost,
     healthOk: multiplayerHealthOk,
     hostRoom: hostMultiplayerRoom,
+    watchRoom: watchMultiplayerGame,
+    openTurnRoom: openTurnMultiplayerRoom,
+    setRoomOptions: setMultiplayerRoomOptions,
     joinRoom: joinMultiplayerRoom,
     startMatch: startMultiplayerMatch,
     runAction: runMultiplayerAction,
@@ -710,6 +745,15 @@ function App() {
         || multiplayerPrompt.kind === 'response'
         || multiplayerPrompt.kind === 'discard'),
   );
+  // The server's clock and this device's rarely agree, so deadlines are shifted onto this one.
+  const multiplayerServerTime = multiplayerRoomView?.serverTime;
+  const multiplayerRevision = multiplayerRoomView?.revision;
+  const multiplayerClockOffset = useMemo(() => {
+    void multiplayerRevision;
+    return multiplayerServerTime == null ? 0 : Date.now() - multiplayerServerTime;
+    // The offset is measured once per room change, so it doesn't jitter with each poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [multiplayerRevision]);
   const multiplayerSummary = useMemo(() => {
     if (!multiplayerGame || !isGameOver(multiplayerGame).done) return null;
     try {
@@ -1162,6 +1206,13 @@ function App() {
 
   const openGame = useCallback((nextGame: GameState) => {
     finalizedMatchRef.current = null;
+    const isFreshGame = nextGame.history.length === 0;
+    replayLogRef.current = isFreshGame
+      ? { initial: structuredClone(nextGame), actions: [] }
+      : loadActiveReplay(nextGame);
+    replayMarksRef.current = [];
+    saveActiveReplay(replayLogRef.current);
+    if (!isFreshGame) setLocalMatch(loadLocalMatch(nextGame.createdAt));
     setGame(nextGame);
     setPostGameSummary(null);
     setRevealedPlayerId(null);
@@ -1173,7 +1224,7 @@ function App() {
     setTurnSnapshots([]);
   }, []);
 
-  const startGameWithPlayers = useCallback((players: PlayerConfig[], options?: { seed?: number; ruleset?: GameConfig['ruleset']; mode?: MatchMode; variant?: GameConfig['variant'] }) => {
+  const startGameWithPlayers = useCallback((players: PlayerConfig[], options?: { seed?: number; ruleset?: GameConfig['ruleset']; mode?: MatchMode; variant?: GameConfig['variant']; match?: LocalMatchOptions }) => {
     const config: GameConfig = { players, deckVersion: 'v1' };
     if (options?.variant === 'no_mercy') config.variant = 'no_mercy';
     if (typeof options?.seed === 'number') config.seed = options.seed;
@@ -1182,6 +1233,8 @@ function App() {
     setUiPreferences((prev) => ({ ...prev, gamePaused: false, pausedGameId: null }));
     setLocalMatchMode(options?.mode ?? 'hot_seat');
     setRecentAchievementUnlocks([]);
+    setNewUnlocks([]);
+    setLocalMatch(options?.match ?? NO_MATCH_OPTIONS);
     openGame(nextGame);
     recordGrowthMetric('game_started');
   }, [openGame, recordGrowthMetric]);
@@ -1196,6 +1249,10 @@ function App() {
     startGameWithPlayers(players, {
       variant: setup.variant,
       ruleset: setup.variant === 'classic' && uiPreferences.experimental.customRules ? sanitizeRuleset(setup.customRules) : undefined,
+      match: {
+        speed: setup.speedMode === true,
+        series: setup.bestOf === 3 ? { bestOf: 3, wins: {}, gameNumber: 1 } : null,
+      },
     });
   };
 
@@ -1359,6 +1416,23 @@ function App() {
     const nextAchievementState = applyMatchToAchievementState(previousAchievementState, matchRecord);
     saveAchievementState(nextAchievementState);
     setAchievementState(nextAchievementState);
+    setNewUnlocks(newlyUnlocked(previousAchievementState.counters, nextAchievementState.counters));
+    if (replayLogRef.current) {
+      const winnerName = nextState.players.find((player) => player.id === status.winnerId)?.name ?? 'Nobody';
+      saveReplay({
+        ...replayLogRef.current,
+        id: matchId,
+        endedAt: nextState.updatedAt,
+        title: `${winnerName === 'You' ? 'You' : winnerName} won in ${nextState.turnCount} turns`,
+      });
+    }
+    saveActiveReplay(null);
+    setLocalMatch((current) => {
+      const series = current.series;
+      if (!series || series.winnerId) return current;
+      const wins = { ...series.wins, [status.winnerId as string]: (series.wins[status.winnerId as string] ?? 0) + 1 };
+      return { ...current, series: { ...series, wins, winnerId: wins[status.winnerId as string] > series.bestOf / 2 ? status.winnerId : undefined } };
+    });
     setRecentAchievementUnlocks(getNewAchievementUnlocks(previousAchievementState, nextAchievementState));
     const challengeForToday = ensureTodayDailyChallenge(loadDailyChallenge());
     const nextChallenge = applyMatchToDailyChallenge(challengeForToday, matchRecord);
@@ -1394,11 +1468,15 @@ function App() {
     }
     if (snapshotBeforeAction) {
       setTurnSnapshots((prev) => appendTurnSnapshot(prev, snapshotBeforeAction));
+      replayMarksRef.current.push(replayLogRef.current?.actions.length ?? 0);
     }
+    replayLogRef.current?.actions.push(action);
     if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId)
       || (game && actionRevealedDeckCards(game, result.state, action.type))) {
       setTurnSnapshots([]);
+      replayMarksRef.current = [];
     }
+    saveActiveReplay(replayLogRef.current);
     setChooser(null);
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
@@ -1556,12 +1634,42 @@ function App() {
     screen,
   ]);
 
+  // Every local game shows a turn clock. Speed games also run out, and then a bot moves.
+  const clockOwnerId = game && prompt && !isGameOver(game).done ? prompt.playerId : null;
+  const clockRuns = localMatch.speed && !isBotPromptPlayer && !shouldShowShield && !isPaused;
+  useEffect(() => {
+    if (!clockOwnerId) {
+      setLocalClock(null);
+      return;
+    }
+    const startedAt = Date.now();
+    setLocalClock({ playerId: clockOwnerId, startedAt, deadlineMs: clockRuns ? startedAt + SPEED_TURN_MS : null });
+  }, [clockOwnerId, clockRuns, game?.createdAt]);
+
+  const deadlineMs = localClock?.deadlineMs ?? null;
+  useEffect(() => {
+    if (deadlineMs == null || !game || !prompt || screen !== 'game' || legalActions.length === 0) return undefined;
+    const handle = window.setTimeout(() => {
+      const choice = chooseHeuristicAction(game, prompt.playerId, legalActions);
+      const action = choice?.action && legalActions.some((item) => actionsEqualForLegality(item.action, choice.action))
+        ? choice.action
+        : legalActions[0].action;
+      runAction(action);
+      // If it's still this player's decision, the next step follows shortly.
+      setLocalClock((current) => (current ? { ...current, deadlineMs: Date.now() + TIMED_OUT_STEP_MS } : current));
+    }, Math.max(0, deadlineMs - Date.now()));
+    return () => window.clearTimeout(handle);
+  }, [deadlineMs, game, legalActions, prompt, runAction, screen]);
+
   const undoLastPlay = () => {
     if (isPaused) return;
     if (turnSnapshots.length === 0) return;
     const previousState = turnSnapshots[turnSnapshots.length - 1];
     setGame(previousState);
     setTurnSnapshots((prev) => prev.slice(0, -1));
+    const mark = replayMarksRef.current.pop();
+    if (replayLogRef.current && mark != null) replayLogRef.current.actions = replayLogRef.current.actions.slice(0, mark);
+    saveActiveReplay(replayLogRef.current);
     setChooser(null);
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
@@ -1574,6 +1682,10 @@ function App() {
     const firstState = turnSnapshots[0];
     setGame(firstState);
     setTurnSnapshots([]);
+    const mark = replayMarksRef.current[0];
+    if (replayLogRef.current && mark != null) replayLogRef.current.actions = replayLogRef.current.actions.slice(0, mark);
+    replayMarksRef.current = [];
+    saveActiveReplay(replayLogRef.current);
     setChooser(null);
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
@@ -1869,12 +1981,20 @@ function App() {
         mode: localMatchMode === 'daily_challenge' ? 'hot_seat' : localMatchMode,
         variant: game.variant,
         ruleset: game.variant === 'classic' && uiPreferences.experimental.customRules ? game.ruleset : undefined,
+        match: {
+          speed: localMatch.speed,
+          series: localMatch.series
+            ? localMatch.series.winnerId
+              ? { bestOf: localMatch.series.bestOf, wins: {}, gameNumber: 1 }
+              : { ...localMatch.series, gameNumber: localMatch.series.gameNumber + 1 }
+            : null,
+        },
       },
     );
     setIsSharing(false);
     setShareStatus(null);
     recordGrowthMetric('rematch_started');
-  }, [game, localMatchMode, recordGrowthMetric, startGameWithPlayers, syncSetupPlayerNames, uiPreferences.experimental.customRules]);
+  }, [game, localMatch, localMatchMode, recordGrowthMetric, startGameWithPlayers, syncSetupPlayerNames, uiPreferences.experimental.customRules]);
 
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -1927,6 +2047,7 @@ function App() {
       textScale={uiPreferences.textScale}
       highContrast={uiPreferences.highContrast}
       tableStyle={uiPreferences.tableStyle}
+      cardBack={uiPreferences.cardBack}
     >
       {screen === 'game' && prompt ? (
         <p className="sr-only" aria-live="polite" aria-atomic="true">
@@ -1997,6 +2118,8 @@ function App() {
             }));
           }}
           onStartMatch={startNewGame}
+          onSpeedModeChange={(speedMode) => setSetup((prev) => ({ ...prev, speedMode }))}
+          onBestOfChange={(bestOf) => setSetup((prev) => ({ ...prev, bestOf }))}
           onBack={() => setScreen('home')}
         />
       ) : null}
@@ -2006,6 +2129,8 @@ function App() {
           matchMode={localMatchMode}
           game={game}
           prompt={prompt}
+          turnClock={localClock}
+          series={localMatch.series}
           tableActionHint={tableActionHint}
           isPaused={isPaused}
           reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
@@ -2136,9 +2261,25 @@ function App() {
           }
           shouldShowShield={false}
           multiplayerSummary={multiplayerSummary}
+          turnClock={multiplayerRoomView.turnClock
+            ? { ...multiplayerRoomView.turnClock, startedAt: multiplayerRoomView.turnClock.startedAt + multiplayerClockOffset, deadlineMs: multiplayerRoomView.turnClock.deadlineMs == null ? null : multiplayerRoomView.turnClock.deadlineMs + multiplayerClockOffset }
+            : null}
+          series={multiplayerRoomView.series ?? null}
+          botSeatIds={multiplayerRoomView.botSeatIds}
+          isSpectator={multiplayerRoomView.role === 'spectator'}
+          isTurnBased={multiplayerRoomView.turnBased === true}
+          spectatorCount={multiplayerRoomView.spectatorCount ?? 0}
           isSharingResult={isSharing}
           shareResultStatus={shareStatus?.message ?? null}
           onShareResult={() => void sharePostGameImage(multiplayerSummary)}
+          onWatchReplay={multiplayerRoomView.replayAvailable && multiplayerSession ? () => {
+            void fetchMultiplayerReplay(multiplayerSession, multiplayerApiBase)
+              .then((log) => {
+                setReplayView({ log, returnTo: 'multiplayer' });
+                setScreen('replay');
+              })
+              .catch(() => setMultiplayerError('Could not load the replay. Please try again.'));
+          } : undefined}
           turnStatusText={multiplayerTurnStatusText}
           isMandatoryPrompt={multiplayerIsMandatoryPrompt}
           mainPhaseExhausted={multiplayerMainPhaseExhausted}
@@ -2244,6 +2385,10 @@ function App() {
           onPlayerNameChange={setMultiplayerPlayerName}
           onJoinCodeChange={setMultiplayerJoinCode}
           onHostRoom={onHostMultiplayerRoom}
+          onHostTurnRoom={() => void hostMultiplayerRoom('turn')}
+          onWatchRoom={() => void watchMultiplayerGame()}
+          onOpenTurnRoom={(saved) => void openTurnMultiplayerRoom(saved)}
+          onSetRoomOptions={(changes) => void setMultiplayerRoomOptions(changes)}
           onJoinRoom={onJoinMultiplayerRoom}
           onStartMatch={startMultiplayerMatch}
           onRunAction={runMultiplayerAction}
@@ -2270,6 +2415,17 @@ function App() {
         />
       ) : null}
 
+      {screen === 'replay' && replayView ? (
+        <ReplayScreen
+          log={replayView.log}
+          reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
+          onClose={() => {
+            setScreen(replayView.returnTo);
+            setReplayView(null);
+          }}
+        />
+      ) : null}
+
       {screen === 'stats' ? (
         <StatsScreen
           history={history}
@@ -2277,6 +2433,11 @@ function App() {
           growthMetrics={growthMetrics}
           unlockedAchievements={unlockedAchievements}
           dailyChallenge={dailyChallenge}
+          replays={loadReplays()}
+          onWatchReplay={(replay) => {
+            setReplayView({ log: replay, returnTo: 'stats' });
+            setScreen('replay');
+          }}
           onBack={() => setScreen('home')}
         />
       ) : null}
@@ -2307,6 +2468,8 @@ function App() {
           onChangeTextScale={(value) => setUiPreferences((prev) => ({ ...prev, textScale: value }))}
           onChangeTableDensity={(value) => setUiPreferences((prev) => ({ ...prev, tableDensity: value }))}
           onChangeTableStyle={(value) => setUiPreferences((prev) => ({ ...prev, tableStyle: value }))}
+          onChangeCardBack={(value) => setUiPreferences((prev) => ({ ...prev, cardBack: value }))}
+          unlockProgress={achievementState.counters}
           onToggleConfirmRiskyActions={(enabled) => setUiPreferences((prev) => ({ ...prev, confirmRiskyActions: enabled }))}
           onToggleRulesDrawerHints={(enabled) => setUiPreferences((prev) => ({ ...prev, showRulesDrawerHints: enabled }))}
           onToggleExperimentalFlag={(flag, enabled) => {
@@ -2343,6 +2506,12 @@ function App() {
           formatDuration={formatDuration}
           onToggleReduceEffects={(enabled) => setUiPreferences((prev) => ({ ...prev, reducedEffects: enabled }))}
           onStartRematch={startRematch}
+          series={localMatch.series}
+          newUnlocks={newUnlocks}
+          onWatchReplay={replayLogRef.current ? () => {
+            setReplayView({ log: replayLogRef.current as GameReplayLog, returnTo: 'game_over' });
+            setScreen('replay');
+          } : undefined}
           onShareImage={() => void sharePostGameImage()}
           onOpenSetup={() => {
             const names = game?.players.map((player) => player.name);
@@ -2377,7 +2546,7 @@ function App() {
         />
       ) : null}
 
-      {screen === 'multiplayer' && multiplayerRoomView && multiplayerSession ? (
+      {screen === 'multiplayer' && multiplayerRoomView && multiplayerSession && multiplayerRoomView.role !== 'spectator' ? (
         <MultiplayerChatDock
           messages={multiplayerRoomView.chatMessages}
           activityFeed={multiplayerRoomView.activityFeed}

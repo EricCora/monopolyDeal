@@ -37,3 +37,12 @@ export function bankTotal(player: PlayerState, variant: GameVariant): number {
 export function cssColor(color: PropertyColor): string {
   return `var(--card-color-${color.replace('_', '-')})`;
 }
+
+/** m:ss, or hours and days for a turn-by-turn room's long waits. */
+export function formatClock(milliseconds: number): string {
+  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  const hours = Math.floor(seconds / 3600);
+  if (hours < 48) return `${hours}h ${Math.floor((seconds % 3600) / 60)}m`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+}

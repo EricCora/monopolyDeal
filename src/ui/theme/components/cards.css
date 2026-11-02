@@ -444,15 +444,20 @@ button.card-view:disabled {
 
 /* Back */
 .card-back {
-  background: linear-gradient(135deg, #c42b35, #8e1721);
+  background: linear-gradient(135deg, var(--back-a, #c42b35), var(--back-b, #8e1721));
 }
+
+.card-back-ocean-blue { --back-a: #2777c4; --back-b: #123f7a; }
+.card-back-forest-green { --back-a: #2c9c63; --back-b: #0f5233; }
+.card-back-midnight-gold { --back-a: #1b2233; --back-b: #0a0d15; --back-mark: #f2c54f; --back-edge: rgba(242, 197, 79, 0.8); }
+.card-back-neon-grid { --back-a: #5b1a8e; --back-b: #123a7a; --back-mark: #4de3ff; --back-edge: rgba(77, 227, 255, 0.8); }
 
 .card-back-frame {
   position: absolute;
   inset: calc(var(--u) * 6);
   display: grid;
   place-items: center;
-  border: calc(var(--u) * 1.5) solid rgba(255, 255, 255, 0.55);
+  border: calc(var(--u) * 1.5) solid var(--back-edge, rgba(255, 255, 255, 0.55));
   border-radius: calc(var(--u) * 6);
 }
 
@@ -464,7 +469,7 @@ button.card-view:disabled {
 }
 
 .card-view .card-back-mark {
-  color: #fff;
+  color: var(--back-mark, #fff);
 }
 
 /* The hand may shrink with the screen; its own layout overlaps cards to fit. */

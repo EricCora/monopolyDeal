@@ -32,6 +32,7 @@ import {
 } from '../experience';
 import type { FeedbackTone } from '../../app/useFeedback';
 import type { PostGameSummary } from '../../stats';
+import { formatClock } from '../table/boardModel';
 import { PromptPanel, type PanelChoice } from '../table/PromptPanel';
 import { bankTotal, boardLanes, type BoardLane } from '../table/boardModel';
 import {
@@ -146,6 +147,18 @@ interface GameTableScreenProps {
   isSharingResult?: boolean;
   shareResultStatus?: string | null;
   onShareResult?: () => void;
+  /** Null shows no clock, as in a game that hasn't started it yet. */
+  turnClock?: { playerId: string; startedAt: number; deadlineMs: number | null } | null;
+  series?: { bestOf: number; wins: Record<string, number>; gameNumber: number; winnerId?: string } | null;
+  botSeatIds?: string[];
+  isSpectator?: boolean;
+  isTurnBased?: boolean;
+  spectatorCount?: number;
+  onWatchReplay?: () => void;
+  /** Replays step the card flights by move, since their timestamps aren't meaningful. */
+  flightKey?: number;
+  /** Replays swap the action bar and hand controls for these. */
+  replayBar?: ReactNode;
   onPauseToggle: () => void;
   onRefreshMultiplayer?: () => void;
   onExitMultiplayer?: () => void;
@@ -367,6 +380,21 @@ function PlaysPips({ used, total }: { used: number; total: number }) {
   );
 }
 
+function TurnClockPill({ clock, now, paused }: { clock: { startedAt: number; deadlineMs: number | null }; now: number; paused: boolean }) {
+  const remaining = clock.deadlineMs == null ? null : clock.deadlineMs - now;
+  const urgent = remaining != null && remaining <= 10_000;
+  const shown = remaining == null ? now - clock.startedAt : Math.ceil(remaining / 1000) * 1000;
+  return (
+    <span
+      className={`turn-clock ${remaining != null ? 'is-countdown' : ''} ${urgent ? 'is-urgent' : ''} ${paused ? 'is-paused' : ''}`}
+      role="timer"
+      aria-label={remaining != null ? `${formatClock(shown)} left this turn` : `This turn has taken ${formatClock(shown)}`}
+    >
+      <Icon name="hourglass" /> {formatClock(shown)}
+    </span>
+  );
+}
+
 const CONNECTION_TONE: Record<string, string> = { connected: 'is-good', reconnecting: 'is-warn', connecting: 'is-warn', disconnected: 'is-bad' };
 
 export function GameTableScreen({
@@ -427,6 +455,15 @@ export function GameTableScreen({
   isSharingResult = false,
   shareResultStatus = null,
   onShareResult,
+  turnClock = null,
+  series = null,
+  botSeatIds = [],
+  isSpectator = false,
+  isTurnBased = false,
+  spectatorCount = 0,
+  onWatchReplay,
+  flightKey,
+  replayBar,
   onPauseToggle,
   onRefreshMultiplayer,
   onExitMultiplayer,
@@ -492,6 +529,10 @@ export function GameTableScreen({
   const [moveWildCardId, setMoveWildCardId] = useState<string | null>(null);
   const [spotlight, setSpotlight] = useState<{ id: number; cardId: string; playerName: string } | null>(null);
   const [setBanner, setSetBanner] = useState<{ token: number; text: string } | null>(null);
+  const [noStamp, setNoStamp] = useState<{ id: number; playerName: string } | null>(null);
+  const [flyingReactions, setFlyingReactions] = useState<Array<{ id: number; emoji: string; x: number; y: number; dx: number; dy: number }>>([]);
+  const screenRef = useRef<HTMLElement | null>(null);
+  const lastReactionIdRef = useRef<number | null>(null);
   const stealAlert = resolveStealAlert(game, clockNow);
   const latestEvent = game.history.length > 0 ? game.history[game.history.length - 1] : null;
   const roomWatchFeed = useMemo(() => {
@@ -528,9 +569,6 @@ export function GameTableScreen({
       });
     return map;
   }, [activityFeed, clockNow, isMultiplayer]);
-  const centerReaction = isMultiplayer
-    ? activityFeed.find((item) => item.kind === 'reaction' && clockNow - item.createdAt <= 1_600) ?? null
-    : null;
   const selectionPendingKind = prompt.kind === 'selection' ? game.pending?.kind ?? null : null;
   const multiplayerPreset = isMultiplayer && multiplayerPresetId
     ? getMultiplayerSessionPresetDefinition(multiplayerPresetId)
@@ -623,7 +661,7 @@ export function GameTableScreen({
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setClockNow(Date.now()), 450);
+    const timer = window.setInterval(() => setClockNow(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -740,11 +778,42 @@ export function GameTableScreen({
     if (getCardDefinition(discardTop, variant).kind !== 'action') return undefined;
     const lastLink = game.pending?.kind === 'counter' ? game.pending.payload.chain[game.pending.payload.chain.length - 1] : undefined;
     const actorId = lastLink?.playerId ?? game.players[game.currentPlayerIndex].id;
+    if (getCardDefinition(discardTop, variant).actionKind === 'just_say_no') {
+      // Anyone's Just Say No lands on the whole table, including your own.
+      const name = lastLink ? game.players.find((player) => player.id === lastLink.playerId)?.name ?? '' : '';
+      setNoStamp({ id: Date.now(), playerName: name });
+      return undefined;
+    }
     if (actorId === viewerId) return undefined;
     const name = game.players.find((player) => player.id === actorId)?.name ?? actorId;
     setSpotlight({ id: Date.now(), cardId: discardTop, playerName: name });
     return undefined;
   }, [discardTop, game.currentPlayerIndex, game.pending, game.players, reducedMotion, variant, viewerId]);
+
+  useEffect(() => {
+    if (!noStamp) return undefined;
+    const timer = window.setTimeout(() => setNoStamp(null), 1300);
+    return () => window.clearTimeout(timer);
+  }, [noStamp]);
+
+  // A reaction flies from whoever sent it to the middle of the table.
+  useEffect(() => {
+    const latest = activityFeed.find((item) => item.kind === 'reaction');
+    if (!latest) return undefined;
+    const isNew = lastReactionIdRef.current !== null && latest.id !== lastReactionIdRef.current && Date.now() - latest.createdAt < 8_000;
+    lastReactionIdRef.current = latest.id;
+    if (!isNew || reducedMotion) return undefined;
+    const seat = latest.playerId
+      ? screenRef.current?.querySelector(`[data-flip-origin="${latest.playerId}"]`) ?? screenRef.current?.querySelector('.player-board')
+      : null;
+    const start = seat?.getBoundingClientRect();
+    const x = start ? start.left + start.width / 2 : window.innerWidth / 2;
+    const y = start ? start.top + 24 : window.innerHeight / 2;
+    const flight = { id: latest.id, emoji: reactionEmoji(latest.reaction), x, y, dx: window.innerWidth / 2 - x, dy: window.innerHeight * 0.4 - y };
+    setFlyingReactions((current) => [...current, flight]);
+    const timer = window.setTimeout(() => setFlyingReactions((current) => current.filter((entry) => entry.id !== flight.id)), 1300);
+    return () => window.clearTimeout(timer);
+  }, [activityFeed, reducedMotion]);
 
   useEffect(() => {
     if (!spotlight) return undefined;
@@ -854,7 +923,10 @@ export function GameTableScreen({
   const currentPlayer = game.players[game.currentPlayerIndex];
   const turnTitle = currentPlayer.id === viewerId ? 'Your turn' : `${currentPlayer.name}'s turn`;
   const variantLabel = variant === 'no_mercy' ? 'No Mercy' : 'Classic';
-  const turnSubtitle = `Turn ${game.turnCount} · ${variantLabel} · ${winCompleteSets} sets to win`;
+  const seriesScore = series
+    ? ` · Game ${series.gameNumber} · ${game.players.map((player) => series.wins[player.id] ?? 0).join('–')}`
+    : '';
+  const turnSubtitle = `Turn ${game.turnCount} · ${variantLabel}${seriesScore || ` · ${winCompleteSets} sets to win`}`;
 
   const statusText = (() => {
     if (over.done) return winnerName ? `${winnerName} won the match.` : 'Match complete.';
@@ -996,6 +1068,7 @@ export function GameTableScreen({
 
   return (
     <section
+      ref={screenRef}
       className={`game-table-screen state-${prompt.kind} ${isPaused ? 'is-paused' : ''} ${isMultiplayer ? 'is-live-room' : 'is-local-table'} ${isViewersPrompt ? 'is-your-move' : ''}`}
     >
       <h2 className="sr-only">{isMultiplayer ? 'Multiplayer Table' : 'Game Table'}</h2>
@@ -1056,6 +1129,8 @@ export function GameTableScreen({
           <span>{turnSubtitle}</span>
         </div>
 
+        {turnClock && !over.done ? <TurnClockPill clock={turnClock} now={clockNow} paused={isPaused} /> : null}
+
         <PlaysPips used={game.turn.playsUsed} total={maxPlaysPerTurn} />
 
         <div className="pile-stack" aria-label="Card piles">
@@ -1092,9 +1167,11 @@ export function GameTableScreen({
           <span className={`connection-pill ${CONNECTION_TONE[multiplayerConnectionState ?? 'connected'] ?? 'is-good'}`}>
             <span className="connection-dot" aria-hidden="true" />
             <span className="sr-only">{`Connection: ${connectionStatusLabel ?? 'Connected'}`}</span>
-            <span aria-hidden="true">{(connectionStatusLabel ?? 'Connected').replace(/^Connected \(Live\)$/, 'Live')}</span>
+            <span aria-hidden="true">{isTurnBased ? 'Turn-by-Turn' : (connectionStatusLabel ?? 'Connected').replace(/^Connected \(Live\)$/, 'Live')}</span>
           </span>
           {multiplayerRoomCode ? <span className="room-bar-code">Room {multiplayerRoomCode}</span> : null}
+          {isSpectator ? <span className="room-bar-tag">Watching</span> : null}
+          {spectatorCount > 0 && !isSpectator ? <span className="room-bar-tag"><Icon name="eye" /> {spectatorCount}</span> : null}
         </div>
       ) : null}
 
@@ -1107,7 +1184,7 @@ export function GameTableScreen({
         </section>
       ) : null}
 
-      <CardFlights className="table-main" flightKey={game.updatedAt} enabled={!reducedMotion}>
+      <CardFlights className="table-main" flightKey={flightKey ?? game.updatedAt} enabled={!reducedMotion}>
         <div className={`opponents-area count-${opponents.length}`}>
           {opponents.map((player) => {
             const isPrompted = prompt.playerId === player.id;
@@ -1123,9 +1200,10 @@ export function GameTableScreen({
               >
                 <button type="button" className="opponent-open" aria-label={`Show ${player.name}'s whole board`} onClick={() => setInspectedOpponentId(player.id)} />
                 <header className="opponent-head">
-                  <PlayerAvatar name={player.name} isBot={player.controller === 'bot'} />
+                  <PlayerAvatar name={player.name} isBot={player.controller === 'bot' || botSeatIds.includes(player.id)} />
                   <h3>{player.name}</h3>
-                  {isMultiplayer && !connected ? (
+                  {botSeatIds.includes(player.id) ? <span className="opponent-bot-tag">Bot playing</span> : null}
+                  {isMultiplayer && !connected && !isTurnBased ? (
                     <span className="opponent-offline" title="Disconnected" role="img" aria-label="Disconnected"><Icon name="wifiOff" /></span>
                   ) : null}
                   {recentReactionsByPlayerId.get(player.id) ? (
@@ -1205,6 +1283,7 @@ export function GameTableScreen({
             </div>
 
             <div className="action-bar">
+              {replayBar ?? (<>
               {showUndo ? (
                 <>
                   <button type="button" className="secondary-button is-icon" aria-label="Undo Last Play" onClick={onUndoLastPlay} disabled={inputBlocked}><Icon name="undo" /></button>
@@ -1241,6 +1320,7 @@ export function GameTableScreen({
                   <p>{coachHint.summary}</p>
                 </aside>
               ) : null}
+              </>)}
             </div>
 
             <section
@@ -1268,12 +1348,12 @@ export function GameTableScreen({
         ) : (
           <div className="viewer-hidden">
             <Icon name="eyeOff" />
-            <p>Hands are hidden until the next player takes the device.</p>
+            <p>{isSpectator ? "You're watching. Every hand stays hidden." : 'Hands are hidden until the next player takes the device.'}</p>
           </div>
         )}
       </CardFlights>
 
-      {viewer && isViewersPrompt && !isPaused ? (
+      {viewer && isViewersPrompt && !isPaused && !replayBar ? (
         <PromptPanel
           game={game}
           prompt={prompt}
@@ -1304,10 +1384,10 @@ export function GameTableScreen({
       ) : null}
 
       <div className="table-moments" aria-live="polite">
-        {centerReaction ? (
-          <div key={centerReaction.id} className="reaction-burst glass-panel" aria-hidden="true">
-            <span>{reactionEmoji(centerReaction.reaction)}</span>
-            <strong>{(centerReaction.reaction ?? '').toUpperCase() === 'GG' ? 'GG' : `${(centerReaction.reaction ?? '').slice(0, 1).toUpperCase()}${(centerReaction.reaction ?? '').slice(1)}`}</strong>
+        {noStamp ? (
+          <div key={noStamp.id} className="jsn-stamp" role="status">
+            <span className="jsn-stamp-mark"><Icon name="just_say_no" /> Just Say No!</span>
+            <span className="jsn-stamp-name">{noStamp.playerName}</span>
           </div>
         ) : null}
         {spotlight ? (
@@ -1323,6 +1403,25 @@ export function GameTableScreen({
           </div>
         ) : null}
       </div>
+
+      {flyingReactions.length > 0 ? (
+        <div className="reaction-layer" aria-hidden="true">
+          {flyingReactions.map((flight) => (
+            <span
+              key={flight.id}
+              className="reaction-flight"
+              style={{
+                left: `${flight.x}px`,
+                top: `${flight.y}px`,
+                ['--fly-x' as string]: `${flight.dx}px`,
+                ['--fly-y' as string]: `${flight.dy}px`,
+              }}
+            >
+              {flight.emoji}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       {tableGhostCards.length > 0 ? (
         <div className="draw-animation-layer" aria-hidden="true">
@@ -1642,6 +1741,14 @@ export function GameTableScreen({
           <div className="overlay-card card-enter">
             <span className="overlay-icon is-gold"><Icon name="trophy" /></span>
             <h3>{winnerName === viewer?.name ? 'You win!' : `${winnerName ?? 'Nobody'} wins!`}</h3>
+            {series ? (
+              <p className="series-score">
+                {series.winnerId
+                  ? `${series.winnerId === viewer?.id ? 'You win' : `${game.players.find((player) => player.id === series.winnerId)?.name ?? 'Someone'} wins`} the series `
+                  : `Game ${series.gameNumber} of up to ${series.bestOf}: `}
+                {game.players.map((player) => `${player.name} ${series.wins[player.id] ?? 0}`).join(', ')}
+              </p>
+            ) : null}
             <p className="sr-only">Match Complete</p>
             <p className="winner-line">Winner: <strong>{winnerName ?? 'Unknown player'}</strong></p>
             {multiplayerSummary ? (
@@ -1672,7 +1779,9 @@ export function GameTableScreen({
             ) : null}
             {rematchStatusText ? <p>{rematchStatusText}</p> : null}
             {onRematchMultiplayer ? (
-              <button type="button" className="primary-button" onClick={onRematchMultiplayer} disabled={checkpointLoading || !canRematchMultiplayer}>Play Rematch</button>
+              <button type="button" className="primary-button" onClick={onRematchMultiplayer} disabled={checkpointLoading || !canRematchMultiplayer}>
+                {series && !series.winnerId ? 'Next Game' : 'Play Rematch'}
+              </button>
             ) : null}
             {onSetMultiplayerPreset ? (
               <div className="overlay-actions" aria-label="Next match preset">
@@ -1695,6 +1804,9 @@ export function GameTableScreen({
                 <button type="button" className="secondary-button" onClick={onShareResult} disabled={isSharingResult} aria-label="Share Brag Image">
                   <Icon name="share" /> {isSharingResult ? 'Preparing...' : 'Share'}
                 </button>
+              ) : null}
+              {onWatchReplay ? (
+                <button type="button" className="secondary-button" onClick={onWatchReplay}><Icon name="pass_go" /> Watch Replay</button>
               ) : null}
               <button type="button" className="secondary-button" onClick={onExitMultiplayer} disabled={checkpointLoading}>Exit Match</button>
               <button type="button" className="secondary-button is-danger-text" onClick={onForgetMultiplayer} disabled={checkpointLoading}>Forget Room</button>
