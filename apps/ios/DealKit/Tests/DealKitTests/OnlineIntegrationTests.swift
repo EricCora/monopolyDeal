@@ -484,6 +484,8 @@ final class OnlineIntegrationTests: XCTestCase {
             _ = await playOneMove(a)
             _ = await playOneMove(b)
         }
+        // Bo may have moved last, so catch Ann up before comparing.
+        await a.refresh()
         let turn = try XCTUnwrap(a.view?.gameState?.turnCount)
         XCTAssertGreaterThan(turn, 1)
         // The seat comes back on a fresh connection.
