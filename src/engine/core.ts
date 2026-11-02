@@ -283,11 +283,64 @@ export function isCompletePropertySet(entries: PropertyCardPlacement[], color: P
   const required = PROPERTY_SET_SIZES[color];
   const properties = entries.filter((entry) => isPropertyCardPlacement(entry, variant));
   if (properties.length < required) return false;
-  // Classic requires a standard property. No Mercy permits two-colour wilds,
-  // but two or more every-colour wilds cannot complete a set on their own.
-  return variant === 'no_mercy'
-    ? properties.some((entry) => !isEveryColorWild(entry.cardId, variant))
-    : properties.some((entry) => isStandardPropertyPlacement(entry, variant));
+  // Any-color Wilds can't complete a set on their own, but anything else can sit beside them.
+  return properties.some((entry) => !isEveryColorWild(entry.cardId, variant));
+}
+
+function shackCount(entries: PropertyCardPlacement[], variant: GameVariant): number {
+  return entries.filter((entry) => getCardDefinition(entry.cardId, variant).actionKind === 'shack').length;
+}
+
+function consolidateOnce(player: PlayerState, color: PropertyColor, variant: GameVariant): boolean {
+  const required = PROPERTY_SET_SIZES[color];
+  const open = propertySets(player, color, variant).filter((set) => !isCompletePropertySet(set.entries, color, variant));
+  if (open.length < 2) return false;
+  const properties = (set: PropertySetView) => set.entries.filter((entry) => isPropertyCardPlacement(entry, variant));
+  const riders = (set: PropertySetView, entry: PropertyCardPlacement) => set.entries.filter((other) => other.attachedToCardId === entry.cardId);
+
+  // A pile full of any-color Wilds needs one real card, and gives back a Wild for it.
+  const stuck = open.find((set) => properties(set).length >= required);
+  if (stuck) {
+    for (const other of open) {
+      if (other === stuck) continue;
+      const real = properties(other).find((entry) => !isEveryColorWild(entry.cardId, variant) && riders(other, entry).length === 0);
+      const spare = [...properties(stuck)].reverse().find((entry) => riders(stuck, entry).length === 0);
+      if (real && spare) {
+        real.setId = stuck.setId;
+        spare.setId = other.setId;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  const target = open[0];
+  for (const source of [...open.slice(1)].reverse()) {
+    const candidates = [...properties(source)].reverse()
+      .sort((left, right) => Number(isEveryColorWild(left.cardId, variant)) - Number(isEveryColorWild(right.cardId, variant)));
+    for (const entry of candidates) {
+      const moving = [entry, ...riders(source, entry)];
+      const completes = properties(target).length + 1 >= required;
+      if (completes && shackCount([...target.entries, ...moving], variant) > 1) continue;
+      for (const card of moving) card.setId = target.setId;
+      // A building left with nothing under it goes along with the cards.
+      if (properties(source).length === 1) {
+        for (const left of source.entries) left.setId = target.setId;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Piles of one color exist so a spare card has somewhere to go, and paying with a card can
+ * leave two partial piles behind. Standard cards can't be moved by hand, so those rejoin here.
+ */
+export function consolidatePropertySets(player: PlayerState, variant: GameVariant = 'classic'): void {
+  for (const color of PROPERTY_COLORS) {
+    while (consolidateOnce(player, color, variant));
+  }
 }
 
 export function isBuildingPlacementLegal(
@@ -372,7 +425,9 @@ export function addToProperty(
     if (!target && card.kind === 'property') {
       // A standard property can complete a wild-only group. Move one excess
       // wild into its own group first so the original group remains physical.
-      const wildOnly = sets.find((set) => !setHasStandardProperty(set, variant) && propertyCount(set, variant) >= required);
+      const wildOnly = sets.find((set) => !setHasStandardProperty(set, variant)
+        && propertyCount(set, variant) >= required
+        && !isCompletePropertySet(set.entries, color, variant));
       let excessWild: PropertyCardPlacement | undefined;
       for (let index = (wildOnly?.entries.length ?? 0) - 1; index >= 0; index -= 1) {
         const entry = wildOnly?.entries[index];
@@ -674,6 +729,10 @@ export function consumePlay(state: GameState): void {
 }
 
 export function checkWinner(state: GameState): void {
+  // A card in the middle of being resolved may still name its pile.
+  if (!state.pending) {
+    for (const player of state.players) consolidatePropertySets(player, state.variant ?? 'classic');
+  }
   const winner = state.players.find((player) => countCompleteSets(player, state.variant ?? 'classic') >= ruleset(state).winCompleteSets);
   if (winner) {
     state.winnerId = winner.id;

@@ -30,7 +30,7 @@ final class PlayRestrictionTests: XCTestCase {
     }
 
     func testTwoWildsDoNotCountAsACompleteSetForAHouse() {
-        let state = game(hand: ["house#1"], table: [(.pink, ["wild_all#1", "wild_all#2", "wild_pink_orange#1"])])
+        let state = game(hand: ["house#1"], table: [(.brown, ["wild_all#1", "wild_all#2"])])
         XCTAssertEqual(reason(state, "house#1"), "A House needs a complete set.")
     }
 

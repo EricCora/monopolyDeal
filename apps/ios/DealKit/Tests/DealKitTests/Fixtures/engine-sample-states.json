@@ -4,8 +4,8 @@
    "name": "classic-opening",
    "state": {
     "version": 1,
-    "createdAt": 1793572696852,
-    "updatedAt": 1793572696852,
+    "createdAt": 1793604934875,
+    "updatedAt": 1793604934875,
     "deckVersion": "v1",
     "variant": "classic",
     "ruleset": {
@@ -198,7 +198,7 @@
     "pending": null,
     "history": [
      {
-      "timestamp": 1793572696852,
+      "timestamp": 1793604934875,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -209,7 +209,7 @@
       }
      },
      {
-      "timestamp": 1793572696852,
+      "timestamp": 1793604934875,
       "type": "bank",
       "message": "Ann banked Pass Go."
      }
@@ -226,8 +226,8 @@
    "name": "classic-midgame",
    "state": {
     "version": 1,
-    "createdAt": 1793572696852,
-    "updatedAt": 1793572696857,
+    "createdAt": 1793604934875,
+    "updatedAt": 1793604934881,
     "deckVersion": "v1",
     "variant": "classic",
     "ruleset": {
@@ -458,7 +458,7 @@
     "pending": null,
     "history": [
      {
-      "timestamp": 1793572696852,
+      "timestamp": 1793604934875,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -469,27 +469,27 @@
       }
      },
      {
-      "timestamp": 1793572696852,
+      "timestamp": 1793604934875,
       "type": "bank",
       "message": "Ann banked Sly Deal."
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934875,
       "type": "bank",
       "message": "Ann banked Sly Deal."
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934875,
       "type": "bank",
       "message": "Ann banked $1 Money."
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934875,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934875,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -500,27 +500,27 @@
       }
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934875,
       "type": "property",
       "message": "O'Brien placed Pink Property in Pink."
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934875,
       "type": "bank",
       "message": "O'Brien banked Pass Go."
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934876,
       "type": "bank",
       "message": "O'Brien banked $1 Money."
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934876,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934876,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -531,37 +531,37 @@
       }
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934876,
       "type": "action",
       "message": "Bot played Debt Collector on Ann."
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934876,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934876,
       "type": "pay",
       "message": "Ann paid Bot $5 (Debt Collector)."
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934876,
       "type": "bank",
       "message": "Bot banked $1 Money."
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934876,
       "type": "property",
       "message": "Bot placed Railroad Property in Railroad."
      },
      {
-      "timestamp": 1793572696853,
+      "timestamp": 1793604934876,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696854,
+      "timestamp": 1793604934876,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -572,27 +572,27 @@
       }
      },
      {
-      "timestamp": 1793572696854,
+      "timestamp": 1793604934876,
       "type": "bank",
       "message": "Ann banked $2 Money."
      },
      {
-      "timestamp": 1793572696854,
+      "timestamp": 1793604934876,
       "type": "bank",
       "message": "Ann banked Forced Deal."
      },
      {
-      "timestamp": 1793572696854,
+      "timestamp": 1793604934876,
       "type": "bank",
       "message": "Ann banked Pass Go."
      },
      {
-      "timestamp": 1793572696854,
+      "timestamp": 1793604934877,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696854,
+      "timestamp": 1793604934877,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -603,27 +603,27 @@
       }
      },
      {
-      "timestamp": 1793572696854,
+      "timestamp": 1793604934877,
       "type": "bank",
       "message": "O'Brien banked House."
      },
      {
-      "timestamp": 1793572696854,
+      "timestamp": 1793604934877,
       "type": "property",
       "message": "O'Brien placed Railroad Property in Railroad."
      },
      {
-      "timestamp": 1793572696854,
+      "timestamp": 1793604934877,
       "type": "bank",
       "message": "O'Brien banked House."
      },
      {
-      "timestamp": 1793572696854,
+      "timestamp": 1793604934877,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696854,
+      "timestamp": 1793604934877,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -634,7 +634,7 @@
       }
      },
      {
-      "timestamp": 1793572696854,
+      "timestamp": 1793604934877,
       "type": "action",
       "message": "Bot played Pass Go and drew 2.",
       "details": {
@@ -645,22 +645,22 @@
       }
      },
      {
-      "timestamp": 1793572696854,
+      "timestamp": 1793604934877,
       "type": "bank",
       "message": "Bot banked Rent Green/Dark Blue."
      },
      {
-      "timestamp": 1793572696855,
+      "timestamp": 1793604934877,
       "type": "bank",
       "message": "Bot banked Forced Deal."
      },
      {
-      "timestamp": 1793572696855,
+      "timestamp": 1793604934877,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696855,
+      "timestamp": 1793604934878,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -671,27 +671,27 @@
       }
      },
      {
-      "timestamp": 1793572696855,
+      "timestamp": 1793604934878,
       "type": "bank",
       "message": "Ann banked It's My Birthday."
      },
      {
-      "timestamp": 1793572696855,
+      "timestamp": 1793604934878,
       "type": "bank",
       "message": "Ann banked Rent Railroad/Utility."
      },
      {
-      "timestamp": 1793572696855,
+      "timestamp": 1793604934878,
       "type": "bank",
       "message": "Ann banked $10 Money."
      },
      {
-      "timestamp": 1793572696855,
+      "timestamp": 1793604934878,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696855,
+      "timestamp": 1793604934878,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -702,27 +702,27 @@
       }
      },
      {
-      "timestamp": 1793572696855,
+      "timestamp": 1793604934878,
       "type": "property",
       "message": "O'Brien placed Green Property in Green."
      },
      {
-      "timestamp": 1793572696855,
+      "timestamp": 1793604934878,
       "type": "bank",
       "message": "O'Brien banked House."
      },
      {
-      "timestamp": 1793572696855,
+      "timestamp": 1793604934878,
       "type": "bank",
       "message": "O'Brien banked Pass Go."
      },
      {
-      "timestamp": 1793572696855,
+      "timestamp": 1793604934878,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696856,
+      "timestamp": 1793604934878,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -733,37 +733,37 @@
       }
      },
      {
-      "timestamp": 1793572696856,
+      "timestamp": 1793604934879,
       "type": "bank",
       "message": "Bot banked $3 Money."
      },
      {
-      "timestamp": 1793572696856,
+      "timestamp": 1793604934879,
       "type": "property",
       "message": "Bot placed Wild Card in Pink."
      },
      {
-      "timestamp": 1793572696856,
+      "timestamp": 1793604934879,
       "type": "bank",
       "message": "Bot banked Hotel."
      },
      {
-      "timestamp": 1793572696856,
+      "timestamp": 1793604934879,
       "type": "wild_move",
       "message": "Bot moved Wild Card to Railroad."
      },
      {
-      "timestamp": 1793572696856,
+      "timestamp": 1793604934879,
       "type": "wild_move",
       "message": "Bot moved Wild Card to Utility."
      },
      {
-      "timestamp": 1793572696856,
+      "timestamp": 1793604934879,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696856,
+      "timestamp": 1793604934880,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -774,32 +774,32 @@
       }
      },
      {
-      "timestamp": 1793572696856,
+      "timestamp": 1793604934880,
       "type": "property",
       "message": "Ann placed Wild Railroad/Green in Green."
      },
      {
-      "timestamp": 1793572696856,
+      "timestamp": 1793604934880,
       "type": "property",
       "message": "Ann placed Orange Property in Orange."
      },
      {
-      "timestamp": 1793572696856,
+      "timestamp": 1793604934880,
       "type": "bank",
       "message": "Ann banked Hotel."
      },
      {
-      "timestamp": 1793572696857,
+      "timestamp": 1793604934880,
       "type": "wild_move",
       "message": "Ann moved Wild Railroad/Green to Railroad."
      },
      {
-      "timestamp": 1793572696857,
+      "timestamp": 1793604934880,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696857,
+      "timestamp": 1793604934880,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -810,22 +810,22 @@
       }
      },
      {
-      "timestamp": 1793572696857,
+      "timestamp": 1793604934880,
       "type": "bank",
       "message": "O'Brien banked Pass Go."
      },
      {
-      "timestamp": 1793572696857,
+      "timestamp": 1793604934880,
       "type": "bank",
       "message": "O'Brien banked $4 Money."
      },
      {
-      "timestamp": 1793572696857,
+      "timestamp": 1793604934880,
       "type": "bank",
       "message": "O'Brien banked Rent Red/Yellow."
      },
      {
-      "timestamp": 1793572696857,
+      "timestamp": 1793604934881,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      }
@@ -842,8 +842,8 @@
    "name": "no-mercy-opening",
    "state": {
     "version": 1,
-    "createdAt": 1793572696858,
-    "updatedAt": 1793572696858,
+    "createdAt": 1793604934881,
+    "updatedAt": 1793604934881,
     "deckVersion": "v1",
     "variant": "no_mercy",
     "ruleset": {
@@ -1064,7 +1064,7 @@
     "pending": null,
     "history": [
      {
-      "timestamp": 1793572696858,
+      "timestamp": 1793604934881,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -1075,7 +1075,7 @@
       }
      },
      {
-      "timestamp": 1793572696858,
+      "timestamp": 1793604934881,
       "type": "property",
       "message": "Ann placed Green Property in Green."
      }
@@ -1092,8 +1092,8 @@
    "name": "no-mercy-midgame",
    "state": {
     "version": 1,
-    "createdAt": 1793572696858,
-    "updatedAt": 1793572696866,
+    "createdAt": 1793604934881,
+    "updatedAt": 1793604934890,
     "deckVersion": "v1",
     "variant": "no_mercy",
     "ruleset": {
@@ -1381,7 +1381,7 @@
     },
     "history": [
      {
-      "timestamp": 1793572696858,
+      "timestamp": 1793604934881,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -1392,32 +1392,32 @@
       }
      },
      {
-      "timestamp": 1793572696858,
+      "timestamp": 1793604934881,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696858,
+      "timestamp": 1793604934881,
       "type": "pay",
       "message": "O'Brien paid Ann $0 (Yoink!)."
      },
      {
-      "timestamp": 1793572696858,
+      "timestamp": 1793604934881,
       "type": "bank",
       "message": "Ann banked Go Again."
      },
      {
-      "timestamp": 1793572696858,
+      "timestamp": 1793604934881,
       "type": "bank",
       "message": "Ann banked $4 Money."
      },
      {
-      "timestamp": 1793572696858,
+      "timestamp": 1793604934881,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696858,
+      "timestamp": 1793604934881,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -1428,37 +1428,37 @@
       }
      },
      {
-      "timestamp": 1793572696858,
+      "timestamp": 1793604934881,
       "type": "debt_repaid",
       "message": "O'Brien repaid Ann with Wild Light Blue/Railroad."
      },
      {
-      "timestamp": 1793572696858,
+      "timestamp": 1793604934881,
       "type": "debt_card_resolved",
       "message": "Ann resolved a received debt card."
      },
      {
-      "timestamp": 1793572696858,
+      "timestamp": 1793604934882,
       "type": "bank",
       "message": "O'Brien banked $3 Money."
      },
      {
-      "timestamp": 1793572696859,
+      "timestamp": 1793604934882,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696859,
+      "timestamp": 1793604934882,
       "type": "heist",
       "message": "O'Brien stole a bank card from Ann."
      },
      {
-      "timestamp": 1793572696859,
+      "timestamp": 1793604934882,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696859,
+      "timestamp": 1793604934882,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -1469,27 +1469,27 @@
       }
      },
      {
-      "timestamp": 1793572696859,
+      "timestamp": 1793604934882,
       "type": "bank",
       "message": "Bot banked $1 Money."
      },
      {
-      "timestamp": 1793572696859,
+      "timestamp": 1793604934882,
       "type": "bank",
       "message": "Bot banked Super Sly Deal."
      },
      {
-      "timestamp": 1793572696859,
+      "timestamp": 1793604934882,
       "type": "bank",
       "message": "Bot banked Tax Collector."
      },
      {
-      "timestamp": 1793572696859,
+      "timestamp": 1793604934882,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696859,
+      "timestamp": 1793604934882,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -1500,27 +1500,27 @@
       }
      },
      {
-      "timestamp": 1793572696859,
+      "timestamp": 1793604934882,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696859,
+      "timestamp": 1793604934883,
       "type": "property",
       "message": "Ann placed Wild Railroad/Green in Green."
      },
      {
-      "timestamp": 1793572696859,
+      "timestamp": 1793604934883,
       "type": "property",
       "message": "Ann placed Yellow Property in Yellow."
      },
      {
-      "timestamp": 1793572696859,
+      "timestamp": 1793604934883,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696860,
+      "timestamp": 1793604934883,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -1531,27 +1531,27 @@
       }
      },
      {
-      "timestamp": 1793572696860,
+      "timestamp": 1793604934883,
       "type": "bank",
       "message": "O'Brien banked $2 Money."
      },
      {
-      "timestamp": 1793572696860,
+      "timestamp": 1793604934883,
       "type": "bank",
       "message": "O'Brien banked $1 Money."
      },
      {
-      "timestamp": 1793572696860,
+      "timestamp": 1793604934883,
       "type": "bank",
       "message": "O'Brien banked Double Rent (Any Color)."
      },
      {
-      "timestamp": 1793572696860,
+      "timestamp": 1793604934883,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696860,
+      "timestamp": 1793604934883,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -1562,57 +1562,57 @@
       }
      },
      {
-      "timestamp": 1793572696860,
+      "timestamp": 1793604934883,
       "type": "debt_repaid",
       "message": "Bot repaid Ann with Rent (Any Color)."
      },
      {
-      "timestamp": 1793572696860,
+      "timestamp": 1793604934884,
       "type": "action",
       "message": "Ann played rent for Railroad at $1."
      },
      {
-      "timestamp": 1793572696860,
+      "timestamp": 1793604934884,
       "type": "debt_card_resolved",
       "message": "Ann played the received Rent (Any Color) immediately."
      },
      {
-      "timestamp": 1793572696860,
+      "timestamp": 1793604934884,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696860,
+      "timestamp": 1793604934884,
       "type": "pay",
       "message": "O'Brien paid Ann $1 (Rent (railroad))."
      },
      {
-      "timestamp": 1793572696861,
+      "timestamp": 1793604934884,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696861,
+      "timestamp": 1793604934884,
       "type": "pay",
       "message": "Bot paid Ann $1 (Rent (railroad))."
      },
      {
-      "timestamp": 1793572696861,
+      "timestamp": 1793604934884,
       "type": "property",
       "message": "Bot placed Brown Property in Brown."
      },
      {
-      "timestamp": 1793572696861,
+      "timestamp": 1793604934884,
       "type": "property",
       "message": "Bot attached a Shack to Brown."
      },
      {
-      "timestamp": 1793572696861,
+      "timestamp": 1793604934884,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696861,
+      "timestamp": 1793604934884,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -1623,32 +1623,32 @@
       }
      },
      {
-      "timestamp": 1793572696861,
+      "timestamp": 1793604934885,
       "type": "property",
       "message": "Ann placed Light Blue Property in Light Blue."
      },
      {
-      "timestamp": 1793572696861,
+      "timestamp": 1793604934885,
       "type": "bank",
       "message": "Ann banked $1 Money."
      },
      {
-      "timestamp": 1793572696861,
+      "timestamp": 1793604934885,
       "type": "bank",
       "message": "Ann banked Double Rent Railroad/Utility."
      },
      {
-      "timestamp": 1793572696861,
+      "timestamp": 1793604934885,
       "type": "wild_move",
       "message": "Ann moved Wild Light Blue/Railroad to Light Blue."
      },
      {
-      "timestamp": 1793572696861,
+      "timestamp": 1793604934885,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696862,
+      "timestamp": 1793604934885,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -1659,27 +1659,27 @@
       }
      },
      {
-      "timestamp": 1793572696862,
+      "timestamp": 1793604934885,
       "type": "bank",
       "message": "O'Brien banked Go Again."
      },
      {
-      "timestamp": 1793572696862,
+      "timestamp": 1793604934885,
       "type": "bank",
       "message": "O'Brien banked Double Rent (Any Color)."
      },
      {
-      "timestamp": 1793572696862,
+      "timestamp": 1793604934885,
       "type": "bank",
       "message": "O'Brien banked Double Rent Green/Dark Blue."
      },
      {
-      "timestamp": 1793572696862,
+      "timestamp": 1793604934886,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696862,
+      "timestamp": 1793604934886,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -1690,42 +1690,42 @@
       }
      },
      {
-      "timestamp": 1793572696862,
+      "timestamp": 1793604934886,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696862,
+      "timestamp": 1793604934886,
       "type": "heist",
       "message": "Bot stole a bank card from Ann."
      },
      {
-      "timestamp": 1793572696862,
+      "timestamp": 1793604934886,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696862,
+      "timestamp": 1793604934886,
       "type": "heist",
       "message": "Bot stole a bank card from O'Brien."
      },
      {
-      "timestamp": 1793572696863,
+      "timestamp": 1793604934886,
       "type": "bank",
       "message": "Bot banked $3 Money."
      },
      {
-      "timestamp": 1793572696863,
+      "timestamp": 1793604934887,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696863,
+      "timestamp": 1793604934887,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696863,
+      "timestamp": 1793604934887,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -1736,42 +1736,42 @@
       }
      },
      {
-      "timestamp": 1793572696863,
+      "timestamp": 1793604934887,
       "type": "debt_repaid",
       "message": "Ann repaid Bot with Unfair Trade."
      },
      {
-      "timestamp": 1793572696863,
+      "timestamp": 1793604934887,
       "type": "debt_card_resolved",
       "message": "Bot played the received Unfair Trade immediately."
      },
      {
-      "timestamp": 1793572696863,
+      "timestamp": 1793604934887,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696864,
+      "timestamp": 1793604934888,
       "type": "bank",
       "message": "Ann banked $1 Money."
      },
      {
-      "timestamp": 1793572696864,
+      "timestamp": 1793604934888,
       "type": "property",
       "message": "Ann placed Wild Pink/Orange in Orange."
      },
      {
-      "timestamp": 1793572696864,
+      "timestamp": 1793604934888,
       "type": "wild_move",
       "message": "Ann moved Wild Railroad/Green to Railroad."
      },
      {
-      "timestamp": 1793572696864,
+      "timestamp": 1793604934888,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696864,
+      "timestamp": 1793604934888,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -1782,27 +1782,27 @@
       }
      },
      {
-      "timestamp": 1793572696864,
+      "timestamp": 1793604934888,
       "type": "bank",
       "message": "O'Brien banked Rent Pink/Orange."
      },
      {
-      "timestamp": 1793572696864,
+      "timestamp": 1793604934888,
       "type": "bank",
       "message": "O'Brien banked Just Say No."
      },
      {
-      "timestamp": 1793572696864,
+      "timestamp": 1793604934888,
       "type": "property",
       "message": "O'Brien placed Railroad Property in Railroad."
      },
      {
-      "timestamp": 1793572696864,
+      "timestamp": 1793604934888,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696864,
+      "timestamp": 1793604934889,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -1813,57 +1813,57 @@
       }
      },
      {
-      "timestamp": 1793572696865,
+      "timestamp": 1793604934889,
       "type": "property",
       "message": "Bot placed Wild Card in Orange."
      },
      {
-      "timestamp": 1793572696865,
+      "timestamp": 1793604934889,
       "type": "bank",
       "message": "Bot banked $15 Money."
      },
      {
-      "timestamp": 1793572696865,
+      "timestamp": 1793604934889,
       "type": "property",
       "message": "Bot placed Orange Property in Orange."
      },
      {
-      "timestamp": 1793572696865,
+      "timestamp": 1793604934889,
       "type": "wild_move",
       "message": "Bot moved Wild Card to Red."
      },
      {
-      "timestamp": 1793572696865,
+      "timestamp": 1793604934889,
       "type": "wild_move",
       "message": "Bot moved Wild Card to Yellow."
      },
      {
-      "timestamp": 1793572696865,
+      "timestamp": 1793604934889,
       "type": "wild_move",
       "message": "Bot moved Wild Card to Green."
      },
      {
-      "timestamp": 1793572696865,
+      "timestamp": 1793604934890,
       "type": "wild_move",
       "message": "Bot moved Wild Card to Dark Blue."
      },
      {
-      "timestamp": 1793572696865,
+      "timestamp": 1793604934890,
       "type": "wild_move",
       "message": "Bot moved Wild Card to Railroad."
      },
      {
-      "timestamp": 1793572696866,
+      "timestamp": 1793604934890,
       "type": "wild_move",
       "message": "Bot moved Wild Card to Utility."
      },
      {
-      "timestamp": 1793572696866,
+      "timestamp": 1793604934890,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696866,
+      "timestamp": 1793604934890,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -1874,7 +1874,7 @@
       }
      },
      {
-      "timestamp": 1793572696866,
+      "timestamp": 1793604934890,
       "type": "counter",
       "message": "Action resolved after counter chain."
      }
@@ -1891,8 +1891,8 @@
    "name": "no-mercy-late",
    "state": {
     "version": 1,
-    "createdAt": 1793572696866,
-    "updatedAt": 1793572696883,
+    "createdAt": 1793604934890,
+    "updatedAt": 1793604934909,
     "deckVersion": "v1",
     "variant": "no_mercy",
     "ruleset": {
@@ -2225,7 +2225,7 @@
     "pending": null,
     "history": [
      {
-      "timestamp": 1793572696866,
+      "timestamp": 1793604934890,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -2236,27 +2236,27 @@
       }
      },
      {
-      "timestamp": 1793572696867,
+      "timestamp": 1793604934891,
       "type": "bank",
       "message": "Ann banked $1 Money."
      },
      {
-      "timestamp": 1793572696867,
+      "timestamp": 1793604934891,
       "type": "bank",
       "message": "Ann banked Double Rent Pink/Orange."
      },
      {
-      "timestamp": 1793572696867,
+      "timestamp": 1793604934891,
       "type": "bank",
       "message": "Ann banked Market Crash."
      },
      {
-      "timestamp": 1793572696867,
+      "timestamp": 1793604934891,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696867,
+      "timestamp": 1793604934891,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -2267,27 +2267,27 @@
       }
      },
      {
-      "timestamp": 1793572696867,
+      "timestamp": 1793604934891,
       "type": "property",
       "message": "O'Brien placed Railroad Property in Railroad."
      },
      {
-      "timestamp": 1793572696867,
+      "timestamp": 1793604934891,
       "type": "property",
       "message": "O'Brien placed Green Property in Green."
      },
      {
-      "timestamp": 1793572696867,
+      "timestamp": 1793604934891,
       "type": "property",
       "message": "O'Brien placed Railroad Property in Railroad."
      },
      {
-      "timestamp": 1793572696867,
+      "timestamp": 1793604934891,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696867,
+      "timestamp": 1793604934891,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -2298,27 +2298,27 @@
       }
      },
      {
-      "timestamp": 1793572696867,
+      "timestamp": 1793604934891,
       "type": "bank",
       "message": "Bot banked $3 Money."
      },
      {
-      "timestamp": 1793572696867,
+      "timestamp": 1793604934891,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696868,
+      "timestamp": 1793604934892,
       "type": "bank",
       "message": "Bot banked Rent Red/Yellow."
      },
      {
-      "timestamp": 1793572696868,
+      "timestamp": 1793604934892,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696868,
+      "timestamp": 1793604934892,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -2329,27 +2329,27 @@
       }
      },
      {
-      "timestamp": 1793572696868,
+      "timestamp": 1793604934892,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696868,
+      "timestamp": 1793604934892,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696868,
+      "timestamp": 1793604934892,
       "type": "property",
       "message": "Ann attached a Shack to Railroad."
      },
      {
-      "timestamp": 1793572696868,
+      "timestamp": 1793604934892,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696868,
+      "timestamp": 1793604934892,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -2360,32 +2360,32 @@
       }
      },
      {
-      "timestamp": 1793572696868,
+      "timestamp": 1793604934893,
       "type": "bank",
       "message": "O'Brien banked $10 Money."
      },
      {
-      "timestamp": 1793572696869,
+      "timestamp": 1793604934893,
       "type": "property",
       "message": "O'Brien placed Wild Pink/Orange in Pink."
      },
      {
-      "timestamp": 1793572696869,
+      "timestamp": 1793604934893,
       "type": "bank",
       "message": "O'Brien banked $2 Money."
      },
      {
-      "timestamp": 1793572696869,
+      "timestamp": 1793604934893,
       "type": "wild_move",
       "message": "O'Brien moved Wild Pink/Orange to Orange."
      },
      {
-      "timestamp": 1793572696869,
+      "timestamp": 1793604934893,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696869,
+      "timestamp": 1793604934893,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -2396,27 +2396,27 @@
       }
      },
      {
-      "timestamp": 1793572696869,
+      "timestamp": 1793604934893,
       "type": "property",
       "message": "Bot placed Yellow Property in Yellow."
      },
      {
-      "timestamp": 1793572696869,
+      "timestamp": 1793604934893,
       "type": "property",
       "message": "Bot placed Orange Property in Orange."
      },
      {
-      "timestamp": 1793572696869,
+      "timestamp": 1793604934893,
       "type": "bank",
       "message": "Bot banked $2 Money."
      },
      {
-      "timestamp": 1793572696869,
+      "timestamp": 1793604934893,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696869,
+      "timestamp": 1793604934893,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -2427,42 +2427,42 @@
       }
      },
      {
-      "timestamp": 1793572696869,
+      "timestamp": 1793604934894,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696869,
+      "timestamp": 1793604934894,
       "type": "heist",
       "message": "Ann stole a bank card from O'Brien."
      },
      {
-      "timestamp": 1793572696870,
+      "timestamp": 1793604934894,
       "type": "counter",
       "message": "Bot played Just Say No."
      },
      {
-      "timestamp": 1793572696870,
+      "timestamp": 1793604934894,
       "type": "counter",
       "message": "Action canceled for this target by Just Say No chain."
      },
      {
-      "timestamp": 1793572696870,
+      "timestamp": 1793604934894,
       "type": "bank",
       "message": "Ann banked Forced Debt."
      },
      {
-      "timestamp": 1793572696870,
+      "timestamp": 1793604934894,
       "type": "bank",
       "message": "Ann banked $4 Money."
      },
      {
-      "timestamp": 1793572696870,
+      "timestamp": 1793604934894,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696870,
+      "timestamp": 1793604934895,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -2473,27 +2473,27 @@
       }
      },
      {
-      "timestamp": 1793572696870,
+      "timestamp": 1793604934895,
       "type": "bank",
       "message": "O'Brien banked Just Say No."
      },
      {
-      "timestamp": 1793572696870,
+      "timestamp": 1793604934895,
       "type": "property",
       "message": "O'Brien placed Dark Blue Property in Dark Blue."
      },
      {
-      "timestamp": 1793572696870,
+      "timestamp": 1793604934895,
       "type": "property",
       "message": "O'Brien placed Wild Light Blue/Railroad in Railroad."
      },
      {
-      "timestamp": 1793572696870,
+      "timestamp": 1793604934895,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696870,
+      "timestamp": 1793604934895,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -2504,27 +2504,27 @@
       }
      },
      {
-      "timestamp": 1793572696871,
+      "timestamp": 1793604934895,
       "type": "bank",
       "message": "Bot banked Market Crash."
      },
      {
-      "timestamp": 1793572696871,
+      "timestamp": 1793604934895,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696871,
+      "timestamp": 1793604934895,
       "type": "property",
       "message": "Bot placed Pink Property in Pink."
      },
      {
-      "timestamp": 1793572696871,
+      "timestamp": 1793604934896,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696871,
+      "timestamp": 1793604934896,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -2535,47 +2535,47 @@
       }
      },
      {
-      "timestamp": 1793572696871,
+      "timestamp": 1793604934896,
       "type": "bank",
       "message": "Ann banked Pass Go, Go Go!."
      },
      {
-      "timestamp": 1793572696871,
+      "timestamp": 1793604934896,
       "type": "action",
       "message": "Ann played Double Rent for Railroad at $14."
      },
      {
-      "timestamp": 1793572696871,
+      "timestamp": 1793604934896,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696872,
+      "timestamp": 1793604934896,
       "type": "pay",
       "message": "O'Brien paid Ann $14 (Double Rent (railroad))."
      },
      {
-      "timestamp": 1793572696872,
+      "timestamp": 1793604934896,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696872,
+      "timestamp": 1793604934897,
       "type": "pay",
       "message": "Bot paid Ann $14 (Double Rent (railroad))."
      },
      {
-      "timestamp": 1793572696872,
+      "timestamp": 1793604934897,
       "type": "property",
       "message": "Ann placed Wild Pink/Orange in Orange."
      },
      {
-      "timestamp": 1793572696872,
+      "timestamp": 1793604934897,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696872,
+      "timestamp": 1793604934897,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -2586,32 +2586,32 @@
       }
      },
      {
-      "timestamp": 1793572696872,
+      "timestamp": 1793604934897,
       "type": "debt_repaid",
       "message": "O'Brien repaid Bot with Double Rent Red/Yellow."
      },
      {
-      "timestamp": 1793572696872,
+      "timestamp": 1793604934897,
       "type": "debt_card_resolved",
       "message": "Bot resolved a received debt card."
      },
      {
-      "timestamp": 1793572696873,
+      "timestamp": 1793604934897,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696873,
+      "timestamp": 1793604934898,
       "type": "bank",
       "message": "O'Brien banked $1 Money."
      },
      {
-      "timestamp": 1793572696873,
+      "timestamp": 1793604934898,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696873,
+      "timestamp": 1793604934898,
       "type": "draw",
       "message": "Bot drew 5 cards.",
       "details": {
@@ -2622,12 +2622,12 @@
       }
      },
      {
-      "timestamp": 1793572696873,
+      "timestamp": 1793604934898,
       "type": "go_again",
       "message": "Bot gets another turn."
      },
      {
-      "timestamp": 1793572696873,
+      "timestamp": 1793604934898,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -2638,32 +2638,32 @@
       }
      },
      {
-      "timestamp": 1793572696873,
+      "timestamp": 1793604934898,
       "type": "property",
       "message": "Bot placed Utility Property in Utility."
      },
      {
-      "timestamp": 1793572696873,
+      "timestamp": 1793604934898,
       "type": "property",
       "message": "Bot placed Red Property in Red."
      },
      {
-      "timestamp": 1793572696874,
+      "timestamp": 1793604934898,
       "type": "property",
       "message": "Bot placed Wild Brown/Light Blue in Light Blue."
      },
      {
-      "timestamp": 1793572696874,
+      "timestamp": 1793604934899,
       "type": "wild_move",
       "message": "Bot moved Wild Brown/Light Blue to Brown."
      },
      {
-      "timestamp": 1793572696874,
+      "timestamp": 1793604934899,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696874,
+      "timestamp": 1793604934899,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -2674,67 +2674,67 @@
       }
      },
      {
-      "timestamp": 1793572696874,
+      "timestamp": 1793604934899,
       "type": "action",
       "message": "Ann played rent for Yellow at $2."
      },
      {
-      "timestamp": 1793572696874,
+      "timestamp": 1793604934899,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696874,
+      "timestamp": 1793604934899,
       "type": "pay",
       "message": "O'Brien paid Ann $2 (Rent (yellow))."
      },
      {
-      "timestamp": 1793572696874,
+      "timestamp": 1793604934899,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696875,
+      "timestamp": 1793604934899,
       "type": "pay",
       "message": "Bot paid Ann $2 (Rent (yellow))."
      },
      {
-      "timestamp": 1793572696875,
+      "timestamp": 1793604934900,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696875,
+      "timestamp": 1793604934900,
       "type": "bank",
       "message": "Ann banked Market Crash."
      },
      {
-      "timestamp": 1793572696875,
+      "timestamp": 1793604934900,
       "type": "wild_move",
       "message": "Ann moved Wild Brown/Light Blue to Light Blue."
      },
      {
-      "timestamp": 1793572696875,
+      "timestamp": 1793604934900,
       "type": "wild_move",
       "message": "Ann moved Wild Pink/Orange to Pink."
      },
      {
-      "timestamp": 1793572696875,
+      "timestamp": 1793604934900,
       "type": "wild_move",
       "message": "Ann moved Wild Pink/Orange to Pink."
      },
      {
-      "timestamp": 1793572696875,
+      "timestamp": 1793604934900,
       "type": "wild_move",
       "message": "Ann moved Wild Light Blue/Railroad to Light Blue."
      },
      {
-      "timestamp": 1793572696876,
+      "timestamp": 1793604934901,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696876,
+      "timestamp": 1793604934901,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -2745,22 +2745,22 @@
       }
      },
      {
-      "timestamp": 1793572696876,
+      "timestamp": 1793604934901,
       "type": "property",
       "message": "O'Brien placed Wild Red/Yellow in Red."
      },
      {
-      "timestamp": 1793572696876,
+      "timestamp": 1793604934901,
       "type": "action",
       "message": "O'Brien played Deal Breaker on Ann."
      },
      {
-      "timestamp": 1793572696876,
+      "timestamp": 1793604934901,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696877,
+      "timestamp": 1793604934901,
       "type": "deal_breaker",
       "message": "O'Brien stole Ann's pink set.",
       "details": {
@@ -2776,32 +2776,32 @@
       }
      },
      {
-      "timestamp": 1793572696877,
+      "timestamp": 1793604934901,
       "type": "bank",
       "message": "O'Brien banked Double Rent Brown/Light Blue."
      },
      {
-      "timestamp": 1793572696877,
+      "timestamp": 1793604934902,
       "type": "wild_move",
       "message": "O'Brien moved Wild Pink/Orange to Orange."
      },
      {
-      "timestamp": 1793572696877,
+      "timestamp": 1793604934902,
       "type": "wild_move",
       "message": "O'Brien moved Wild Pink/Orange to Pink."
      },
      {
-      "timestamp": 1793572696877,
+      "timestamp": 1793604934902,
       "type": "wild_move",
       "message": "O'Brien moved Wild Red/Yellow to Yellow."
      },
      {
-      "timestamp": 1793572696877,
+      "timestamp": 1793604934902,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696877,
+      "timestamp": 1793604934902,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -2812,32 +2812,32 @@
       }
      },
      {
-      "timestamp": 1793572696877,
+      "timestamp": 1793604934902,
       "type": "bank",
       "message": "Bot banked $1 Money."
      },
      {
-      "timestamp": 1793572696878,
+      "timestamp": 1793604934902,
       "type": "property",
       "message": "Bot placed Wild Railroad/Utility in Railroad."
      },
      {
-      "timestamp": 1793572696878,
+      "timestamp": 1793604934903,
       "type": "bank",
       "message": "Bot banked Double Rent Railroad/Utility."
      },
      {
-      "timestamp": 1793572696878,
+      "timestamp": 1793604934903,
       "type": "wild_move",
       "message": "Bot moved Wild Railroad/Utility to Utility."
      },
      {
-      "timestamp": 1793572696878,
+      "timestamp": 1793604934903,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696878,
+      "timestamp": 1793604934903,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -2848,27 +2848,27 @@
       }
      },
      {
-      "timestamp": 1793572696878,
+      "timestamp": 1793604934903,
       "type": "bank",
       "message": "Ann banked $15 Money."
      },
      {
-      "timestamp": 1793572696878,
+      "timestamp": 1793604934903,
       "type": "property",
       "message": "Ann placed Dark Blue Property in Dark Blue."
      },
      {
-      "timestamp": 1793572696878,
+      "timestamp": 1793604934904,
       "type": "bank",
       "message": "Ann banked $3 Money."
      },
      {
-      "timestamp": 1793572696879,
+      "timestamp": 1793604934904,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696879,
+      "timestamp": 1793604934904,
       "type": "draw",
       "message": "O'Brien drew 5 cards.",
       "details": {
@@ -2879,22 +2879,22 @@
       }
      },
      {
-      "timestamp": 1793572696879,
+      "timestamp": 1793604934904,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696879,
+      "timestamp": 1793604934904,
       "type": "action",
       "message": "O'Brien played Deal Breaker on Ann."
      },
      {
-      "timestamp": 1793572696879,
+      "timestamp": 1793604934905,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696879,
+      "timestamp": 1793604934905,
       "type": "deal_breaker",
       "message": "O'Brien stole Ann's dark_blue set.",
       "details": {
@@ -2909,12 +2909,12 @@
       }
      },
      {
-      "timestamp": 1793572696880,
+      "timestamp": 1793604934905,
       "type": "go_again",
       "message": "O'Brien gets another turn."
      },
      {
-      "timestamp": 1793572696880,
+      "timestamp": 1793604934905,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -2925,42 +2925,42 @@
       }
      },
      {
-      "timestamp": 1793572696880,
+      "timestamp": 1793604934905,
       "type": "action",
       "message": "O'Brien played Double Rent for Dark Blue at $16."
      },
      {
-      "timestamp": 1793572696880,
+      "timestamp": 1793604934905,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696882,
+      "timestamp": 1793604934907,
       "type": "pay",
       "message": "Ann paid O'Brien $16 (Double Rent (dark_blue))."
      },
      {
-      "timestamp": 1793572696882,
+      "timestamp": 1793604934907,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696882,
+      "timestamp": 1793604934908,
       "type": "pay",
       "message": "Bot paid O'Brien $10 (Double Rent (dark_blue))."
      },
      {
-      "timestamp": 1793572696883,
+      "timestamp": 1793604934908,
       "type": "action",
       "message": "O'Brien played rent for Dark Blue at $8."
      },
      {
-      "timestamp": 1793572696883,
+      "timestamp": 1793604934908,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696883,
+      "timestamp": 1793604934909,
       "type": "pay",
       "message": "Ann paid O'Brien $8 (Rent (dark_blue))."
      }
@@ -2978,8 +2978,8 @@
    "name": "legacy-untagged",
    "state": {
     "version": 1,
-    "createdAt": 1793572696883,
-    "updatedAt": 1793572696887,
+    "createdAt": 1793604934909,
+    "updatedAt": 1793604934912,
     "deckVersion": "v1",
     "players": [
      {
@@ -3200,7 +3200,7 @@
     "pending": null,
     "history": [
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934909,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -3211,12 +3211,12 @@
       }
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934909,
       "type": "bank",
       "message": "Ann banked $1 Money."
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934909,
       "type": "action",
       "message": "Ann played Pass Go and drew 2.",
       "details": {
@@ -3227,17 +3227,17 @@
       }
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934909,
       "type": "property",
       "message": "Ann placed Brown Property in Brown."
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934909,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934909,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -3248,27 +3248,27 @@
       }
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934909,
       "type": "bank",
       "message": "O'Brien banked Rent Pink/Orange."
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934909,
       "type": "property",
       "message": "O'Brien placed Utility Property in Utility."
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934909,
       "type": "property",
       "message": "O'Brien placed Railroad Property in Railroad."
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934909,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934910,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -3279,27 +3279,27 @@
       }
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934910,
       "type": "bank",
       "message": "Bot banked $4 Money."
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934910,
       "type": "property",
       "message": "Bot placed Green Property in Green."
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934910,
       "type": "bank",
       "message": "Bot banked $2 Money."
      },
      {
-      "timestamp": 1793572696884,
+      "timestamp": 1793604934910,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696885,
+      "timestamp": 1793604934910,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -3310,47 +3310,47 @@
       }
      },
      {
-      "timestamp": 1793572696885,
+      "timestamp": 1793604934910,
       "type": "bank",
       "message": "Ann banked Just Say No."
      },
      {
-      "timestamp": 1793572696885,
+      "timestamp": 1793604934910,
       "type": "bank",
       "message": "Ann banked Pass Go."
      },
      {
-      "timestamp": 1793572696885,
+      "timestamp": 1793604934910,
       "type": "action",
       "message": "Ann played It's My Birthday."
      },
      {
-      "timestamp": 1793572696885,
+      "timestamp": 1793604934910,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696885,
+      "timestamp": 1793604934910,
       "type": "pay",
       "message": "O'Brien paid Ann $2 (It's My Birthday)."
      },
      {
-      "timestamp": 1793572696885,
+      "timestamp": 1793604934910,
       "type": "counter",
       "message": "Action resolved after counter chain."
      },
      {
-      "timestamp": 1793572696885,
+      "timestamp": 1793604934910,
       "type": "pay",
       "message": "Bot paid Ann $2 (It's My Birthday)."
      },
      {
-      "timestamp": 1793572696885,
+      "timestamp": 1793604934911,
       "type": "turn_passed",
       "message": "Ann ended the turn."
      },
      {
-      "timestamp": 1793572696885,
+      "timestamp": 1793604934911,
       "type": "draw",
       "message": "O'Brien drew 2 cards.",
       "details": {
@@ -3361,42 +3361,42 @@
       }
      },
      {
-      "timestamp": 1793572696885,
+      "timestamp": 1793604934911,
       "type": "property",
       "message": "O'Brien placed Orange Property in Orange."
      },
      {
-      "timestamp": 1793572696885,
+      "timestamp": 1793604934911,
       "type": "property",
       "message": "O'Brien placed Wild Card in Pink."
      },
      {
-      "timestamp": 1793572696886,
+      "timestamp": 1793604934911,
       "type": "bank",
       "message": "O'Brien banked $5 Money."
      },
      {
-      "timestamp": 1793572696886,
+      "timestamp": 1793604934911,
       "type": "wild_move",
       "message": "O'Brien moved Wild Card to Dark Blue."
      },
      {
-      "timestamp": 1793572696886,
+      "timestamp": 1793604934911,
       "type": "wild_move",
       "message": "O'Brien moved Wild Card to Railroad."
      },
      {
-      "timestamp": 1793572696886,
+      "timestamp": 1793604934911,
       "type": "wild_move",
       "message": "O'Brien moved Wild Card to Utility."
      },
      {
-      "timestamp": 1793572696886,
+      "timestamp": 1793604934911,
       "type": "turn_passed",
       "message": "O'Brien ended the turn."
      },
      {
-      "timestamp": 1793572696886,
+      "timestamp": 1793604934911,
       "type": "draw",
       "message": "Bot drew 2 cards.",
       "details": {
@@ -3407,17 +3407,17 @@
       }
      },
      {
-      "timestamp": 1793572696886,
+      "timestamp": 1793604934912,
       "type": "bank",
       "message": "Bot banked Sly Deal."
      },
      {
-      "timestamp": 1793572696886,
+      "timestamp": 1793604934912,
       "type": "property",
       "message": "Bot placed Pink Property in Pink."
      },
      {
-      "timestamp": 1793572696886,
+      "timestamp": 1793604934912,
       "type": "action",
       "message": "Bot played Pass Go and drew 2.",
       "details": {
@@ -3428,12 +3428,12 @@
       }
      },
      {
-      "timestamp": 1793572696886,
+      "timestamp": 1793604934912,
       "type": "turn_passed",
       "message": "Bot ended the turn."
      },
      {
-      "timestamp": 1793572696886,
+      "timestamp": 1793604934912,
       "type": "draw",
       "message": "Ann drew 2 cards.",
       "details": {
@@ -3444,12 +3444,12 @@
       }
      },
      {
-      "timestamp": 1793572696887,
+      "timestamp": 1793604934912,
       "type": "property",
       "message": "Ann placed Yellow Property in Yellow."
      },
      {
-      "timestamp": 1793572696887,
+      "timestamp": 1793604934912,
       "type": "bank",
       "message": "Ann banked Rent Pink/Orange."
      }

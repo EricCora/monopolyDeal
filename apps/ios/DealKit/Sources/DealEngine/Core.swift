@@ -216,11 +216,61 @@ public enum Engine {
     public static func isCompletePropertySet(_ entries: [PropertyCardPlacement], _ color: PropertyColor, _ variant: GameVariant) -> Bool {
         let properties = entries.filter { isPropertyPlacement($0, variant) }
         if properties.count < color.setSize { return false }
-        // Classic requires a standard property. No Mercy permits two-colour wilds,
-        // but two or more every-colour wilds cannot complete a set on their own.
-        return variant == .no_mercy
-            ? properties.contains { !Catalog.isEveryColorWild($0.cardId, variant) }
-            : properties.contains { isStandardPlacement($0, variant) }
+        // Any-color Wilds can't complete a set on their own, but anything else can sit beside them.
+        return properties.contains { !Catalog.isEveryColorWild($0.cardId, variant) }
+    }
+
+    private static func consolidateOnce(_ player: inout PlayerState, _ color: PropertyColor, _ variant: GameVariant) -> Bool {
+        let required = color.setSize
+        let open = propertySets(player, color, variant).filter { !isCompletePropertySet($0.entries, color, variant) }
+        if open.count < 2 { return false }
+        func properties(_ set: PropertySetView) -> [PropertyCardPlacement] { set.entries.filter { isPropertyPlacement($0, variant) } }
+        func riders(_ set: PropertySetView, _ entry: PropertyCardPlacement) -> [PropertyCardPlacement] { set.entries.filter { $0.attachedToCardId == entry.cardId } }
+        func setSetId(_ cardId: String, _ setId: String, _ player: inout PlayerState) {
+            if let index = player.properties[color].firstIndex(where: { $0.cardId == cardId }) { player.properties[color][index].setId = setId }
+        }
+
+        // A pile full of any-color Wilds needs one real card, and gives back a Wild for it.
+        if let stuck = open.first(where: { properties($0).count >= required }) {
+            for other in open where other.setId != stuck.setId {
+                let real = properties(other).first { !Catalog.isEveryColorWild($0.cardId, variant) && riders(other, $0).isEmpty }
+                let spare = properties(stuck).reversed().first { riders(stuck, $0).isEmpty }
+                if let real, let spare {
+                    setSetId(real.cardId, stuck.setId, &player)
+                    setSetId(spare.cardId, other.setId, &player)
+                    return true
+                }
+            }
+            return false
+        }
+
+        let target = open[0]
+        for source in open.dropFirst().reversed() {
+            let reversed = Array(properties(source).reversed())
+            // A stable sort, like the web's: real cards before any-color Wilds.
+            let candidates = reversed.filter { !Catalog.isEveryColorWild($0.cardId, variant) } + reversed.filter { Catalog.isEveryColorWild($0.cardId, variant) }
+            for entry in candidates {
+                let moving = [entry] + riders(source, entry)
+                let completes = properties(target).count + 1 >= required
+                let shacks = (target.entries + moving).filter { Catalog.card($0.cardId, variant).actionKind == .shack }.count
+                if completes && shacks > 1 { continue }
+                for card in moving { setSetId(card.cardId, target.setId, &player) }
+                // A building left with nothing under it goes along with the cards.
+                if properties(source).count == 1 {
+                    for left in source.entries { setSetId(left.cardId, target.setId, &player) }
+                }
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Piles of one color exist so a spare card has somewhere to go, and paying with a card can
+    /// leave two partial piles behind. Standard cards can't be moved by hand, so those rejoin here.
+    static func consolidatePropertySets(_ player: inout PlayerState, _ variant: GameVariant) {
+        for color in PropertyColor.allCases {
+            while consolidateOnce(&player, color, variant) {}
+        }
     }
 
     static func isBuildingPlacementLegal(_ player: PlayerState, _ color: PropertyColor, _ kind: ActionKind?, setId: String?, _ variant: GameVariant) -> Bool {
@@ -296,7 +346,7 @@ public enum Engine {
             if target == nil && card.kind == .property {
                 // A standard property can complete a wild-only group. Move one excess
                 // wild into its own group first so the original group remains physical.
-                let wildOnly = sets.first { !hasStandardProperty($0, variant) && propertyCount($0, variant) >= required }
+                let wildOnly = sets.first { !hasStandardProperty($0, variant) && propertyCount($0, variant) >= required && !isCompletePropertySet($0.entries, color, variant) }
                 let excess = wildOnly?.entries.last { Catalog.card($0.cardId, variant).kind == .wild }
                 if let wildOnly, let excess {
                     let nextId = firstUnusedGeneratedId()
@@ -568,6 +618,10 @@ public enum Engine {
 
     static func checkWinner(_ state: inout GameState) {
         let variant = gameVariant(state)
+        // A card in the middle of being resolved may still name its pile.
+        if state.pending == nil {
+            for index in state.players.indices { consolidatePropertySets(&state.players[index], variant) }
+        }
         let needed = ruleset(state).winCompleteSets
         if let winner = state.players.first(where: { countCompleteSets($0, variant) >= needed }) {
             state.winnerId = winner.id

@@ -73,7 +73,7 @@ export function RulesDrawer({ onClose }: RulesDrawerProps) {
 
         <section className="rules-drawer-section">
           <h4>Property Sets And Rent</h4>
-          <p>Classic supports 2–5 players. Property cards, including Wilds, cannot be banked. A complete set needs at least one standard Property card; an any-color Wild alone earns no rent.</p>
+          <p>Classic supports 2–5 players. Property cards, including Wilds, cannot be banked. Any-color Wilds can&apos;t complete a set on their own, and alone earn no rent.</p>
           <p>Two-color Rent charges all opponents; any-color Rent charges one opponent. Each complete set except Railroads and Utilities can hold one House and one Hotel. A Hotel requires a House.</p>
           <div className="rules-table-wrap">
             <table>

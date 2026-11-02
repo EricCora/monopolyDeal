@@ -126,10 +126,10 @@ describe('engine basics', () => {
     expect(anyRent.state.pending?.kind).toBe('rent');
   });
 
-  it('requires a standard property for completion and enforces building rules', () => {
+  it('requires more than any-color Wilds for completion and enforces building rules', () => {
     const state = mkState();
     state.players[0].properties.brown = [
-      { cardId: 'wild_brown_light_blue#w1', assignedColor: 'brown' },
+      { cardId: 'wild_all#w1', assignedColor: 'brown' },
       { cardId: 'wild_all#w2', assignedColor: 'brown' },
     ];
     state.players[0].hand = ['house#h1', 'hotel#h1', 'brown_1#b1'];

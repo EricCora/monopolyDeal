@@ -554,7 +554,7 @@ struct RulesView: View {
                     }
                 }
                 Section("Classic") {
-                    rule("Property cards, including Wilds, can't be banked. A complete set needs at least one standard Property.")
+                    rule("Property cards, including Wilds, can't be banked. Any-color Wilds can't complete a set on their own.")
                     rule("Two-color Rent charges everyone. Any-color Rent charges one player.")
                     rule("Each complete set except Railroads and Utilities can hold one House and one Hotel. A Hotel needs a House.")
                     rule("An any-color Wild on its own earns no rent.")

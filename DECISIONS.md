@@ -72,8 +72,14 @@ A five-player Forced Deal can offer over 200 moves, which took up to 6.5 seconds
 ## 2026-11-01: A disconnected seat reclaims itself
 The server answers `invalid_session` both for a bad token and for a seat it marked disconnected, so the app tries to reconnect before treating the seat as lost.
 
-## 2026-11-01: Two Wilds stay short of a complete Classic set
-Eric reviewed this while playing on iOS and kept the rule. The app now says why, instead of changing it.
+## 2026-11-01: Two Wilds stay short of a complete Classic set (superseded)
+Eric reviewed this while playing on iOS and kept the rule. The app now says why, instead of changing it. **Superseded 2026-11-02** by the decision below.
+
+## 2026-11-02: A two-color Wild and an any-color Wild make a complete set
+Eric hit this in a playtest and said it's valid. Classic now matches No Mercy: only a set made entirely of any-color Wilds falls short.
+
+## 2026-11-02: Partial piles of one color rejoin by themselves
+Paying with a card can leave 2/3 and 1/3 piles, and standard cards can't be moved by hand, so a player could hold a winning table and never win. When nothing is mid-resolution, the engine moves cards from later partial piles to the first, carrying Shacks along. It skips a move that would put two Shacks on a complete set.
 
 ## 2026-11-01: The iOS hand reacts to a hold after 60 ms
 Spreading starts before a tap has ended, so a touch released within 250 ms without moving still counts as a tap. Slower thresholds felt laggy on a real phone.
