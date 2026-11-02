@@ -507,7 +507,7 @@ export function GameTableScreen({
   const visibleBankZoneByPlayerIdRef = useRef<Record<string, HTMLDivElement | null>>({});
   const propertyLaneByKeyRef = useRef<Record<string, HTMLDivElement | null>>({});
   const handledDrawEventKeyRef = useRef<string | null>(null);
-  const handledActionHintTokenRef = useRef<number | null | undefined>(undefined);
+  const handledActionHintTokenRef = useRef<number | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const hasDisconnectDeadline = Number.isFinite(disconnectDeadlineMs) && Number(disconnectDeadlineMs) > clockNow;
   const disconnectSecondsRemaining = hasDisconnectDeadline
