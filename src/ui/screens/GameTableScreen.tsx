@@ -31,6 +31,7 @@ import {
   type MultiplayerSessionPresetId,
 } from '../experience';
 import type { FeedbackTone } from '../../app/useFeedback';
+import { pickNewReaction } from '../table/newReaction';
 import type { PostGameSummary } from '../../stats';
 import { formatClock } from '../table/boardModel';
 import { PromptPanel, type PanelChoice } from '../table/PromptPanel';
@@ -506,7 +507,7 @@ export function GameTableScreen({
   const visibleBankZoneByPlayerIdRef = useRef<Record<string, HTMLDivElement | null>>({});
   const propertyLaneByKeyRef = useRef<Record<string, HTMLDivElement | null>>({});
   const handledDrawEventKeyRef = useRef<string | null>(null);
-  const handledActionHintTokenRef = useRef<number | null>(null);
+  const handledActionHintTokenRef = useRef<number | null | undefined>(undefined);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const hasDisconnectDeadline = Number.isFinite(disconnectDeadlineMs) && Number(disconnectDeadlineMs) > clockNow;
   const disconnectSecondsRemaining = hasDisconnectDeadline
@@ -532,7 +533,7 @@ export function GameTableScreen({
   const [noStamp, setNoStamp] = useState<{ id: number; playerName: string } | null>(null);
   const [flyingReactions, setFlyingReactions] = useState<Array<{ id: number; emoji: string; x: number; y: number; dx: number; dy: number }>>([]);
   const screenRef = useRef<HTMLElement | null>(null);
-  const lastReactionIdRef = useRef<number | null>(null);
+  const lastReactionIdRef = useRef<number | null | undefined>(undefined);
   const stealAlert = resolveStealAlert(game, clockNow);
   const latestEvent = game.history.length > 0 ? game.history[game.history.length - 1] : null;
   const roomWatchFeed = useMemo(() => {
@@ -798,11 +799,9 @@ export function GameTableScreen({
 
   // A reaction flies from whoever sent it to the middle of the table.
   useEffect(() => {
-    const latest = activityFeed.find((item) => item.kind === 'reaction');
-    if (!latest) return undefined;
-    const isNew = lastReactionIdRef.current !== null && latest.id !== lastReactionIdRef.current && Date.now() - latest.createdAt < 8_000;
-    lastReactionIdRef.current = latest.id;
-    if (!isNew || reducedMotion) return undefined;
+    const { reaction: latest, lastSeenId } = pickNewReaction(activityFeed, lastReactionIdRef.current);
+    lastReactionIdRef.current = lastSeenId;
+    if (!latest || reducedMotion) return undefined;
     const seat = latest.playerId
       ? screenRef.current?.querySelector(`[data-flip-origin="${latest.playerId}"]`) ?? screenRef.current?.querySelector('.player-board')
       : null;
