@@ -105,7 +105,13 @@ final class PlaytestRoundTests: XCTestCase {
         app.segmentedControls["room.preset"].buttons["Fast"].tap()
         let speed = app.switches["room.speed"]
         XCTAssertTrue(speed.waitForExistence(timeout: 3))
+        // The preset's description changes height, so let the layout settle before aiming at the switch.
+        sleep(2)
+        for _ in 0..<4 where !speed.isHittable { app.swipeUp() }
         speed.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        if !app.sliders["timer.slider"].waitForExistence(timeout: 3) {
+            speed.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        }
         XCTAssertTrue(app.sliders["timer.slider"].waitForExistence(timeout: 5))
         app.sliders["timer.slider"].adjust(toNormalizedSliderPosition: 1)
         sleep(1)
