@@ -126,3 +126,6 @@ SF Rounded only exists on Apple devices, so cards and titles fall back to Nunito
 
 ## 2026-11-01: Old table copy stays in the page for existing tests
 Some tests pin copy from the old layout, such as "Monopoly Deal Local" and "Premium Tabletop Match Night". It's kept as screen-reader text or in the Game Log sheet, so no test was edited. Those tests no longer prove the text is visible.
+
+## 2026-11-01: The hand never scrolls sideways
+Eric approved replacing two layout tests that required the old sidebar order and a sideways-scrolling tight hand. Scrolling and hold-and-slide want the same finger movement, so the hand always overlaps its cards to fit, as on iOS. The new tests check that the table stays on screen and that touches on the hand go to its gestures.

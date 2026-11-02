@@ -8,6 +8,7 @@ const baseCss = readFileSync(resolve(process.cwd(), 'src/ui/theme/base.css'), 'u
 const setupCss = readFileSync(resolve(process.cwd(), 'src/ui/theme/screens/setup.css'), 'utf8');
 const layoutCss = readFileSync(resolve(process.cwd(), 'src/ui/theme/components/layout.css'), 'utf8');
 const cardsCss = readFileSync(resolve(process.cwd(), 'src/ui/theme/components/cards.css'), 'utf8');
+const tableCss = readFileSync(resolve(process.cwd(), 'src/ui/theme/table.css'), 'utf8');
 
 describe('mobile/touch layout contracts', () => {
   it('keeps core form controls at a touch-friendly minimum height', () => {
@@ -27,16 +28,14 @@ describe('mobile/touch layout contracts', () => {
     );
   });
 
-  it('brings the main table surface ahead of the sidebar stack on narrow layouts', () => {
-    expect(layoutCss).toMatch(
-      /@media\s*\(max-width:\s*1120px\)\s*{[\s\S]*\.game-table-main\s*{[\s\S]*order:\s*1;[\s\S]*}[\s\S]*\.game-table-left-stack\s*{[\s\S]*order:\s*2;/,
-    );
+  it('keeps the whole table on screen, with the player\'s board and hand in reach on narrow layouts', () => {
+    expect(tableCss).toMatch(/\.game-table-screen\s*{[\s\S]*position:\s*fixed;[\s\S]*inset:\s*0;[\s\S]*overflow:\s*hidden;/);
+    expect(tableCss).toMatch(/grid-template-areas:\s*'opponents'\s*'status'\s*'board'\s*'actions'\s*'hand';/);
   });
 
-  it('keeps rail-layout hands horizontally pannable on touch devices', () => {
-    expect(cardsCss).toMatch(
-      /\.hand-fan\.is-rail\s*{[\s\S]*overflow-x:\s*auto;[\s\S]*overflow-y:\s*hidden;[\s\S]*overscroll-behavior-x:\s*contain;[\s\S]*-webkit-overflow-scrolling:\s*touch;[\s\S]*touch-action:\s*pan-x;/,
-    );
+  it('leaves touches on the hand to its gestures, so holding and sliding never scrolls the page', () => {
+    expect(tableCss).toMatch(/\.hand-fan\s*{[\s\S]*touch-action:\s*none;/);
+    expect(`${tableCss}${cardsCss}`).not.toMatch(/\.hand-fan[^{]*{[^}]*overflow-x:\s*auto/);
   });
 
   it('keeps the hand lane shrinkable so card overflow becomes scrollable instead of clipped', () => {
