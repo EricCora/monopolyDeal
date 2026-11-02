@@ -336,7 +336,6 @@ function App() {
   const postGameTitleRef = useRef<HTMLHeadingElement | null>(null);
   const finalizedMatchRef = useRef<string | null>(null);
   const devAutoSeedAttemptedRef = useRef(false);
-  const botTurnSignatureRef = useRef<string | null>(null);
   const coachHintMetricRef = useRef<string | null>(null);
   const multiplayerFinishedMetricRef = useRef<string | null>(null);
   const multiplayerRecordedMatchRef = useRef<string | null>(null);
@@ -1605,10 +1604,6 @@ function App() {
     if (!promptPlayerState || promptPlayerState.controller !== 'bot') return;
     if (legalActions.length === 0) return;
 
-    const turnSignature = `${game.updatedAt}:${prompt.playerId}:${game.turn.playsUsed}:${game.pending?.kind ?? 'none'}`;
-    if (botTurnSignatureRef.current === turnSignature) return;
-    botTurnSignatureRef.current = turnSignature;
-
     const handle = window.setTimeout(() => {
       if (!game) return;
       const decision = promptPlayerState.botDifficulty === 'hard'
@@ -1620,7 +1615,6 @@ function App() {
         ? selectedAction
         : legalActions[0].action;
       runAction(nextAction);
-      botTurnSignatureRef.current = null;
     }, 480);
 
     return () => window.clearTimeout(handle);
@@ -1633,6 +1627,17 @@ function App() {
     runAction,
     screen,
   ]);
+
+  // Speed and series survive a reload, tied to the game they were chosen for.
+  const localGameCreatedAt = game?.createdAt;
+  useEffect(() => {
+    if (localGameCreatedAt == null) return;
+    try {
+      localStorage.setItem(LOCAL_MATCH_KEY, JSON.stringify({ ...localMatch, gameCreatedAt: localGameCreatedAt }));
+    } catch {
+      // Storage can be full or blocked; the match simply won't resume its options.
+    }
+  }, [localGameCreatedAt, localMatch]);
 
   // Every local game shows a turn clock. Speed games also run out, and then a bot moves.
   const clockOwnerId = game && prompt && !isGameOver(game).done ? prompt.playerId : null;
