@@ -193,11 +193,11 @@ struct TableView: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Text(subtitle)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                // The clock takes room from this line, so it gives way before anything gets cut off.
+                ViewThatFits(in: .horizontal) {
+                    subtitleText(subtitle)
+                    subtitleText(shortSubtitle)
+                }
             }
             Spacer(minLength: 4)
 
@@ -221,13 +221,26 @@ struct TableView: View {
         return current.id == session.viewerId ? "Your turn" : "\(current.name)'s turn"
     }
 
+    private func subtitleText(_ text: String) -> some View {
+        Text(text)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .fixedSize()
+    }
+
+    private var shortSubtitle: String {
+        guard let game = session.game else { return session.title }
+        return "Turn \(game.turnCount)"
+    }
+
     private var subtitle: String {
         guard let game = session.game else { return session.title }
         if let series = session.series, series.bestOf > 1 {
             let score = game.players.map { String(series.wins[$0.id] ?? 0) }.joined(separator: "–")
             return "Turn \(game.turnCount) · \(game.resolvedVariant.label) · Game \(series.gameNumber) · \(score)"
         }
-        return "Turn \(game.turnCount) · \(game.resolvedVariant.label) · \(Engine.ruleset(game).winCompleteSets) sets to win"
+        return "Turn \(game.turnCount) · \(game.resolvedVariant.label) · \(Engine.ruleset(game).winCompleteSets) \(Engine.ruleset(game).winCompleteSets == 1 ? "set" : "sets") to win"
     }
 
     // MARK: Status

@@ -110,7 +110,6 @@ struct ReplayView: View {
             .environment(\.cardBackStyle, app.preferences.cardBack)
             .onAppear { match.begin() }
             .onDisappear { match.end() }
-            .accessibilityIdentifier("replay")
     }
 
     private var bar: some View {

@@ -1,4 +1,5 @@
 import DealEngine
+import DealStats
 import SwiftUI
 
 /// Draws any card as vector shapes, so it stays sharp at every size. The layout is

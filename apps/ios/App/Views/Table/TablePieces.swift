@@ -1002,7 +1002,7 @@ private struct LogTurnCard: View {
     private func text(_ entry: LogEntry) -> Text {
         let message = displayText(entry.message)
         guard let actor = entry.actor, message.hasPrefix(actor) else { return Text(message) }
-        return Text(actor).fontWeight(.bold) + Text(message.dropFirst(actor.count))
+        return Text("\(Text(actor).fontWeight(.bold))\(String(message.dropFirst(actor.count)))")
     }
 
     private func tint(_ entry: LogEntry) -> Color {
