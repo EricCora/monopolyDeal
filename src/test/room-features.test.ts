@@ -20,6 +20,7 @@ import {
 } from '../../apps/server/src/gameService';
 import { createMemoryTurnStore, handleTurnRoomRequest, type TurnRoomNotifier } from '../../apps/server/src/turnRooms';
 import { applyAction, getLegalActions, getNextPrompt, isGameOver, type Action } from '../engine';
+import { routeRoomRequest } from '../network/roomRouting';
 import { replayStateFingerprint } from '../replay/serialize';
 
 interface Seat { playerId: string; sessionToken: string }
@@ -461,5 +462,71 @@ describe('turn-by-turn rooms', () => {
     expect((await handleTurnRoomRequest(post('/ZZZZZ/join', { playerName: 'A' }), store)).status).toBe(404);
     const resume = await handleTurnRoomRequest(post('/ZZZZZZ/reconnect', { playerId: 'p1', sessionToken: 'x' }), store);
     expect((resume.json as { status: string }).status).toBe('room_closed');
+  });
+});
+
+describe('turn room storage budget', () => {
+  const rooms = '/api/multiplayer/rooms';
+  const post = (path: string, body: Record<string, unknown>) => ({ method: 'POST', path: `${rooms}${path}`, query: {}, body });
+
+  async function recordedRoom() {
+    const inner = createMemoryTurnStore();
+    const reads: string[] = [];
+    const store = {
+      ...inner,
+      load: (code: string, how: 'cached' | 'fresh' | 'for_write' = 'for_write') => {
+        reads.push(how);
+        return inner.load(code, how);
+      },
+    };
+    const created = (await handleTurnRoomRequest(post('', { playerName: 'Ann' }), store)).json as { roomCode: string; playerId: string; sessionToken: string };
+    reads.length = 0;
+    const read = (fresh?: string) => handleTurnRoomRequest({
+      method: 'GET',
+      path: `${rooms}/${created.roomCode}/state`,
+      query: { playerId: created.playerId, sessionToken: created.sessionToken, ...(fresh ? { fresh } : {}) },
+      body: {},
+    }, store);
+    return { store, reads, created, read };
+  }
+
+  it('answers a routine poll from the cache', async () => {
+    const { reads, read } = await recordedRoom();
+    expect((await read()).status).toBe(200);
+    expect(reads).toEqual(['cached']);
+  });
+
+  it('reads past the cache when the client has just changed something', async () => {
+    const { reads, read } = await recordedRoom();
+    await read('1');
+    expect(reads).toEqual(['fresh']);
+  });
+
+  it('reads the version it needs before a write', async () => {
+    const { store, reads, created } = await recordedRoom();
+    await handleTurnRoomRequest(post(`/${created.roomCode}/ready`, { playerId: created.playerId, sessionToken: created.sessionToken, ready: true }), store);
+    expect(reads).toEqual(['for_write']);
+  });
+});
+
+describe('reading a turn room after a change', () => {
+  const state = (code: string) => `http://site/api/multiplayer/rooms/${code}/state?playerId=p1`;
+  const action = (code: string) => `http://site/api/multiplayer/rooms/${code}/action`;
+
+  afterEach(() => vi.useRealTimers());
+
+  it('asks past the cache on opening, and after a write, then goes back to the cache', () => {
+    vi.useFakeTimers();
+    expect(String(routeRoomRequest(state('AAAAAA')))).toContain('fresh=1');
+    vi.advanceTimersByTime(20_000);
+    expect(String(routeRoomRequest(state('AAAAAA')))).not.toContain('fresh=1');
+    routeRoomRequest(action('AAAAAA'), { method: 'POST' });
+    expect(String(routeRoomRequest(state('AAAAAA')))).toContain('fresh=1');
+    vi.advanceTimersByTime(20_000);
+    expect(String(routeRoomRequest(state('AAAAAA')))).not.toContain('fresh=1');
+  });
+
+  it('leaves live rooms alone', () => {
+    expect(String(routeRoomRequest(state('AAAAA')))).not.toContain('fresh=1');
   });
 });
