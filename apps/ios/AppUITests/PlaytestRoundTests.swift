@@ -24,18 +24,25 @@ final class PlaytestRoundTests: XCTestCase {
         return nil
     }
 
+    /// Taps where the control is right now. The turn clock can clear a prompt at any moment,
+    /// and tapping the element itself would fail the test if it had just gone.
+    private func tapWhereItIs(_ element: XCUIElement) {
+        let frame = element.frame
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
+    }
+
     /// One move for this seat, if it has one.
     private func playAStep() {
         if let control = firstExisting(["confirm.play", "chooser.0", "action.draw", "payment.auto", "payment.submit", "counter.allow", "forced.give.0", "forced.take.0"]) {
-            control.tap()
+            tapWhereItIs(control)
             return
         }
         let playable = app.descendants(matching: .any).matching(NSPredicate(format: "identifier MATCHES 'hand\\\\.[0-9]+' AND value == 'playable'")).firstMatch
         if playable.exists && playable.isHittable {
-            playable.tap()
+            tapWhereItIs(playable)
             return
         }
-        if let pass = firstExisting(["action.pass", "discard.0"]) { pass.tap() }
+        if let pass = firstExisting(["action.pass", "discard.0"]) { tapWhereItIs(pass) }
     }
 
     private func playUntil(_ done: XCUIElement, steps: Int) {
@@ -116,9 +123,6 @@ final class PlaytestRoundTests: XCTestCase {
         app.sliders["timer.slider"].adjust(toNormalizedSliderPosition: 1)
         sleep(1)
         shot("lobby-speed")
-        // A running clock can clear a prompt just as this slow test taps it, so it plays untimed.
-        speed.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        sleep(1)
         for _ in 0..<4 where !app.buttons["room.ready"].isHittable { app.swipeUp() }
         app.buttons["room.ready"].tap()
         let start = app.buttons["room.start"]
