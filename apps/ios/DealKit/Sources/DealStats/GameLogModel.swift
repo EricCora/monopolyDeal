@@ -13,7 +13,7 @@ public struct LogEntry: Hashable, Sendable, Identifiable {
 
     public var tone: Tone {
         switch type {
-        case "turn_passed", "draw": .turn
+        case "turn_passed", "draw", "discard": .turn
         case "bank", "pay", "payment": .money
         case "property", "wild_move": .property
         case "counter", "action", "rent_target": .action
@@ -29,6 +29,7 @@ public struct LogEntry: Hashable, Sendable, Identifiable {
         case "property", "wild_move": "square.stack.fill"
         case "counter": "hand.raised.fill"
         case "action", "rent_target": "sparkles"
+        case "discard": "trash"
         case "game_over": "trophy.fill"
         default: "info"
         }

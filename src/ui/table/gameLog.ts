@@ -9,7 +9,7 @@ export interface LogEntry {
   tone: LogTone;
   filter: Exclude<LogFilter, 'all'> | 'turn';
   /** A symbol name, shared by meaning with the iOS log. */
-  icon: 'draw' | 'dollar' | 'stack' | 'sparkles' | 'just_say_no' | 'check' | 'info' | 'trophy';
+  icon: 'draw' | 'dollar' | 'stack' | 'sparkles' | 'just_say_no' | 'check' | 'info' | 'trophy' | 'trash';
   /** Whoever the entry starts with, so the name can stand out. */
   actor: string | null;
   timestamp: number;
@@ -33,6 +33,7 @@ function describe(type: string): Pick<LogEntry, 'tone' | 'filter' | 'icon'> {
     case 'property': case 'wild_move': return { tone: 'property', filter: 'property', icon: 'stack' };
     case 'counter': return { tone: 'action', filter: 'action', icon: 'just_say_no' };
     case 'action': case 'rent_target': return { tone: 'action', filter: 'action', icon: 'sparkles' };
+    case 'discard': return { tone: 'turn', filter: 'turn', icon: 'trash' };
     case 'game_over': return { tone: 'neutral', filter: 'turn', icon: 'trophy' };
     default: return { tone: 'neutral', filter: 'action', icon: 'info' };
   }
