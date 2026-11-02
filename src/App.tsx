@@ -81,6 +81,7 @@ import { GameTableScreen } from './ui/screens/GameTableScreen';
 import { shouldAskFirst, type CardInput } from './ui/tapPolicy';
 import { ReplayScreen } from './ui/screens/ReplayScreen';
 import { newlyUnlocked } from './ui/unlockables';
+import { orderRentChoices } from './ui/table/rentChoices';
 import { loadActiveReplay, loadReplays, saveActiveReplay, saveReplay, type GameReplayLog } from './persistence/replays';
 import { fetchMultiplayerReplay } from './network/roomFeatures';
 import { HomeScreen } from './ui/screens/HomeScreen';
@@ -99,13 +100,14 @@ import './App.css';
 
 type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over' | 'multiplayer' | 'replay';
 
-const SPEED_TURN_MS = 45_000;
+const DEFAULT_SPEED_SECONDS = 45;
 /** After a timed-out move, how soon the bot takes any next step of the same turn. */
 const TIMED_OUT_STEP_MS = 1_500;
 const LOCAL_MATCH_KEY = 'monopolyDeal.localMatch.v1';
 
 interface LocalMatchOptions {
   speed: boolean;
+  speedSeconds?: number;
   series: { bestOf: 1 | 3; wins: Record<string, number>; gameNumber: number; winnerId?: string } | null;
 }
 
@@ -114,7 +116,7 @@ const NO_MATCH_OPTIONS: LocalMatchOptions = { speed: false, series: null };
 function loadLocalMatch(gameCreatedAt: number): LocalMatchOptions {
   try {
     const parsed = JSON.parse(localStorage.getItem(LOCAL_MATCH_KEY) ?? 'null') as (LocalMatchOptions & { gameCreatedAt: number }) | null;
-    return parsed?.gameCreatedAt === gameCreatedAt ? { speed: parsed.speed, series: parsed.series } : NO_MATCH_OPTIONS;
+    return parsed?.gameCreatedAt === gameCreatedAt ? { speed: parsed.speed, speedSeconds: parsed.speedSeconds, series: parsed.series } : NO_MATCH_OPTIONS;
   } catch {
     return NO_MATCH_OPTIONS;
   }
@@ -481,6 +483,7 @@ function App() {
     watchRoom: watchMultiplayerGame,
     openTurnRoom: openTurnMultiplayerRoom,
     setRoomOptions: setMultiplayerRoomOptions,
+    manageBots: manageMultiplayerBots,
     joinRoom: joinMultiplayerRoom,
     startMatch: startMultiplayerMatch,
     runAction: runMultiplayerAction,
@@ -703,6 +706,10 @@ function App() {
   }, [discardOverLimitCount, game, mainPhaseExhausted, maxPlaysPerTurn, prompt]);
 
   const multiplayerGame = screen === 'multiplayer' ? (multiplayerRoomView?.gameState ?? null) : null;
+  // A finished room works like a lobby, for whoever has left the results behind.
+  // Tied to the game they left, so the next game's results show up by themselves.
+  const [lobbyAfterGame, setLobbyAfterGame] = useState<number | null>(null);
+  const backInLobby = multiplayerRoomView?.status === 'finished' && multiplayerGame?.createdAt === lobbyAfterGame;
   const multiplayerPrompt = useMemo(
     () => (multiplayerGame ? getNextPrompt(multiplayerGame) : null),
     [multiplayerGame],
@@ -1250,6 +1257,7 @@ function App() {
       ruleset: setup.variant === 'classic' && uiPreferences.experimental.customRules ? sanitizeRuleset(setup.customRules) : undefined,
       match: {
         speed: setup.speedMode === true,
+        speedSeconds: setup.speedSeconds ?? DEFAULT_SPEED_SECONDS,
         series: setup.bestOf === 3 ? { bestOf: 3, wins: {}, gameNumber: 1 } : null,
       },
     });
@@ -1648,7 +1656,7 @@ function App() {
       return;
     }
     const startedAt = Date.now();
-    setLocalClock({ playerId: clockOwnerId, startedAt, deadlineMs: clockRuns ? startedAt + SPEED_TURN_MS : null });
+    setLocalClock({ playerId: clockOwnerId, startedAt, deadlineMs: clockRuns ? startedAt + (localMatch.speedSeconds ?? DEFAULT_SPEED_SECONDS) * 1000 : null });
   }, [clockOwnerId, clockRuns, game?.createdAt]);
 
   const deadlineMs = localClock?.deadlineMs ?? null;
@@ -1716,7 +1724,7 @@ function App() {
 
     const def = getCardDefinition(cardId, game?.variant ?? 'classic');
     const cardLabel = def.kind === 'money' ? `$${def.moneyValue ?? def.value}` : def.name;
-    setChooser({ cardId, cardLabel, variants });
+    setChooser({ cardId, cardLabel, variants: orderRentChoices(variants, game, prompt.playerId, game?.variant ?? 'classic') });
   };
 
   const handlePaymentCardToggle = (cardId: string) => {
@@ -1751,7 +1759,7 @@ function App() {
     }
     const def = getCardDefinition(cardId, multiplayerGame?.variant ?? multiplayerRoomView?.variant ?? 'classic');
     const cardLabel = def.kind === 'money' ? `$${def.moneyValue ?? def.value}` : def.name;
-    setChooser({ cardId, cardLabel, variants });
+    setChooser({ cardId, cardLabel, variants: orderRentChoices(variants, multiplayerGame, multiplayerRoomView?.yourPlayerId, multiplayerVariant) });
   };
 
   const handleMultiplayerPaymentCardToggle = (cardId: string) => {
@@ -1988,6 +1996,7 @@ function App() {
         ruleset: game.variant === 'classic' && uiPreferences.experimental.customRules ? game.ruleset : undefined,
         match: {
           speed: localMatch.speed,
+          speedSeconds: localMatch.speedSeconds,
           series: localMatch.series
             ? localMatch.series.winnerId
               ? { bestOf: localMatch.series.bestOf, wins: {}, gameNumber: 1 }
@@ -2124,6 +2133,7 @@ function App() {
           }}
           onStartMatch={startNewGame}
           onSpeedModeChange={(speedMode) => setSetup((prev) => ({ ...prev, speedMode }))}
+          onSpeedSecondsChange={(speedSeconds) => setSetup((prev) => ({ ...prev, speedSeconds }))}
           onBestOfChange={(bestOf) => setSetup((prev) => ({ ...prev, bestOf }))}
           onBack={() => setScreen('home')}
         />
@@ -2197,7 +2207,7 @@ function App() {
         />
       ) : null}
 
-      {screen === 'multiplayer' && multiplayerRoomView?.started && multiplayerGame && multiplayerPrompt ? (
+      {screen === 'multiplayer' && multiplayerRoomView?.started && multiplayerGame && multiplayerPrompt && !backInLobby ? (
         <GameTableScreen
           mode="multiplayer"
           matchMode="live_online"
@@ -2312,6 +2322,9 @@ function App() {
           onRematchMultiplayer={multiplayerIsHost ? () => {
             void rematchMultiplayerMatch();
           } : undefined}
+          onBackToLobby={multiplayerRoomView.role !== 'spectator' ? () => setLobbyAfterGame(multiplayerGame.createdAt) : undefined}
+          onSetBotDifficulty={multiplayerIsHost ? (seatId, difficulty) => void manageMultiplayerBots({ op: 'difficulty', seatId, difficulty }) : undefined}
+          seatDifficulties={Object.fromEntries(multiplayerRoomView.players.map((player) => [player.id, player.botDifficulty ?? 'easy']))}
           onExitMultiplayer={() => {
             void exitMultiplayerRoom();
             setScreen('home');
@@ -2366,7 +2379,7 @@ function App() {
         />
       ) : null}
 
-      {screen === 'multiplayer' && (!multiplayerRoomView?.started || !multiplayerGame || !multiplayerPrompt) ? (
+      {screen === 'multiplayer' && (!multiplayerRoomView?.started || !multiplayerGame || !multiplayerPrompt || backInLobby) ? (
         <MultiplayerScreen
           playerName={multiplayerPlayerName}
           joinCode={multiplayerJoinCode}
@@ -2395,7 +2408,8 @@ function App() {
           onOpenTurnRoom={(saved) => void openTurnMultiplayerRoom(saved)}
           onSetRoomOptions={(changes) => void setMultiplayerRoomOptions(changes)}
           onJoinRoom={onJoinMultiplayerRoom}
-          onStartMatch={startMultiplayerMatch}
+          onStartMatch={backInLobby ? () => void rematchMultiplayerMatch() : startMultiplayerMatch}
+          onManageBots={(change) => void manageMultiplayerBots(change)}
           onRunAction={runMultiplayerAction}
           onSetReady={(ready) => {
             void setMultiplayerReadyState(ready);

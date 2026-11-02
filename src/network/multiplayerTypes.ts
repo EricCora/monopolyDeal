@@ -33,6 +33,8 @@ export interface MultiplayerPlayerSummary {
   reconnectDeadlineMs: number;
   isHost: boolean;
   ready: boolean;
+  isBot?: boolean;
+  botDifficulty?: 'easy' | 'hard';
 }
 
 export interface MultiplayerActivityFeedItem {
@@ -92,6 +94,7 @@ export interface MultiplayerRoomView {
 }
 
 export interface MultiplayerRoomOptions {
+  botDifficulty?: 'easy' | 'hard';
   botFill: boolean;
   turnTimerSeconds: number | null;
   bestOf: 1 | 3;

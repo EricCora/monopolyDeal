@@ -2128,3 +2128,151 @@
     display: flex;
   }
 }
+
+/* A bank spread out to read */
+.bank-fan {
+  min-width: 0;
+}
+
+.bank-fan-cards {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: calc(88px * 1.4 + 8px);
+  padding: 4px 2px;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bank-fan-card {
+  position: absolute;
+  left: calc(2px + var(--i) * 9px);
+  top: 4px;
+  transition: transform 220ms ease;
+}
+
+.bank-fan-cards.is-open {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bank-fan-cards.is-open .bank-fan-card {
+  position: static;
+  flex: none;
+}
+
+/* Game log */
+.game-log {
+  display: grid;
+  gap: 10px;
+}
+
+.game-log-filters {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.game-log-filters button {
+  flex: none;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.game-log-filters button.is-active {
+  background: var(--accent);
+  border-color: transparent;
+  color: #14202f;
+}
+
+.game-log-empty {
+  padding: 18px 0;
+  text-align: center;
+  opacity: 0.7;
+}
+
+.game-log-turn {
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.game-log-turn.is-current {
+  border-color: var(--accent);
+}
+
+.game-log-turn header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.game-log-turn header span:last-child {
+  margin-left: auto;
+  font-size: 0.74rem;
+  font-weight: 700;
+  opacity: 0.65;
+}
+
+.game-log-turn ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.game-log-turn li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.game-log-turn li p {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.game-log-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 0.72rem;
+}
+
+.game-log-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.tone-money .game-log-icon { background: rgba(48, 180, 127, 0.28); color: #7fe0b6; }
+.tone-property .game-log-icon { background: rgba(77, 160, 227, 0.28); color: #9dd2ff; }
+.tone-action .game-log-icon { background: rgba(155, 92, 230, 0.3); color: #d0b3ff; }
+.tone-turn .game-log-icon { background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.75); }
+
+.game-log-more {
+  justify-self: center;
+}
+
+.sheet-bot-difficulty {
+  margin-bottom: 4px;
+}
+

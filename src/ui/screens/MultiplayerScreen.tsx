@@ -1,8 +1,34 @@
+import { TurnTimerSlider } from '../components/TurnTimerSlider';
+import type { BotChange } from '../../network/roomFeatures';
 import { Icon } from '../components/icons';
 import { loadTurnRooms } from '../../persistence/turnRooms';
 import { canUseTurnPush, enableTurnPush, type TurnPushResult } from '../../network/turnPush';
 
-const SPEED_TURN_SECONDS = 45;
+const DEFAULT_SPEED_SECONDS = 45;
+
+function DifficultyPicker({ label, value, disabled, onChange }: {
+  label: string;
+  value: 'easy' | 'hard';
+  disabled?: boolean;
+  onChange: (difficulty: 'easy' | 'hard') => void;
+}) {
+  return (
+    <div className="difficulty-picker" role="group" aria-label={label}>
+      {(['easy', 'hard'] as const).map((difficulty) => (
+        <button
+          key={difficulty}
+          type="button"
+          aria-pressed={value === difficulty}
+          className={value === difficulty ? 'is-selected' : ''}
+          disabled={disabled}
+          onClick={() => onChange(difficulty)}
+        >
+          {difficulty === 'easy' ? 'Easy' : 'Hard'}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 import { useEffect, useMemo, useState } from 'react';
 import { isLanResolvableHost, listMultiplayerLanOrigins } from '../../network/multiplayerClient';
@@ -66,6 +92,7 @@ interface MultiplayerScreenProps {
   onSetRoomOptions?: (changes: Partial<MultiplayerRoomOptions>) => void;
   onJoinRoom: () => void;
   onStartMatch: (checkpointId?: string) => void;
+  onManageBots?: (change: BotChange) => void;
   onRunAction: (index: number) => void;
   onSetReady: (ready: boolean) => void;
   onSetRoomPreset?: (presetId: MultiplayerSessionPresetId) => void;
@@ -251,6 +278,7 @@ export function MultiplayerScreen({
   onSetRoomOptions,
   onJoinRoom,
   onStartMatch,
+  onManageBots,
   onRunAction,
   onSetReady,
   onSetRoomPreset,
@@ -845,6 +873,31 @@ export function MultiplayerScreen({
                     </div> : <p className="multiplayer-lobby-status">Official No Mercy rules · 2–5 players</p>}
                   </section>
                 ) : null}
+                {!roomView.started && isHost && onManageBots ? (
+                  <section className="multiplayer-entry-card room-bots-card" aria-label="Bots">
+                    <p className="setup-stage-label">Bots</p>
+                    {roomView.players.filter((player) => player.isBot).map((player) => (
+                      <div key={player.id} className="room-bot-row">
+                        <strong>{player.name}</strong>
+                        <DifficultyPicker
+                          label={`${player.name} plays`}
+                          value={player.botDifficulty ?? 'easy'}
+                          disabled={loading}
+                          onChange={(difficulty) => onManageBots({ op: 'difficulty', seatId: player.id, difficulty })}
+                        />
+                        <button type="button" className="glass-button" disabled={loading} onClick={() => onManageBots({ op: 'remove', seatId: player.id })}>
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <div className="actions">
+                      <button type="button" disabled={loading || roomView.players.length >= 5} onClick={() => onManageBots({ op: 'add', difficulty: 'easy' })}>
+                        Add a Bot
+                      </button>
+                    </div>
+                    {roomView.players.length >= 5 ? <p className="menu-note">The table is full.</p> : null}
+                  </section>
+                ) : null}
                 {!roomView.started && roomView.role !== 'spectator' ? (
                   <section className="multiplayer-entry-card room-options-card" aria-label="Room options">
                     <p className="setup-stage-label">Room Options</p>
@@ -859,15 +912,30 @@ export function MultiplayerScreen({
                             onChange={(event) => onSetRoomOptions?.({ botFill: event.target.checked })}
                           />
                         </label>
+                        {roomView.options?.botFill ? (
+                          <DifficultyPicker
+                            label="Those bots play"
+                            value={roomView.options.botDifficulty ?? 'easy'}
+                            disabled={loading || !isHost || !onSetRoomOptions}
+                            onChange={(botDifficulty) => onSetRoomOptions?.({ botDifficulty })}
+                          />
+                        ) : null}
                         <label className="room-option-toggle">
-                          <span>Speed mode<small>45 seconds a turn, then a bot moves for you.</small></span>
+                          <span>Speed mode<small>When time runs out, a bot moves for you.</small></span>
                           <input
                             type="checkbox"
                             checked={roomView.options?.turnTimerSeconds != null}
                             disabled={loading || !isHost || !onSetRoomOptions}
-                            onChange={(event) => onSetRoomOptions?.({ turnTimerSeconds: event.target.checked ? SPEED_TURN_SECONDS : null })}
+                            onChange={(event) => onSetRoomOptions?.({ turnTimerSeconds: event.target.checked ? DEFAULT_SPEED_SECONDS : null })}
                           />
                         </label>
+                        {roomView.options?.turnTimerSeconds != null ? (
+                          <TurnTimerSlider
+                            seconds={roomView.options.turnTimerSeconds}
+                            disabled={loading || !isHost || !onSetRoomOptions}
+                            onChange={(turnTimerSeconds) => onSetRoomOptions?.({ turnTimerSeconds })}
+                          />
+                        ) : null}
                       </>
                     ) : null}
                     <label className="room-option-toggle">
@@ -961,6 +1029,7 @@ export function MultiplayerScreen({
                           <span className="multiplayer-player-tags">
                             {player.id === session.playerId ? <span className="multiplayer-player-tag is-self">You</span> : null}
                             {player.isHost ? <span className="multiplayer-player-tag">Host</span> : null}
+                            {player.isBot ? <span className="multiplayer-player-tag">{player.botDifficulty === 'hard' ? 'Hard Bot' : 'Easy Bot'}</span> : null}
                             {player.ready ? <span className="multiplayer-player-tag is-ready">Ready</span> : null}
                             {roomView.promptPlayerId === player.id ? <span className="multiplayer-player-tag is-turn">Turn</span> : null}
                           </span>

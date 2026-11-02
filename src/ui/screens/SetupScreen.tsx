@@ -2,6 +2,7 @@ import type { SetupViewModel } from '../types';
 import type { BotDifficulty, GameVariant, PlayerController } from '../../engine';
 import { Icon } from '../components/icons';
 import { PlayerAvatar } from '../table/tablePieces';
+import { TurnTimerSlider } from '../components/TurnTimerSlider';
 
 interface SetupScreenProps {
   setup: SetupViewModel;
@@ -14,6 +15,7 @@ interface SetupScreenProps {
   onPlayerDifficultyChange: (index: number, difficulty: BotDifficulty) => void;
   onChangeCustomRule: (rule: keyof SetupViewModel['customRules'], value: number) => void;
   onSpeedModeChange?: (enabled: boolean) => void;
+  onSpeedSecondsChange?: (seconds: number) => void;
   onBestOfChange?: (bestOf: 1 | 3) => void;
   onStartMatch: () => void;
   onBack: () => void;
@@ -93,6 +95,7 @@ export function SetupScreen({
   onPlayerDifficultyChange,
   onChangeCustomRule,
   onSpeedModeChange,
+  onSpeedSecondsChange,
   onBestOfChange,
   onStartMatch,
   onBack,
@@ -191,9 +194,12 @@ export function SetupScreen({
               />
               <p className="menu-note">
                 {setup.speedMode
-                  ? '45 seconds a turn. When time runs out, a bot moves for you.'
+                  ? 'When time runs out, a bot moves for you.'
                   : 'A clock shows how long each turn is taking, with no limit.'}
               </p>
+              {setup.speedMode && onSpeedSecondsChange ? (
+                <TurnTimerSlider seconds={setup.speedSeconds ?? 45} onChange={onSpeedSecondsChange} />
+              ) : null}
             </>
           ) : null}
           {onBestOfChange ? (

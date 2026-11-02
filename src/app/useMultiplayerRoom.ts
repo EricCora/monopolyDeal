@@ -61,7 +61,7 @@ import {
   type MultiplayerRecoveryEntry,
   type MultiplayerRecoveryState,
 } from '../persistence/multiplayerRecovery';
-import { createTurnBasedRoom, setMultiplayerRoomOptions, watchMultiplayerRoom } from '../network/roomFeatures';
+import { createTurnBasedRoom, manageMultiplayerBots, setMultiplayerRoomOptions, watchMultiplayerRoom, type BotChange } from '../network/roomFeatures';
 import { isTurnRoomCode } from '../network/roomRouting';
 import { forgetTurnRoom, rememberTurnRoom } from '../persistence/turnRooms';
 import type { GrowthMetricEvent } from '../stats';
@@ -917,6 +917,21 @@ export function useMultiplayerRoom({
     }
   }, [apiBase, clearError, refreshRoom, session, setErrorFromCode]);
 
+  const manageBots = useCallback(async (change: BotChange) => {
+    const current = session;
+    if (!current) return;
+    setLoading(true);
+    clearError();
+    try {
+      await manageMultiplayerBots(current, change, apiBase);
+      await refreshRoom(current);
+    } catch (botError) {
+      setErrorFromCode(botError instanceof Error ? botError.message : 'request_failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [apiBase, clearError, refreshRoom, session, setErrorFromCode]);
+
   const joinRoom = useCallback(async (): Promise<boolean> => {
     setLoading(true);
     setConnectionState('connecting');
@@ -1706,6 +1721,7 @@ export function useMultiplayerRoom({
     clearHostChangeNotice: () => setHostChangeNotice(null),
     isHost,
     hostRoom,
+    manageBots,
     watchRoom,
     openTurnRoom,
     setRoomOptions,

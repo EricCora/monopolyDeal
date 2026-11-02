@@ -263,3 +263,73 @@
   display: grid;
   gap: 8px;
 }
+
+.turn-timer-slider {
+  padding: 6px 0 2px;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.turn-timer-slider label {
+  display: grid;
+  gap: 6px;
+}
+
+.turn-timer-slider input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.turn-timer-stops {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.76rem;
+  opacity: 0.65;
+}
+
+.turn-timer-stops .is-chosen {
+  font-weight: 800;
+  opacity: 1;
+  color: var(--accent);
+}
+
+.difficulty-picker {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.difficulty-picker button {
+  min-height: 32px;
+  min-width: 56px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.difficulty-picker button.is-selected {
+  background: var(--accent);
+  color: #14202f;
+}
+
+.room-bot-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.room-bot-row strong {
+  flex: 1;
+  min-width: 70px;
+}
+

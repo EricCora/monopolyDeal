@@ -13,6 +13,8 @@ export interface SetupViewModel {
   };
   /** 45 seconds a turn, then a bot moves. Without it the clock only counts up. */
   speedMode?: boolean;
+  /** How long a Speed turn lasts: 30, 45 or 60. */
+  speedSeconds?: number;
   bestOf?: 1 | 3;
 }
 

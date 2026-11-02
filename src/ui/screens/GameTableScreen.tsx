@@ -133,7 +133,7 @@ interface GameTableScreenProps {
   mainPhaseExhausted: boolean;
   discardOverLimitCount: number;
   showRulesHints: boolean;
-  enhancedEventLog: boolean;
+  enhancedEventLog?: boolean;
   coachHint: {
     title: string;
     summary: string;
@@ -161,6 +161,10 @@ interface GameTableScreenProps {
   /** Replays swap the action bar and hand controls for these. */
   replayBar?: ReactNode;
   onPauseToggle: () => void;
+  /** Leaves the results for the room, where chat and the next game's setup are. */
+  onBackToLobby?: () => void;
+  onSetBotDifficulty?: (seatId: string, difficulty: 'easy' | 'hard') => void;
+  seatDifficulties?: Record<string, 'easy' | 'hard'>;
   onRefreshMultiplayer?: () => void;
   onExitMultiplayer?: () => void;
   onForgetMultiplayer?: () => void;
@@ -398,6 +402,33 @@ function TurnClockPill({ clock, now, paused }: { clock: { startedAt: number; dea
 
 const CONNECTION_TONE: Record<string, string> = { connected: 'is-good', reconnecting: 'is-warn', connecting: 'is-warn', disconnected: 'is-bad' };
 
+/** A bank laid out so every card can be read. Tapping the pile spreads it, and the row scrolls. */
+function BankFan({ player, variant, startOpen = false }: { player: PlayerState; variant: GameVariant; startOpen?: boolean }) {
+  const [open, setOpen] = useState(startOpen);
+  const total = bankTotal(player, variant);
+  return (
+    <section className="bank-fan" aria-label={`Bank, ${total} dollars`}>
+      <p className="section-title">Bank ${total}</p>
+      {player.bank.length === 0 ? <p className="sheet-empty">Nothing banked.</p> : (
+        <button
+          type="button"
+          className={`bank-fan-cards ${open ? 'is-open' : ''}`}
+          aria-expanded={open}
+          aria-label={open ? 'Stack the bank' : `Spread out all ${player.bank.length} bank cards`}
+          style={{ ['--bank-count' as string]: player.bank.length }}
+          onClick={() => setOpen((current) => !current)}
+        >
+          {player.bank.map((cardId, index) => (
+            <span key={cardId} className="bank-fan-card" style={{ ['--i' as string]: index }}>
+              <CardView cardId={cardId} width={open ? 104 : 88} gameVariant={variant} decorative />
+            </span>
+          ))}
+        </button>
+      )}
+    </section>
+  );
+}
+
 export function GameTableScreen({
   mode = 'local',
   matchMode = mode === 'multiplayer' ? 'live_online' : 'hot_seat',
@@ -446,7 +477,6 @@ export function GameTableScreen({
   mainPhaseExhausted,
   discardOverLimitCount,
   showRulesHints,
-  enhancedEventLog,
   coachHint,
   turnSnapshotsCount,
   showDebugActions,
@@ -466,6 +496,9 @@ export function GameTableScreen({
   flightKey,
   replayBar,
   onPauseToggle,
+  onBackToLobby,
+  onSetBotDifficulty,
+  seatDifficulties,
   onRefreshMultiplayer,
   onExitMultiplayer,
   onForgetMultiplayer,
@@ -525,6 +558,7 @@ export function GameTableScreen({
   const [coachOpen, setCoachOpen] = useState(false);
   const [inspectedCardId, setInspectedCardId] = useState<string | null>(null);
   const [inspectedOpponentId, setInspectedOpponentId] = useState<string | null>(null);
+  const [bankOpen, setBankOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [panelChoices, setPanelChoices] = useState<{ cardId: string; title: string; choices: PanelChoice[] } | null>(null);
   const [moveWildCardId, setMoveWildCardId] = useState<string | null>(null);
@@ -1229,7 +1263,7 @@ export function GameTableScreen({
                         extraClassName={transitionTargetKey === `bank:${player.id}` ? `is-transition-target transition-tone-${transitionTargetTone ?? 'bank'}` : ''}
                         bankRef={(node) => { visibleBankZoneByPlayerIdRef.current[player.id] = node; }}
                         behavior={bankBehavior(player)}
-                        onInspect={setInspectedCardId}
+                        onInspect={() => setInspectedOpponentId(player.id)}
                       />
                     ) : null}
                   </div>
@@ -1271,7 +1305,7 @@ export function GameTableScreen({
                     extraClassName={transitionTargetKey === `bank:${viewer.id}` ? `is-transition-target transition-tone-${transitionTargetTone ?? 'bank'}` : ''}
                     bankRef={(node) => { visibleBankZoneByPlayerIdRef.current[viewer.id] = node; }}
                     behavior={bankBehavior(viewer)}
-                    onInspect={setInspectedCardId}
+                    onInspect={() => setBankOpen(true)}
                   />
                   {renderLanes(viewer, false)}
                 </div>
@@ -1574,7 +1608,7 @@ export function GameTableScreen({
               </section>
             ) : null}
 
-            <RecentEvents events={game.history} enhancedGrouping={enhancedEventLog} />
+            <RecentEvents events={game.history} playerNames={game.players.map((player) => player.name)} />
           </div>
         </div>
       </aside>
@@ -1601,6 +1635,12 @@ export function GameTableScreen({
         </Sheet>
       ) : null}
 
+      {bankOpen && viewer ? (
+        <Sheet label="Your bank" onClose={() => setBankOpen(false)}>
+          <BankFan player={viewer} variant={variant} startOpen />
+        </Sheet>
+      ) : null}
+
       {inspectedOpponent && !inspectedCardId ? (
         <Sheet label={`${inspectedOpponent.name}'s board`} tall onClose={closeInspectors}>
           <header className="opponent-sheet-head">
@@ -1608,12 +1648,25 @@ export function GameTableScreen({
             <strong>{inspectedOpponent.name}</strong>
             <span><Icon name="cards" /> {inspectedOpponent.hand.length} in hand</span>
           </header>
-          <p className="section-title">Bank</p>
-          <div className="opponent-sheet-bank">
-            {inspectedOpponent.bank.length === 0 ? <p className="sheet-empty">Nothing banked.</p> : inspectedOpponent.bank.map((cardId) => (
-              <CardView key={cardId} cardId={cardId} width={72} gameVariant={variant} decorative />
-            ))}
-          </div>
+          {onSetBotDifficulty && (botSeatIds?.includes(inspectedOpponent.id) || inspectedOpponent.controller === 'bot') ? (
+            <div className="sheet-bot-difficulty">
+              <p className="section-title">Bot Difficulty</p>
+              <div className="difficulty-picker" role="group" aria-label={`${inspectedOpponent.name}'s bot difficulty`}>
+                {(['easy', 'hard'] as const).map((difficulty) => (
+                  <button
+                    key={difficulty}
+                    type="button"
+                    aria-pressed={seatDifficulties?.[inspectedOpponent.id] === difficulty}
+                    className={seatDifficulties?.[inspectedOpponent.id] === difficulty ? 'is-selected' : ''}
+                    onClick={() => onSetBotDifficulty(inspectedOpponent.id, difficulty)}
+                  >
+                    {difficulty === 'easy' ? 'Easy' : 'Hard'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <BankFan player={inspectedOpponent} variant={variant} />
           <p className="section-title">Properties</p>
           <div className="opponent-sheet-lanes">
             {boardLanes(inspectedOpponent, variant).length === 0 ? <p className="sheet-empty">No properties yet.</p> : null}
@@ -1777,6 +1830,9 @@ export function GameTableScreen({
               </>
             ) : null}
             {rematchStatusText ? <p>{rematchStatusText}</p> : null}
+            {onBackToLobby ? (
+              <button type="button" className="glass-button" onClick={onBackToLobby}>Back to Lobby</button>
+            ) : null}
             {onRematchMultiplayer ? (
               <button type="button" className="primary-button" onClick={onRematchMultiplayer} disabled={checkpointLoading || !canRematchMultiplayer}>
                 {series && !series.winnerId ? 'Next Game' : 'Play Rematch'}

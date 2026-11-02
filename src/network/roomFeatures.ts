@@ -37,6 +37,15 @@ export async function setMultiplayerRoomOptions(
   await post(roomUrl(apiBase, session.roomCode, 'options'), { playerId: session.playerId, sessionToken: session.sessionToken, ...changes });
 }
 
+export type BotChange =
+  | { op: 'add'; difficulty: 'easy' | 'hard' }
+  | { op: 'remove'; seatId: string }
+  | { op: 'difficulty'; seatId: string; difficulty: 'easy' | 'hard' };
+
+export async function manageMultiplayerBots(session: MultiplayerSession, change: BotChange, apiBase: string): Promise<void> {
+  await post(roomUrl(apiBase, session.roomCode, 'bots'), { playerId: session.playerId, sessionToken: session.sessionToken, ...change });
+}
+
 export function fetchMultiplayerReplay(session: MultiplayerSession, apiBase: string): Promise<MultiplayerReplayLog> {
   const params = new URLSearchParams({ playerId: session.playerId, sessionToken: session.sessionToken });
   return send(`${roomUrl(apiBase, session.roomCode, 'replay')}?${params.toString()}`);
