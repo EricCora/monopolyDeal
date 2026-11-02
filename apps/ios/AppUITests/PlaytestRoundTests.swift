@@ -110,6 +110,9 @@ final class PlaytestRoundTests: XCTestCase {
         app.sliders["timer.slider"].adjust(toNormalizedSliderPosition: 1)
         sleep(1)
         shot("lobby-speed")
+        // A running clock can clear a prompt just as this slow test taps it, so it plays untimed.
+        speed.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        sleep(1)
         for _ in 0..<4 where !app.buttons["room.ready"].isHittable { app.swipeUp() }
         app.buttons["room.ready"].tap()
         let start = app.buttons["room.start"]
