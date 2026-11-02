@@ -20,6 +20,7 @@
     "test:watch": "vitest",
     "tree": "node scripts/print_tree.mjs",
     "quality": "node scripts/run_quality.mjs",
+    "verify:turn-live": "node scripts/verify_turn_rooms.mjs",
     "e2e:smoke": "node scripts/run_e2e.mjs",
     "replay:verify": "node scripts/replay_verify.mjs",
     "traces:record": "node --import tsx/esm scripts/record_engine_traces.ts",
