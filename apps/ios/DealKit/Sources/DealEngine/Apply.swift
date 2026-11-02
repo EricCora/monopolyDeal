@@ -56,22 +56,7 @@ extension Engine {
     public static func suggestedPaymentCards(_ state: GameState, playerId: PlayerId, amount: Int) -> [String] {
         guard let player = player(state, playerId) else { return [] }
         let variant = gameVariant(state)
-        let available = player.bank + propertyColors.flatMap { player.properties[$0].map(\.cardId) }
-        let exactSingles = available.filter { cardMoneyValue($0, variant) == amount }
-        let fromBank = exactSingles.filter { player.bank.contains($0) }.sorted(by: cardIdPrecedes).first
-        if let exact = fromBank ?? exactSingles.sorted(by: cardIdPrecedes).first { return [exact] }
-        let options = generatePaymentOptions(player, targetAmount: amount, variant)
-        guard var best = options.first else { return [] }
-        var bestScore = Int.max
-        for option in options {
-            let total = option.reduce(0) { $0 + cardMoneyValue($1, variant) }
-            let score = total >= amount ? total * 100 + option.count : 1_000_000 - total * 100 + option.count
-            if score < bestScore {
-                best = option
-                bestScore = score
-            }
-        }
-        return best
+        return suggestPayment(player, amount, gameVariant(state))
     }
 
     // MARK: Debt

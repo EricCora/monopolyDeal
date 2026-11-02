@@ -85,3 +85,46 @@ final class SetRulesTests: XCTestCase {
         XCTAssertEqual(Engine.countCompleteSets(bank(state).players[0], .classic), 1)
     }
 }
+
+final class AutoDecisionTests: XCTestCase {
+    private func table() -> GameState {
+        var state = Engine.createGame(GameConfig(players: [PlayerConfig(id: "p1", name: "Ann"), PlayerConfig(id: "p2", name: "Bo")], seed: 3))
+        state.turn.phase = .action
+        state.currentPlayerIndex = 0
+        state.players[0].hand = []
+        state.players[0].bank = []
+        return state
+    }
+
+    private func place(_ color: PropertyColor, _ cards: String...) -> [PropertyCardPlacement] {
+        cards.map { PropertyCardPlacement(cardId: $0, assignedColor: color) }
+    }
+
+    func testTheBankPaysBeforeAProperty() {
+        var state = table()
+        state.players[0].bank = ["money_5#a"]
+        state.players[0].properties[.red] = place(.red, "red_1#a")
+        XCTAssertEqual(Engine.suggestedPaymentCards(state, playerId: "p1", amount: 3), ["money_5#a"])
+    }
+
+    func testBankCardsAddUpBeforeAnExactProperty() {
+        var state = table()
+        state.players[0].bank = ["money_1#a", "money_2#a"]
+        state.players[0].properties[.red] = place(.red, "red_1#a")
+        XCTAssertEqual(Set(Engine.suggestedPaymentCards(state, playerId: "p1", amount: 3)), ["money_1#a", "money_2#a"])
+    }
+
+    func testPlainMoneyGoesBeforeABankedActionCard() {
+        var state = table()
+        state.players[0].bank = ["deal_breaker#a", "money_5#a"]
+        XCTAssertEqual(Engine.suggestedPaymentCards(state, playerId: "p1", amount: 5), ["money_5#a"])
+    }
+
+    func testACompleteSetBreaksOnlyWhenNothingElseCovers() {
+        var state = table()
+        state.players[0].properties[.red] = place(.red, "red_1#a", "red_1#b", "red_1#c")
+        state.players[0].properties[.pink] = place(.pink, "pink_1#a")
+        XCTAssertEqual(Engine.suggestedPaymentCards(state, playerId: "p1", amount: 2), ["pink_1#a"])
+        XCTAssertTrue(Engine.suggestedPaymentCards(state, playerId: "p1", amount: 4).contains("pink_1#a"))
+    }
+}

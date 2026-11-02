@@ -1,5 +1,5 @@
 import { getCardDefinition } from '../cards/catalog';
-import { DEFAULT_RULESET, getSetCompletionCount, type Action, type GameState, type LegalAction, type PlayerId } from '../engine';
+import { DEFAULT_RULESET, getSetCompletionCount, getSuggestedPaymentCards, type Action, type GameState, type LegalAction, type PlayerId } from '../engine';
 
 export interface ScoredAction {
   action: Action;
@@ -20,6 +20,8 @@ function currentPlayerScore(state: GameState, playerId: PlayerId): number {
   const bankValue = player.bank.reduce((sum, cardId) => sum + moneyValue(cardId, state.variant ?? 'classic'), 0);
   return sets * 100 + bankValue;
 }
+
+const HOLD_IN_HAND = new Set(['deal_breaker', 'just_say_no', 'sly_deal', 'forced_deal', 'super_sly_deal']);
 
 function actionScore(state: GameState, actorId: PlayerId, item: LegalAction): ScoredAction {
   const { action } = item;
@@ -47,10 +49,12 @@ function actionScore(state: GameState, actorId: PlayerId, item: LegalAction): Sc
 
   if (action.type === 'pay_request') {
     const paid = action.cards.reduce((sum, cardId) => sum + moneyValue(cardId, state.variant ?? 'classic'), 0);
+    const amount = state.pending?.kind === 'payment' ? state.pending.payload.amount : 0;
+    const sensible = getSuggestedPaymentCards(state, actorId, amount).sort((left, right) => left.localeCompare(right)).join('|');
     return {
       action,
       label: item.label,
-      score: 250 - paid,
+      score: [...action.cards].sort((left, right) => left.localeCompare(right)).join('|') === sensible ? 300 : 250 - paid,
       reason: 'Prefer lower-cost payment options when resolving debt.' ,
     };
   }
@@ -82,6 +86,13 @@ function actionScore(state: GameState, actorId: PlayerId, item: LegalAction): Sc
 
   if (action.type === 'play_to_bank') {
     const value = moneyValue(action.cardId, state.variant ?? 'classic');
+    const actor = state.players.find((entry) => entry.id === actorId);
+    const handLimit = state.ruleset?.maxHandAtEndTurn ?? DEFAULT_RULESET.maxHandAtEndTurn;
+    const kind = getCardDefinition(action.cardId, state.variant ?? 'classic').actionKind;
+    // Banked, a Deal Breaker is only $5. Hold it for a target, unless the hand has to shrink.
+    if (kind && HOLD_IN_HAND.has(kind) && (actor?.hand.length ?? 0) <= handLimit) {
+      return { action, label: item.label, score: 10, reason: 'This card is worth more played later than banked now.' };
+    }
     return {
       action,
       label: item.label,
@@ -177,7 +188,7 @@ export function chooseHeuristicAction(state: GameState, actorId: PlayerId, legal
   const top = ranked[0];
   const actorStrength = currentPlayerScore(state, actorId);
   if (top.action.type === 'pass_turn' && actorStrength < 180) {
-    const better = ranked.find((entry) => entry.action.type !== 'pass_turn' && entry.action.type !== 'move_wild');
+    const better = ranked.find((entry) => entry.action.type !== 'pass_turn' && entry.action.type !== 'move_wild' && entry.score >= top.score);
     if (better) return better;
   }
   return top;

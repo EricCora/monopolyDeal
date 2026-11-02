@@ -36,6 +36,8 @@ public enum Heuristic {
         }
     }
 
+    private static let holdInHand: Set<ActionKind> = [.deal_breaker, .just_say_no, .sly_deal, .forced_deal, .super_sly_deal]
+
     private static func score(_ state: GameState, actorId: PlayerId, item: LegalAction) -> ScoredAction {
         let variant = state.resolvedVariant
         let action = item.action
@@ -53,6 +55,12 @@ public enum Heuristic {
                 : scored(260, "Passing on the counter preserves cards for later.")
         case .pay_request:
             let paid = (action.cards ?? []).reduce(0) { $0 + Engine.cardMoneyValue($1, variant) }
+            var amount = 0
+            if case .payment(let request) = state.pending { amount = request.amount }
+            let sensible = Engine.suggestedPaymentCards(state, playerId: actorId, amount: amount).sorted()
+            if (action.cards ?? []).sorted() == sensible {
+                return scored(300, "This is what a careful player would hand over.")
+            }
             return scored(Double(250 - paid), "Prefer lower-cost payment options when resolving debt.")
         case .play_property:
             let beforeSets = Engine.player(state, actorId).map { Engine.countCompleteSets($0, variant) } ?? 0
@@ -63,6 +71,12 @@ public enum Heuristic {
             // so bots cannot oscillate a wild between two legal lanes forever.
             return scored(5, "Moving a wild can optimize set completion and future rent value.")
         case .play_to_bank:
+            // Banked, a Deal Breaker is only $5. Hold it for a target, unless the hand has to shrink.
+            let handLimit = state.ruleset?.maxHandAtEndTurn ?? Engine.defaultRuleset.maxHandAtEndTurn
+            if let kind = Catalog.card(action.cardId ?? "", variant).actionKind, holdInHand.contains(kind),
+               (Engine.player(state, actorId)?.hand.count ?? 0) <= handLimit {
+                return scored(10, "This card is worth more played later than banked now.")
+            }
             return scored(Double(200 + Engine.cardMoneyValue(action.cardId ?? "", variant) * 6), "Banking increases payment resilience and future spend flexibility.")
         case .play_action:
             let card = Catalog.card(action.cardId ?? "", variant)
@@ -99,7 +113,7 @@ public enum Heuristic {
         let ranked = rank(state, actorId: actorId, legalActions: legalActions)
         let top = ranked[0]
         if top.action.type == .pass_turn && strength(state, actorId) < 180 {
-            if let better = ranked.first(where: { $0.action.type != .pass_turn && $0.action.type != .move_wild }) { return better }
+            if let better = ranked.first(where: { $0.action.type != .pass_turn && $0.action.type != .move_wild && $0.score >= top.score }) { return better }
         }
         return top
     }

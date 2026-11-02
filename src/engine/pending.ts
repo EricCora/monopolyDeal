@@ -15,6 +15,7 @@ import {
   colorLabel,
   completeSetColors,
   generatePaymentOptions,
+  suggestPayment,
   getPlayer,
   isCompleteSet,
   movablePropertyCards,
@@ -134,7 +135,11 @@ function legalForCounter(state: GameState, player: PlayerState): LegalAction[] {
 function legalForPayment(state: GameState, player: PlayerState): LegalAction[] {
   if (!state.pending || state.pending.kind !== 'payment') return [];
   if (state.pending.payload.targetPlayerId !== player.id) return [];
-  const paymentOptions = generatePaymentOptions(player, state.pending.payload.amount, state.variant ?? 'classic');
+  const variant = state.variant ?? 'classic';
+  const paymentOptions = generatePaymentOptions(player, state.pending.payload.amount, variant);
+  // The list is capped by how little each option overpays, which can leave out the sensible one.
+  const suggested = suggestPayment(player, state.pending.payload.amount, variant).sort((left, right) => left.localeCompare(right));
+  if (suggested.length > 0 && !paymentOptions.some((cards) => cards.join('|') === suggested.join('|'))) paymentOptions.push(suggested);
   return paymentOptions.map((cards, idx) => ({
     label: cards.length
       ? `Pay option ${idx + 1}: ${cards.map((cardId) => cardLabel(cardId, state.variant ?? 'classic')).join(', ')}`

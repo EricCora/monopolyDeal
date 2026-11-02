@@ -44,7 +44,11 @@ extension Engine {
 
     private static func legalForPayment(_ req: PaymentRequest, _ player: PlayerState, _ variant: GameVariant) -> [LegalAction] {
         guard req.targetPlayerId == player.id else { return [] }
-        return generatePaymentOptions(player, targetAmount: req.amount, variant).enumerated().map { index, cards in
+        var options = generatePaymentOptions(player, targetAmount: req.amount, variant)
+        // The list is capped by how little each option overpays, which can leave out the sensible one.
+        let suggested = suggestPayment(player, req.amount, variant).sorted(by: cardIdPrecedes)
+        if !suggested.isEmpty && !options.contains(suggested) { options.append(suggested) }
+        return options.enumerated().map { index, cards in
             LegalAction(
                 label: cards.isEmpty
                     ? "Cannot pay (no cards)"

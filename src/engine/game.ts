@@ -27,6 +27,7 @@ import {
   cardLabel,
   cardMoneyValue,
   checkWinner,
+  suggestPayment,
   cloneState,
   colorLabel,
   completeSetColors,
@@ -39,7 +40,6 @@ import {
   findPropertySetIdByCard,
   finishTurn,
   gameVariant,
-  generatePaymentOptions,
   getCurrentPlayer,
   getPlayer,
   getRentAmount,
@@ -80,36 +80,7 @@ function completeSet(state: GameState, player: PlayerState, color: PropertyColor
 export function getSuggestedPaymentCards(state: GameState, playerId: PlayerId, amount: number): string[] {
   const player = getPlayer(state, playerId);
   if (!player) return [];
-  const availableCards = [
-    ...player.bank,
-    ...PROPERTY_COLORS.flatMap((color) => player.properties[color].map((entry) => entry.cardId)),
-  ];
-  const variant = gameVariant(state);
-  const exactSingles = availableCards.filter((cardId) => cardMoneyValue(cardId, variant) === amount);
-  const exactSingleFromBank = exactSingles
-    .filter((cardId) => player.bank.includes(cardId))
-    .sort((left, right) => left.localeCompare(right))[0];
-  const exactSingle = exactSingleFromBank ?? exactSingles.sort((left, right) => left.localeCompare(right))[0];
-  if (exactSingle) return [exactSingle];
-  const options = generatePaymentOptions(player, amount, variant);
-  if (options.length === 0) return [];
-
-  let best: string[] = options[0];
-  let bestScore = Number.POSITIVE_INFINITY;
-
-  for (const option of options) {
-    const total = option.reduce((sum, cardId) => sum + cardMoneyValue(cardId, variant), 0);
-    const meetsTarget = total >= amount;
-    const score = meetsTarget
-      ? total * 100 + option.length
-      : 1_000_000 - total * 100 + option.length;
-    if (score < bestScore) {
-      best = option;
-      bestScore = score;
-    }
-  }
-
-  return best;
+  return suggestPayment(player, amount, gameVariant(state));
 }
 
 function debtsFor(player: PlayerState): NonNullable<PlayerState['debts']> {

@@ -625,6 +625,62 @@ export function generatePaymentOptions(player: PlayerState, targetAmount: number
   return options.slice(0, 25);
 }
 
+/** The cheapest pick from `cards` that reaches `amount`: least overpaid, then fewest banked action cards, then fewest cards. */
+function cheapestCover(cards: string[], amount: number, variant: GameVariant): string[] | null {
+  const isAction = (cardId: string) => (getCardDefinition(cardId, variant).kind === 'money' ? 0 : 1);
+  const ordered = [...cards].sort((left, right) => left.localeCompare(right));
+  let picks = new Map<number, string[]>([[0, []]]);
+  const better = (left: string[], right: string[]) => {
+    const actions = left.reduce((sum, id) => sum + isAction(id), 0) - right.reduce((sum, id) => sum + isAction(id), 0);
+    return actions !== 0 ? actions < 0 : left.length < right.length;
+  };
+  for (const cardId of ordered) {
+    const next = new Map(picks);
+    for (const [total, pick] of picks) {
+      if (total >= amount) continue;
+      const sum = total + cardMoneyValue(cardId, variant);
+      const candidate = [...pick, cardId];
+      const held = next.get(sum);
+      if (!held || better(candidate, held)) next.set(sum, candidate);
+    }
+    picks = next;
+  }
+  const totals = [...picks.keys()].filter((total) => total >= amount).sort((left, right) => left - right);
+  return totals.length > 0 ? picks.get(totals[0]) ?? null : null;
+}
+
+/**
+ * What a sensible player hands over: the bank first, since that money is spent either way,
+ * then cards outside complete sets, and a complete set only when nothing else covers it.
+ */
+export function suggestPayment(player: PlayerState, amount: number, variant: GameVariant = 'classic'): string[] {
+  const payable = (cardId: string) => cardMoneyValue(cardId, variant) > 0 && !(variant === 'no_mercy' && isEveryColorWild(cardId, variant));
+  const bank = player.bank.filter(payable);
+  const fromBank = cheapestCover(bank, amount, variant);
+  if (fromBank) return fromBank;
+  const remaining = amount - bank.reduce((sum, cardId) => sum + cardMoneyValue(cardId, variant), 0);
+
+  const loose: string[] = [];
+  const complete: string[][] = [];
+  for (const color of PROPERTY_COLORS) {
+    for (const set of propertySets(player, color, variant)) {
+      const cards = set.entries.map((entry) => entry.cardId).filter(payable);
+      if (isCompletePropertySet(set.entries, color, variant)) complete.push(cards);
+      else loose.push(...cards);
+    }
+  }
+  const worth = (cards: string[]) => cards.reduce((sum, cardId) => sum + cardMoneyValue(cardId, variant), 0);
+  complete.sort((left, right) => worth(left) - worth(right) || left.join().localeCompare(right.join()));
+
+  const pool = [...loose];
+  for (let added = 0; added <= complete.length; added += 1) {
+    const cover = cheapestCover(pool, remaining, variant);
+    if (cover) return [...bank, ...cover];
+    if (added < complete.length) pool.push(...complete[added]);
+  }
+  return [...bank, ...pool];
+}
+
 export function findPropertyColorByCard(player: PlayerState, cardId: string): PropertyColor | null {
   for (const color of PROPERTY_COLORS) {
     if (player.properties[color].some((entry) => entry.cardId === cardId)) {

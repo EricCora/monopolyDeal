@@ -371,6 +371,61 @@ public enum Engine {
         player.properties[color].filter { $0.attachedToCardId == cardId && (setId == nil || $0.setId == setId) }
     }
 
+    /// The cheapest pick from `cards` that reaches `amount`: least overpaid, then fewest banked action cards, then fewest cards.
+    private static func cheapestCover(_ cards: [String], _ amount: Int, _ variant: GameVariant) -> [String]? {
+        func actions(_ pick: [String]) -> Int { pick.filter { Catalog.card($0, variant).kind != .money }.count }
+        var picks: [Int: [String]] = [0: []]
+        for cardId in cards.sorted(by: cardIdPrecedes) {
+            var next = picks
+            // A dictionary's order is random, so read totals in order to match the web's insertion order closely enough:
+            // `better` decides on content, and ties keep whichever was already held.
+            for total in picks.keys.sorted() where total < amount {
+                let sum = total + cardMoneyValue(cardId, variant)
+                let candidate = picks[total]! + [cardId]
+                if let held = next[sum] {
+                    let difference = actions(candidate) - actions(held)
+                    if difference < 0 || (difference == 0 && candidate.count < held.count) { next[sum] = candidate }
+                } else {
+                    next[sum] = candidate
+                }
+            }
+            picks = next
+        }
+        return picks.keys.filter { $0 >= amount }.min().flatMap { picks[$0] }
+    }
+
+    /// What a sensible player hands over: the bank first, since that money is spent either way,
+    /// then cards outside complete sets, and a complete set only when nothing else covers it.
+    public static func suggestPayment(_ player: PlayerState, _ amount: Int, _ variant: GameVariant) -> [String] {
+        func payable(_ cardId: String) -> Bool {
+            cardMoneyValue(cardId, variant) > 0 && !(variant == .no_mercy && Catalog.isEveryColorWild(cardId, variant))
+        }
+        func worth(_ cards: [String]) -> Int { cards.reduce(0) { $0 + cardMoneyValue($1, variant) } }
+        let bank = player.bank.filter(payable)
+        if let fromBank = cheapestCover(bank, amount, variant) { return fromBank }
+        let remaining = amount - worth(bank)
+
+        var loose: [String] = []
+        var complete: [[String]] = []
+        for color in propertyColors {
+            for set in propertySets(player, color, variant) {
+                let cards = set.entries.map(\.cardId).filter(payable)
+                if isCompletePropertySet(set.entries, color, variant) { complete.append(cards) } else { loose += cards }
+            }
+        }
+        complete = complete.enumerated().sorted { left, right in
+            let difference = worth(left.element) - worth(right.element)
+            return difference != 0 ? difference < 0 : left.offset < right.offset
+        }.map(\.element)
+
+        var pool = loose
+        for added in 0...complete.count {
+            if let cover = cheapestCover(pool, remaining, variant) { return bank + cover }
+            if added < complete.count { pool += complete[added] }
+        }
+        return bank + pool
+    }
+
     public static func cardMoneyValue(_ cardId: String, _ variant: GameVariant) -> Int {
         let card = Catalog.card(cardId, variant)
         return card.moneyValue ?? card.value
