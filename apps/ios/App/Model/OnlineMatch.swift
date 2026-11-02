@@ -167,7 +167,7 @@ final class OnlineMatch: TableSession {
         guard recordedSignature != signature else { return }
         recordedSignature = signature
         let before = store.achievements().counters
-        let record = store.record(StatsBuilder.matchRecord(game, mode: .live_online, surface: .multiplayer, presetId: view.presetId.rawValue, roomCode: view.roomCode))
+        let record = store.record(StatsBuilder.matchRecord(game, mode: .live_online, surface: .multiplayer, presetId: view.presetId.rawValue, roomCode: view.roomCode, viewerId: view.yourPlayerId))
         summary = PostGame.summary(game, lifetime: record.lifetime)
         unlocked = record.unlocked
         newUnlocks = Unlockables.newlyUnlocked(before: before, after: store.achievements().counters)

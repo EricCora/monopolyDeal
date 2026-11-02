@@ -75,6 +75,12 @@ The server answers `invalid_session` both for a bad token and for a seat it mark
 ## 2026-11-01: Two Wilds stay short of a complete Classic set (superseded)
 Eric reviewed this while playing on iOS and kept the rule. The app now says why, instead of changing it. **Superseded 2026-11-02** by the decision below.
 
+## 2026-11-02: Only a win by someone on this device counts as your win
+Wins, quick wins, the unlocks built on them, and the daily challenge used to count any finished game, so a bot beating you earned "First Win". Records now carry `viewerWon`. Online that means this seat won. Locally, any person at the device counts, including in pass-and-play, and bots don't. Older records keep counting as before, and nothing already earned is taken away. Web online games now also count toward achievements, as iOS already did.
+
+## 2026-11-02: The table wraps onto rows
+The player's piles used to scroll sideways with empty table below them. They now wrap, and scroll down only if they outgrow the space.
+
 ## 2026-11-02: A two-color Wild and an any-color Wild make a complete set
 Eric hit this in a playtest and said it's valid. Classic now matches No Mercy: only a set made entirely of any-color Wilds falls short.
 
@@ -171,3 +177,6 @@ Push needs a paid Apple developer setup. iOS checks every 30 seconds while the a
 
 ## 2026-11-01: The hand never scrolls sideways
 Eric approved replacing two layout tests that required the old sidebar order and a sideways-scrolling tight hand. Scrolling and hold-and-slide want the same finger movement, so the hand always overlaps its cards to fit, as on iOS. The new tests check that the table stays on screen and that touches on the hand go to its gestures.
+
+## 2026-11-02: The repo lives at ~/Developer/monopolyDeal
+iCloud offloads files on the Desktop, including `.git` objects, which stalled every tool. Eric approved moving it. The Desktop copy went to the Trash, with its one unique item saved as the local branch `archive/no-mercy-wip`.

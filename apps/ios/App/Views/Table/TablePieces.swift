@@ -299,8 +299,8 @@ struct PlayerBoard: View {
                 SetCountBadge(count: Engine.countCompleteSets(player, session.variant), needed: session.game.map { Engine.ruleset($0).winCompleteSets } ?? 3)
                 if session.variant == .no_mercy { DebtBadge(player: player) }
             }
-            ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                HStack(alignment: .top, spacing: 10) {
+            ScrollView(.vertical, showsIndicators: false) {
+                TableFlow(spacing: 10) {
                     BankStack(cards: player.bank, variant: session.variant, cardWidth: cardWidth, space: space, onTap: { _ in actions.ui.showBank = true })
                     ForEach(lanes, id: \.id) { lane in
                         SetLane(lane: lane, variant: session.variant, cardWidth: cardWidth, space: space) { cardId in
@@ -404,6 +404,46 @@ struct SetLane: View {
     }
 }
 
+/// Lays piles out in rows, so the table fills its space before anything needs scrolling.
+struct TableFlow: Layout {
+    var spacing: CGFloat
+
+    private func rows(_ subviews: Subviews, width: CGFloat) -> [[(index: Int, size: CGSize)]] {
+        var rows: [[(index: Int, size: CGSize)]] = [[]]
+        var used: CGFloat = 0
+        for (index, subview) in subviews.enumerated() {
+            let size = subview.sizeThatFits(.unspecified)
+            if !rows[rows.count - 1].isEmpty && used + spacing + size.width > width {
+                rows.append([])
+                used = 0
+            }
+            used += (rows[rows.count - 1].isEmpty ? 0 : spacing) + size.width
+            rows[rows.count - 1].append((index, size))
+        }
+        return rows
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        let rows = rows(subviews, width: width)
+        let height = rows.reduce(0) { $0 + ($1.map(\.size.height).max() ?? 0) } + spacing * CGFloat(max(rows.count - 1, 0))
+        let widest = rows.map { row in row.reduce(0) { $0 + $1.size.width } + spacing * CGFloat(max(row.count - 1, 0)) }.max() ?? 0
+        return CGSize(width: proposal.width ?? widest, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in rows(subviews, width: bounds.width) {
+            var x = bounds.minX
+            for item in row {
+                subviews[item.index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(item.size))
+                x += item.size.width + spacing
+            }
+            y += (row.map(\.size.height).max() ?? 0) + spacing
+        }
+    }
+}
+
 struct BankStack: View {
     var cards: [String]
     var variant: GameVariant
@@ -447,7 +487,7 @@ struct BankStack: View {
 
     @ViewBuilder
     private func card(_ cardId: String) -> some View {
-        let view = CardView(cardId: cardId, variant: variant, width: cardWidth)
+        let view = CardView(cardId: cardId, variant: variant, width: cardWidth, edgeOnly: cardId != visibleCards.last)
             .shadow(color: .black.opacity(0.25), radius: 1.5, y: 1)
             .onTapGesture { onTap(cardId) }
         if let space {
@@ -651,7 +691,7 @@ struct MiniBoard: View {
                 if !player.bank.isEmpty {
                     ZStack(alignment: .topLeading) {
                         ForEach(Array(player.bank.suffix(4).enumerated()), id: \.element) { index, cardId in
-                            CardView(cardId: cardId, variant: variant, width: 40)
+                            CardView(cardId: cardId, variant: variant, width: 40, edgeOnly: cardId != player.bank.last)
                                 .offset(x: CGFloat(index) * 4, y: CGFloat(index) * 2)
                         }
                     }
@@ -1045,7 +1085,7 @@ struct BankFan: View {
                 } label: {
                     ZStack(alignment: .topLeading) {
                         ForEach(Array(cards.enumerated()), id: \.element) { index, cardId in
-                            CardView(cardId: cardId, variant: variant, width: 88)
+                            CardView(cardId: cardId, variant: variant, width: 88, edgeOnly: cardId != cards.last)
                                 .shadow(color: .black.opacity(0.25), radius: 1.5, y: 1)
                                 .offset(x: CGFloat(index) * 9)
                         }

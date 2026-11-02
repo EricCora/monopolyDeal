@@ -30,7 +30,7 @@ final class PlaytestRoundTests: XCTestCase {
             control.tap()
             return
         }
-        let playable = app.descendants(matching: .any).matching(NSPredicate(format: "identifier MATCHES 'hand\\\\.[0-9]+'")).firstMatch
+        let playable = app.descendants(matching: .any).matching(NSPredicate(format: "identifier MATCHES 'hand\\\\.[0-9]+' AND value == 'playable'")).firstMatch
         if playable.exists && playable.isHittable {
             playable.tap()
             return
@@ -63,7 +63,7 @@ final class PlaytestRoundTests: XCTestCase {
         app.swipeUp()
         app.buttons["setup.start"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["table.clock"].waitForExistence(timeout: 10))
-        for _ in 0..<40 { playAStep() }
+        for _ in 0..<70 { playAStep() }
         shot("table")
         let bank = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Bank,'")).firstMatch
         if bank.exists {

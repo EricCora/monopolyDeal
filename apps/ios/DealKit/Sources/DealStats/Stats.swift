@@ -24,6 +24,8 @@ public struct MatchRecord: Codable, Hashable, Sendable, Identifiable {
     public var players: [String]
     public var winnerId: String?
     public var winnerName: String?
+    /// Whether someone on this device won. Records from before this was tracked leave it out.
+    public var viewerWon: Bool?
     public var turnCount: Int
     public var durationSec: Int
     public var actionsByType: [String: Int]
@@ -31,6 +33,8 @@ public struct MatchRecord: Codable, Hashable, Sendable, Identifiable {
     public var surface: MatchSurface
     public var presetId: String?
     public var roomCode: String?
+
+    var didViewerWin: Bool { viewerWon ?? (winnerName != nil) }
 
     public var endedDate: Date { Date(timeIntervalSince1970: endedAt / 1000) }
 }
@@ -65,8 +69,8 @@ public enum AchievementId: String, Codable, CaseIterable, Hashable, Sendable {
 
     public var detail: String {
         switch self {
-        case .first_win: "Finish a game with a winner."
-        case .ten_wins: "Finish ten games with a winner."
+        case .first_win: "Win a game."
+        case .ten_wins: "Win ten games."
         case .action_century: "Play 100 actions across all games."
         case .quick_win: "Win within 12 turns."
         }
@@ -118,8 +122,8 @@ public struct AchievementState: Codable, Hashable, Sendable {
         var next = self
         next.counters.gamesPlayed += 1
         next.counters.actions += match.actionsByType.values.reduce(0, +)
-        if match.winnerName != nil { next.counters.wins += 1 }
-        if match.turnCount <= 12 && match.winnerName != nil { next.counters.quickWins += 1 }
+        if match.didViewerWin { next.counters.wins += 1 }
+        if match.turnCount <= 12 && match.didViewerWin { next.counters.quickWins += 1 }
         for id in AchievementId.allCases where next.progress(id) >= id.target && next.unlockedAt[id.rawValue] == nil {
             next.unlockedAt[id.rawValue] = match.endedAt
         }
@@ -170,13 +174,13 @@ public struct DailyChallenge: Codable, Hashable, Sendable {
         } else {
             next.bestTurnCount = match.turnCount
         }
-        if match.turnCount <= next.targetTurns { next.completed = true }
+        if match.turnCount <= next.targetTurns && match.didViewerWin { next.completed = true }
         return next
     }
 }
 
 public enum StatsBuilder {
-    public static func matchRecord(_ state: GameState, mode: MatchMode, surface: MatchSurface, presetId: String? = nil, roomCode: String? = nil) -> MatchRecord {
+    public static func matchRecord(_ state: GameState, mode: MatchMode, surface: MatchSurface, presetId: String? = nil, roomCode: String? = nil, viewerId: String? = nil) -> MatchRecord {
         var actions: [String: Int] = [:]
         for event in state.history { actions[event.type, default: 0] += 1 }
         let winner = state.players.first { $0.id == state.winnerId }
@@ -187,6 +191,8 @@ public enum StatsBuilder {
             players: state.players.map(\.name),
             winnerId: state.winnerId,
             winnerName: winner?.name,
+            // Online, the seat on this device. Locally, any person at the device counts, and bots don't.
+            viewerWon: winner.map { winner in viewerId.map { $0 == winner.id } ?? (winner.controller != .bot) } ?? false,
             turnCount: state.turnCount,
             durationSec: max(1, Int((state.updatedAt - state.createdAt) / 1000)),
             actionsByType: actions,

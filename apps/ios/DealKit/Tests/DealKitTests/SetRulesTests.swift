@@ -148,3 +148,47 @@ final class GameLogModelTests: XCTestCase {
         XCTAssertEqual(turns[1].entries.first?.message, "Ann ended their turn.")
     }
 }
+
+final class WhoWonTests: XCTestCase {
+    private func finished(winner: PlayerId, second: PlayerController = .bot) -> GameState {
+        var state = Engine.createGame(GameConfig(players: [
+            PlayerConfig(id: "p1", name: "Ann", controller: .human, botDifficulty: .easy),
+            PlayerConfig(id: "p2", name: "Bot", controller: second, botDifficulty: .easy),
+        ], seed: 1))
+        state.winnerId = winner
+        state.turnCount = 5
+        return state
+    }
+
+    private func wins(_ state: GameState, viewerId: PlayerId? = nil) -> Int {
+        AchievementState().applying(StatsBuilder.matchRecord(state, mode: .practice, surface: .local, viewerId: viewerId)).counters.wins
+    }
+
+    func testAPersonBeatingABotCounts() { XCTAssertEqual(wins(finished(winner: "p1")), 1) }
+
+    func testABotBeatingYouDoesNot() {
+        let next = AchievementState().applying(StatsBuilder.matchRecord(finished(winner: "p2"), mode: .practice, surface: .local))
+        XCTAssertEqual(next.counters.wins, 0)
+        XCTAssertEqual(next.counters.quickWins, 0)
+        XCTAssertFalse(next.isUnlocked(.first_win))
+    }
+
+    func testAnyPersonWinningPassAndPlayCounts() { XCTAssertEqual(wins(finished(winner: "p2", second: .human)), 1) }
+
+    func testOnlineOnlyThisSeatCounts() {
+        XCTAssertEqual(wins(finished(winner: "p1"), viewerId: "p1"), 1)
+        XCTAssertEqual(wins(finished(winner: "p1"), viewerId: "p2"), 0)
+    }
+
+    func testRecordsFromBeforeThisWasTrackedStillRead() {
+        var record = StatsBuilder.matchRecord(finished(winner: "p2"), mode: .practice, surface: .local)
+        record.viewerWon = nil
+        XCTAssertEqual(AchievementState().applying(record).counters.wins, 1)
+    }
+
+    func testALossDoesNotCompleteTheDailyChallenge() {
+        let daily = DailyChallenge.current(nil)
+        let lost = StatsBuilder.matchRecord(finished(winner: "p2"), mode: .daily_challenge, surface: .local)
+        XCTAssertFalse(daily.applying(lost).completed)
+    }
+}

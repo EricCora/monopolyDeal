@@ -782,7 +782,8 @@
   position: relative;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
 }
@@ -793,10 +794,9 @@
 
 .player-board-lanes {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 10px;
-  width: max-content;
-  min-width: 100%;
   padding: 4px 2px;
 }
 
@@ -2287,5 +2287,11 @@
   font-weight: 700;
   opacity: 0.75;
   cursor: pointer;
+}
+
+/* Only the edge of a card under another shows, so its tags would just collide. */
+.bank-card-wrap:not(:last-child) .card-face > *,
+.bank-fan-cards:not(.is-open) .bank-fan-card:not(:last-child) .card-face > * {
+  visibility: hidden;
 }
 

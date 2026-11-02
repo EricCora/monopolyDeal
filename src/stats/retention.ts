@@ -78,13 +78,17 @@ function markUnlocked(next: AchievementStateV1, id: AchievementId, timestamp: nu
   }
 }
 
+function didViewerWin(match: MatchRecordV1): boolean {
+  return match.viewerWon ?? Boolean(match.winnerName);
+}
+
 export function applyMatchToAchievementState(current: AchievementStateV1, match: MatchRecordV1): AchievementStateV1 {
   const next = structuredClone(current);
 
   next.counters.gamesPlayed += 1;
   next.counters.actions += sumActions(match);
-  if (match.winnerName) next.counters.wins += 1;
-  if (match.turnCount <= 12 && match.winnerName) next.counters.quickWins += 1;
+  if (didViewerWin(match)) next.counters.wins += 1;
+  if (match.turnCount <= 12 && didViewerWin(match)) next.counters.quickWins += 1;
 
   if (next.counters.wins >= ACHIEVEMENT_TARGETS.first_win) markUnlocked(next, 'first_win', match.endedAt);
   if (next.counters.wins >= ACHIEVEMENT_TARGETS.ten_wins) markUnlocked(next, 'ten_wins', match.endedAt);
@@ -100,7 +104,7 @@ export function applyMatchToDailyChallenge(current: DailyChallengeV1, match: Mat
   if (next.bestTurnCount == null || match.turnCount < next.bestTurnCount) {
     next.bestTurnCount = match.turnCount;
   }
-  if (match.turnCount <= next.targetTurns) {
+  if (match.turnCount <= next.targetTurns && didViewerWin(match)) {
     next.completed = true;
   }
   return next;

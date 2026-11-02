@@ -73,8 +73,8 @@ export function HomeScreen({
   const dailyDetail = dailyChallenge.completed
     ? `Beaten today in ${dailyChallenge.bestTurnCount ?? 0} turns.`
     : dailyChallenge.bestTurnCount != null
-      ? `Finish within ${dailyChallenge.targetTurns} turns. Best so far: ${dailyChallenge.bestTurnCount}.`
-      : `Today's deal: finish within ${dailyChallenge.targetTurns} turns.`;
+      ? `Win within ${dailyChallenge.targetTurns} turns. Best so far: ${dailyChallenge.bestTurnCount}.`
+      : `Today's deal: win within ${dailyChallenge.targetTurns} turns.`;
 
   return (
     <section className={`home-screen card-enter ${reducedEffects ? 'is-still' : ''}`}>

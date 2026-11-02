@@ -9,6 +9,8 @@ export interface MatchRecordV1 {
   players: string[];
   winnerId?: string;
   winnerName?: string;
+  /** Whether someone on this device won. Records from before this was tracked leave it out. */
+  viewerWon?: boolean;
   turnCount: number;
   durationSec: number;
   actionsByType: Record<string, number>;

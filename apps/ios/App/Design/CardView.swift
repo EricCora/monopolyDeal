@@ -11,13 +11,19 @@ struct CardView: View {
     var width: CGFloat
     /// The color a wild is currently assigned to, shown on the table.
     var assignedColor: PropertyColor?
+    /// Only the edge shows, under another card in a pile, so its tags would just collide.
+    var edgeOnly = false
 
     static let aspect: CGFloat = 1.4
 
     var body: some View {
         Group {
             if let card = Catalog.lookup(cardId, variant) {
-                face(card)
+                if edgeOnly {
+                    CardEdge(card: card)
+                } else {
+                    face(card)
+                }
             } else {
                 CardBack(width: width)
             }
@@ -73,21 +79,37 @@ private struct PaperBackground: View {
 
 // MARK: Money
 
+private func moneyTint(_ value: Int) -> Color {
+    switch value {
+    case 1: Color(hex: 0xB99B6B)
+    case 2: Color(hex: 0xD76A8C)
+    case 3: Color(hex: 0x3FA66C)
+    case 4: Color(hex: 0x4C9BD6)
+    case 5: Color(hex: 0x8A5CC9)
+    case 10: Color(hex: 0xE5873A)
+    default: Palette.goldDeep
+    }
+}
+
+private struct CardEdge: View {
+    var card: CardDefinition
+
+    var body: some View {
+        if card.kind == .money {
+            let tint = moneyTint(card.value)
+            LinearGradient(colors: [tint.opacity(0.28), tint.opacity(0.5)], startPoint: .top, endPoint: .bottom)
+                .background(Palette.paper)
+        } else {
+            Palette.paper
+        }
+    }
+}
+
 private struct MoneyFace: View {
     var card: CardDefinition
     var width: CGFloat
 
-    private var tint: Color {
-        switch card.value {
-        case 1: Color(hex: 0xB99B6B)
-        case 2: Color(hex: 0xD76A8C)
-        case 3: Color(hex: 0x3FA66C)
-        case 4: Color(hex: 0x4C9BD6)
-        case 5: Color(hex: 0x8A5CC9)
-        case 10: Color(hex: 0xE5873A)
-        default: Palette.goldDeep
-        }
-    }
+    private var tint: Color { moneyTint(card.value) }
 
     var body: some View {
         let s = Scale(width: width)
@@ -108,6 +130,11 @@ private struct MoneyFace: View {
             Text("$\(card.value)")
                 .font(.system(size: s(card.value >= 10 ? 26 : 30), weight: .black, design: .rounded))
                 .foregroundStyle(Palette.ink)
+        }
+        // The rings run past the card's edges, so the corners are placed on the card, not on them.
+        .frame(width: width, height: width * CardView.aspect)
+        .clipped()
+        .overlay {
             VStack {
                 HStack {
                     Text("$\(card.value)")

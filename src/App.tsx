@@ -995,12 +995,19 @@ function App() {
     recordGrowthMetric('multiplayer_match_completed');
     if (multiplayerRecordedMatchRef.current === signature) return;
     multiplayerRecordedMatchRef.current = signature;
-    appendMatchRecord(buildMatchRecord(multiplayerGame, {
+    // Someone watching wasn't playing, so the result isn't theirs.
+    if (multiplayerRoomView.role === 'spectator') return;
+    const onlineRecord = buildMatchRecord(multiplayerGame, {
       mode: 'live_online',
       surface: 'multiplayer',
       presetId: multiplayerRoomView.presetId,
       roomCode: multiplayerRoomView.roomCode,
-    }));
+      viewerId: multiplayerRoomView.yourPlayerId,
+    });
+    appendMatchRecord(onlineRecord);
+    const nextAchievements = applyMatchToAchievementState(loadAchievementState(), onlineRecord);
+    saveAchievementState(nextAchievements);
+    setAchievementState(nextAchievements);
   }, [appendMatchRecord, multiplayerGame, multiplayerRoomView, recordGrowthMetric, screen]);
 
   useEffect(() => {

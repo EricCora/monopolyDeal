@@ -19,8 +19,8 @@ interface StatsScreenProps {
 }
 
 const ACHIEVEMENTS: Array<{ id: AchievementId; label: string; detail: string; icon: IconName }> = [
-  { id: 'first_win', label: 'First Win', detail: 'Finish a game with a winner.', icon: 'trophy' },
-  { id: 'ten_wins', label: 'Ten Wins', detail: 'Finish ten games with a winner.', icon: 'star' },
+  { id: 'first_win', label: 'First Win', detail: 'Win a game.', icon: 'trophy' },
+  { id: 'ten_wins', label: 'Ten Wins', detail: 'Win ten games.', icon: 'star' },
   { id: 'action_century', label: 'Action Century', detail: 'Play 100 actions across all games.', icon: 'deal_breaker' },
   { id: 'quick_win', label: 'Quick Win', detail: 'Win within 12 turns.', icon: 'pass_go' },
 ];

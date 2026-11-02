@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createGame, type GameState } from '../engine';
-import { applyMatchToAchievementState, applyMatchToDailyChallenge, buildMatchRecord, ensureTodayDailyChallenge, loadAchievementState } from '../stats';
+import { applyMatchToAchievementState, applyMatchToDailyChallenge, buildMatchRecord, defaultAchievementState, ensureTodayDailyChallenge } from '../stats';
 
 function finished(winnerId: string): GameState {
   const state = createGame({
@@ -15,7 +15,7 @@ function finished(winnerId: string): GameState {
   return state;
 }
 
-const achievements = () => loadAchievementState();
+const achievements = () => defaultAchievementState();
 
 describe('what counts as your win', () => {
   it('counts a person beating a bot on this device', () => {

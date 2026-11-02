@@ -176,8 +176,8 @@ struct HomeView: View {
     private var dailyDetail: String {
         let challenge = app.dailyChallenge
         if challenge.completed { return "Beaten today in \(challenge.bestTurnCount ?? 0) turns." }
-        if let best = challenge.bestTurnCount { return "Finish within \(challenge.targetTurns) turns. Best so far: \(best)." }
-        return "Today's deal: finish within \(challenge.targetTurns) turns."
+        if let best = challenge.bestTurnCount { return "Win within \(challenge.targetTurns) turns. Best so far: \(best)." }
+        return "Today's deal: win within \(challenge.targetTurns) turns."
     }
 
     private var menuGrid: some View {

@@ -20,6 +20,7 @@ import {
 } from '../../apps/server/src/gameService';
 import { createMemoryTurnStore, handleTurnRoomRequest, type TurnRoomNotifier } from '../../apps/server/src/turnRooms';
 import { applyAction, getLegalActions, getNextPrompt, isGameOver, type Action } from '../engine';
+import { chooseHeuristicAction } from '../ai';
 import { routeRoomRequest } from '../network/roomRouting';
 import { replayStateFingerprint } from '../replay/serialize';
 
@@ -49,11 +50,9 @@ function playToEnd(room: MultiplayerRoom, host: Seat, other: Seat, limit = 6000)
     const prompt = getNextPrompt(room.game);
     const legal = getLegalActions(room.game, prompt.playerId);
     const seat = seatOf(room, host, other, prompt.playerId);
-    const choice = legal.find((entry) => entry.action.type === 'play_property')
-      ?? legal.find((entry) => entry.action.type === 'draw_cards')
-      ?? legal.find((entry) => entry.action.type === 'pass_turn')
-      ?? legal[0];
-    applyRoomAction(room, seat.playerId, seat.sessionToken, choice.action);
+    // The real bot: a player that never steals stalemates at 2 sets each in about 1 game in 130.
+    const action = chooseHeuristicAction(room.game, prompt.playerId, legal)?.action ?? legal[0].action;
+    applyRoomAction(room, seat.playerId, seat.sessionToken, action);
   }
 }
 

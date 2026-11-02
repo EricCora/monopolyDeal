@@ -7,6 +7,8 @@ interface MatchRecordMetadata {
   surface: MatchSurface;
   presetId?: MultiplayerSessionPresetId;
   roomCode?: string;
+  /** Online, the seat on this device. Locally, any person at the device counts, and bots don't. */
+  viewerId?: string;
 }
 
 export function buildMatchRecord(state: GameState, metadata: MatchRecordMetadata): MatchRecordV1 {
@@ -24,6 +26,7 @@ export function buildMatchRecord(state: GameState, metadata: MatchRecordMetadata
     players: state.players.map((player) => player.name),
     winnerId: state.winnerId,
     winnerName: winner?.name,
+    viewerWon: Boolean(winner) && (metadata.viewerId ? winner?.id === metadata.viewerId : winner?.controller !== 'bot'),
     turnCount: state.turnCount,
     durationSec: Math.max(1, Math.floor((state.updatedAt - state.createdAt) / 1000)),
     actionsByType,
