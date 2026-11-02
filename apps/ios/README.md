@@ -31,9 +31,21 @@ Automated tests can't cover touch and feel, so try these on the phone:
   - `DealEngine`: the rules, a port of `src/engine`.
   - `DealAI`: the easy and hard bots and the coach, a port of `src/ai`.
   - `DealStats`: saves, stats, achievements and the post-game recap.
-  - `DealOnline`: the room client, using HTTP and SSE.
+  - `DealOnline`: the room client, using HTTP and SSE. Six-letter room codes are turn-by-turn rooms, which poll the website instead.
 - `App/`: the SwiftUI screens.
-- `AppUITests/`: tests that play games through the screen.
+- `AppUITests/`: tests that play games through the screen. `PlaytestRoundTests` walks the bank, log, history, replay and room screens, and attaches screenshots to the result bundle.
+
+## Installing on the iPhone from the command line
+
+Xcode isn't needed once the phone is paired. Use the device id from `xcrun devicectl list devices`:
+
+```bash
+xcodebuild -project MonopolyDeal.xcodeproj -scheme MonopolyDeal -configuration Release -destination generic/platform=iOS -derivedDataPath ~/Library/Caches/MonopolyDealBuild/device -allowProvisioningUpdates build
+```
+
+```bash
+xcrun devicectl device install app --device <id> ~/Library/Caches/MonopolyDealBuild/device/Build/Products/Release-iphoneos/MonopolyDeal.app
+```
 
 ## Changing the rules
 
@@ -65,5 +77,10 @@ Add these under **Product > Scheme > Edit Scheme > Run > Arguments**:
 | --- | --- |
 | `-serverURL http://localhost:8787` | Uses a local room server instead of the hosted one |
 | `-seed 11` | Deals the same cards every time |
+| `-botDelayMs 60` | Shortens the bot's pause |
+| `-speedTurnSeconds 2` | Shortens a Speed turn, so bots finish a game unattended |
+| `-winSets 1` | Sets the number of complete sets needed to win |
+| `-route online` | Opens on a screen: `setup`, `saved`, `stats`, `settings` or `online` |
+| `-storeDirectory NAME` | Uses a throwaway save folder |
 | `-autoplayGames 3 -autoplayVariant no_mercy -autoplayPlayers 4` | Plays whole games by itself (Debug builds only) |
 | `-autoplayOnlineRoom CODE` | Joins a room and plays its seat by itself (Debug builds only) |

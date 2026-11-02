@@ -4,11 +4,12 @@ Purpose: give coding agents enough context to make correct, low-regression chang
 
 ## Current Handoff Focus
 
-- Flagship multiplayer roadmap and tradeoff ledger:
-  - `docs/ROADMAP_MULTIPLAYER_FLAGSHIP.md`
-  - `docs/MULTIPLAYER_CONCESSIONS_LOG.md`
+There's no active handoff. Start from `AGENTS.md` and `docs/PARALLEL_WORK.md`, and use `docs/README.md` to tell current docs from historical ones. Newest feature specs are in `docs/specs/`.
 
 ## Architecture Snapshot
+
+- `apps/ios/`: native SwiftUI app. See `apps/ios/README.md`. `DealKit` mirrors `src/engine`, `src/ai` and `src/stats`, and recorded traces hold the engines together.
+- `apps/server/src/`: `gameService.ts` holds room rules: seats, bots (`addRoomBot`, `nextRoomAutomation`, `runRoomAutomation`), options, series, replay logs, and the room between matches (`rematchSeats`). `index.ts` is the live server on Render. `turnRooms.ts` serves the same rules for six-letter turn-by-turn rooms through a `TurnRoomStore`, with `api/turn-rooms.source.ts` as the Vercel Function and Blob store.
 
 - `src/engine/`
   - Pure game rules engine.
@@ -325,6 +326,12 @@ Validation:
 - Multiplayer server entry: `apps/server/src/index.ts`
 - Legacy LAN fallback: `src/ui/screens/LanPlayScreen.tsx`, `src/network/lanClient.ts`
 - Tests: `src/test/engine.test.ts`, `src/test/app.test.tsx`, `src/test/card-ui.test.tsx`
+- Set rules and pile rejoining: `consolidatePropertySets` in `src/engine/core.ts`, tested in `src/test/set-rules.test.ts`
+- Auto-Select and bot decisions: `suggestPayment` in `src/engine/core.ts`, `src/ai/heuristic.ts`, tested in `src/test/auto-decisions.test.ts`
+- Who won, for achievements: `viewerWon` in `src/stats/records.ts`, tested in `src/test/who-won.test.ts`
+- Game log model: `src/ui/table/gameLog.ts`, `src/ui/components/RecentEvents.tsx`, `apps/ios/DealKit/Sources/DealStats/GameLogModel.swift`
+- Replays and match history: `src/persistence/replays.ts`, `src/ui/screens/ReplayScreen.tsx`, `src/ui/screens/StatsScreen.tsx`, `apps/ios/App/Views/Table/ReplayView.swift`, `apps/ios/App/Views/Menus/MatchDetailView.swift`
+- Rooms: `src/test/room-features.test.ts`, `src/test/room-bots.test.ts`, `src/test/server-rejected-action.test.ts` (which runs the real server), `scripts/verify_turn_rooms.mjs` (which plays on the live site)
 
 ## Multiplayer behavior notes
 

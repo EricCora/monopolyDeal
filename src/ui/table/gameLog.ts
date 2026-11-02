@@ -45,7 +45,7 @@ function actorOf(message: string, names: string[]): string | null {
 }
 
 /** The game's events by turn, newest turn first and newest entry first within it. */
-export function buildLogTurns(events: GameEvent[], playerNames: string[]): LogTurn[] {
+export function buildLogTurns(events: GameEvent[], playerNames: string[], finished = false): LogTurn[] {
   const turns: LogTurn[] = [];
   let current: LogTurn | null = null;
   events.forEach((event, index) => {
@@ -65,7 +65,7 @@ export function buildLogTurns(events: GameEvent[], playerNames: string[]): LogTu
     if (event.type === 'turn_passed') current = null;
   });
   const reversed = turns.reverse().map((turn) => ({ ...turn, entries: [...turn.entries].reverse() }));
-  if (reversed[0] && current) reversed[0].isCurrent = true;
+  if (reversed[0] && current && !finished) reversed[0].isCurrent = true;
   return reversed;
 }
 

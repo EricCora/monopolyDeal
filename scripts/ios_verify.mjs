@@ -10,13 +10,16 @@
  * may sync to iCloud.
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const ios = join(root, 'apps/ios');
-const cache = join(homedir(), 'Library/Caches/MonopolyDealBuild');
-const port = 8799;
+// Per checkout, so agents working in other worktrees don't share build output or a server.
+const checkoutId = createHash('sha256').update(root).digest();
+const cache = join(homedir(), 'Library/Caches/MonopolyDealBuild', checkoutId.toString('hex').slice(0, 8));
+const port = Number(process.env.DEAL_VERIFY_PORT ?? 8700 + (checkoutId[0] % 200));
 const serverUrl = `http://localhost:${port}`;
 const skipUi = process.argv.includes('--skip-ui');
 const developerDir = '/Applications/Xcode.app/Contents/Developer';

@@ -180,3 +180,10 @@ Eric approved replacing two layout tests that required the old sidebar order and
 
 ## 2026-11-02: The repo lives at ~/Developer/monopolyDeal
 iCloud offloads files on the Desktop, including `.git` objects, which stalled every tool. Eric approved moving it. The Desktop copy went to the Trash, with its one unique item saved as the local branch `archive/no-mercy-wip`.
+
+## 2026-11-02: Replays are kept per match, for the history
+A game in the history opens to its log and replay, matched by the record's id. iOS keeps 50 games, the same as its history. The web keeps 20, because localStorage is small and shared with saves. Online games fetch and save their replay as soon as they finish. A replay can show any player's hand, because the game is over.
+
+## 2026-11-02: One agent at a time on simulators and rules
+Eric plans to run agents concurrently. Tests, ports and iOS build folders are safe per worktree, but simulators and the phone are shared, and a rule change touches two engines and recorded traces. `docs/PARALLEL_WORK.md` has the working rules.
+

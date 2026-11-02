@@ -7,6 +7,8 @@ import { PlayerAvatar } from '../table/tablePieces';
 interface RecentEventsProps {
   events: GameEvent[];
   playerNames: string[];
+  /** The game is over, so no turn is still being played. */
+  finished?: boolean;
 }
 
 const FILTERS: { id: LogFilter; label: string }[] = [
@@ -24,10 +26,10 @@ function EntryText({ entry }: { entry: LogEntry }) {
 }
 
 /** The game so far, one card per turn, newest first. */
-export function RecentEvents({ events, playerNames }: RecentEventsProps) {
+export function RecentEvents({ events, playerNames, finished = false }: RecentEventsProps) {
   const [filter, setFilter] = useState<LogFilter>('all');
   const [visibleTurns, setVisibleTurns] = useState(TURNS_PER_PAGE);
-  const turns = useMemo(() => filterLogTurns(buildLogTurns(events, playerNames), filter), [events, filter, playerNames]);
+  const turns = useMemo(() => filterLogTurns(buildLogTurns(events, playerNames, finished), filter), [events, filter, finished, playerNames]);
 
   return (
     <section className="game-log" aria-label="Game log">

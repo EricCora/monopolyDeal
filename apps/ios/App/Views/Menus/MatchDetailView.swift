@@ -6,8 +6,9 @@ import SwiftUI
 struct MatchDetailView: View {
     @Environment(AppModel.self) private var app
     var match: MatchRecord
-    var replay: StoredReplay?
 
+    @State private var replay: StoredReplay?
+    @State private var loaded = false
     @State private var turns: [LogTurn] = []
 
     var body: some View {
@@ -37,7 +38,7 @@ struct MatchDetailView: View {
                         .accessibilityIdentifier("match.replay")
                         SectionTitle(text: "Game Log")
                         ForEach(turns) { LogTurnCard(turn: $0) }
-                    } else {
+                    } else if loaded {
                         Label("This game has no replay. It was played before replays were saved, or it's older than the last \(DealStore.maxReplays) games.", systemImage: "info.circle")
                             .font(.footnote)
                             .foregroundStyle(SoftWhite(0.8))
@@ -52,13 +53,13 @@ struct MatchDetailView: View {
         .navigationTitle("Match")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            guard let replay else { return }
-            let log = replay.log
+            replay = app.store.replays().first { $0.id == match.id }
+            loaded = true
+            guard let log = replay?.log else { return }
             turns = await Task.detached(priority: .userInitiated) {
                 let final = log.positions().last ?? log.initial
-                return GameLogModel.turns(final.history, playerNames: final.players.map(\.name))
+                return GameLogModel.turns(final.history, playerNames: final.players.map(\.name), finished: true)
             }.value
         }
-        .accessibilityIdentifier("match")
     }
 }

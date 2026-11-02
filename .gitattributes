@@ -1,0 +1,7 @@
+# Append-only, so two branches adding entries should keep both.
+DECISIONS.md merge=union
+docs/FEATURE_RELEASE_NOTES.md merge=union
+
+# Generated. Never merge by hand: regenerate with the command in docs/PARALLEL_WORK.md.
+api/turn-rooms.js linguist-generated=true -diff
+apps/ios/DealKit/Tests/DealKitTests/Fixtures/*.json linguist-generated=true -diff

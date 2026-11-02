@@ -1,8 +1,8 @@
-# Monopoly Deal (Local Web App)
+# Monopoly Deal
 
-A browser-based Monopoly Deal game built with React + TypeScript.
+Monopoly Deal for the web and iOS: Classic and No Mercy, pass-and-play, bots, live rooms and turn-by-turn rooms, with web and iOS players able to share a room.
 
-This project focuses on pass-and-play and private-room multiplayer gameplay with a rules engine, persistent saves, and match stats.
+Live at https://monopoly-deal-smoky.vercel.app. Working on the code? Start with `AGENTS.md` and `docs/PARALLEL_WORK.md`.
 
 ## Features
 
@@ -73,7 +73,7 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 
 - **Turn clock in every mode.** It counts up normally, and Speed gives 30, 45 or 60 seconds a turn before a bot moves for you.
 - **Best of three**, locally and in rooms.
-- **Replays.** Watch a finished game back on the table. The last five are kept under Stats.
+- **Match history you can open.** Any recent game has its full log and a replay, with the option to reveal any player's hand. The last 50 are kept on iOS, and the last 20 on the web.
 - **Unlockable table styles and card backs**, earned from your stats and chosen in Settings.
 - **Bots fill dropped seats** so a live room keeps playing.
 - **Bots beside people.** A room's host can add bots and pick each one's difficulty.
@@ -168,8 +168,11 @@ The installed app opens in its own full-screen window. Local saves and settings 
 - `npm run test:watch` - run tests in watch mode
 - `npm run quality` - run lint + tests + build as one baseline gate
 - `npm run tree` - print a trimmed repo tree snapshot
-- `npm run e2e:smoke` - run Playwright/Cypress if configured; otherwise run smoke UI tests
 - `npm run replay:verify` - deterministic replay fingerprint verification (seed + command log)
+- `npm run traces:record` - record games for the Swift engine to match, after a rule or bot change
+- `npm run ios:verify` - Swift tests, app build and UI tests. `-- --skip-ui` leaves out the simulators
+- `npm run build:turn-api` - bundle the turn-by-turn room function, after server or engine changes
+- `npm run verify:turn-live` - play a short turn-by-turn game against the deployed site
 
 ## Settings
 
@@ -201,15 +204,22 @@ When a live match is open, the top bar includes `Pause` / `Resume`. Paused state
 
 ```text
 src/
-  engine/        # Core game rules and action resolution
-  cards/         # Card catalog and metadata
-  ui/            # UI components, screen containers, and theme modules
-    layout/      # Shared shell/top-bar/action-rail primitives
-    screens/     # Home/setup/game/stats/post-game screen components
-    theme/       # Tokenized CSS split by base/components/screens
-  persistence/   # localStorage save/load helpers
-  stats/         # Match records and lifetime stat aggregation
-  test/          # Engine and UI tests
+  engine/        # Rules and action resolution. The source of truth
+  cards/         # Card catalogs and metadata
+  ai/            # Bots and the coach
+  stats/         # Match records, lifetime stats, achievements
+  persistence/   # localStorage saves, replays
+  replay/        # Rebuilding and fingerprinting games from their moves
+  network/       # Room client and routing
+  app/           # App hooks, including useMultiplayerRoom
+  ui/            # Screens, table pieces and theme
+  test/          # Engine, server and UI tests
+apps/server/src/ # Room rules, live server (Render), turn-by-turn rooms
+api/             # Vercel Function for turn-by-turn rooms. turn-rooms.js is generated
+packages/shared/ # Room protocol types shared by client and server
+apps/ios/        # SwiftUI app: DealKit package (engine, bots, stats, rooms) and App screens
+scripts/         # Verification, trace recording, bundling
+docs/            # See docs/README.md for what's current
 ```
 
 ## Agent Documentation
@@ -217,11 +227,11 @@ src/
 For AI coding agents working on this repository:
 
 - `AGENTS.md` - default operating instructions, invariants, and done criteria
+- `docs/PARALLEL_WORK.md` - running several agents at once: worktrees, ports, conflict-prone files
+- `docs/README.md` - which docs are current, and which are historical
 - `docs/LLM_AGENT_GUIDE.md` - deeper architecture map, change playbooks, and test matrix
-- `docs/REFRACTOR_SAFETY_PLAYBOOK.md` - refactor safety workflow, behavior-contract templates, and regression gates
-- `docs/NEXT_CODEX_MULTIPLAYER.md` - next-session multiplayer simplification handoff instructions
-- `docs/BASELINE.md` - baseline commands, determinism path, and guardrail scripts
-- `docs/IMPLEMENTATION_TRACKER.md` - staged full-audit modernization tracker
+- `docs/REFRACTOR_SAFETY_PLAYBOOK.md` - refactor safety workflow and regression gates
+- `DECISIONS.md` - rule and behavior decisions, with reasons
 
 ## Engineering Quality Guardrails
 
@@ -244,11 +254,14 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 - `monopolyDeal.growthMetrics.v1`
 - `monopolyDeal.uiPreferences.v1`
 - `monopolyDeal.multiplayerRecovery.v1`
+- `monopolyDeal.replays.v1` and `monopolyDeal.activeReplay.v1` - finished games' moves, the latest 20, and the running game's
+- `monopolyDeal.localMatch.v1` - the running game's Speed and series settings
 
 ## Current Scope
 
-- Local pass-and-play
-- Private-room multiplayer (hosted API path)
+- Local pass-and-play, and practice against bots
+- Live rooms and turn-by-turn rooms, with bots beside people
+- Native iOS app with the same features (`apps/ios/`)
 - Private invite-link multiplayer (`/join/:roomCode`)
 - Installable PWA for iPhone and other modern mobile browsers
 - Legacy LAN scaffold is retained in the repo for development fallback but is not the primary user flow

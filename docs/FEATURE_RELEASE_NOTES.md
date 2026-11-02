@@ -1,3 +1,11 @@
+# Release Notes
+
+## 2026-11-02: Playtest round
+
+Sets and piles, a new game log, spreadable banks, bots beside people with per-seat difficulty, a lobby between matches, a timer slider, better Auto-Select and bot play, sorted rent choices, wins that count only for you, wrapped table rows, and match history with replays and hand reveal. See `docs/specs/2026-11-02-playtest-round.md` and `DECISIONS.md`.
+
+The notes below are older.
+
 # Deep Research Branch Release Notes
 
 Branch: `codex/deep-research-improvements`

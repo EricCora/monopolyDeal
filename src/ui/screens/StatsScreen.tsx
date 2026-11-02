@@ -44,7 +44,7 @@ function MatchDetail({ match, replay, onWatch, onClose }: {
       <p className="menu-note">{match.players.join(', ')} · {match.turnCount} turns</p>
       <button type="button" className="primary-button" onClick={onWatch}><Icon name="pass_go" /> Watch Replay</button>
       <p className="section-title">Game Log</p>
-      <RecentEvents events={final.history} playerNames={final.players.map((player) => player.name)} />
+      <RecentEvents events={final.history} playerNames={final.players.map((player) => player.name)} finished />
     </Sheet>
   );
 }
@@ -75,7 +75,7 @@ export function StatsScreen({ history, lifetime, growthMetrics, unlockedAchievem
       {dailyChallenge ? (
         <section className="stats-progress" aria-label="Today's challenge">
           <p className="section-title">Today&apos;s Challenge</p>
-          <strong>Finish within {dailyChallenge.targetTurns} turns</strong>
+          <strong>Win within {dailyChallenge.targetTurns} turns</strong>
           <small>
             {dailyChallenge.attempts} attempts · Best: {dailyChallenge.bestTurnCount != null ? `${dailyChallenge.bestTurnCount} turns` : 'none yet'} · {dailyChallenge.completed ? 'Done' : 'Not done yet'}
           </small>

@@ -25,7 +25,7 @@ struct StatsView: View {
         }
     }
 
-    @State private var replays: [String: StoredReplay] = [:]
+    @State private var openMatch: MatchRecord?
 
     private var matches: [MatchRecord] {
         app.history.filter { match in
@@ -77,13 +77,10 @@ struct StatsView: View {
         }
         .navigationTitle("Stats")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: MatchRecord.self) { match in
-            MatchDetailView(match: match, replay: replays[match.id])
+        .navigationDestination(item: $openMatch) { match in
+            MatchDetailView(match: match)
         }
-        .onAppear {
-            app.reloadStoredData()
-            replays = Dictionary(app.store.replays().map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        }
+        .onAppear { app.reloadStoredData() }
     }
 
     private var filters: some View {
@@ -234,7 +231,7 @@ struct StatsView: View {
         let challenge = app.dailyChallenge
         return VStack(alignment: .leading, spacing: 6) {
             SectionTitle(text: "Today's Challenge")
-            Text("Finish within \(challenge.targetTurns) turns")
+            Text("Win within \(challenge.targetTurns) turns")
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(.white)
             Text("\(challenge.attempts) attempts · Best: \(challenge.bestTurnCount.map { "\($0) turns" } ?? "none yet") · \(challenge.completed ? "Done" : "Not done yet")")
@@ -255,7 +252,9 @@ struct StatsView: View {
                     .foregroundStyle(SoftWhite(0.7))
             }
             ForEach(matches) { match in
-                NavigationLink(value: match) {
+                Button {
+                    openMatch = match
+                } label: {
                     HStack(spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack {

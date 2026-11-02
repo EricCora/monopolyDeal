@@ -99,6 +99,10 @@ final class PlaytestRoundTests: XCTestCase {
         app.buttons["setup.start"].tap()
         XCTAssertTrue(app.staticTexts["postgame.winner"].waitForExistence(timeout: 240))
         app.buttons["postgame.done"].tap()
+        // The game was started from New Game, so that's the screen it returns to.
+        let back = app.buttons["BackButton"]
+        XCTAssertTrue(back.waitForExistence(timeout: 5))
+        back.tap()
         let stats = app.buttons["home.stats"]
         XCTAssertTrue(stats.waitForExistence(timeout: 5))
         stats.tap()

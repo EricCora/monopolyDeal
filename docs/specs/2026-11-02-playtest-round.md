@@ -17,6 +17,8 @@ Eric played a two-phone game and found two cases where a player held a winning t
 9. The turn timer is a slider with stops at 30, 45 and 60 seconds, locally and in rooms.
 10. Auto-Select and bots stop giving up properties and strong cards they don't need to.
 11. A rent card lists its colors from most to least earned, with the amount.
+12. A bot's win no longer counts as yours.
+13. A match in the history opens to its log and a replay, and a replay can show any player's hand.
 
 ## Constraints
 - Rules change in TypeScript first, then `npm run traces:record`, then Swift. Confirmed.

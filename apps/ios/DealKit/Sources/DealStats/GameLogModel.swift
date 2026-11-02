@@ -47,7 +47,7 @@ public struct LogTurn: Hashable, Sendable, Identifiable {
 
 public enum GameLogModel {
     /// Newest turn first, and newest entry first within it.
-    public static func turns(_ events: [GameEvent], playerNames: [String]) -> [LogTurn] {
+    public static func turns(_ events: [GameEvent], playerNames: [String], finished: Bool = false) -> [LogTurn] {
         // Longest first, so "Bot 10" isn't read as "Bot 1".
         let names = playerNames.sorted { $0.count > $1.count }
         var turns: [LogTurn] = []
@@ -62,7 +62,7 @@ public enum GameLogModel {
             turns[turns.count - 1].entries.append(LogEntry(id: index, message: event.message, type: event.type, actor: actor))
             if event.type == "turn_passed" { open = false }
         }
-        if open { turns[turns.count - 1].isCurrent = true }
+        if open && !finished { turns[turns.count - 1].isCurrent = true }
         return turns.reversed().map { turn in
             var next = turn
             next.entries.reverse()

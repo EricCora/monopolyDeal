@@ -2,7 +2,8 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { io } from 'socket.io-client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-const PORT = 18791;
+// Varies by process, so parallel test runs in other checkouts don't collide.
+const PORT = 18000 + (process.pid % 1500);
 const BASE = `http://127.0.0.1:${PORT}`;
 let server: ChildProcess;
 
