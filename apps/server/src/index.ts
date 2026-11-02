@@ -24,9 +24,14 @@ import {
   saveRoomCheckpoint,
   sendRoomChat,
   sendRoomReaction,
+  nextRoomAutomation,
+  roomReplay,
+  runRoomAutomation,
+  setRoomOptions,
   setRoomPreset,
   setRoomVariant,
   setRoomTyping,
+  watchRoom,
   setRoomReady,
   startRoom,
   resumeRoom,
@@ -37,6 +42,7 @@ import { DisconnectTimerRegistry, disconnectTimerKey } from './disconnectTimers.
 import { SocketSessionRegistry, type SocketSeatBinding } from './socketSessionRegistry.ts';
 import { flushSnapshots, loadSnapshots, saveSnapshots } from './persistence/snapshots.ts';
 import { redactSensitiveToken } from './logging.ts';
+import { createMemoryTurnStore, handleTurnRoomRequest } from './turnRooms.ts';
 import { collectBody, RequestBodyError, SlidingWindowRateLimiter } from './httpSafeguards.ts';
 import type { PlayerId } from '../../../src/engine/index.ts';
 import type {
@@ -203,24 +209,6 @@ function mapReconnectErrorToStatus(code: string): ResumeResultStatus {
   return 'invalid_token';
 }
 
-function mapActionErrorToRejectedReason(code: string): ActionRejectedReason {
-  if (code === 'stale_state' || code === 'revision_conflict') return 'stale_state';
-  if (code === 'not_your_turn' || code === 'invalid_turn' || code === 'player_action_mismatch') return 'not_your_turn';
-  if (code === 'unresolved_pending') return 'prompt_mismatch';
-  return 'invalid_action';
-}
-
-function isActionRejectionCandidate(code: string): boolean {
-  return code === 'stale_state'
-    || code === 'revision_conflict'
-    || code === 'not_your_turn'
-    || code === 'invalid_turn'
-    || code === 'illegal_action'
-    || code === 'invalid_action'
-    || code === 'unresolved_pending'
-    || code === 'player_action_mismatch';
-}
-
 function listLanOrigins(uiPort: number): string[] {
   const nets = networkInterfaces();
   const origins = new Set<string>();
@@ -293,6 +281,7 @@ function broadcastRoomEvent(
   reason: string,
   details?: { seatId?: PlayerId; displayName?: string; graceExpiresAt?: number },
 ): void {
+  scheduleRoomAutomation(room);
   const event: MultiplayerRoomEventEnvelope = {
     roomCode: room.code,
     revision: room.revision,
@@ -359,6 +348,31 @@ function syncDisconnectTimersForRoom(room: MultiplayerRoom): void {
     }
     disconnectTimers.schedule(room.code, seat.seatId, seat.reconnectDeadlineMs);
   }
+}
+
+const automationTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Keeps one timer per room for the next move a bot seat or an expired clock will make. */
+function scheduleRoomAutomation(room: MultiplayerRoom): void {
+  const existing = automationTimers.get(room.code);
+  if (existing) clearTimeout(existing);
+  automationTimers.delete(room.code);
+  const next = nextRoomAutomation(room);
+  if (!next) return;
+  automationTimers.set(room.code, setTimeout(() => {
+    automationTimers.delete(room.code);
+    const current = rooms.get(room.code);
+    if (!current) return;
+    try {
+      if (runRoomAutomation(current)) {
+        snapshotAll();
+        broadcastRoomEvent(current, 'automation');
+      }
+    } catch (error) {
+      console.error(`[mp][automation_failed] room=${room.code}`, error);
+    }
+    scheduleRoomAutomation(current);
+  }, Math.max(0, next.at - Date.now())));
 }
 
 function syncDisconnectTimersForAllRooms(): void {
@@ -624,6 +638,14 @@ function registerSocketCommands(socket: Socket): void {
     setRoomVariant(room, binding.seatId, binding.sessionToken, payload.variant, payload?.expectedRevision);
     snapshotAll();
     broadcastRoomEvent(room, 'variant_changed');
+    return { ok: true };
+  });
+
+  registerSocketCommand(socket, 'mp:cmd:options', (room, binding, payload) => {
+    const { expectedRevision, ...changes } = payload ?? {};
+    setRoomOptions(room, binding.seatId, binding.sessionToken, changes, expectedRevision);
+    snapshotAll();
+    broadcastRoomEvent(room, 'options_changed');
     return { ok: true };
   });
 
@@ -894,6 +916,8 @@ const pruneInterval = setInterval(() => {
   snapshotAll();
 }, 60_000);
 
+const localTurnRooms = createMemoryTurnStore();
+
 const httpServer = createServer(async (req, res) => {
   if (!req.url || !req.method) {
     writeJson(res, 400, { error: 'bad_request' });
@@ -907,6 +931,22 @@ const httpServer = createServer(async (req, res) => {
 
   const parsed = parse(req.url, true);
   const path = parsed.pathname ?? '';
+  if (path.startsWith('/api/turn/')) {
+    // Stands in for the Vercel Function during local development.
+    try {
+      const raw = req.method === 'POST' ? await collectBody(req, MAX_JSON_BODY_BYTES) : '{}';
+      const result = await handleTurnRoomRequest({
+        method: req.method,
+        path: path.slice('/api/turn'.length),
+        query: Object.fromEntries(Object.entries(parsed.query).map(([key, value]) => [key, Array.isArray(value) ? value[0] : value])),
+        body: JSON.parse(raw || '{}') as Record<string, unknown>,
+      }, localTurnRooms);
+      writeJson(res, result.status, result.json as Record<string, unknown>);
+    } catch {
+      writeJson(res, 400, { error: 'invalid_payload' });
+    }
+    return;
+  }
   const pruneResult = pruneInactiveRooms(rooms);
   for (const disconnected of pruneResult.disconnectedSeats) {
     const room = rooms.get(disconnected.roomCode);
@@ -973,7 +1013,7 @@ const httpServer = createServer(async (req, res) => {
     }
 
     const match = path.match(
-      /^\/api\/multiplayer\/rooms\/([^/]+)(?:\/(join|reconnect|start|preset|variant|rematch|action|leave|state|pause|resume|undo|reset-turn|checkpoints|events|ready|reaction|chat|typing))?(?:\/(save|load|delete))?$/,
+      /^\/api\/multiplayer\/rooms\/([^/]+)(?:\/(join|watch|reconnect|start|preset|variant|options|rematch|action|leave|state|replay|pause|resume|undo|reset-turn|checkpoints|events|ready|reaction|chat|typing))?(?:\/(save|load|delete))?$/,
     );
     if (!match) {
       writeJson(res, 404, { error: 'not_found' });
@@ -1097,6 +1137,21 @@ const httpServer = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'GET' && operation === 'replay') {
+      const identity = resolveSessionIdentity({
+        seatId: parsed.query.seatId,
+        resumeToken: parsed.query.resumeToken,
+        playerId: parsed.query.playerId,
+        sessionToken: parsed.query.sessionToken,
+      });
+      if (!identity) {
+        writeJson(res, 400, { error: 'invalid_payload' });
+        return;
+      }
+      writeJson(res, 200, roomReplay(room, identity.playerId, identity.sessionToken) as unknown as Record<string, unknown>);
+      return;
+    }
+
     if (req.method === 'GET' && operation === 'checkpoints' && !checkpointOperation) {
       const identity = resolveSessionIdentity({
         seatId: parsed.query.seatId,
@@ -1160,7 +1215,18 @@ const httpServer = createServer(async (req, res) => {
       reaction?: unknown;
       text?: unknown;
       typing?: unknown;
+      botFill?: unknown;
+      turnTimerSeconds?: unknown;
+      bestOf?: unknown;
     };
+
+    if (operation === 'watch') {
+      const session = watchRoom(room, optionalTrimmedString(payload.playerName) ?? 'Spectator');
+      snapshotAll();
+      broadcastRoomEvent(room, 'watch');
+      writeJson(res, 200, session);
+      return;
+    }
 
     if (operation === 'join') {
       const session = joinRoom(room, optionalTrimmedString(payload.playerName) ?? 'Player');
@@ -1228,6 +1294,18 @@ const httpServer = createServer(async (req, res) => {
       setRoomVariant(room, playerId, sessionToken, payload.variant, expectedRevision);
       snapshotAll();
       broadcastRoomEvent(room, 'variant_changed');
+      writeJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (operation === 'options') {
+      setRoomOptions(room, playerId, sessionToken, {
+        ...(payload.botFill !== undefined ? { botFill: payload.botFill === true } : {}),
+        ...(payload.turnTimerSeconds !== undefined ? { turnTimerSeconds: payload.turnTimerSeconds as number | null } : {}),
+        ...(payload.bestOf !== undefined ? { bestOf: payload.bestOf as 1 | 3 } : {}),
+      }, expectedRevision);
+      snapshotAll();
+      broadcastRoomEvent(room, 'options_changed');
       writeJson(res, 200, { ok: true });
       return;
     }

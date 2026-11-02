@@ -9,6 +9,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/api/turn/:path*",
+      "destination": "/api/turn-rooms?path=:path*"
+    },
+    {
       "source": "/api/multiplayer/:path*",
       "destination": "https://monopolydeal-multiplayer.onrender.com/api/multiplayer/:path*"
     },
@@ -16,5 +20,10 @@
       "source": "/socket.io/:path*",
       "destination": "https://monopolydeal-multiplayer.onrender.com/socket.io/:path*"
     }
-  ]
+  ],
+  "functions": {
+    "api/turn-rooms.js": {
+      "maxDuration": 15
+    }
+  }
 }

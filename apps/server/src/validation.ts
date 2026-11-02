@@ -145,3 +145,21 @@ export function isValidMultiplayerAction(value: unknown): value is Action {
 
   return false;
 }
+
+export function mapActionErrorToRejectedReason(code: string): 'stale_state' | 'not_your_turn' | 'invalid_action' | 'prompt_mismatch' {
+  if (code === 'stale_state' || code === 'revision_conflict') return 'stale_state';
+  if (code === 'not_your_turn' || code === 'invalid_turn' || code === 'player_action_mismatch') return 'not_your_turn';
+  if (code === 'unresolved_pending') return 'prompt_mismatch';
+  return 'invalid_action';
+}
+
+export function isActionRejectionCandidate(code: string): boolean {
+  return code === 'stale_state'
+    || code === 'revision_conflict'
+    || code === 'not_your_turn'
+    || code === 'invalid_turn'
+    || code === 'illegal_action'
+    || code === 'invalid_action'
+    || code === 'unresolved_pending'
+    || code === 'player_action_mismatch';
+}

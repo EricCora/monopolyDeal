@@ -40,6 +40,37 @@ export interface MultiplayerChatMessage {
   text: string;
 }
 
+export type MultiplayerSeriesLength = 1 | 3;
+
+/** What the host chose for this room. Omitted options mean the original behavior. */
+export interface MultiplayerRoomOptions {
+  /** A dropped seat plays on as a bot instead of pausing the room. */
+  botFill: boolean;
+  /** Seconds per turn before a bot moves for the player. Null shows a count-up clock only. */
+  turnTimerSeconds: number | null;
+  bestOf: MultiplayerSeriesLength;
+}
+
+export interface MultiplayerTurnClock {
+  playerId: PlayerId;
+  startedAt: number;
+  /** When the turn runs out. Null means the clock only counts up. */
+  deadlineMs: number | null;
+}
+
+export interface MultiplayerSeriesState {
+  bestOf: MultiplayerSeriesLength;
+  wins: Record<string, number>;
+  gameNumber: number;
+  /** Set once someone has won enough games. */
+  winnerId?: PlayerId;
+}
+
+export interface MultiplayerReplayLog {
+  initial: GameState;
+  actions: Action[];
+}
+
 export interface MultiplayerRoomView {
   roomCode: string;
   status: MultiplayerRoomStatus;
@@ -69,6 +100,18 @@ export interface MultiplayerRoomView {
   chatMessages: MultiplayerChatMessage[];
   typingPlayerIds: PlayerId[];
   lastEventId: number;
+  /** Additive fields below. Older servers omit them. */
+  role?: 'player' | 'spectator';
+  options?: MultiplayerRoomOptions;
+  turnClock?: MultiplayerTurnClock;
+  series?: MultiplayerSeriesState;
+  /** Seats a bot is playing for right now. */
+  botSeatIds?: PlayerId[];
+  spectatorCount?: number;
+  /** The room lasts for days and players take turns when they like. */
+  turnBased?: boolean;
+  /** A finished game's log can be fetched from the replay route. */
+  replayAvailable?: boolean;
 }
 
 export interface MultiplayerCheckpointSummary {
@@ -144,6 +187,16 @@ export interface SetRoomVariantRequest extends ReconnectRoomRequest {
 
 export type RematchRoomRequest = ReconnectRoomRequest;
 
+export interface SetRoomOptionsRequest extends ReconnectRoomRequest {
+  botFill?: boolean;
+  turnTimerSeconds?: number | null;
+  bestOf?: MultiplayerSeriesLength;
+}
+
+export interface WatchRoomRequest {
+  playerName: string;
+}
+
 export interface ApplyRoomActionRequest extends ReconnectRoomRequest {
   action: Action;
   clientStateVersion?: number;
@@ -218,6 +271,7 @@ export type MultiplayerSocketCommandName =
   | 'mp:cmd:start'
   | 'mp:cmd:preset'
   | 'mp:cmd:variant'
+  | 'mp:cmd:options'
   | 'mp:cmd:rematch'
   | 'mp:cmd:action'
   | 'mp:cmd:leave'
@@ -268,6 +322,7 @@ export interface MultiplayerSocketCommandPayloadMap {
   'mp:cmd:start': { seed?: number; checkpointId?: string; expectedRevision?: number };
   'mp:cmd:preset': { presetId: MultiplayerSessionPresetId; expectedRevision?: number };
   'mp:cmd:variant': { variant: GameVariant; expectedRevision?: number };
+  'mp:cmd:options': { botFill?: boolean; turnTimerSeconds?: number | null; bestOf?: MultiplayerSeriesLength; expectedRevision?: number };
   'mp:cmd:rematch': { expectedRevision?: number };
   'mp:cmd:action': { action: Action; expectedRevision?: number; clientStateVersion?: number; actionId?: string };
   'mp:cmd:leave': { expectedRevision?: number; abandon?: boolean };
@@ -290,6 +345,7 @@ export interface MultiplayerSocketCommandResponseMap {
   'mp:cmd:start': { ok: true };
   'mp:cmd:preset': { ok: true };
   'mp:cmd:variant': { ok: true };
+  'mp:cmd:options': { ok: true };
   'mp:cmd:rematch': { ok: true };
   'mp:cmd:action': { ok: true };
   'mp:cmd:leave': { ok: true };

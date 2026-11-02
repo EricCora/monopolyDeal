@@ -10,6 +10,10 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      '/api/turn': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+      },
       '/api/multiplayer': {
         target: 'http://localhost:8787',
         changeOrigin: true,
@@ -17,6 +21,8 @@ export default defineConfig({
     },
   },
   test: {
+    // iCloud leaves copies named "file 2.ts" beside the real files.
+    exclude: ['**/node_modules/**', '**/dist/**', '**/* 2.*'],
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     globals: true,

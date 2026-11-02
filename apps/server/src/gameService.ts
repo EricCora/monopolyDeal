@@ -1,4 +1,5 @@
 import { randomBytes, randomInt } from 'node:crypto';
+import { chooseHeuristicAction } from '../../../src/ai/heuristic.ts';
 import { actionRevealedDeckCards, appendTurnSnapshot } from '../../../src/engine/undoPolicy.ts';
 import {
   applyAction,
@@ -38,6 +39,10 @@ import type {
   MultiplayerRoomRuntimeState,
   MultiplayerRoomStatus,
   RoomSessionResponse,
+  MultiplayerReplayLog,
+  MultiplayerRoomOptions,
+  MultiplayerSeriesState,
+  MultiplayerTurnClock,
 } from '../../../packages/shared/multiplayer.ts';
 
 const RECONNECT_WINDOW_V1_DEFAULT_MS = 90_000;
@@ -60,6 +65,17 @@ const MAX_CHAT_MESSAGE_LENGTH = 280;
 const TYPING_TTL_MS = 4_500;
 export const ROOM_REACTION_OPTIONS: MultiplayerReaction[] = ['nice', 'wow', 'gg', 'oops'];
 const DEFAULT_GAME_VARIANT: GameVariant = 'classic';
+const MAX_SPECTATORS = 8;
+const SPECTATOR_STALE_MS = 10 * 60_000;
+/** How long a bot seems to think before it moves for a dropped seat. */
+const BOT_SEAT_DELAY_MS = 1_500;
+/** Long enough that a bot-played seat can always come back while the room is open. */
+const BOT_SEAT_RECLAIM_MS = 7 * 24 * 60 * 60_000;
+/** A turn-by-turn room has no presence to track, and lasts for weeks. */
+const TURN_ROOM_SEAT_MS = 60 * 24 * 60 * 60_000;
+const ALLOWED_TURN_TIMERS = [30, 45, 60, 90];
+export const TURN_ROOM_CODE_LENGTH = 6;
+const LIVE_ROOM_CODE_LENGTH = 5;
 
 export function resolveReconnectWindowMs(configuredGraceMs?: string): number {
   const parsed = Number(configuredGraceMs);
@@ -132,6 +148,29 @@ export interface MultiplayerRoom {
   chatMessages: MultiplayerChatMessage[];
   nextChatId: number;
   typingByPlayerId: Record<string, number>;
+  /** All optional, so snapshots from before these features still load. */
+  options?: MultiplayerRoomOptions;
+  turnBased?: boolean;
+  turnClock?: MultiplayerTurnClock | null;
+  series?: MultiplayerSeriesState | null;
+  /** Web push addresses per seat, for turn-by-turn rooms. Never sent to clients. */
+  pushSubscriptions?: Record<string, RoomPushSubscription>;
+  spectators?: RoomSpectator[];
+  replayLog?: MultiplayerReplayLog | null;
+  /** Length of the action log when each turn snapshot was taken, so undo can rewind it. */
+  replayMarks?: number[];
+}
+
+export interface RoomPushSubscription {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}
+
+interface RoomSpectator {
+  id: string;
+  name: string;
+  sessionToken: string;
+  lastSeenAt: number;
 }
 
 export interface SeatConnectionSnapshot {
@@ -255,11 +294,11 @@ function nowMs(): number {
   return Date.now();
 }
 
-function nextRoomCode(existing: Map<string, MultiplayerRoom>): string {
+function nextRoomCode(existing: Map<string, MultiplayerRoom>, length = LIVE_ROOM_CODE_LENGTH): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   for (;;) {
     let code = '';
-    for (let i = 0; i < 5; i += 1) {
+    for (let i = 0; i < length; i += 1) {
       const index = randomInt(alphabet.length);
       code += alphabet[index];
     }
@@ -348,6 +387,11 @@ function touchPlayer(player: RoomParticipant): void {
   player.reconnectDeadlineMs = now + RECONNECT_WINDOW_MS;
 }
 
+function touchRoomPlayer(room: MultiplayerRoom, player: RoomParticipant): void {
+  touchPlayer(player);
+  if (room.turnBased) player.reconnectDeadlineMs = nowMs() + TURN_ROOM_SEAT_MS;
+}
+
 function findPlayer(room: MultiplayerRoom, playerId: PlayerId): RoomParticipant | undefined {
   return room.players.find((player) => player.id === playerId);
 }
@@ -384,6 +428,8 @@ function isHostSeat(room: MultiplayerRoom, seatId: PlayerId): boolean {
 }
 
 function hasDisconnectedSeatAwaitingReconnect(room: MultiplayerRoom): boolean {
+  // A bot is playing those seats, so nobody is waiting on them.
+  if (room.options?.botFill) return false;
   return room.players.some((player) => player.connectionState === 'disconnected');
 }
 
@@ -409,6 +455,7 @@ function restorePauseStateAfterDisconnect(room: MultiplayerRoom): void {
 function applyDisconnectPauseState(room: MultiplayerRoom, disconnectedSeatId: PlayerId): void {
   if (room.status !== 'active' && room.status !== 'finished') return;
   if (room.roomRuntimeState === 'ended_timeout') return;
+  if (room.options?.botFill) return;
   if (room.roomRuntimeState !== 'paused_disconnect' && room.roomRuntimeState !== 'paused_host_disconnect') {
     room.disconnectPauseRestore = room.paused
       ? {
@@ -552,9 +599,14 @@ function markDisconnected(room: MultiplayerRoom, player: RoomParticipant): void 
   player.connectionState = 'disconnected';
   player.disconnectedAt = now;
   player.lastSeenAt = now;
-  player.reconnectDeadlineMs = now + RECONNECT_WINDOW_MS;
+  player.reconnectDeadlineMs = now + (room.options?.botFill && room.status !== 'lobby' ? BOT_SEAT_RECLAIM_MS : RECONNECT_WINDOW_MS);
   delete room.typingByPlayerId[player.id];
-  appendActivity(room, 'connection', `${player.name} disconnected.`, { playerId: player.id });
+  appendActivity(
+    room,
+    'connection',
+    room.options?.botFill && room.status === 'active' ? `${player.name} disconnected. A bot is playing their seat.` : `${player.name} disconnected.`,
+    { playerId: player.id },
+  );
   applyDisconnectPauseState(room, player.id);
   const migrated = migrateHost(room);
   if (migrated) {
@@ -742,10 +794,13 @@ function allConnectedPlayersReady(room: MultiplayerRoom): boolean {
 }
 
 function allRoomPlayersConnectedAndReady(room: MultiplayerRoom): boolean {
+  // A seat a bot is playing doesn't hold up the next game.
+  if (room.options?.botFill) return room.players.length >= 2 && room.players.every((player) => !player.connected || player.ready);
   return room.players.length >= 2 && room.players.every((player) => player.connected && player.ready);
 }
 
 function allRoomPlayersConnected(room: MultiplayerRoom): boolean {
+  if (room.options?.botFill) return room.players.length >= 2;
   return room.players.length >= 2 && room.players.every((player) => player.connected);
 }
 
@@ -926,6 +981,180 @@ function commitMutation(room: MultiplayerRoom): void {
   incrementRevision(room);
   bumpUpdatedAt(room);
   incrementEventId(room);
+  syncTurnClock(room);
+}
+
+/** The clock restarts whenever the game starts waiting on someone else. */
+function syncTurnClock(room: MultiplayerRoom, restart = false): void {
+  if (!room.game || isGameOver(room.game).done) {
+    room.turnClock = null;
+    return;
+  }
+  const playerId = getNextPrompt(room.game).playerId;
+  if (!restart && room.turnClock?.playerId === playerId) return;
+  const startedAt = nowMs();
+  const seconds = room.options?.turnTimerSeconds ?? null;
+  room.turnClock = { playerId, startedAt, deadlineMs: seconds ? startedAt + seconds * 1000 : null };
+}
+
+function newSeries(room: MultiplayerRoom): MultiplayerSeriesState {
+  return { bestOf: room.options?.bestOf ?? 1, wins: {}, gameNumber: 1 };
+}
+
+function recordSeriesResult(room: MultiplayerRoom, winnerId: PlayerId | undefined): void {
+  const series = room.series;
+  if (!series || !winnerId || series.winnerId) return;
+  series.wins[winnerId] = (series.wins[winnerId] ?? 0) + 1;
+  if (series.wins[winnerId] > series.bestOf / 2) {
+    series.winnerId = winnerId;
+    appendActivity(room, 'match', `${playerDisplayName(room, winnerId)} won the series.`, { playerId: winnerId });
+  }
+}
+
+/** A checkpoint starts partway through a game, so there's no complete log to replay. */
+function beginReplayLog(room: MultiplayerRoom, fromCheckpoint: boolean): void {
+  room.replayLog = !fromCheckpoint && room.game ? { initial: structuredClone(room.game), actions: [] } : null;
+  room.replayMarks = [];
+}
+
+/** Applies a legal action to the game, for a player or for the bot acting in their place. */
+function applyGameAction(room: MultiplayerRoom, game: GameState, action: Action): void {
+  const playerId = action.playerId;
+  const shouldSnapshot = isReversibleActionType(action.type) && getNextPrompt(game).playerId === playerId;
+  if (shouldSnapshot) {
+    room.turnSnapshots = appendTurnSnapshot(room.turnSnapshots, structuredClone(game));
+    room.replayMarks = [...(room.replayMarks ?? []), room.replayLog?.actions.length ?? 0];
+  }
+
+  const result = applyAction(game, action);
+  if (result.error) {
+    throw new Error(result.error.code);
+  }
+  room.game = result.state;
+  room.replayLog?.actions.push(action);
+  const nextPromptPlayerId = getNextPrompt(result.state).playerId;
+  if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId)
+    || actionRevealedDeckCards(game, result.state, action.type)) {
+    room.turnSnapshots = [];
+    room.replayMarks = [];
+  }
+  const outcome = isGameOver(result.state);
+  if (outcome.done) {
+    appendActivity(room, 'match', 'Match completed.');
+    recordSeriesResult(room, outcome.winnerId);
+  }
+  updateStatusFromGame(room);
+}
+
+export interface RoomAutomation {
+  at: number;
+  playerId: PlayerId;
+  reason: 'bot_seat' | 'timer';
+}
+
+/** The next move the server should make by itself, if any. */
+export function nextRoomAutomation(room: MultiplayerRoom): RoomAutomation | null {
+  const game = room.game;
+  if (!game || room.turnBased || room.paused || room.roomRuntimeState === 'ended_timeout') return null;
+  if (isGameOver(game).done) return null;
+  // With nobody left at the table, the bots wait rather than finish the game alone.
+  if (!room.players.some((player) => player.connected)) return null;
+  const playerId = getNextPrompt(game).playerId;
+  const seat = findPlayer(room, playerId);
+  if (room.options?.botFill && seat && !seat.connected) {
+    return { at: (room.turnClock?.playerId === playerId ? room.turnClock.startedAt : nowMs()) + BOT_SEAT_DELAY_MS, playerId, reason: 'bot_seat' };
+  }
+  if (room.turnClock?.playerId === playerId && room.turnClock.deadlineMs) {
+    return { at: room.turnClock.deadlineMs, playerId, reason: 'timer' };
+  }
+  return null;
+}
+
+/**
+ * Makes the due move, if one is due. A bot seat or an expired clock plays one legal move at a
+ * time, so a turn with several decisions runs through the same schedule as a person's would.
+ */
+export function runRoomAutomation(room: MultiplayerRoom, now = nowMs()): boolean {
+  const next = nextRoomAutomation(room);
+  if (!next || next.at > now || !room.game) return false;
+  const game = room.game;
+  const legal = getLegalActions(game, next.playerId);
+  if (legal.length === 0) return false;
+  const choice = chooseHeuristicAction(game, next.playerId, legal);
+  const action = choice && legal.some((entry) => JSON.stringify(entry.action) === JSON.stringify(choice.action))
+    ? choice.action
+    : legal[0].action;
+  if (next.reason === 'timer') {
+    appendActivity(room, 'system', `Time ran out, so a bot moved for ${playerDisplayName(room, next.playerId)}.`, { playerId: next.playerId });
+  }
+  applyGameAction(room, game, action);
+  commitMutation(room);
+  // Still the same player's decision: the next step of a timed-out turn comes straight after.
+  if (next.reason === 'timer' && room.turnClock?.playerId === next.playerId && room.turnClock.deadlineMs) {
+    room.turnClock.deadlineMs = now + BOT_SEAT_DELAY_MS;
+  } else if (next.reason === 'bot_seat' && room.turnClock?.playerId === next.playerId) {
+    room.turnClock.startedAt = now;
+  }
+  return true;
+}
+
+export function setRoomOptions(
+  room: MultiplayerRoom,
+  playerId: PlayerId,
+  sessionToken: string,
+  changes: Partial<MultiplayerRoomOptions>,
+  expectedRevision?: number,
+): MultiplayerRoom {
+  ensureExpectedRevision(room, expectedRevision);
+  requireSession(room, playerId, sessionToken);
+  requireHost(room, playerId);
+  if (room.status === 'active') throw new Error('room_started');
+  if (room.turnBased && (changes.botFill || changes.turnTimerSeconds)) throw new Error('option_not_supported');
+  if (changes.turnTimerSeconds != null && !ALLOWED_TURN_TIMERS.includes(changes.turnTimerSeconds)) throw new Error('invalid_payload');
+  if (changes.bestOf != null && changes.bestOf !== 1 && changes.bestOf !== 3) throw new Error('invalid_payload');
+  room.options = {
+    botFill: changes.botFill ?? room.options?.botFill ?? false,
+    turnTimerSeconds: changes.turnTimerSeconds !== undefined ? changes.turnTimerSeconds : room.options?.turnTimerSeconds ?? null,
+    bestOf: changes.bestOf ?? room.options?.bestOf ?? 1,
+  };
+  commitMutation(room);
+  return room;
+}
+
+function findSpectator(room: MultiplayerRoom, id: string): RoomSpectator | undefined {
+  return room.spectators?.find((entry) => entry.id === id);
+}
+
+function spectatorSession(room: MultiplayerRoom, spectator: RoomSpectator): RoomSessionResponse {
+  return {
+    roomCode: room.code,
+    seatId: spectator.id,
+    resumeToken: spectator.sessionToken,
+    playerId: spectator.id,
+    sessionToken: spectator.sessionToken,
+    reconnectDeadlineMs: spectator.lastSeenAt + SPECTATOR_STALE_MS,
+  };
+}
+
+export function watchRoom(room: MultiplayerRoom, name: string): RoomSessionResponse {
+  const now = nowMs();
+  room.spectators = (room.spectators ?? []).filter((entry) => now - entry.lastSeenAt < SPECTATOR_STALE_MS);
+  if (room.spectators.length >= MAX_SPECTATORS) throw new Error('room_full');
+  let index = 1;
+  while (room.spectators.some((entry) => entry.id === `s${index}`)) index += 1;
+  const spectator: RoomSpectator = { id: `s${index}`, name: sanitizeName(name, 'Spectator'), sessionToken: randomToken(), lastSeenAt: now };
+  room.spectators.push(spectator);
+  incrementEventId(room);
+  bumpUpdatedAt(room);
+  return spectatorSession(room, spectator);
+}
+
+/** The finished game's opening state and every move, for replay. Hands are no longer secret. */
+export function roomReplay(room: MultiplayerRoom, viewerId: string, sessionToken: string): MultiplayerReplayLog {
+  const spectator = findSpectator(room, viewerId);
+  if (!(spectator && spectator.sessionToken === sessionToken)) requireSession(room, viewerId as PlayerId, sessionToken);
+  if (room.status !== 'finished' || !room.replayLog) throw new Error('replay_not_available');
+  return room.replayLog;
 }
 
 function updateStatusFromGame(room: MultiplayerRoom): void {
@@ -957,8 +1186,10 @@ function findCheckpoint(room: MultiplayerRoom, checkpointId: string): RoomCheckp
 export function createRoom(
   rooms: Map<string, MultiplayerRoom>,
   hostName: string,
+  createOptions: { turnBased?: boolean } = {},
 ): { room: MultiplayerRoom; session: RoomSessionResponse } {
-  const code = nextRoomCode(rooms);
+  const turnBased = createOptions.turnBased === true;
+  const code = nextRoomCode(rooms, turnBased ? TURN_ROOM_CODE_LENGTH : LIVE_ROOM_CODE_LENGTH);
   const playerId: PlayerId = 'p1';
   const token = randomToken();
   const createdAt = nowMs();
@@ -1000,7 +1231,9 @@ export function createRoom(
     chatMessages: [],
     nextChatId: 1,
     typingByPlayerId: {},
+    ...(turnBased ? { turnBased: true } : {}),
   };
+  if (turnBased) room.players[0].reconnectDeadlineMs = createdAt + TURN_ROOM_SEAT_MS;
   appendActivity(room, 'lobby', `${room.players[0].name} created the room.`, { playerId });
   rooms.set(code, room);
   return {
@@ -1011,7 +1244,7 @@ export function createRoom(
       resumeToken: token,
       playerId,
       sessionToken: token,
-      reconnectDeadlineMs: createdAt + RECONNECT_WINDOW_MS,
+      reconnectDeadlineMs: room.players[0].reconnectDeadlineMs,
     },
   };
 }
@@ -1040,6 +1273,8 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
     lastReactionAt: 0,
     lastChatAt: 0,
   });
+  const seatDeadline = now + (room.turnBased ? TURN_ROOM_SEAT_MS : RECONNECT_WINDOW_MS);
+  room.players[room.players.length - 1].reconnectDeadlineMs = seatDeadline;
   appendActivity(room, 'lobby', `${sanitizeName(playerName, `Player ${playerId.slice(1)}`)} joined the lobby.`, { playerId });
   commitMutation(room);
   return {
@@ -1048,18 +1283,23 @@ export function joinRoom(room: MultiplayerRoom, playerName: string): RoomSession
     resumeToken: token,
     playerId,
     sessionToken: token,
-    reconnectDeadlineMs: now + RECONNECT_WINDOW_MS,
+    reconnectDeadlineMs: seatDeadline,
   };
 }
 
 export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, expectedRevision?: number): RoomSessionResponse {
   void expectedRevision;
+  const spectator = findSpectator(room, playerId);
+  if (spectator && spectator.sessionToken === sessionToken) {
+    spectator.lastSeenAt = nowMs();
+    return spectatorSession(room, spectator);
+  }
   const player = requireSession(room, playerId, sessionToken);
   const now = nowMs();
   assertReconnectWindowOpen(player, now);
   const wasConnected = player.connected;
   const previousHostId = room.hostPlayerId;
-  touchPlayer(player);
+  touchRoomPlayer(room, player);
   if (!wasConnected) {
     appendActivity(room, 'connection', `${player.name} reconnected.`, { playerId: player.id });
     // Clients drop events whose id they have already seen, so the resume
@@ -1073,6 +1313,11 @@ export function reconnectRoom(room: MultiplayerRoom, playerId: PlayerId, session
     appendActivity(room, 'host', `${playerDisplayName(room, room.hostPlayerId)} is now host.`, { playerId: room.hostPlayerId });
   }
   resolveDisconnectPauseStateAfterReconnect(room);
+  if (!wasConnected && room.options?.botFill && room.status === 'active') {
+    appendActivity(room, 'connection', `${player.name} took their seat back from the bot.`, { playerId: player.id });
+    room.revision += 1;
+    syncTurnClock(room, true);
+  }
   // Reconnect is presence, not a gameplay mutation. A stale client must still
   // receive the authoritative snapshot without invalidating another player's
   // in-flight gameplay action.
@@ -1094,6 +1339,13 @@ export function leaveRoom(
   expectedRevision?: number,
   options: { abandon?: boolean } = {},
 ): void {
+  const spectator = findSpectator(room, playerId);
+  if (spectator && spectator.sessionToken === sessionToken) {
+    room.spectators = (room.spectators ?? []).filter((entry) => entry.id !== playerId);
+    incrementEventId(room);
+    bumpUpdatedAt(room);
+    return;
+  }
   const player = requireSession(room, playerId, sessionToken);
   ensureExpectedRevision(room, expectedRevision);
   if (room.status === 'lobby') {
@@ -1169,6 +1421,8 @@ export function startRoom(
     });
   }
   resetRoomForFreshMatch(room);
+  beginReplayLog(room, Boolean(checkpointId));
+  room.series = (room.options?.bestOf ?? 1) > 1 ? newSeries(room) : null;
   const presetLabel = getMultiplayerSessionPresetDefinition(room.presetId).label;
   appendActivity(
     room,
@@ -1250,7 +1504,7 @@ export function applyRoomAction(
   const game = requireGame(room);
   requireConnectedPlayer(player);
   ensureNotPaused(room);
-  touchPlayer(player);
+  touchRoomPlayer(room, player);
   if (
     versionGuardEnabled
     && Number.isFinite(options.clientStateVersion)
@@ -1274,30 +1528,16 @@ export function applyRoomAction(
     throw new Error('illegal_action');
   }
 
-  const shouldSnapshot = isReversibleActionType(action.type) && getNextPrompt(game).playerId === playerId;
-  if (shouldSnapshot) {
-    room.turnSnapshots = appendTurnSnapshot(room.turnSnapshots, structuredClone(game));
-  }
-
-  const result = applyAction(game, action);
-  if (result.error) {
-    throw new Error(result.error.code);
-  }
-  room.game = result.state;
-  const nextPromptPlayerId = getNextPrompt(result.state).playerId;
-  if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId)
-    || actionRevealedDeckCards(game, result.state, action.type)) {
-    room.turnSnapshots = [];
-  }
-  if (isGameOver(result.state).done) {
-    appendActivity(room, 'match', 'Match completed.');
-  }
-  updateStatusFromGame(room);
+  applyGameAction(room, game, action);
   commitMutation(room);
   if (versionGuardEnabled && actionId) {
     trackActionId(room, playerId, actionId, action);
   }
   return room;
+}
+
+function rewindReplayLog(room: MultiplayerRoom, length: number | undefined): void {
+  if (room.replayLog && length != null) room.replayLog.actions = room.replayLog.actions.slice(0, length);
 }
 
 export function undoRoomAction(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, expectedRevision?: number): MultiplayerRoom {
@@ -1318,6 +1558,7 @@ export function undoRoomAction(room: MultiplayerRoom, playerId: PlayerId, sessio
   const previous = room.turnSnapshots[room.turnSnapshots.length - 1];
   room.turnSnapshots = room.turnSnapshots.slice(0, -1);
   room.game = previous;
+  rewindReplayLog(room, (room.replayMarks ?? []).pop());
   updateStatusFromGame(room);
   commitMutation(room);
   return room;
@@ -1341,6 +1582,8 @@ export function resetTurnRoomActions(room: MultiplayerRoom, playerId: PlayerId, 
   const first = room.turnSnapshots[0];
   room.game = first;
   room.turnSnapshots = [];
+  rewindReplayLog(room, room.replayMarks?.[0]);
+  room.replayMarks = [];
   updateStatusFromGame(room);
   commitMutation(room);
   return room;
@@ -1543,6 +1786,14 @@ export function rematchRoom(
     variant: room.variant,
   });
   resetRoomForFreshMatch(room);
+  beginReplayLog(room, false);
+  if ((room.options?.bestOf ?? 1) > 1) {
+    room.series = !room.series || room.series.winnerId
+      ? newSeries(room)
+      : { ...room.series, gameNumber: room.series.gameNumber + 1 };
+  } else {
+    room.series = null;
+  }
   appendActivity(room, 'match', `Rematch started with ${getMultiplayerSessionPresetDefinition(room.presetId).label}.`);
   updateStatusFromGame(room);
   commitMutation(room);
@@ -1643,10 +1894,15 @@ export function setRoomTyping(
 }
 
 export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken: string): MultiplayerRoomView {
+  const spectator = findSpectator(room, viewerId);
+  if (spectator && spectator.sessionToken === sessionToken) {
+    spectator.lastSeenAt = nowMs();
+    return spectatorView(room, spectator);
+  }
   const viewer = requireSession(room, viewerId, sessionToken);
   assertReconnectWindowOpen(viewer);
   if (viewer.connected) {
-    touchPlayer(viewer);
+    touchRoomPlayer(room, viewer);
   } else {
     viewer.lastSeenAt = nowMs();
   }
@@ -1694,6 +1950,61 @@ export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken
     chatMessages: room.chatMessages,
     typingPlayerIds: Object.keys(room.typingByPlayerId),
     lastEventId: room.eventId,
+    ...roomViewExtras(room),
+    role: 'player',
+  };
+}
+
+function roomViewExtras(room: MultiplayerRoom): Partial<MultiplayerRoomView> {
+  return {
+    options: room.options ?? { botFill: false, turnTimerSeconds: null, bestOf: 1 },
+    turnClock: room.turnClock ?? undefined,
+    series: room.series ?? undefined,
+    botSeatIds: room.options?.botFill && room.status === 'active'
+      ? room.players.filter((player) => !player.connected).map((player) => player.id)
+      : [],
+    spectatorCount: room.spectators?.length ?? 0,
+    turnBased: room.turnBased === true,
+    replayAvailable: room.status === 'finished' && Boolean(room.replayLog),
+  };
+}
+
+/** What someone watching sees: the table with every hand face down, and nothing to do. */
+function spectatorView(room: MultiplayerRoom, spectator: RoomSpectator): MultiplayerRoomView {
+  updateStatusFromGame(room);
+  pruneExpiredTyping(room);
+  const status = room.game ? isGameOver(room.game) : { done: false as const };
+  return {
+    roomCode: room.code,
+    status: room.status,
+    started: Boolean(room.game),
+    winnerId: status.done ? status.winnerId : undefined,
+    presetId: room.presetId,
+    variant: room.variant,
+    hostPlayerId: room.hostPlayerId,
+    yourPlayerId: spectator.id,
+    players: roomPlayerSummary(room),
+    promptPlayerId: room.game ? getNextPrompt(room.game).playerId : undefined,
+    legalActions: [],
+    gameState: room.game ? maskForViewer(room.game, spectator.id) : undefined,
+    paused: room.paused,
+    pausedByPlayerId: room.pausedByPlayerId,
+    roomRuntimeState: room.roomRuntimeState,
+    pausedReason: room.pausedReason,
+    endedReason: room.endedReason,
+    revision: room.revision,
+    turnSnapshotCount: 0,
+    checkpointSlots: [],
+    canStart: false,
+    canRematch: false,
+    reconnectDeadlineMs: spectator.lastSeenAt + SPECTATOR_STALE_MS,
+    serverTime: nowMs(),
+    activityFeed: room.activityFeed.filter((entry) => entry.kind !== 'chat'),
+    chatMessages: [],
+    typingPlayerIds: [],
+    lastEventId: room.eventId,
+    ...roomViewExtras(room),
+    role: 'spectator',
   };
 }
 

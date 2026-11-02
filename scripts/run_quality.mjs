@@ -2,6 +2,7 @@
 import { spawnSync } from 'node:child_process';
 
 const commands = [
+  ['node', ['scripts/build_turn_api.mjs', '--check']],
   ['npm', ['run', 'lint']],
   ['npm', ['run', 'test']],
   ['npm', ['run', 'build']],

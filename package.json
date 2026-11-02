@@ -23,15 +23,18 @@
     "e2e:smoke": "node scripts/run_e2e.mjs",
     "replay:verify": "node scripts/replay_verify.mjs",
     "traces:record": "node --import tsx/esm scripts/record_engine_traces.ts",
-    "ios:verify": "node scripts/ios_verify.mjs"
+    "ios:verify": "node scripts/ios_verify.mjs",
+    "build:turn-api": "node scripts/build_turn_api.mjs"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.3",
+    "@vercel/blob": "^2.8.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.7.0",
     "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.3",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -41,9 +44,11 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-v8": "^4.0.18",
     "concurrently": "^9.2.1",
+    "esbuild": "^0.28.2",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
