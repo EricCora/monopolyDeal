@@ -153,12 +153,14 @@ public struct RoomClient: Sendable {
         return next
     }
 
-    public func state(_ session: RoomSession) async throws -> RoomView {
+    /// `fresh` reads past a turn room's storage cache, which can otherwise be a minute old.
+    public func state(_ session: RoomSession, fresh: Bool = false) async throws -> RoomView {
         var components = URLComponents(url: roomURL(session.roomCode, "state"), resolvingAgainstBaseURL: false)!
         components.queryItems = [
             URLQueryItem(name: "playerId", value: session.playerId),
             URLQueryItem(name: "sessionToken", value: session.sessionToken),
         ]
+        if fresh { components.queryItems?.append(URLQueryItem(name: "fresh", value: "1")) }
         return try await send(RoomView.self, URLRequest(url: components.url!))
     }
 

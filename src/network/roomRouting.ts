@@ -11,11 +11,30 @@ export function turnRoomOrigin(): string {
   return `${typeof window === 'undefined' ? '' : window.location.origin}/api/turn`;
 }
 
-export function routeRoomRequest(input: RequestInfo | URL): RequestInfo | URL {
+/** How long after opening a room or changing it this client reads past the storage cache. */
+const FRESH_READ_MS = 15_000;
+const freshReadsUntil = new Map<string, number>();
+
+/** Routine polls can be a minute old. Your own move, and a room you've just opened, can't. */
+function withFreshRead(url: string, code: string, init?: RequestInit): string {
+  const now = Date.now();
+  if ((init?.method ?? 'GET') !== 'GET') {
+    freshReadsUntil.set(code, now + FRESH_READ_MS);
+    return url;
+  }
+  if (!/\/state(\?|$)/.test(url)) return url;
+  if (!freshReadsUntil.has(code)) freshReadsUntil.set(code, now + FRESH_READ_MS);
+  if (now >= (freshReadsUntil.get(code) ?? 0)) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}fresh=1`;
+}
+
+export function routeRoomRequest(input: RequestInfo | URL, init?: RequestInit): RequestInfo | URL {
   if (typeof input !== 'string') return input;
   const match = input.match(/\/api\/multiplayer\/rooms\/([^/?]+)/);
-  if (!match || !isTurnRoomCode(decodeURIComponent(match[1]))) return input;
-  return `${turnRoomOrigin()}${input.slice(input.indexOf('/api/multiplayer'))}`;
+  if (!match) return input;
+  const code = decodeURIComponent(match[1]);
+  if (!isTurnRoomCode(code)) return input;
+  return withFreshRead(`${turnRoomOrigin()}${input.slice(input.indexOf('/api/multiplayer'))}`, code.toUpperCase(), init);
 }
 
 /** These sessions use plain requests: turn rooms have no socket server, and spectators hold no seat. */

@@ -352,6 +352,8 @@ VITE_MULTIPLAYER_API_URL=https://your-render-service.onrender.com
 
 These run as a Vercel Function, not on Render. They need a private Vercel Blob store connected to the project, which sets `BLOB_READ_WRITE_TOKEN`. Web push also needs `TURN_PUSH_PUBLIC_KEY` and `TURN_PUSH_PRIVATE_KEY` (make a pair with `npx web-push generate-vapid-keys`), and optionally `TURN_PUSH_SUBJECT`. Without the keys, rooms still work and only the notifications are off. Without the store, the room button reports an error.
 
+Vercel's free plan never bills for this, but it allows about 2,000 moves a month, roughly a dozen full games. Past that, turn-by-turn rooms stop for up to 30 days. Live rooms use Render and aren't affected. Other players' moves can take up to about 90 seconds to appear.
+
 ### How updates work after setup
 
 For normal app changes, yes, you redeploy.

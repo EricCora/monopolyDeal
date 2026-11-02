@@ -7,7 +7,7 @@ import type {
 import { routeRoomRequest, turnRoomOrigin } from './roomRouting';
 
 async function send<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(routeRoomRequest(url), init);
+  const response = await fetch(routeRoomRequest(url, init), init);
   const payload = await response.json().catch(() => ({})) as { error?: unknown };
   if (!response.ok) throw new Error(typeof payload.error === 'string' ? payload.error : 'request_failed');
   return payload as T;

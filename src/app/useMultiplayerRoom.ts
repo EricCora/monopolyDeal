@@ -68,7 +68,7 @@ import type { GrowthMetricEvent } from '../stats';
 import { normalizeMultiplayerSessionPreset, type MultiplayerSessionPresetId } from '../ui/experience';
 import type { GameVariant } from '../engine';
 
-const TURN_ROOM_POLL_MS = 12_000;
+const TURN_ROOM_POLL_MS = 30_000;
 
 interface UseMultiplayerRoomOptions {
   enabled: boolean;

@@ -11,17 +11,19 @@ const MAX_BODY_BYTES = 64 * 1024;
 const pathname = (code: string) => `turn-rooms/${code}.json`;
 
 const blobStore: TurnRoomStore = {
-  async load(code) {
+  async load(code, how = 'for_write') {
     // The tag has to come from `head`: after an overwrite, the one on `get` is refused by `ifMatch`.
     // Reading it first is safe, because a newer room in between just makes the save retry.
-    let version: string;
-    try {
-      version = (await head(pathname(code))).etag;
-    } catch (error) {
-      if (error instanceof BlobNotFoundError) return null;
-      throw error;
+    let version = '';
+    if (how === 'for_write') {
+      try {
+        version = (await head(pathname(code))).etag;
+      } catch (error) {
+        if (error instanceof BlobNotFoundError) return null;
+        throw error;
+      }
     }
-    const result = await get(pathname(code), { access: 'private', useCache: false });
+    const result = await get(pathname(code), { access: 'private', useCache: how === 'cached' });
     if (!result || result.statusCode !== 200 || !result.stream) return null;
     const text = await new Response(result.stream).text();
     return { room: JSON.parse(text) as MultiplayerRoom, version };
@@ -32,6 +34,7 @@ const blobStore: TurnRoomStore = {
         access: 'private',
         addRandomSuffix: false,
         contentType: 'application/json',
+        cacheControlMaxAge: 60,
         ...(version === null ? { allowOverwrite: false } : { allowOverwrite: true, ifMatch: version }),
       });
       return true;

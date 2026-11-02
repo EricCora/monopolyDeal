@@ -30,7 +30,7 @@ const room = `${rooms}/${code}`;
 const guest = must('join', await post(`${room}/join`, { playerName: 'Live Check B' }));
 
 async function view(seat) {
-  const response = await fetch(`${room}/state?playerId=${seat.playerId}&sessionToken=${seat.sessionToken}`);
+  const response = await fetch(`${room}/state?playerId=${seat.playerId}&sessionToken=${seat.sessionToken}&fresh=1`);
   return must('read the room', { status: response.status, json: await response.json() });
 }
 
@@ -56,5 +56,17 @@ if (moves < 6 || final.gameState.turnCount < 2) {
   console.error(`FAILED: the game didn't move on: ${moves} moves, turn ${final.gameState.turnCount}`);
   process.exit(1);
 }
+// A routine poll uses the storage cache, and has to catch up by itself.
+const startedWaiting = Date.now();
+for (;;) {
+  const polled = await (await fetch(`${room}/state?playerId=${guest.playerId}&sessionToken=${guest.sessionToken}`)).json();
+  if (polled.revision === final.revision) break;
+  if (Date.now() - startedWaiting > 150_000) {
+    console.error(`FAILED: a routine poll was still on revision ${polled.revision} of ${final.revision} after 150 seconds`);
+    process.exit(1);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 5_000));
+}
+console.log(`A routine poll caught up after ${Math.round((Date.now() - startedWaiting) / 1000)} seconds`);
 for (const seat of [host, guest]) must('leave', await post(`${room}/leave`, { ...identity(seat), abandon: true }));
 console.log(`OK: room ${code} played ${moves} moves to turn ${final.gameState.turnCount} on ${origin}`);

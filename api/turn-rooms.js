@@ -4053,8 +4053,8 @@ async function tellNextPlayer(room, previousPrompt, store, notifier2) {
     }
   }
 }
-async function loadLiveRoom(store, code) {
-  const stored = await store.load(code);
+async function loadLiveRoom(store, code, how) {
+  const stored = await store.load(code, how);
   if (!stored) return null;
   if (Date.now() - stored.room.updatedAt > TURN_ROOM_TTL_MS) {
     await store.remove(code);
@@ -4065,7 +4065,7 @@ async function loadLiveRoom(store, code) {
 }
 async function mutateRoom(store, notifier2, code, change) {
   for (let attempt = 0; attempt < MAX_SAVE_ATTEMPTS; attempt += 1) {
-    const stored = await loadLiveRoom(store, code);
+    const stored = await loadLiveRoom(store, code, "for_write");
     if (!stored) return fail(404, "room_not_found");
     const previousPrompt = promptPlayerId(stored.room);
     const result = change(stored.room);
@@ -4100,7 +4100,7 @@ async function handleTurnRoomRequest(request, store, notifier2) {
       if (operation !== "state" && operation !== "replay") return fail(405, "method_not_allowed");
       const identity2 = identityFrom(query);
       if (!identity2) return fail(400, "invalid_payload");
-      const stored = await loadLiveRoom(store, code);
+      const stored = await loadLiveRoom(store, code, query.fresh === "1" ? "fresh" : "cached");
       if (!stored) return fail(404, "room_not_found");
       return ok(operation === "state" ? roomView(stored.room, identity2.playerId, identity2.sessionToken) : roomReplay(stored.room, identity2.playerId, identity2.sessionToken));
     }
@@ -4116,7 +4116,7 @@ async function handleTurnRoomRequest(request, store, notifier2) {
     const { playerId, sessionToken } = identity;
     const expectedRevision = body.expectedRevision;
     if (operation === "reconnect") {
-      const stored = await loadLiveRoom(store, code);
+      const stored = await loadLiveRoom(store, code, "cached");
       if (!stored) {
         const response = { status: "room_closed", roomCode: code, seatId: playerId, requiresFullResync: false };
         return ok(response);
@@ -4260,15 +4260,17 @@ async function handleTurnRoomRequest(request, store, notifier2) {
 var MAX_BODY_BYTES = 64 * 1024;
 var pathname = (code) => `turn-rooms/${code}.json`;
 var blobStore = {
-  async load(code) {
-    let version;
-    try {
-      version = (await head(pathname(code))).etag;
-    } catch (error2) {
-      if (error2 instanceof BlobNotFoundError) return null;
-      throw error2;
+  async load(code, how = "for_write") {
+    let version = "";
+    if (how === "for_write") {
+      try {
+        version = (await head(pathname(code))).etag;
+      } catch (error2) {
+        if (error2 instanceof BlobNotFoundError) return null;
+        throw error2;
+      }
     }
-    const result = await get(pathname(code), { access: "private", useCache: false });
+    const result = await get(pathname(code), { access: "private", useCache: how === "cached" });
     if (!result || result.statusCode !== 200 || !result.stream) return null;
     const text = await new Response(result.stream).text();
     return { room: JSON.parse(text), version };
@@ -4279,6 +4281,7 @@ var blobStore = {
         access: "private",
         addRandomSuffix: false,
         contentType: "application/json",
+        cacheControlMaxAge: 60,
         ...version === null ? { allowOverwrite: false } : { allowOverwrite: true, ifMatch: version }
       });
       return true;

@@ -443,7 +443,7 @@ async function parseJson<T>(response: Response): Promise<T> {
 
 async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   try {
-    const response = await fetch(routeRoomRequest(input), init);
+    const response = await fetch(routeRoomRequest(input, init), init);
     return parseJson<T>(response);
   } catch (error) {
     if (error instanceof Error && error.message) {

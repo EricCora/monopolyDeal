@@ -57,8 +57,15 @@ export interface StoredTurnRoom {
   version: string;
 }
 
+/**
+ * Blob's free plan allows 10,000 reads a month, and going over locks storage for 30 days.
+ * `cached` costs nothing on a cache hit but can be up to a minute old, so routine polls use it.
+ * `fresh` costs one read. `for_write` costs two, because the save needs the version too.
+ */
+export type TurnRoomRead = 'cached' | 'fresh' | 'for_write';
+
 export interface TurnRoomStore {
-  load(code: string): Promise<StoredTurnRoom | null>;
+  load(code: string, how?: TurnRoomRead): Promise<StoredTurnRoom | null>;
   /** Returns false when the room changed since `version` was read. Null means a new room. */
   save(room: MultiplayerRoom, version: string | null): Promise<boolean>;
   remove(code: string): Promise<void>;
@@ -167,8 +174,8 @@ async function tellNextPlayer(
   }
 }
 
-async function loadLiveRoom(store: TurnRoomStore, code: string): Promise<StoredTurnRoom | null> {
-  const stored = await store.load(code);
+async function loadLiveRoom(store: TurnRoomStore, code: string, how: TurnRoomRead): Promise<StoredTurnRoom | null> {
+  const stored = await store.load(code, how);
   if (!stored) return null;
   if (Date.now() - stored.room.updatedAt > TURN_ROOM_TTL_MS) {
     await store.remove(code);
@@ -186,7 +193,7 @@ async function mutateRoom(
   change: (room: MultiplayerRoom) => unknown,
 ): Promise<TurnRoomResponse> {
   for (let attempt = 0; attempt < MAX_SAVE_ATTEMPTS; attempt += 1) {
-    const stored = await loadLiveRoom(store, code);
+    const stored = await loadLiveRoom(store, code, 'for_write');
     if (!stored) return fail(404, 'room_not_found');
     const previousPrompt = promptPlayerId(stored.room);
     const result = change(stored.room);
@@ -228,7 +235,7 @@ export async function handleTurnRoomRequest(
       if (operation !== 'state' && operation !== 'replay') return fail(405, 'method_not_allowed');
       const identity = identityFrom(query);
       if (!identity) return fail(400, 'invalid_payload');
-      const stored = await loadLiveRoom(store, code);
+      const stored = await loadLiveRoom(store, code, query.fresh === '1' ? 'fresh' : 'cached');
       if (!stored) return fail(404, 'room_not_found');
       return ok(operation === 'state'
         ? roomView(stored.room, identity.playerId, identity.sessionToken)
@@ -249,7 +256,7 @@ export async function handleTurnRoomRequest(
     const expectedRevision = body.expectedRevision as number | undefined;
 
     if (operation === 'reconnect') {
-      const stored = await loadLiveRoom(store, code);
+      const stored = await loadLiveRoom(store, code, 'cached');
       if (!stored) {
         const response: ResumeRoomResponse = { status: 'room_closed', roomCode: code, seatId: playerId, requiresFullResync: false };
         return ok(response);

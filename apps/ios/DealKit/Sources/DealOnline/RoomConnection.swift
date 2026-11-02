@@ -33,7 +33,7 @@ public final class RoomConnection {
 
     public static let pollInterval: Duration = .seconds(2)
     /// A turn-by-turn room moves slowly and runs on someone's free quota, so it looks less often.
-    public static let turnRoomPollInterval: Duration = .seconds(12)
+    public static let turnRoomPollInterval: Duration = .seconds(30)
     /// The server marks a seat disconnected when it hasn't been seen for a while, and an
     /// open event stream doesn't count, so a quiet room still needs a periodic fetch.
     public static let keepAliveInterval: Duration = .seconds(15)
@@ -44,6 +44,14 @@ public final class RoomConnection {
     }
 
     private var revision: Int? { view?.revision }
+
+    /// Routine polls of a turn room can be a minute old. Your own move, and a room you've just opened, can't.
+    private static let freshReadSeconds = 15.0
+    private var freshReadsUntil = Date.distantPast
+
+    private func readFreshForAWhile() {
+        if isTurnRoom { freshReadsUntil = Date().addingTimeInterval(Self.freshReadSeconds) }
+    }
 
     private var isTurnRoom: Bool { RoomClient.isTurnRoom(session.roomCode) }
 
@@ -58,6 +66,7 @@ public final class RoomConnection {
     /// Reclaims the seat and starts listening. Safe to call again after a drop.
     public func connect() async {
         stop()
+        readFreshForAWhile()
         status = view == nil ? .connecting : .reconnecting
         do {
             if !isSpectator {
@@ -153,7 +162,7 @@ public final class RoomConnection {
     // MARK: State
 
     private func fetch() async throws {
-        let next = try await client.state(session)
+        let next = try await client.state(session, fresh: Date() < freshReadsUntil)
         // A card this build doesn't know means the server is newer than the app. Stop
         // here with a clear message rather than drawing or rule-checking something unknown.
         if let game = next.gameState, !game.usesOnlyKnownCards { throw OnlineError.updateRequired }
@@ -250,6 +259,7 @@ public final class RoomConnection {
     /// board and can act again.
     @discardableResult
     public func run(retryIfStale: Bool = true, _ command: @Sendable (RoomClient, RoomSession, Int?) async throws -> Void) async -> Bool {
+        readFreshForAWhile()
         do {
             try await command(client, session, revision)
             lastError = nil
