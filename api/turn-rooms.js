@@ -432,7 +432,51 @@ function isCompletePropertySet(entries, color, variant = "classic") {
   const required = PROPERTY_SET_SIZES[color];
   const properties = entries.filter((entry) => isPropertyCardPlacement(entry, variant));
   if (properties.length < required) return false;
-  return variant === "no_mercy" ? properties.some((entry) => !isEveryColorWild(entry.cardId, variant)) : properties.some((entry) => isStandardPropertyPlacement(entry, variant));
+  return properties.some((entry) => !isEveryColorWild(entry.cardId, variant));
+}
+function shackCount(entries, variant) {
+  return entries.filter((entry) => getCardDefinition(entry.cardId, variant).actionKind === "shack").length;
+}
+function consolidateOnce(player, color, variant) {
+  const required = PROPERTY_SET_SIZES[color];
+  const open = propertySets(player, color, variant).filter((set) => !isCompletePropertySet(set.entries, color, variant));
+  if (open.length < 2) return false;
+  const properties = (set) => set.entries.filter((entry) => isPropertyCardPlacement(entry, variant));
+  const riders = (set, entry) => set.entries.filter((other) => other.attachedToCardId === entry.cardId);
+  const stuck = open.find((set) => properties(set).length >= required);
+  if (stuck) {
+    for (const other of open) {
+      if (other === stuck) continue;
+      const real = properties(other).find((entry) => !isEveryColorWild(entry.cardId, variant) && riders(other, entry).length === 0);
+      const spare = [...properties(stuck)].reverse().find((entry) => riders(stuck, entry).length === 0);
+      if (real && spare) {
+        real.setId = stuck.setId;
+        spare.setId = other.setId;
+        return true;
+      }
+    }
+    return false;
+  }
+  const target = open[0];
+  for (const source of [...open.slice(1)].reverse()) {
+    const candidates = [...properties(source)].reverse().sort((left, right) => Number(isEveryColorWild(left.cardId, variant)) - Number(isEveryColorWild(right.cardId, variant)));
+    for (const entry of candidates) {
+      const moving = [entry, ...riders(source, entry)];
+      const completes = properties(target).length + 1 >= required;
+      if (completes && shackCount([...target.entries, ...moving], variant) > 1) continue;
+      for (const card of moving) card.setId = target.setId;
+      if (properties(source).length === 1) {
+        for (const left of source.entries) left.setId = target.setId;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+function consolidatePropertySets(player, variant = "classic") {
+  for (const color of PROPERTY_COLORS) {
+    while (consolidateOnce(player, color, variant)) ;
+  }
 }
 function isBuildingPlacementLegal(player, color, actionKind, setId, variant = "classic") {
   if (color === "railroad" || color === "utility") return false;
@@ -471,7 +515,7 @@ function addToProperty(player, cardId, color, setId, attachedToCardId, variant =
     const open = sets.filter((set) => propertyCount(set, variant) < required && !(variant === "no_mercy" && propertyCount(set, variant) + 1 >= required && set.entries.filter((entry) => getCardDefinition(entry.cardId, variant).actionKind === "shack").length > 1));
     target = card.kind === "wild" ? open.find((set) => setHasStandardProperty(set, variant)) ?? open[0] : open[0];
     if (!target && card.kind === "property") {
-      const wildOnly = sets.find((set) => !setHasStandardProperty(set, variant) && propertyCount(set, variant) >= required);
+      const wildOnly = sets.find((set) => !setHasStandardProperty(set, variant) && propertyCount(set, variant) >= required && !isCompletePropertySet(set.entries, color, variant));
       let excessWild;
       for (let index = (wildOnly?.entries.length ?? 0) - 1; index >= 0; index -= 1) {
         const entry = wildOnly?.entries[index];
@@ -626,6 +670,53 @@ function generatePaymentOptions(player, targetAmount, variant = "classic") {
   });
   return options.slice(0, 25);
 }
+function cheapestCover(cards, amount, variant) {
+  const isAction = (cardId) => getCardDefinition(cardId, variant).kind === "money" ? 0 : 1;
+  const ordered = [...cards].sort((left, right) => left.localeCompare(right));
+  let picks = /* @__PURE__ */ new Map([[0, []]]);
+  const better = (left, right) => {
+    const actions = left.reduce((sum, id) => sum + isAction(id), 0) - right.reduce((sum, id) => sum + isAction(id), 0);
+    return actions !== 0 ? actions < 0 : left.length < right.length;
+  };
+  for (const cardId of ordered) {
+    const next = new Map(picks);
+    for (const [total, pick] of picks) {
+      if (total >= amount) continue;
+      const sum = total + cardMoneyValue(cardId, variant);
+      const candidate = [...pick, cardId];
+      const held = next.get(sum);
+      if (!held || better(candidate, held)) next.set(sum, candidate);
+    }
+    picks = next;
+  }
+  const totals = [...picks.keys()].filter((total) => total >= amount).sort((left, right) => left - right);
+  return totals.length > 0 ? picks.get(totals[0]) ?? null : null;
+}
+function suggestPayment(player, amount, variant = "classic") {
+  const payable = (cardId) => cardMoneyValue(cardId, variant) > 0 && !(variant === "no_mercy" && isEveryColorWild(cardId, variant));
+  const bank = player.bank.filter(payable);
+  const fromBank = cheapestCover(bank, amount, variant);
+  if (fromBank) return fromBank;
+  const remaining = amount - bank.reduce((sum, cardId) => sum + cardMoneyValue(cardId, variant), 0);
+  const loose = [];
+  const complete = [];
+  for (const color of PROPERTY_COLORS) {
+    for (const set of propertySets(player, color, variant)) {
+      const cards = set.entries.map((entry) => entry.cardId).filter(payable);
+      if (isCompletePropertySet(set.entries, color, variant)) complete.push(cards);
+      else loose.push(...cards);
+    }
+  }
+  const worth = (cards) => cards.reduce((sum, cardId) => sum + cardMoneyValue(cardId, variant), 0);
+  complete.sort((left, right) => worth(left) - worth(right) || left.join().localeCompare(right.join()));
+  const pool = [...loose];
+  for (let added = 0; added <= complete.length; added += 1) {
+    const cover = cheapestCover(pool, remaining, variant);
+    if (cover) return [...bank, ...cover];
+    if (added < complete.length) pool.push(...complete[added]);
+  }
+  return [...bank, ...pool];
+}
 function findPropertyColorByCard(player, cardId) {
   for (const color of PROPERTY_COLORS) {
     if (player.properties[color].some((entry) => entry.cardId === cardId)) {
@@ -704,6 +795,9 @@ function consumePlay(state) {
   state.turn.playsUsed += 1;
 }
 function checkWinner(state) {
+  if (!state.pending) {
+    for (const player of state.players) consolidatePropertySets(player, state.variant ?? "classic");
+  }
   const winner = state.players.find((player) => countCompleteSets(player, state.variant ?? "classic") >= ruleset(state).winCompleteSets);
   if (winner) {
     state.winnerId = winner.id;
@@ -811,7 +905,10 @@ function legalForCounter(state, player) {
 function legalForPayment(state, player) {
   if (!state.pending || state.pending.kind !== "payment") return [];
   if (state.pending.payload.targetPlayerId !== player.id) return [];
-  const paymentOptions = generatePaymentOptions(player, state.pending.payload.amount, state.variant ?? "classic");
+  const variant = state.variant ?? "classic";
+  const paymentOptions = generatePaymentOptions(player, state.pending.payload.amount, variant);
+  const suggested = suggestPayment(player, state.pending.payload.amount, variant).sort((left, right) => left.localeCompare(right));
+  if (suggested.length > 0 && !paymentOptions.some((cards) => cards.join("|") === suggested.join("|"))) paymentOptions.push(suggested);
   return paymentOptions.map((cards, idx) => ({
     label: cards.length ? `Pay option ${idx + 1}: ${cards.map((cardId) => cardLabel(cardId, state.variant ?? "classic")).join(", ")}` : "Cannot pay (no cards)",
     action: { type: "pay_request", playerId: player.id, cards }
@@ -953,6 +1050,11 @@ function cardDefinition(state, cardId) {
 }
 function completeSet(state, player, color, setId) {
   return isCompleteSet(player, color, setId, gameVariant(state));
+}
+function getSuggestedPaymentCards(state, playerId, amount) {
+  const player = getPlayer(state, playerId);
+  if (!player) return [];
+  return suggestPayment(player, amount, gameVariant(state));
 }
 function debtsFor(player) {
   const debts = player.debtsOwed && player.debtsOwed.length > 0 && (!player.debts || player.debts.length === 0) ? player.debtsOwed : player.debts ?? player.debtsOwed ?? [];
@@ -1762,8 +1864,8 @@ function applyAction(currentState, action) {
     if (gameVariant(state) === "no_mercy") {
       const resultingSetId = findPropertySetIdByCard(player, action.color, action.cardId, gameVariant(state));
       const resultingSet = propertySets(player, action.color, gameVariant(state)).find((set) => set.setId === resultingSetId);
-      const shackCount = resultingSet?.entries.filter((entry) => cardDefinition(state, entry.cardId).actionKind === "shack").length ?? 0;
-      if (resultingSet && isCompleteSet(player, action.color, resultingSet.setId, gameVariant(state)) && shackCount > 1) {
+      const shackCount2 = resultingSet?.entries.filter((entry) => cardDefinition(state, entry.cardId).actionKind === "shack").length ?? 0;
+      if (resultingSet && isCompleteSet(player, action.color, resultingSet.setId, gameVariant(state)) && shackCount2 > 1) {
         return setErr(error("invalid_action", "A complete No Mercy set may have only one Shack."));
       }
     }
@@ -2437,6 +2539,284 @@ function getSetCompletionCount(player, variant = "classic") {
 // apps/server/src/gameService.ts
 import { randomBytes, randomInt } from "node:crypto";
 
+// src/ai/heuristic.ts
+function moneyValue(cardId, variant = "classic") {
+  const card = getCardDefinition(cardId, variant);
+  return card.moneyValue ?? card.value;
+}
+function currentPlayerScore(state, playerId) {
+  const player = state.players.find((entry) => entry.id === playerId);
+  if (!player) return 0;
+  const sets = getSetCompletionCount(player, state.variant ?? "classic");
+  const bankValue = player.bank.reduce((sum, cardId) => sum + moneyValue(cardId, state.variant ?? "classic"), 0);
+  return sets * 100 + bankValue;
+}
+var HOLD_IN_HAND = /* @__PURE__ */ new Set(["deal_breaker", "just_say_no", "sly_deal", "forced_deal", "super_sly_deal"]);
+function actionScore(state, actorId, item) {
+  const { action } = item;
+  if (action.type === "draw_cards") {
+    return { action, label: item.label, score: 900, reason: "Drawing unlocks the whole turn." };
+  }
+  if (action.type === "discard_card") {
+    const value = moneyValue(action.cardId, state.variant ?? "classic");
+    return {
+      action,
+      label: item.label,
+      score: 80 - value,
+      reason: `Discarding a lower-value card preserves stronger options.`
+    };
+  }
+  if (action.type === "counter_response") {
+    if (action.useJustSayNo) {
+      return { action, label: item.label, score: 500, reason: "Countering can fully cancel the incoming effect." };
+    }
+    return { action, label: item.label, score: 260, reason: "Passing on the counter preserves cards for later." };
+  }
+  if (action.type === "pay_request") {
+    const paid = action.cards.reduce((sum, cardId) => sum + moneyValue(cardId, state.variant ?? "classic"), 0);
+    const amount = state.pending?.kind === "payment" ? state.pending.payload.amount : 0;
+    const sensible = getSuggestedPaymentCards(state, actorId, amount).sort((left, right) => left.localeCompare(right)).join("|");
+    return {
+      action,
+      label: item.label,
+      score: [...action.cards].sort((left, right) => left.localeCompare(right)).join("|") === sensible ? 300 : 250 - paid,
+      reason: "Prefer lower-cost payment options when resolving debt."
+    };
+  }
+  if (action.type === "play_property") {
+    const actor = state.players.find((entry) => entry.id === actorId);
+    const beforeSets = actor ? getSetCompletionCount(actor, state.variant ?? "classic") : 0;
+    const card = getCardDefinition(action.cardId, state.variant ?? "classic");
+    const base = card.kind === "property" ? 420 : 340;
+    const completionBonus = beforeSets >= 2 ? 180 : 40;
+    return {
+      action,
+      label: item.label,
+      score: base + completionBonus,
+      reason: "Playing property directly improves set progress and win pressure."
+    };
+  }
+  if (action.type === "move_wild") {
+    return {
+      action,
+      label: item.label,
+      // Wild repositioning is a free maintenance action. Keep it below Pass
+      // so bots cannot oscillate a wild between two legal lanes forever.
+      score: 5,
+      reason: "Moving a wild can optimize set completion and future rent value."
+    };
+  }
+  if (action.type === "play_to_bank") {
+    const value = moneyValue(action.cardId, state.variant ?? "classic");
+    const actor = state.players.find((entry) => entry.id === actorId);
+    const handLimit = state.ruleset?.maxHandAtEndTurn ?? DEFAULT_RULESET.maxHandAtEndTurn;
+    const kind = getCardDefinition(action.cardId, state.variant ?? "classic").actionKind;
+    if (kind && HOLD_IN_HAND.has(kind) && (actor?.hand.length ?? 0) <= handLimit) {
+      return { action, label: item.label, score: 10, reason: "This card is worth more played later than banked now." };
+    }
+    return {
+      action,
+      label: item.label,
+      score: 200 + value * 6,
+      reason: "Banking increases payment resilience and future spend flexibility."
+    };
+  }
+  if (action.type === "play_action") {
+    const card = getCardDefinition(action.cardId, state.variant ?? "classic");
+    const kind = card.actionKind;
+    const actionKindScore = {
+      deal_breaker: 650,
+      forced_deal: 560,
+      sly_deal: 500,
+      debt_collector: 450,
+      its_my_birthday: 430,
+      rent: 410,
+      rent_wild: 410,
+      just_say_no: 230,
+      pass_go: 380,
+      house: 360,
+      hotel: 330,
+      double_rent: 340,
+      forced_debt: 520,
+      go_again: 480,
+      heist: 500,
+      market_crash: 560,
+      repossession: 540,
+      shack: 320,
+      super_sly_deal: 620,
+      tax_collector: 500,
+      tough_luck: 470,
+      unfair_trade: 360,
+      yoink: 460
+    };
+    const score = (kind ? actionKindScore[kind] : 300) + (item.requiresPropertyTransfer ? 40 : 0);
+    return {
+      action,
+      label: item.label,
+      score,
+      reason: card.name + " is a high-leverage action in this position."
+    };
+  }
+  if (action.type === "sly_deal_pick" || action.type === "forced_deal_pick" || action.type === "deal_breaker_pick" || action.type === "no_mercy_pick") {
+    return {
+      action,
+      label: item.label,
+      score: 520,
+      reason: "Resolving a targeted property selection can swing set control."
+    };
+  }
+  if (action.type === "repay_debt" || action.type === "resolve_debt_card") {
+    return {
+      action,
+      label: item.label,
+      score: 540,
+      reason: "Clearing a required debt step keeps the turn moving legally."
+    };
+  }
+  if (action.type === "pass_turn") {
+    const maxPlaysPerTurn = state.ruleset?.maxPlaysPerTurn ?? DEFAULT_RULESET.maxPlaysPerTurn;
+    const playBudgetSpent = state.turn.playsUsed >= maxPlaysPerTurn;
+    const base = playBudgetSpent ? 210 : 20;
+    return {
+      action,
+      label: item.label,
+      score: base,
+      reason: playBudgetSpent ? "Play budget is spent; passing is efficient." : "Passing early can avoid overextending."
+    };
+  }
+  return {
+    action,
+    label: item.label,
+    score: 100,
+    reason: "Fallback strategic baseline."
+  };
+}
+function rankHeuristicActions(state, actorId, legalActions) {
+  return legalActions.map((item) => actionScore(state, actorId, item)).sort((left, right) => right.score - left.score);
+}
+function chooseHeuristicAction(state, actorId, legalActions) {
+  if (legalActions.length === 0) return null;
+  const ranked = rankHeuristicActions(state, actorId, legalActions);
+  const top = ranked[0];
+  const actorStrength = currentPlayerScore(state, actorId);
+  if (top.action.type === "pass_turn" && actorStrength < 180) {
+    const better = ranked.find((entry) => entry.action.type !== "pass_turn" && entry.action.type !== "move_wild" && entry.score >= top.score);
+    if (better) return better;
+  }
+  return top;
+}
+
+// src/ai/rollout.ts
+function makeRand(seed) {
+  let value = seed % 2147483647;
+  if (value <= 0) value += 2147483646;
+  return () => {
+    value = value * 16807 % 2147483647;
+    return (value - 1) / 2147483646;
+  };
+}
+function evaluateState(state, playerId) {
+  const me = state.players.find((player) => player.id === playerId);
+  if (!me) return -999;
+  const mySets = getSetCompletionCount(me, state.variant ?? "classic");
+  const myBank = me.bank.length;
+  const myHand = me.hand.length;
+  const myScore = mySets * 220 + myBank * 16 + myHand * 6;
+  let bestOpponent = -Infinity;
+  for (const player of state.players) {
+    if (player.id === playerId) continue;
+    const score = getSetCompletionCount(player, state.variant ?? "classic") * 200 + player.bank.length * 14 + player.hand.length * 5;
+    if (score > bestOpponent) bestOpponent = score;
+  }
+  return myScore - (Number.isFinite(bestOpponent) ? bestOpponent : 0);
+}
+function chooseRolloutAction(state, actorId, legalActions, rand) {
+  if (legalActions.length === 1) return legalActions[0];
+  const ranked = rankHeuristicActions(state, actorId, legalActions);
+  const top = ranked.slice(0, Math.min(3, ranked.length));
+  if (top.length === 0) return legalActions[0];
+  const roll = rand();
+  if (roll < 0.62) {
+    const selected2 = top[0];
+    return legalActions.find((item) => JSON.stringify(item.action) === JSON.stringify(selected2.action)) ?? legalActions[0];
+  }
+  if (roll < 0.86) {
+    const selected2 = top[Math.min(1, top.length - 1)];
+    return legalActions.find((item) => JSON.stringify(item.action) === JSON.stringify(selected2.action)) ?? legalActions[0];
+  }
+  const selected = top[Math.min(2, top.length - 1)];
+  return legalActions.find((item) => JSON.stringify(item.action) === JSON.stringify(selected.action)) ?? legalActions[0];
+}
+function rolloutSimulation(startState, rootPlayerId, depth, rand) {
+  let state = structuredClone(startState);
+  for (let step = 0; step < depth; step += 1) {
+    const status = isGameOver(state);
+    if (status.done) {
+      if (status.winnerId === rootPlayerId) return 1200 - step * 10;
+      return -1200 + step * 10;
+    }
+    const prompt = getNextPrompt(state);
+    const legal = getLegalActions(state, prompt.playerId);
+    if (legal.length === 0) break;
+    const selected = chooseRolloutAction(state, prompt.playerId, legal, rand);
+    const result = applyAction(state, selected.action);
+    if (result.error) break;
+    state = result.state;
+  }
+  return evaluateState(state, rootPlayerId);
+}
+var MAX_WILD_MOVES_PER_TURN = 2;
+function allowedMoves(state, legalActions) {
+  let wildMoves = 0;
+  for (let index = state.history.length - 1; index >= 0; index -= 1) {
+    const { type } = state.history[index];
+    if (type === "draw" || type === "turn_passed" || type === "go_again") break;
+    if (type === "wild_move") wildMoves += 1;
+  }
+  if (wildMoves < MAX_WILD_MOVES_PER_TURN) return legalActions;
+  const others = legalActions.filter((item) => item.action.type !== "move_wild");
+  return others.length > 0 ? others : legalActions;
+}
+function chooseMonteCarloAction(state, actorId, legalActions, options = {}) {
+  if (legalActions.length === 0) return null;
+  const startedAt = Date.now();
+  const outOfTime = () => options.timeBudgetMs != null && Date.now() - startedAt > options.timeBudgetMs;
+  const simulations = options.simulations ?? 16;
+  const depth = options.depth ?? 10;
+  const rand = makeRand(options.seed ?? state.turnCount + state.history.length + 17);
+  let best = null;
+  for (const legal of allowedMoves(state, legalActions)) {
+    const first = applyAction(state, legal.action);
+    if (first.error) continue;
+    const immediate = chooseHeuristicAction(state, actorId, [legal]);
+    let total = immediate?.score ?? 0;
+    let ran = 0;
+    for (; ran < simulations && !outOfTime(); ran += 1) {
+      total += rolloutSimulation(first.state, actorId, depth, rand);
+    }
+    const average = total / (ran + 1);
+    const candidate = {
+      action: legal.action,
+      label: legal.label,
+      score: average,
+      reason: `${simulations} rollout simulations estimated this as strongest expected value.`,
+      simulationScore: average,
+      simulations
+    };
+    if (!best || candidate.score > best.score) {
+      best = candidate;
+    }
+  }
+  if (best) return best;
+  const fallback = chooseHeuristicAction(state, actorId, legalActions);
+  if (!fallback) return null;
+  return {
+    ...fallback,
+    simulationScore: fallback.score,
+    simulations: 0
+  };
+}
+
 // src/engine/undoPolicy.ts
 var MAX_TURN_SNAPSHOTS = 32;
 function actionRevealedDeckCards(before, after, actionType) {
@@ -2539,10 +2919,11 @@ function resolveReconnectWindowMs(configuredGraceMs) {
 }
 function normalizeRoomForRuntime(room) {
   room.presetId = normalizeMultiplayerSessionPreset(room.presetId, DEFAULT_MULTIPLAYER_SESSION_PRESET);
-  room.variant = normalizeGameVariant(room.game?.variant ?? room.variant, DEFAULT_GAME_VARIANT);
+  const pickedForNextGame = room.status === "finished" && room.variant;
+  room.variant = normalizeGameVariant(pickedForNextGame ? room.variant : room.game?.variant ?? room.variant, DEFAULT_GAME_VARIANT);
   if (room.variant === "no_mercy") room.presetId = DEFAULT_MULTIPLAYER_SESSION_PRESET;
   if (room.game) {
-    room.game = normalizeGameState({ ...room.game, variant: room.variant });
+    room.game = normalizeGameState({ ...room.game, variant: pickedForNextGame ? room.game.variant : room.variant });
   }
   room.turnSnapshots = Array.isArray(room.turnSnapshots) ? room.turnSnapshots.map((snapshot) => normalizeGameState(snapshot)) : [];
   room.checkpoints = Array.isArray(room.checkpoints) ? room.checkpoints.map((checkpoint) => ({
@@ -2821,12 +3202,12 @@ function migrateHost(room) {
   const previousHostId = room.hostPlayerId;
   const currentHost = findPlayer(room, room.hostPlayerId);
   if (currentHost?.connected) return null;
-  const connectedCandidate = room.players.find((player) => player.connected);
+  const connectedCandidate = room.players.find((player) => player.connected && !player.isBot);
   if (connectedCandidate) {
     room.hostPlayerId = connectedCandidate.id;
     return room.hostPlayerId === previousHostId ? null : { previousHostId, nextHostId: room.hostPlayerId };
   }
-  const fallback = room.players[0];
+  const fallback = room.players.find((player) => !player.isBot);
   if (fallback) {
     room.hostPlayerId = fallback.id;
     return room.hostPlayerId === previousHostId ? null : { previousHostId, nextHostId: room.hostPlayerId };
@@ -2895,7 +3276,7 @@ function markSeatTimedOutIfExpired(room, seatId, now2 = nowMs()) {
     } else {
       retireTimedOutPlayerFromGame(room, player.id);
       if (isHostSeat(room, player.id)) {
-        const nextHost = room.players.find((candidate) => candidate.id !== player.id && candidate.connected);
+        const nextHost = room.players.find((candidate) => candidate.id !== player.id && candidate.connected && !candidate.isBot);
         if (nextHost) {
           room.hostPlayerId = nextHost.id;
           appendActivity(room, "host", `${nextHost.name} is now host.`, { playerId: nextHost.id });
@@ -2916,6 +3297,10 @@ function markSeatTimedOutIfExpired(room, seatId, now2 = nowMs()) {
     graceExpiresAt: player.reconnectDeadlineMs
   };
 }
+function botSummary(room, entry) {
+  if (!entry) return {};
+  return { isBot: entry.isBot === true, botDifficulty: seatBotDifficulty(room, entry) };
+}
 function roomPlayerSummary(room) {
   if (!room.game) {
     return room.players.map((entry) => ({
@@ -2930,10 +3315,11 @@ function roomPlayerSummary(room) {
       lastSeenAt: entry.lastSeenAt,
       reconnectDeadlineMs: entry.reconnectDeadlineMs,
       isHost: entry.id === room.hostPlayerId,
-      ready: entry.ready
+      ready: entry.ready,
+      ...botSummary(room, entry)
     }));
   }
-  return room.game.players.map((player) => {
+  const inGame = room.game.players.map((player) => {
     const entry = findPlayer(room, player.id);
     return {
       id: player.id,
@@ -2947,9 +3333,26 @@ function roomPlayerSummary(room) {
       lastSeenAt: entry?.lastSeenAt ?? room.updatedAt,
       reconnectDeadlineMs: entry?.reconnectDeadlineMs ?? room.updatedAt,
       isHost: player.id === room.hostPlayerId,
-      ready: Boolean(entry?.ready)
+      ready: Boolean(entry?.ready),
+      ...botSummary(room, entry)
     };
   });
+  const joined = room.players.filter((entry) => !room.game?.players.some((player) => player.id === entry.id));
+  return [...inGame, ...joined.map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+    handCount: 0,
+    bankCount: 0,
+    completeSets: 0,
+    connected: entry.connected,
+    connectionState: entry.connectionState,
+    disconnectedAt: entry.disconnectedAt,
+    lastSeenAt: entry.lastSeenAt,
+    reconnectDeadlineMs: entry.reconnectDeadlineMs,
+    isHost: entry.id === room.hostPlayerId,
+    ready: entry.ready,
+    ...botSummary(room, entry)
+  }))];
 }
 function canonicalizeCardIds(cardIds) {
   return [...cardIds].sort((left, right) => left.localeCompare(right));
@@ -2986,16 +3389,32 @@ function allConnectedPlayersReady(room) {
   return !seatReconnecting && connectedPlayers.length >= 2 && connectedPlayers.every((player) => player.ready);
 }
 function allRoomPlayersConnectedAndReady(room) {
-  if (room.options?.botFill) return room.players.length >= 2 && room.players.every((player) => !player.connected || player.ready);
-  return room.players.length >= 2 && room.players.every((player) => player.connected && player.ready);
+  const seats = rematchSeats(room);
+  const covered = (player) => !player.connected && room.options?.botFill === true;
+  return seats.length >= 2 && seats.every((player) => covered(player) || player.connected && player.ready);
+}
+function rematchSeats(room, now2 = nowMs()) {
+  if (room.options?.botFill) return room.players;
+  return room.players.filter((player) => player.connected || now2 - (player.disconnectedAt ?? 0) < LOBBY_START_HOLD_MS);
 }
 function allRoomPlayersConnected(room) {
   if (room.options?.botFill) return room.players.length >= 2;
-  return room.players.length >= 2 && room.players.every((player) => player.connected);
+  const seats = rematchSeats(room);
+  return seats.length >= 2 && seats.every((player) => player.connected);
+}
+function gameSeats(players) {
+  return players.map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+    ...entry.isBot ? { controller: "bot", botDifficulty: entry.botDifficulty ?? "easy" } : {}
+  }));
+}
+function seatBotDifficulty(room, seat) {
+  return seat.botDifficulty ?? room.options?.botDifficulty ?? "easy";
 }
 function clearAllReadyStates(room) {
   room.players.forEach((player) => {
-    player.ready = false;
+    player.ready = player.isBot === true;
   });
 }
 function canViewerStartRoom(room, viewerId) {
@@ -3022,7 +3441,7 @@ function resetRoomForFreshMatch(room) {
   clearAllReadyStates(room);
 }
 function removeLobbyParticipant(room, playerId) {
-  if (room.status !== "lobby") return false;
+  if (room.status !== "lobby" && room.status !== "finished") return false;
   const player = findPlayer(room, playerId);
   if (!player) return false;
   const nextPlayers = room.players.filter((entry) => entry.id !== playerId);
@@ -3181,6 +3600,27 @@ function applyGameAction(room, game, action) {
   }
   updateStatusFromGame(room);
 }
+var HARD_BOT_BUDGET_MS = 900;
+function chooseBotAction(game, playerId, legal, difficulty) {
+  const choice = difficulty === "hard" ? chooseMonteCarloAction(game, playerId, legal, { simulations: 18, depth: 11, timeBudgetMs: HARD_BOT_BUDGET_MS }) : chooseHeuristicAction(game, playerId, legal);
+  return choice && legal.some((entry) => JSON.stringify(entry.action) === JSON.stringify(choice.action)) ? choice.action : legal[0].action;
+}
+function playTurnRoomBots(room) {
+  if (!room.turnBased) return;
+  const startedAt = nowMs();
+  for (let step = 0; step < 400; step += 1) {
+    const game = room.game;
+    if (!game || room.paused || isGameOver(game).done) return;
+    const playerId = getNextPrompt(game).playerId;
+    const seat = findPlayer(room, playerId);
+    if (!seat?.isBot) return;
+    const legal = getLegalActions(game, playerId);
+    if (legal.length === 0) return;
+    const difficulty = nowMs() - startedAt < 6e3 ? seatBotDifficulty(room, seat) : "easy";
+    applyGameAction(room, game, chooseBotAction(game, playerId, legal, difficulty));
+    commitMutation(room);
+  }
+}
 function setRoomOptions(room, playerId, sessionToken, changes, expectedRevision) {
   ensureExpectedRevision(room, expectedRevision);
   requireSession(room, playerId, sessionToken);
@@ -3189,11 +3629,63 @@ function setRoomOptions(room, playerId, sessionToken, changes, expectedRevision)
   if (room.turnBased && (changes.botFill || changes.turnTimerSeconds)) throw new Error("option_not_supported");
   if (changes.turnTimerSeconds != null && !ALLOWED_TURN_TIMERS.includes(changes.turnTimerSeconds)) throw new Error("invalid_payload");
   if (changes.bestOf != null && changes.bestOf !== 1 && changes.bestOf !== 3) throw new Error("invalid_payload");
+  if (changes.botDifficulty != null && !BOT_DIFFICULTIES.includes(changes.botDifficulty)) throw new Error("invalid_payload");
   room.options = {
     botFill: changes.botFill ?? room.options?.botFill ?? false,
+    botDifficulty: changes.botDifficulty ?? room.options?.botDifficulty ?? "easy",
     turnTimerSeconds: changes.turnTimerSeconds !== void 0 ? changes.turnTimerSeconds : room.options?.turnTimerSeconds ?? null,
     bestOf: changes.bestOf ?? room.options?.bestOf ?? 1
   };
+  commitMutation(room);
+  return room;
+}
+var BOT_DIFFICULTIES = ["easy", "hard"];
+function addRoomBot(room, playerId, sessionToken, difficulty = "easy") {
+  requireSession(room, playerId, sessionToken);
+  requireHost(room, playerId);
+  if (room.status === "active") throw new Error("room_started");
+  if (!BOT_DIFFICULTIES.includes(difficulty)) throw new Error("invalid_payload");
+  if (room.players.length >= 5) throw new Error("room_full");
+  const id = nextAvailableLobbyPlayerId(room);
+  const now2 = nowMs();
+  const name = uniqueSeatName(room, `Bot ${room.players.filter((entry) => entry.isBot).length + 1}`);
+  room.players.push({
+    id,
+    name,
+    sessionToken: randomToken(),
+    isBot: true,
+    botDifficulty: difficulty,
+    connected: true,
+    connectionState: "connected",
+    disconnectedAt: null,
+    lastSeenAt: now2,
+    reconnectDeadlineMs: now2 + BOT_SEAT_RECLAIM_MS,
+    ready: true,
+    lastReactionAt: 0,
+    lastChatAt: 0
+  });
+  appendActivity(room, "lobby", `${name} joined the table.`, { playerId: id });
+  commitMutation(room);
+  return room;
+}
+function removeRoomBot(room, playerId, sessionToken, botId) {
+  requireSession(room, playerId, sessionToken);
+  requireHost(room, playerId);
+  if (room.status === "active") throw new Error("room_started");
+  const bot = findPlayer(room, botId);
+  if (!bot?.isBot) throw new Error("seat_not_found");
+  room.players = room.players.filter((entry) => entry.id !== botId);
+  appendActivity(room, "lobby", `${bot.name} left the table.`, { playerId: botId });
+  commitMutation(room);
+  return room;
+}
+function setSeatBotDifficulty(room, playerId, sessionToken, seatId, difficulty) {
+  requireSession(room, playerId, sessionToken);
+  requireHost(room, playerId);
+  if (!BOT_DIFFICULTIES.includes(difficulty)) throw new Error("invalid_payload");
+  const seat = findPlayer(room, seatId);
+  if (!seat) throw new Error("seat_not_found");
+  seat.botDifficulty = difficulty;
   commitMutation(room);
   return room;
 }
@@ -3312,7 +3804,7 @@ function createRoom(rooms, hostName, createOptions = {}) {
   };
 }
 function joinRoom(room, playerName2) {
-  if (room.status !== "lobby" || room.game) {
+  if (room.status === "active" || room.status === "lobby" && room.game) {
     throw new Error("room_started");
   }
   reclaimDisconnectedLobbyParticipants(room, nowMs(), room.players.length >= 5 ? "all" : "expired");
@@ -3397,7 +3889,7 @@ function leaveRoom(room, playerId, sessionToken, expectedRevision, options = {})
   }
   const player = requireSession(room, playerId, sessionToken);
   ensureExpectedRevision(room, expectedRevision);
-  if (room.status === "lobby") {
+  if (room.status === "lobby" || room.status === "finished" && options.abandon) {
     if (removeLobbyParticipant(room, player.id)) {
       incrementRevision(room);
     }
@@ -3426,7 +3918,7 @@ function startRoom(room, playerId, sessionToken, seed, expectedRevision, checkpo
     throw new Error("players_not_ready");
   }
   reclaimDisconnectedLobbyParticipants(room, nowMs(), "all");
-  const players = activePlayers.map((player) => ({ id: player.id, name: player.name }));
+  const players = gameSeats(activePlayers);
   if (checkpointId) {
     const checkpoint = findCheckpoint(room, checkpointId);
     const lobbyPlayerById = new Map(activePlayers.map((entry) => [entry.id, entry.name]));
@@ -3677,7 +4169,7 @@ function setRoomVariant(room, playerId, sessionToken, variant, expectedRevision)
   assertReconnectWindowOpen(player);
   requireConnectedPlayer(player);
   requireHost(room, playerId);
-  if (room.status !== "lobby" || room.game) {
+  if (room.status === "active") {
     throw new Error("room_started");
   }
   const nextVariant = normalizeGameVariant(variant, room.variant);
@@ -3723,8 +4215,9 @@ function rematchRoom(room, playerId, sessionToken, expectedRevision) {
   if (!allRoomPlayersConnectedAndReady(room)) {
     throw new Error("players_not_ready");
   }
+  room.players = rematchSeats(room);
   room.game = createGame({
-    players: room.players.map((entry) => ({ id: entry.id, name: entry.name })),
+    players: gameSeats(room.players),
     deckVersion: "v1",
     seed: randomInt(MATCH_SEED_RANGE),
     ruleset: getMultiplayerSessionPresetRuleset(room.presetId),
@@ -3847,10 +4340,10 @@ function roomView(room, viewerId, sessionToken) {
 }
 function roomViewExtras(room) {
   return {
-    options: room.options ?? { botFill: false, turnTimerSeconds: null, bestOf: 1 },
+    options: { botDifficulty: "easy", ...room.options ?? { botFill: false, turnTimerSeconds: null, bestOf: 1 } },
     turnClock: room.turnClock ?? void 0,
     series: room.series ?? void 0,
-    botSeatIds: room.options?.botFill && room.status === "active" ? room.players.filter((player) => !player.connected).map((player) => player.id) : [],
+    botSeatIds: room.options?.botFill && room.status === "active" ? room.players.filter((player) => !player.connected && !player.isBot).map((player) => player.id) : [],
     spectatorCount: room.spectators?.length ?? 0,
     turnBased: room.turnBased === true,
     replayAvailable: room.status === "finished" && Boolean(room.replayLog)
@@ -4069,6 +4562,7 @@ async function mutateRoom(store, notifier2, code, change) {
     if (!stored) return fail(404, "room_not_found");
     const previousPrompt = promptPlayerId(stored.room);
     const result = change(stored.room);
+    playTurnRoomBots(stored.room);
     if (await store.save(stored.room, stored.version)) {
       await tellNextPlayer(stored.room, previousPrompt, store, notifier2);
       return ok(result ?? { ok: true });
@@ -4089,7 +4583,7 @@ async function handleTurnRoomRequest(request, store, notifier2) {
       return await createTurnRoom(store, optionalTrimmedString(body.playerName) ?? "Host");
     }
     const match = path.match(
-      /^\/api\/multiplayer\/rooms\/([^/]+)\/(join|watch|reconnect|start|preset|variant|options|rematch|action|leave|state|replay|pause|resume|undo|reset-turn|checkpoints|ready|reaction|chat|typing|push)(?:\/(save|load|delete))?$/
+      /^\/api\/multiplayer\/rooms\/([^/]+)\/(join|watch|reconnect|start|preset|variant|options|bots|rematch|action|leave|state|replay|pause|resume|undo|reset-turn|checkpoints|ready|reaction|chat|typing|push)(?:\/(save|load|delete))?$/
     );
     if (!match) return fail(404, "not_found");
     const code = decodeURIComponent(match[1]).toUpperCase();
@@ -4161,10 +4655,21 @@ async function handleTurnRoomRequest(request, store, notifier2) {
         case "options":
           setRoomOptions(room, playerId, sessionToken, {
             ...body.botFill !== void 0 ? { botFill: body.botFill === true } : {},
+            ...body.botDifficulty !== void 0 ? { botDifficulty: body.botDifficulty } : {},
             ...body.turnTimerSeconds !== void 0 ? { turnTimerSeconds: body.turnTimerSeconds } : {},
             ...body.bestOf !== void 0 ? { bestOf: body.bestOf } : {}
           }, expectedRevision);
           return null;
+        case "bots": {
+          const op = optionalTrimmedString(body.op);
+          const difficulty = optionalTrimmedString(body.difficulty) ?? "easy";
+          const seatId = optionalTrimmedString(body.seatId);
+          if (op === "add") addRoomBot(room, playerId, sessionToken, difficulty);
+          else if (op === "remove" && seatId) removeRoomBot(room, playerId, sessionToken, seatId);
+          else if (op === "difficulty" && seatId) setSeatBotDifficulty(room, playerId, sessionToken, seatId, difficulty);
+          else throw new Error("invalid_payload");
+          return null;
+        }
         case "rematch":
           rematchRoom(room, playerId, sessionToken, expectedRevision);
           return null;

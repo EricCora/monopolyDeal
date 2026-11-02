@@ -833,7 +833,7 @@ export function MultiplayerScreen({
                 <h3>{roomView.started ? 'Match Live' : 'Lobby'}</h3>
                 <p className="multiplayer-lobby-status">
                   {roomView.winnerId
-                    ? `Winner: ${roomView.winnerId}`
+                    ? `Winner: ${roomView.players.find((player) => player.id === roomView.winnerId)?.name ?? roomView.winnerId}`
                     : promptPlayerName
                       ? `Turn: ${promptPlayerName}`
                       : 'Waiting for players.'}

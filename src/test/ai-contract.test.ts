@@ -172,17 +172,25 @@ describe('action card scores', () => {
 
 describe('hard bot and Wilds', () => {
   /** A position where the hard bot's first choice is to move a Wild, which costs no play. */
-  function wildMovePosition(): { state: GameState; actor: string; legal: LegalAction[] } {
-    let state = createGame({ seed: 1, players: [{ id: 'p1', name: 'A' }, { id: 'p2', name: 'B' }] });
-    for (let step = 0; step < 52; step += 1) {
-      const prompt = getNextPrompt(state);
-      state = applyAction(state, chooseHeuristicAction(state, prompt.playerId, getLegalActions(state, prompt.playerId))!.action).state;
+  function findWildMovePosition(): { state: GameState; actor: string; legal: LegalAction[] } {
+    for (let seed = 1; seed < 40; seed += 1) {
+      let state = createGame({ seed, players: [{ id: 'p1', name: 'A' }, { id: 'p2', name: 'B' }] });
+      for (let step = 0; step < 400 && !isGameOver(state).done; step += 1) {
+        const actor = getNextPrompt(state).playerId;
+        const legal = getLegalActions(state, actor);
+        if (legal.some((item) => item.action.type === 'move_wild')
+          && chooseMonteCarloAction(state, actor, legal, options)?.action.type === 'move_wild') {
+          return { state, actor, legal };
+        }
+        state = applyAction(state, chooseHeuristicAction(state, actor, legal)!.action).state;
+      }
     }
-    const actor = getNextPrompt(state).playerId;
-    return { state, actor, legal: getLegalActions(state, actor) };
+    throw new Error('no game reached a position where the hard bot moves a Wild');
   }
 
   const options = { simulations: 6, depth: 8, seed: 7 };
+  let found: ReturnType<typeof findWildMovePosition> | undefined;
+  const wildMovePosition = () => (found ??= findWildMovePosition());
 
   it('may reposition a Wild early in a turn', () => {
     const { state, actor, legal } = wildMovePosition();

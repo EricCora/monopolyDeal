@@ -1657,7 +1657,7 @@ function App() {
     }
     const startedAt = Date.now();
     setLocalClock({ playerId: clockOwnerId, startedAt, deadlineMs: clockRuns ? startedAt + (localMatch.speedSeconds ?? DEFAULT_SPEED_SECONDS) * 1000 : null });
-  }, [clockOwnerId, clockRuns, game?.createdAt]);
+  }, [clockOwnerId, clockRuns, game?.createdAt, localMatch.speedSeconds]);
 
   const deadlineMs = localClock?.deadlineMs ?? null;
   useEffect(() => {
@@ -2384,7 +2384,15 @@ function App() {
           playerName={multiplayerPlayerName}
           joinCode={multiplayerJoinCode}
           session={multiplayerSession}
-          roomView={multiplayerRoomView}
+          roomView={backInLobby && multiplayerRoomView ? {
+            ...multiplayerRoomView,
+            started: false,
+            status: 'lobby',
+            canStart: multiplayerRoomView.canRematch,
+            winnerId: undefined,
+            promptPlayerId: undefined,
+            players: multiplayerRoomView.players.map((player) => ({ ...player, handCount: 0, bankCount: 0, completeSets: 0 })),
+          } : multiplayerRoomView}
           loading={multiplayerLoading}
           healthOk={multiplayerHealthOk}
           apiBase={multiplayerApiBase}

@@ -1483,6 +1483,9 @@ export function GameTableScreen({
             <button type="button" className="icon-button" aria-label="Close game log" onClick={() => setLogOpen(false)}><Icon name="close" /></button>
           </header>
           <div className="table-details-body">
+            <RecentEvents events={game.history} playerNames={game.players.map((player) => player.name)} />
+            <details className="table-details-more">
+            <summary>Turn Details</summary>
             {turnPriorityNotice ? (
               <section className={`table-priority-banner tone-${turnPriorityNotice.tone}`} aria-label="Turn priority">
                 <p className="table-priority-title">{turnPriorityNotice.title}</p>
@@ -1608,7 +1611,7 @@ export function GameTableScreen({
               </section>
             ) : null}
 
-            <RecentEvents events={game.history} playerNames={game.players.map((player) => player.name)} />
+            </details>
           </div>
         </div>
       </aside>

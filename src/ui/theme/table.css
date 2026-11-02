@@ -2276,3 +2276,16 @@
   margin-bottom: 4px;
 }
 
+.table-details-more {
+  margin-top: 4px;
+}
+
+.table-details-more > summary {
+  min-height: 40px;
+  padding: 10px 2px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  opacity: 0.75;
+  cursor: pointer;
+}
+
