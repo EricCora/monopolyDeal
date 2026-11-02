@@ -1,7 +1,7 @@
 // The source of the turn-by-turn room function. `npm run build:turn-api` bundles it into
 // api/turn-rooms.js, because Vercel Functions can't run the engine's extensionless imports.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { BlobNotFoundError, BlobPreconditionFailedError, del, get, put } from '@vercel/blob';
+import { BlobNotFoundError, BlobPreconditionFailedError, del, get, head, put } from '@vercel/blob';
 import webpush from 'web-push';
 import { handleTurnRoomRequest, type TurnRoomNotifier, type TurnRoomStore } from '../apps/server/src/turnRooms.ts';
 import type { MultiplayerRoom } from '../apps/server/src/gameService.ts';
@@ -12,10 +12,19 @@ const pathname = (code: string) => `turn-rooms/${code}.json`;
 
 const blobStore: TurnRoomStore = {
   async load(code) {
+    // The tag has to come from `head`: after an overwrite, the one on `get` is refused by `ifMatch`.
+    // Reading it first is safe, because a newer room in between just makes the save retry.
+    let version: string;
+    try {
+      version = (await head(pathname(code))).etag;
+    } catch (error) {
+      if (error instanceof BlobNotFoundError) return null;
+      throw error;
+    }
     const result = await get(pathname(code), { access: 'private', useCache: false });
     if (!result || result.statusCode !== 200 || !result.stream) return null;
     const text = await new Response(result.stream).text();
-    return { room: JSON.parse(text) as MultiplayerRoom, version: result.blob.etag };
+    return { room: JSON.parse(text) as MultiplayerRoom, version };
   },
   async save(room, version) {
     try {
