@@ -402,19 +402,45 @@ private struct RentWheel: View {
 // MARK: Back
 
 struct CardBack: View {
+    @Environment(\.cardBackStyle) private var style
     var width: CGFloat
+
+    private var colors: [Color] {
+        switch style {
+        case .classic_red: [Color(hex: 0xC42B35), Color(hex: 0x8E1721)]
+        case .ocean_blue: [Color(hex: 0x2777C4), Color(hex: 0x123F7A)]
+        case .forest_green: [Color(hex: 0x2C9C63), Color(hex: 0x0F5233)]
+        case .midnight_gold: [Color(hex: 0x1B2233), Color(hex: 0x0A0D15)]
+        case .neon_grid: [Color(hex: 0x5B1A8E), Color(hex: 0x123A7A)]
+        }
+    }
+
+    private var mark: Color {
+        switch style {
+        case .midnight_gold: Palette.gold
+        case .neon_grid: Color(hex: 0x4DE3FF)
+        default: .white
+        }
+    }
+
+    private var edge: Color {
+        switch style {
+        case .midnight_gold, .neon_grid: mark.opacity(0.8)
+        default: .white.opacity(0.55)
+        }
+    }
 
     var body: some View {
         let s = Scale(width: width)
         ZStack {
-            LinearGradient(colors: [Color(hex: 0xC42B35), Color(hex: 0x8E1721)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
             RoundedRectangle(cornerRadius: s(6), style: .continuous)
-                .strokeBorder(.white.opacity(0.55), lineWidth: s(1.5))
+                .strokeBorder(edge, lineWidth: s(1.5))
                 .padding(s(6))
             Text("DEAL")
                 .font(.system(size: s(21), weight: .black, design: .rounded))
                 .tracking(1)
-                .foregroundStyle(.white)
+                .foregroundStyle(mark)
                 .rotationEffect(.degrees(-24))
         }
         .frame(width: width, height: width * CardView.aspect)

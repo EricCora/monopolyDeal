@@ -15,7 +15,7 @@ function gameOnBotsTurn(): GameState {
   });
   while (getNextPrompt(state).playerId !== 'p2') {
     const legal = getLegalActions(state, getNextPrompt(state).playerId);
-    const pass = legal.find((entry) => entry.action.type === 'draw_cards' || entry.action.type === 'pass_turn' || entry.action.type === 'end_turn') ?? legal[0];
+    const pass = legal.find((entry) => entry.action.type === 'draw_cards' || entry.action.type === 'pass_turn') ?? legal[0];
     state = applyAction(state, pass.action).state;
   }
   return state;

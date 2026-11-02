@@ -22,6 +22,10 @@ final class OnlineMatch: TableSession {
         didSet { if chatOpen { unreadChat = 0 } }
     }
     private var lastPromptWasMine = false
+    private(set) var newUnlocks: [String] = []
+    private var reactions = ReactionTracker()
+    /// The reaction crossing the table right now.
+    private(set) var flight: FlyingReaction?
 
     init(connection: RoomConnection, store: DealStore, preferences: @escaping () -> Preferences, onFeedback: @escaping (Feedback.Tone) -> Void) {
         self.connection = connection
@@ -34,7 +38,25 @@ final class OnlineMatch: TableSession {
     var game: GameState? { view?.gameState }
     var prompt: TurnPrompt? { game.map(Engine.nextPrompt) }
     var legalActions: [LegalAction] { view?.legalActions ?? [] }
-    var viewerId: PlayerId? { view?.yourPlayerId }
+    /// A spectator has no seat, so every player shows as across the table.
+    var viewerId: PlayerId? { view?.isSpectator == true ? nil : view?.yourPlayerId }
+    var isSpectating: Bool { view?.isSpectator == true }
+
+    var turnClock: TurnClockInfo? {
+        guard let clock = view?.turnClock, game.map({ !Engine.isGameOver($0).done }) == true else { return nil }
+        let offset = connection.serverClockOffsetMs
+        return TurnClockInfo(
+            playerId: clock.playerId,
+            startedAt: Date(timeIntervalSince1970: (clock.startedAt - offset) / 1000),
+            deadline: clock.deadlineMs.map { Date(timeIntervalSince1970: ($0 - offset) / 1000) }
+        )
+    }
+
+    var series: MatchSeries? {
+        view?.series.map { MatchSeries(bestOf: $0.bestOf, wins: $0.wins, gameNumber: $0.gameNumber, winnerId: $0.winnerId) }
+    }
+
+    var botSeatIds: [PlayerId] { view?.botSeatIds ?? [] }
     var isPaused: Bool { view?.paused ?? false }
     var canPause: Bool { view?.canHostTogglePause ?? false }
     var pauseMessage: String? { view?.pauseMessage }
@@ -59,6 +81,17 @@ final class OnlineMatch: TableSession {
             return error.errorDescription
         }
         set { if newValue == nil { connection.lastError = nil } }
+    }
+
+    /// The finished game's moves, to watch it back. Keeps a copy with the local replays.
+    func fetchReplay() async -> GameLog? {
+        guard let room = try? await connection.replay() else { return nil }
+        let log = GameLog(initial: room.initial, actions: room.actions)
+        if let game, !isSpectating {
+            let winner = game.players.first { $0.id == game.winnerId }?.name ?? "Nobody"
+            store.saveReplay(StoredReplay(id: "\(connection.session.roomCode)-\(Int(game.createdAt))", endedAt: game.updatedAt, title: "\(winner) won in \(game.turnCount) turns", log: log))
+        }
+        return log
     }
 
     func perform(_ action: Action) {
@@ -101,6 +134,23 @@ final class OnlineMatch: TableSession {
             }
             lastSeenChatId = latest
         }
+        if let reaction = reactions.note(view.latestReaction), let kind = reaction.reaction {
+            let opponents = view.players.filter { $0.id != view.yourPlayerId }
+            let seat = opponents.firstIndex { $0.id == reaction.playerId } ?? 0
+            let flying = FlyingReaction(
+                reaction: kind,
+                playerName: view.players.first { $0.id == reaction.playerId }?.name ?? "",
+                fromViewer: reaction.playerId == view.yourPlayerId,
+                seatPosition: opponents.count > 1 ? Double(seat) / Double(opponents.count - 1) : 0.5
+            )
+            flight = flying
+            Task {
+                try? await Task.sleep(for: .seconds(1.4))
+                if self.flight?.id == flying.id { self.flight = nil }
+            }
+        }
+        // A spectator has nothing to be nudged about and no result to record.
+        if view.isSpectator { return }
         let mine = prompt?.playerId == view.yourPlayerId && !view.legalActions.isEmpty
         if mine && !lastPromptWasMine { onFeedback(.turn) }
         lastPromptWasMine = mine
@@ -109,15 +159,18 @@ final class OnlineMatch: TableSession {
             if view.status == "lobby" {
                 summary = nil
                 unlocked = []
+                newUnlocks = []
             }
             return
         }
         let signature = "\(view.roomCode):\(game.winnerId ?? ""):\(Int(game.createdAt))"
         guard recordedSignature != signature else { return }
         recordedSignature = signature
+        let before = store.achievements().counters
         let record = store.record(StatsBuilder.matchRecord(game, mode: .live_online, surface: .multiplayer, presetId: view.presetId.rawValue, roomCode: view.roomCode))
         summary = PostGame.summary(game, lifetime: record.lifetime)
         unlocked = record.unlocked
+        newUnlocks = Unlockables.newlyUnlocked(before: before, after: store.achievements().counters)
         onFeedback(.win)
     }
 }
@@ -145,6 +198,15 @@ extension OnlineMatch {
     }
 }
 #endif
+
+struct FlyingReaction: Identifiable, Equatable {
+    let id = UUID()
+    var reaction: RoomReaction
+    var playerName: String
+    var fromViewer: Bool
+    /// Where the sender sits across the top of the table, from 0 to 1.
+    var seatPosition: Double
+}
 
 /// Stores the seat token for a room in the Keychain, so a relaunch can rejoin it.
 enum SessionVault {

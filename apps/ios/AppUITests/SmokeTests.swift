@@ -199,6 +199,26 @@ final class GameplayUITests: XCTestCase {
         XCTAssertFalse(app.buttons["action.draw"].exists, "Draw was offered on the bot's turn")
     }
 
+    func testSpeedGameRunsItsClockThenABotMovesAndTheGameCanBeWatchedBack() throws {
+        app.launchArguments = ["-seed", "5", "-botDelayMs", "60", "-speedTurnSeconds", "2", "-winSets", "1", "-storeDirectory", "uitest-\(UUID().uuidString)"]
+        app.launch()
+        app.buttons["home.newGame"].firstMatch.tap()
+        app.segmentedControls["setup.speed"].buttons["Speed"].tap()
+        app.segmentedControls["setup.bestOf"].buttons["Best of Three"].tap()
+        let controller = app.buttons["setup.controller.1"]
+        controller.tap()
+        app.buttons["Bot"].tap()
+        app.buttons["setup.start"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["table.clock"].waitForExistence(timeout: 5))
+        // Touch nothing: with time running out each turn, bots finish the game.
+        XCTAssertTrue(app.staticTexts["postgame.winner"].waitForExistence(timeout: 240))
+        XCTAssertTrue(app.descendants(matching: .any)["postgame.series"].exists)
+        app.buttons["postgame.replay"].tap()
+        XCTAssertTrue(app.staticTexts["replay.position"].waitForExistence(timeout: 5))
+        app.buttons["replay.close"].tap()
+        XCTAssertTrue(app.staticTexts["postgame.winner"].waitForExistence(timeout: 5))
+    }
+
     func testMenusOpen() throws {
         launch(seed: 3)
         for (button, title) in [("home.saved", "Saved Games"), ("home.stats", "Stats"), ("home.settings", "Settings"), ("home.online", "Online")] {

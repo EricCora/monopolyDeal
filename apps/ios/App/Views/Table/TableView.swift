@@ -52,7 +52,7 @@ struct TableView: View {
                         statusRow
                         playerBoard(cardWidth: phoneLane)
                     }
-                    if session.isViewersPrompt || session.viewerId != nil {
+                    if (session.isViewersPrompt || session.viewerId != nil) && !session.isReplay {
                         actionBar
                     }
                     HandFan(
@@ -63,11 +63,14 @@ struct TableView: View {
                         space: cardSpace,
                         animatesDeal: cardsAnimate
                     )
+                    .allowsHitTesting(!session.isReplay)
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 4)
 
-                PromptPanel(session: session, actions: actions, ui: ui)
+                if !session.isReplay {
+                    PromptPanel(session: session, actions: actions, ui: ui)
+                }
 
                 toast
 
@@ -166,7 +169,7 @@ struct TableView: View {
                     Button("Save Game", systemImage: "square.and.arrow.down") { ui.showSaves = true }
                 }
                 Divider()
-                Button(session is LocalMatch ? "Back to Menu" : "Exit Match", systemImage: "chevron.backward", action: onLeave)
+                Button(leaveLabel, systemImage: "chevron.backward", action: onLeave)
             } label: {
                 Image(systemName: "line.3.horizontal")
                     .font(.headline.weight(.bold))
@@ -191,10 +194,18 @@ struct TableView: View {
             }
             Spacer(minLength: 4)
 
+            if let clock = session.turnClock { TurnClockPill(clock: clock) }
+
             PlaysPips(used: session.game?.turn.playsUsed ?? 0, total: session.game.map { Engine.ruleset($0).maxPlaysPerTurn } ?? 3)
 
             PileStack(session: session, ui: ui)
         }
+    }
+
+    private var leaveLabel: String {
+        if session.isReplay { return "Close Replay" }
+        if session.isSpectating { return "Stop Watching" }
+        return session is LocalMatch ? "Back to Menu" : "Exit Match"
     }
 
     private var turnTitle: String {
@@ -205,6 +216,10 @@ struct TableView: View {
 
     private var subtitle: String {
         guard let game = session.game else { return session.title }
+        if let series = session.series, series.bestOf > 1 {
+            let score = game.players.map { String(series.wins[$0.id] ?? 0) }.joined(separator: "–")
+            return "Turn \(game.turnCount) · \(game.resolvedVariant.label) · Game \(series.gameNumber) · \(score)"
+        }
         return "Turn \(game.turnCount) · \(game.resolvedVariant.label) · \(Engine.ruleset(game).winCompleteSets) sets to win"
     }
 
@@ -310,7 +325,7 @@ struct TableView: View {
             VStack(spacing: 8) {
                 Image(systemName: "eye.slash")
                     .font(.title2)
-                Text("Hands are hidden until the next player takes the phone.")
+                Text(session.isSpectating ? "You're watching. Every hand stays hidden." : "Hands are hidden until the next player takes the phone.")
                     .font(.subheadline)
                     .multilineTextAlignment(.center)
             }
@@ -426,7 +441,12 @@ struct TableView: View {
     private func showSpotlightIfNeeded(previousTop: String?, newTop: String?) {
         guard let newTop, newTop != previousTop,
               let game = session.game, let card = Catalog.lookup(newTop, session.variant),
-              card.kind == .action, let actor = actorOfLatestPlay(in: game), actor != session.viewerId else { return }
+              card.kind == .action, let actor = actorOfLatestPlay(in: game) else { return }
+        if card.actionKind == .just_say_no {
+            stampJustSayNo(by: session.playerName(actor))
+            return
+        }
+        guard actor != session.viewerId else { return }
         let spotlight = PlaySpotlight(cardId: newTop, playerName: session.playerName(actor))
         AccessibilityNotification.Announcement("\(spotlight.playerName) played \(CardText.spokenName(card))").post()
         guard !app.preferences.reducedEffects else { return }
@@ -437,6 +457,20 @@ struct TableView: View {
             try? await Task.sleep(for: .seconds(1.5))
             guard ui.spotlight?.id == spotlight.id else { return }
             withAnimation(.easeOut(duration: 0.25)) { ui.spotlight = nil }
+        }
+    }
+
+    private func stampJustSayNo(by name: String) {
+        let stamp = JustSayNoStamp(playerName: name)
+        AccessibilityNotification.Announcement("Just Say No, from \(name)").post()
+        guard !app.preferences.reducedEffects else { return }
+        withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.28, dampingFraction: 0.55)) {
+            ui.noStamp = stamp
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(1.3))
+            guard ui.noStamp?.id == stamp.id else { return }
+            withAnimation(.easeOut(duration: 0.25)) { ui.noStamp = nil }
         }
     }
 
@@ -467,6 +501,10 @@ struct TableView: View {
                 if let spotlight = ui.spotlight {
                     PlaySpotlightView(spotlight: spotlight, variant: session.variant, width: wide ? 260 : min(210, height * 0.22))
                         .transition(reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
+                }
+                if let stamp = ui.noStamp {
+                    JustSayNoStampView(stamp: stamp)
+                        .transition(reduceMotion ? .opacity : .scale(scale: 2.2).combined(with: .opacity))
                 }
                 if let banner = ui.setBanner {
                     ZStack {
@@ -569,7 +607,7 @@ struct TableView: View {
                         .foregroundStyle(Palette.gold)
                         .accessibilityElement(children: .combine)
                     }
-                    Button(session is LocalMatch ? "Back to Menu" : "Exit Match", action: onLeave)
+                    Button(leaveLabel, action: onLeave)
                         .buttonStyle(SecondaryButtonStyle())
                         .frame(maxWidth: 220)
                 }

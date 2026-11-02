@@ -242,6 +242,28 @@ struct SetupView: View {
                         }
                     }
 
+                    VStack(spacing: 8) {
+                        SectionTitle(text: "Pace")
+                        Picker("Turn timer", selection: $app.setup.speedMode) {
+                            Text("No Limit").tag(false)
+                            Text("Speed").tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("setup.speed")
+                        Text(app.setup.speedMode
+                            ? "45 seconds a turn. When time runs out, a bot moves for you."
+                            : "A clock shows how long each turn is taking, with no limit.")
+                            .font(.footnote)
+                            .foregroundStyle(SoftWhite(0.7))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Picker("Match length", selection: $app.setup.bestOfThree) {
+                            Text("Single Game").tag(false)
+                            Text("Best of Three").tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("setup.bestOf")
+                    }
+
                     if app.setup.variant == .classic && app.preferences.customRulesEnabled {
                         VStack(spacing: 8) {
                             SectionTitle(text: "Custom Rules")
@@ -426,13 +448,46 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var app
     @State private var confirmClear = false
 
+    private var counters: AchievementState.Counters { app.achievements.counters }
+
+    private func unlockableRow(_ label: String, unlocked: Bool, needs: String?, selected: Bool, choose: @escaping () -> Void) -> some View {
+        Button(action: choose) {
+            HStack {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(label).foregroundStyle(unlocked ? Color.white : Color.white.opacity(0.55))
+                    if !unlocked, let needs {
+                        Text(needs).font(.caption).foregroundStyle(SoftWhite(0.6))
+                    }
+                }
+                Spacer()
+                if selected {
+                    Image(systemName: "checkmark").foregroundStyle(Palette.gold).accessibilityLabel("Selected")
+                } else if !unlocked {
+                    Image(systemName: "lock.fill").foregroundStyle(SoftWhite(0.55)).accessibilityLabel("Locked")
+                }
+            }
+        }
+        .disabled(!unlocked)
+    }
+
     var body: some View {
         @Bindable var app = app
         Form {
-            Section("Table") {
-                Picker("Table Style", selection: $app.preferences.tableStyle) {
-                    ForEach(TableTheme.allCases, id: \.self) { Text($0.label).tag($0) }
+            Section("Table Style") {
+                ForEach(TableTheme.allCases, id: \.self) { style in
+                    unlockableRow(style.label, unlocked: style.isUnlocked(counters), needs: style.unlockRule?.needs, selected: app.preferences.tableStyle == style) {
+                        app.preferences.tableStyle = style
+                    }
                 }
+            }
+            Section("Card Back") {
+                ForEach(CardBackStyle.allCases, id: \.self) { back in
+                    unlockableRow(back.label, unlocked: back.isUnlocked(counters), needs: back.unlockRule?.needs, selected: app.preferences.cardBack == back) {
+                        app.preferences.cardBack = back
+                    }
+                }
+            }
+            Section("Table") {
                 Toggle("Reduce Effects", isOn: $app.preferences.reducedEffects)
             }
             Section("Feedback") {

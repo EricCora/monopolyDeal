@@ -65,6 +65,7 @@ struct StatsView: View {
                     if !winRows.isEmpty { winsChart }
                     if matches.count > 1 { lengthChart }
                     achievements
+                    if !replays.isEmpty { replaysPanel }
                     daily
                     history
                 }
@@ -76,6 +77,38 @@ struct StatsView: View {
         .navigationTitle("Stats")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { app.reloadStoredData() }
+    }
+
+    private var replays: [StoredReplay] { app.store.replays() }
+
+    private var replaysPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionTitle(text: "Replays")
+            ForEach(replays) { replay in
+                Button {
+                    app.replayToWatch = ReplayRequest(log: replay.log)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "play.circle.fill")
+                            .foregroundStyle(Palette.gold)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(replay.title)
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(.white)
+                            Text(Date(timeIntervalSince1970: replay.endedAt / 1000).formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption2)
+                                .foregroundStyle(SoftWhite(0.65))
+                        }
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("stats.replay")
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassPanel()
     }
 
     private var filters: some View {

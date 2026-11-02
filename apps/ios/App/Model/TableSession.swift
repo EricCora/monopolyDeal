@@ -4,6 +4,13 @@ import DealStats
 import Foundation
 import Observation
 
+/// Whose turn the clock is timing, and whether it can run out.
+struct TurnClockInfo: Equatable {
+    var playerId: PlayerId
+    var startedAt: Date
+    var deadline: Date?
+}
+
 /// What the table screen needs from a game, local or online.
 @MainActor
 protocol TableSession: AnyObject {
@@ -24,6 +31,12 @@ protocol TableSession: AnyObject {
     var thinkingPlayerId: PlayerId? { get }
     var showsCoach: Bool { get }
     var title: String { get }
+    var turnClock: TurnClockInfo? { get }
+    var series: MatchSeries? { get }
+    /// Watching with every hand hidden, so nothing here is yours to play.
+    var isSpectating: Bool { get }
+    /// A finished game playing back. Nothing can be played.
+    var isReplay: Bool { get }
 
     func perform(_ action: Action)
     func undo()
@@ -32,6 +45,11 @@ protocol TableSession: AnyObject {
 }
 
 extension TableSession {
+    var turnClock: TurnClockInfo? { nil }
+    var series: MatchSeries? { nil }
+    var isSpectating: Bool { false }
+    var isReplay: Bool { false }
+
     var variant: GameVariant { game?.resolvedVariant ?? .classic }
 
     var viewer: PlayerState? { viewerId.flatMap { id in game?.players.first { $0.id == id } } }
@@ -67,8 +85,20 @@ final class LocalMatch: TableSession {
     private(set) var summary: PostGameSummary?
     private(set) var unlocked: [AchievementId] = []
     private(set) var thinkingPlayerId: PlayerId?
+    private(set) var options: MatchOptions
+    private(set) var turnClock: TurnClockInfo?
+    /// The game so far, for watching it back once it's over. Nil for a game loaded without one.
+    private(set) var log: GameLog?
+    private(set) var newUnlocks: [String] = []
     var errorMessage: String?
 
+    private var clockRuns = false
+    private var clockTask: Task<Void, Never>?
+    private var logMarks: [Int] = []
+    /// How long a Speed turn lasts. UI tests shorten it.
+    var speedTurnSeconds = 45.0
+    /// After time runs out, the rest of the turn plays out at this pace.
+    static let timedOutStepSeconds = 1.5
     private let store: DealStore
     private let preferences: () -> Preferences
     private let updatePreferences: ((inout Preferences) -> Void) -> Void
@@ -85,9 +115,11 @@ final class LocalMatch: TableSession {
     var onFinished: (() -> Void)?
     #endif
 
-    init(game: GameState, mode: MatchMode, store: DealStore, preferences: @escaping () -> Preferences, updatePreferences: @escaping ((inout Preferences) -> Void) -> Void, onFeedback: @escaping (Feedback.Tone) -> Void) {
+    init(game: GameState, mode: MatchMode, options: MatchOptions = MatchOptions(), log: GameLog? = nil, store: DealStore, preferences: @escaping () -> Preferences, updatePreferences: @escaping ((inout Preferences) -> Void) -> Void, onFeedback: @escaping (Feedback.Tone) -> Void) {
         self.game = game
         self.mode = mode
+        self.options = options
+        self.log = log
         self.store = store
         self.preferences = preferences
         self.updatePreferences = updatePreferences
@@ -96,6 +128,7 @@ final class LocalMatch: TableSession {
     }
 
     var title: String { mode.label }
+    var series: MatchSeries? { options.series }
     var canPause: Bool { true }
     var pauseMessage: String? { nil }
     var pauseDeadline: Date? { nil }
@@ -139,6 +172,7 @@ final class LocalMatch: TableSession {
 
     func reveal() {
         revealedPlayerId = prompt?.playerId
+        syncClock()
     }
 
     // MARK: Lifecycle
@@ -146,12 +180,16 @@ final class LocalMatch: TableSession {
     func start() {
         active = true
         scheduleBotIfNeeded()
+        syncClock()
     }
 
     func stop() {
         active = false
         botTask?.cancel()
         botTask = nil
+        clockTask?.cancel()
+        clockTask = nil
+        turnClock = nil
     }
 
     private func refreshDerived() {
@@ -169,11 +207,15 @@ final class LocalMatch: TableSession {
         guard let game, !Engine.isGameOver(game).done else { return }
         let store = self.store
         let mode = self.mode
+        let log = self.log
+        let options = self.options
         saveTask?.cancel()
         saveTask = Task {
             try? await Task.sleep(for: .milliseconds(220))
             if Task.isCancelled { return }
             store.saveActiveGame(game, mode: mode)
+            store.saveActiveReplay(log)
+            store.saveMatchOptions(options, for: game)
         }
     }
 
@@ -181,6 +223,8 @@ final class LocalMatch: TableSession {
         saveTask?.cancel()
         guard let game, !Engine.isGameOver(game).done else { return }
         store.saveActiveGame(game, mode: mode)
+        store.saveActiveReplay(log)
+        store.saveMatchOptions(options, for: game)
     }
 
     // MARK: Actions
@@ -211,21 +255,28 @@ final class LocalMatch: TableSession {
         let previousPrompt = prompt?.playerId
         let nextPrompt = Engine.nextPrompt(result.state).playerId
         if previousPrompt != nextPrompt { revealedPlayerId = nil }
-        if takeSnapshot { turnSnapshots = Engine.appendTurnSnapshot(turnSnapshots, game) }
+        if takeSnapshot {
+            turnSnapshots = Engine.appendTurnSnapshot(turnSnapshots, game)
+            logMarks.append(log?.actions.count ?? 0)
+        }
+        log?.actions.append(action)
         if !shouldRetainSnapshots(result.state, promptPlayerId: nextPrompt)
             || Engine.actionRevealedDeckCards(before: game, after: result.state, actionType: action.type) {
             turnSnapshots = []
+            logMarks = []
         }
         self.game = result.state
         refreshDerived()
         scheduleSave()
         finalizeIfGameOver(result.state)
         scheduleBotIfNeeded()
+        syncClock()
     }
 
     func undo() {
         guard !isPaused, let previous = turnSnapshots.last else { return }
         turnSnapshots.removeLast()
+        if let mark = logMarks.popLast() { log?.actions.removeSubrange(mark...) }
         game = previous
         errorMessage = nil
         refreshDerived()
@@ -235,6 +286,8 @@ final class LocalMatch: TableSession {
     func resetTurn() {
         guard !isPaused, let first = turnSnapshots.first else { return }
         turnSnapshots = []
+        if let mark = logMarks.first { log?.actions.removeSubrange(mark...) }
+        logMarks = []
         game = first
         errorMessage = nil
         refreshDerived()
@@ -254,6 +307,46 @@ final class LocalMatch: TableSession {
         } else {
             scheduleBotIfNeeded()
         }
+        syncClock()
+    }
+
+    // MARK: Clock
+
+    /// Every game shows a turn clock. Speed games also run out, and then a bot moves.
+    private func syncClock() {
+        guard active, let game, let prompt, !Engine.isGameOver(game).done else {
+            clockTask?.cancel()
+            clockTask = nil
+            turnClock = nil
+            return
+        }
+        let runs = options.speed && promptPlayer?.controller != .bot && !shouldShowShield && !isPaused
+        if turnClock?.playerId == prompt.playerId && runs == clockRuns { return }
+        clockRuns = runs
+        let now = Date.now
+        turnClock = TurnClockInfo(playerId: prompt.playerId, startedAt: now, deadline: runs ? now.addingTimeInterval(speedTurnSeconds) : nil)
+        scheduleExpiry()
+    }
+
+    private func scheduleExpiry() {
+        clockTask?.cancel()
+        clockTask = nil
+        guard let deadline = turnClock?.deadline else { return }
+        clockTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow)))
+            if Task.isCancelled { return }
+            self?.timeRanOut()
+        }
+    }
+
+    private func timeRanOut() {
+        guard let game, let prompt, !legalActions.isEmpty else { return }
+        let owner = prompt.playerId
+        perform(BotBrain.choose(game, actorId: owner, legalActions: legalActions, hard: false))
+        // If it's still this player's decision, the next step follows shortly.
+        guard clockRuns, turnClock?.playerId == owner, self.prompt?.playerId == owner else { return }
+        turnClock?.deadline = Date.now.addingTimeInterval(Self.timedOutStepSeconds)
+        scheduleExpiry()
     }
 
     // MARK: Bots
@@ -292,9 +385,17 @@ final class LocalMatch: TableSession {
     private func finalizeIfGameOver(_ state: GameState) {
         guard !finalized, Engine.isGameOver(state).done else { return }
         finalized = true
+        let before = store.achievements().counters
         let record = store.record(StatsBuilder.matchRecord(state, mode: mode, surface: .local))
         summary = PostGame.summary(state, lifetime: record.lifetime)
         unlocked = record.unlocked
+        newUnlocks = Unlockables.newlyUnlocked(before: before, after: store.achievements().counters)
+        if let log {
+            let winner = state.players.first { $0.id == state.winnerId }?.name ?? "Nobody"
+            store.saveReplay(StoredReplay(id: "\(Int(state.createdAt))-\(Int(state.updatedAt))", endedAt: state.updatedAt, title: "\(winner) won in \(state.turnCount) turns", log: log))
+        }
+        store.saveActiveReplay(nil)
+        if let winnerId = state.winnerId, let series = options.series { options.series = series.recording(winner: winnerId) }
         store.clearActiveGame()
         saveTask?.cancel()
         turnSnapshots = []

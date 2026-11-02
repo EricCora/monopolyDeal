@@ -217,6 +217,24 @@ public struct RoomView: Codable, Hashable, Sendable {
     }
 }
 
+/// Spots the reaction to animate. What's already in the feed when a table opens stays
+/// still, and a room's first reaction still counts as new.
+public struct ReactionTracker: Sendable {
+    private var looked = false
+    private var lastSeenId: Int?
+
+    public init() {}
+
+    public mutating func note(_ latest: RoomActivity?) -> RoomActivity? {
+        defer {
+            looked = true
+            if let latest { lastSeenId = latest.id }
+        }
+        guard looked, let latest, latest.id != lastSeenId else { return nil }
+        return latest
+    }
+}
+
 public struct RoomSession: Codable, Hashable, Sendable {
     public var version = 1
     public var roomCode: String

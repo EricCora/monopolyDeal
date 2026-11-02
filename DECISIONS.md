@@ -127,5 +127,23 @@ SF Rounded only exists on Apple devices, so cards and titles fall back to Nunito
 ## 2026-11-01: Old table copy stays in the page for existing tests
 Some tests pin copy from the old layout, such as "Monopoly Deal Local" and "Premium Tabletop Match Night". It's kept as screen-reader text or in the Game Log sheet, so no test was edited. Those tests no longer prove the text is visible.
 
+## 2026-11-01: Turn-by-turn rooms run on Vercel, with private Blob storage
+Render's free tier sleeps and forgets its memory and disk, so a room that lasts for days can't live there. Six-letter room codes route to a Vercel Function at `/api/turn`, which stores each room in a private Blob and uses compare-and-swap so two players' moves can't overwrite each other. Letting clients hold the snapshot was rejected, because an offline player's stale copy would lose moves. Web push uses VAPID keys set as Vercel environment variables. Eric chose this only if it stays on free accounts. **Assumption, not checked:** the Hobby plan stops at its limits instead of billing. The docs search didn't confirm it.
+
+## 2026-11-01: The function is bundled and the bundle is committed
+Vercel can't run this repo's extensionless and `.ts` imports, so `api/turn-rooms.source.ts` is built by esbuild into `api/turn-rooms.js`. `npm run quality` fails if the two have drifted. Run `npm run build:turn-api` after changing server or engine code it includes.
+
+## 2026-11-01: The server is now type checked
+`apps/server/src/` wasn't in any TypeScript project. A refactor moved two helpers out of `index.ts` without importing them, and any rejected move then crashed the real server. Neither lint nor the tests noticed; a browser run did. `tsconfig.node.json` now includes the server, and `src/test/server-rejected-action.test.ts` drives the real process.
+
+## 2026-11-01: Every mode shows a turn clock
+Eric asked for this. It counts up normally. Speed counts down from 45 seconds and goes red under 10, and on expiry a heuristic bot moves, with later steps at 1.5 seconds. Bots aren't timed.
+
+## 2026-11-01: New live rooms turn bots on from the client
+The server's default stays off, so existing tests and older clients see no change. The web and iOS clients set it after creating a room. Bots and Speed aren't available in turn-by-turn rooms.
+
+## 2026-11-01: iOS turn-by-turn rooms have no push
+Push needs a paid Apple developer setup. iOS checks every 12 seconds while the app is open. Web push works where the browser supports it.
+
 ## 2026-11-01: The hand never scrolls sideways
 Eric approved replacing two layout tests that required the old sidebar order and a sideways-scrolling tight hand. Scrolling and hold-and-slide want the same finger movement, so the hand always overlaps its cards to fit, as on iOS. The new tests check that the table stays on screen and that touches on the hand go to its gestures.

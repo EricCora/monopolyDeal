@@ -15,6 +15,8 @@ struct GameSetup {
     var winCompleteSets = 3
     var maxHandAtEndTurn = 7
     var maxPlaysPerTurn = 3
+    var speedMode = false
+    var bestOfThree = false
 
     var ruleset: Ruleset {
         Ruleset(
@@ -65,6 +67,8 @@ final class AppModel {
     var onlineBusy = false
     /// A finished game opened from a save, shown straight on the results screen.
     var viewedSummary: ViewedSummary?
+    /// A saved game opened from the Stats screen, to watch it back.
+    var replayToWatch: ReplayRequest?
 
     struct ViewedSummary: Identifiable {
         let id = UUID()
@@ -80,7 +84,10 @@ final class AppModel {
         self.store = store
         preferences = store.preferences()
         dailyChallenge = store.dailyChallenge()
-        client = RoomClient(baseURL: LaunchOptions().serverURL ?? RoomClient.productionURL)
+        client = RoomClient(
+            baseURL: LaunchOptions().serverURL ?? RoomClient.productionURL,
+            turnBaseURL: LaunchOptions().serverURL ?? RoomClient.productionTurnURL
+        )
         storedRoom = SessionVault.load()
         reloadStoredData()
         if launch.resumeOnLaunch { resumeActive() }
@@ -133,11 +140,13 @@ final class AppModel {
 
     // MARK: Local games
 
-    private func open(_ game: GameState, mode: MatchMode) {
+    private func open(_ game: GameState, mode: MatchMode, options: MatchOptions = MatchOptions(), log: GameLog?) {
         localMatch?.stop()
         let match = LocalMatch(
             game: game,
             mode: mode,
+            options: options,
+            log: log,
             store: store,
             preferences: { [weak self] in self?.preferences ?? Preferences() },
             updatePreferences: { [weak self] change in
@@ -149,6 +158,7 @@ final class AppModel {
             onFeedback: { [weak self] tone in self?.feedback(tone) }
         )
         if let delay = launch.botDelay { match.botDelay = delay }
+        if let seconds = launch.speedTurnSeconds { match.speedTurnSeconds = seconds }
         localMatch = match
         #if DEBUG
         if autoplayRemaining > 0 {
@@ -159,16 +169,18 @@ final class AppModel {
         match.start()
     }
 
-    private func newGame(players: [PlayerConfig], variant: GameVariant = .classic, seed: Int? = nil, ruleset: Ruleset? = nil, mode: MatchMode) {
+    private func newGame(players: [PlayerConfig], variant: GameVariant = .classic, seed: Int? = nil, ruleset: Ruleset? = nil, mode: MatchMode, options: MatchOptions = MatchOptions()) {
         preferences.gamePaused = false
         preferences.pausedGameId = nil
-        open(Engine.createGame(GameConfig(players: players, seed: seed ?? launch.seed, variant: variant, ruleset: ruleset ?? launch.ruleset)), mode: mode)
+        let game = Engine.createGame(GameConfig(players: players, seed: seed ?? launch.seed, variant: variant, ruleset: ruleset ?? launch.ruleset))
+        open(game, mode: mode, options: options, log: GameLog(initial: game))
     }
 
     func startFromSetup() {
         let hasBot = setup.players.contains { $0.controller == .bot }
         let ruleset = setup.variant == .classic && preferences.customRulesEnabled ? setup.ruleset : nil
-        newGame(players: setup.players, variant: setup.variant, ruleset: ruleset, mode: hasBot ? .practice : .hot_seat)
+        let options = MatchOptions(speed: setup.speedMode, series: setup.bestOfThree ? MatchSeries() : nil)
+        newGame(players: setup.players, variant: setup.variant, ruleset: ruleset, mode: hasBot ? .practice : .hot_seat, options: options)
     }
 
     func startPractice(variant: GameVariant = .classic, hard: Bool = false) {
@@ -202,7 +214,7 @@ final class AppModel {
             reloadStoredData()
             return
         }
-        open(game, mode: mode)
+        open(game, mode: mode, options: store.matchOptions(for: game), log: store.activeReplay(for: game))
     }
 
     func rematch() {
@@ -211,7 +223,8 @@ final class AppModel {
             PlayerConfig(id: $0.id, name: $0.name, controller: $0.controller ?? .human, botDifficulty: $0.botDifficulty ?? .easy)
         }
         let ruleset = game.variant == .classic ? game.ruleset : nil
-        newGame(players: players, variant: game.resolvedVariant, ruleset: ruleset, mode: match.mode == .daily_challenge ? .practice : match.mode)
+        let options = MatchOptions(speed: match.options.speed, series: match.options.series?.next)
+        newGame(players: players, variant: game.resolvedVariant, ruleset: ruleset, mode: match.mode == .daily_challenge ? .practice : match.mode, options: options)
     }
 
     func closeLocalMatch() {
@@ -261,9 +274,12 @@ final class AppModel {
 
     // MARK: Online
 
-    private func attach(_ session: RoomSession) async {
-        SessionVault.save(session)
-        storedRoom = session
+    private func attach(_ session: RoomSession, remember: Bool = true) async {
+        // A spectator holds no seat, so there's nothing to come back to.
+        if remember {
+            SessionVault.save(session)
+            storedRoom = session
+        }
         let connection = RoomConnection(client: client, session: session)
         connection.onSessionChange = { SessionVault.save($0) }
         let match = OnlineMatch(
@@ -295,6 +311,36 @@ final class AppModel {
         defer { onlineBusy = false }
         do {
             await attach(try await client.createRoom(playerName: onlineName()))
+            // New live rooms start with bots on. The server's default stays off for older clients.
+            await onlineMatch?.connection.run { client, session, revision in
+                try await client.setOptions(session, botFill: true, expectedRevision: revision)
+            }
+        } catch {
+            onlineError = error.localizedDescription
+        }
+    }
+
+    /// A room that lasts for days. Players take their turns when they like.
+    func hostTurnRoom() async {
+        onlineBusy = true
+        onlineError = nil
+        defer { onlineBusy = false }
+        do {
+            await attach(try await client.createTurnRoom(playerName: onlineName()))
+        } catch {
+            onlineError = error.localizedDescription
+        }
+    }
+
+    /// Takes a place at the table with every hand hidden.
+    func watchRoom(code rawCode: String) async {
+        let code = rawCode.uppercased().filter { $0.isLetter || $0.isNumber }
+        guard !code.isEmpty else { return }
+        onlineBusy = true
+        onlineError = nil
+        defer { onlineBusy = false }
+        do {
+            await attach(try await client.watchRoom(code: String(code.prefix(8)), playerName: onlineName()), remember: false)
         } catch {
             onlineError = error.localizedDescription
         }
@@ -383,6 +429,9 @@ struct LaunchOptions {
     }
     var botDelay: Duration? {
         defaults.object(forKey: "botDelayMs") == nil ? nil : .milliseconds(defaults.integer(forKey: "botDelayMs"))
+    }
+    var speedTurnSeconds: Double? {
+        defaults.object(forKey: "speedTurnSeconds") == nil ? nil : defaults.double(forKey: "speedTurnSeconds")
     }
     var ruleset: Ruleset? {
         defaults.object(forKey: "winSets") == nil ? nil : Ruleset(winCompleteSets: defaults.integer(forKey: "winSets"))

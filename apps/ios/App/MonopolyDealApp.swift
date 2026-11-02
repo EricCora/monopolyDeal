@@ -34,12 +34,18 @@ struct RootView: View {
                 }
         }
         .tint(Palette.gold)
+        .environment(\.cardBackStyle, app.preferences.cardBack)
+        .fullScreenCover(item: $app.replayToWatch) { request in
+            ReplayView(log: request.log)
+                .environment(app)
+        }
         .fullScreenCover(item: Binding(
             get: { app.localMatch.map(LocalMatchBox.init) },
             set: { if $0 == nil { app.closeLocalMatch() } }
         )) { box in
             LocalGameView(match: box.match)
                 .environment(app)
+                .environment(\.cardBackStyle, app.preferences.cardBack)
         }
         .fullScreenCover(item: Binding(
             get: { app.onlineMatch.map(OnlineMatchBox.init) },
@@ -47,6 +53,7 @@ struct RootView: View {
         )) { box in
             OnlineGameView(match: box.match)
                 .environment(app)
+                .environment(\.cardBackStyle, app.preferences.cardBack)
         }
         .sheet(item: $app.viewedSummary) { viewed in
             PostGameView(summary: viewed.summary, game: viewed.game, unlocked: [], primaryTitle: nil, onPrimary: {}, onClose: { app.viewedSummary = nil })

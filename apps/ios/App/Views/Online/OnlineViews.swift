@@ -69,6 +69,18 @@ struct OnlineHomeView: View {
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(!nameIsSet || app.onlineBusy)
                         .accessibilityIdentifier("online.host")
+                        Button {
+                            Task { await app.hostTurnRoom() }
+                        } label: {
+                            Label("Host a Turn-by-Turn Room", systemImage: "calendar.badge.clock")
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(!nameIsSet || app.onlineBusy)
+                        .accessibilityIdentifier("online.hostTurn")
+                        Text("A turn-by-turn room stays open for 60 days. Everyone plays when they like. Check back to see whose turn it is.")
+                            .font(.footnote)
+                            .foregroundStyle(SoftWhite(0.7))
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
                     VStack(spacing: 8) {
@@ -91,6 +103,14 @@ struct OnlineHomeView: View {
                             .disabled(!nameIsSet || joinCode.isEmpty || app.onlineBusy)
                             .accessibilityIdentifier("online.join")
                         }
+                        Button {
+                            Task { await app.watchRoom(code: joinCode) }
+                        } label: {
+                            Label("Watch This Room", systemImage: "eye.fill")
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(!nameIsSet || joinCode.isEmpty || app.onlineBusy)
+                        .accessibilityIdentifier("online.watch")
                     }
 
                     if app.onlineBusy {
@@ -141,7 +161,10 @@ struct OnlineGameView: View {
 
     @State private var showChat = false
     @State private var confirmForget = false
-    @State private var reactionBurst: RoomReaction?
+    @State private var replay: ReplayRequest?
+    @State private var replayFailed = false
+
+    private var reducedEffects: Bool { app.preferences.reducedEffects }
 
     var body: some View {
         ZStack {
@@ -151,10 +174,15 @@ struct OnlineGameView: View {
                 TableBackground(style: app.preferences.tableStyle)
                 ProgressView("Joining the room").tint(.white).foregroundStyle(.white)
             }
-            if let reaction = reactionBurst {
-                ReactionBurst(reaction: reaction)
-                    .transition(.scale.combined(with: .opacity))
-                    .allowsHitTesting(false)
+            if let flight = match.flight {
+                if reducedEffects {
+                    ReactionBurst(reaction: flight.reaction)
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                } else {
+                    ReactionFlightView(flight: flight)
+                        .id(flight.id)
+                }
             }
         }
         .sheet(isPresented: $showChat) {
@@ -171,14 +199,32 @@ struct OnlineGameView: View {
             match.observeChange()
             if match.connection.endedReason != nil { app.handleSeatLost() }
         }
-        .onChange(of: match.view?.activityFeed.last?.id) {
-            guard let latest = match.view?.activityFeed.last, let reaction = latest.reaction else { return }
-            withAnimation(.snappy) { reactionBurst = reaction }
-            Task {
-                try? await Task.sleep(for: .seconds(1.6))
-                withAnimation(.easeOut) { reactionBurst = nil }
+        .fullScreenCover(item: $replay) { request in
+            ReplayView(log: request.log)
+                .environment(app)
+        }
+        .alert("Couldn't Load the Replay", isPresented: $replayFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Check your connection and try again.")
+        }
+    }
+
+    private func watchReplay() {
+        Task {
+            if let log = await match.fetchReplay() {
+                replay = ReplayRequest(log: log)
+            } else {
+                replayFailed = true
             }
         }
+    }
+
+    private func primaryTitle(_ view: RoomView) -> String? {
+        let mineReady = view.players.first { $0.id == view.yourPlayerId }?.ready == true
+        let moreGames = view.series.map { $0.bestOf > 1 && $0.winnerId == nil } ?? false
+        if view.canRematch { return moreGames ? "Next Game" : "Rematch" }
+        return mineReady ? nil : (moreGames ? "Ready for Next Game" : "Ready for Rematch")
     }
 
     @ViewBuilder
@@ -192,7 +238,10 @@ struct OnlineGameView: View {
                 summary: summary,
                 game: game,
                 unlocked: match.unlocked,
-                primaryTitle: view.canRematch ? "Rematch" : (view.players.first { $0.id == view.yourPlayerId }?.ready == true ? nil : "Ready for Rematch"),
+                primaryTitle: primaryTitle(view),
+                newUnlocks: match.newUnlocks,
+                series: match.series,
+                onWatchReplay: view.replayAvailable == true ? { watchReplay() } : nil,
                 onPrimary: { rematchTapped(view) },
                 onClose: { Task { await app.exitRoom() } }
             )
@@ -200,6 +249,8 @@ struct OnlineGameView: View {
             TableView(session: match, extras: AnyView(roomBar(view))) {
                 Task { await app.exitRoom() }
             }
+        } else if view.isSpectator {
+            WatcherLobbyView(view: view) { Task { await app.exitRoom() } }
         } else {
             RoomLobbyView(match: match, onChat: { showChat = true }, onForget: { confirmForget = true })
         }
@@ -223,7 +274,39 @@ struct OnlineGameView: View {
             Text("Room \(view.roomCode)")
                 .font(.caption.weight(.heavy).monospaced())
                 .foregroundStyle(SoftWhite(0.8))
+            if view.isSpectator {
+                Label("Watching", systemImage: "eye.fill")
+                    .font(.caption2.weight(.heavy))
+                    .foregroundStyle(SoftWhite(0.85))
+                    .accessibilityIdentifier("room.watching")
+            } else if view.turnBased == true {
+                Text("Turn-by-Turn")
+                    .font(.caption2.weight(.heavy))
+                    .foregroundStyle(Palette.gold)
+                    .accessibilityIdentifier("room.turnBased")
+            }
+            if let watchers = view.spectatorCount, watchers > 0, !view.isSpectator {
+                Label("\(watchers)", systemImage: "eye.fill")
+                    .font(.caption2.weight(.heavy))
+                    .foregroundStyle(SoftWhite(0.8))
+                    .accessibilityLabel("\(watchers) watching")
+            }
             Spacer()
+            if view.isSpectator {
+                if view.isFinished, view.replayAvailable == true {
+                    Button("Watch Replay") { watchReplay() }
+                        .font(.caption.weight(.bold))
+                        .buttonStyle(.glass)
+                }
+            } else {
+                seatControls(view)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func seatControls(_ view: RoomView) -> some View {
+        Group {
             Menu {
                 ForEach(RoomReaction.allCases, id: \.self) { reaction in
                     Button(reaction.label, systemImage: reaction.symbol) {
@@ -292,6 +375,39 @@ struct OnlineGameView: View {
             .accessibilityLabel("Forget Room")
             .accessibilityIdentifier("room.forget")
         }
+    }
+}
+
+/// What a spectator sees until the host starts the match.
+private struct WatcherLobbyView: View {
+    @Environment(AppModel.self) private var app
+    var view: RoomView
+    var onLeave: () -> Void
+
+    var body: some View {
+        ZStack {
+            TableBackground(style: app.preferences.tableStyle)
+            VStack(spacing: 14) {
+                Image(systemName: "eye.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(Palette.gold)
+                Text("Room \(view.roomCode)")
+                    .font(.title2.weight(.black).monospaced())
+                    .foregroundStyle(.white)
+                Text("You're watching. The table appears when the host starts the match. Every hand stays hidden.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(SoftWhite(0.8))
+                Text(view.players.map(\.name).joined(separator: ", "))
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+                Button("Stop Watching", action: onLeave)
+                    .buttonStyle(SecondaryButtonStyle())
+                    .frame(maxWidth: 240)
+                    .accessibilityIdentifier("room.stopWatching")
+            }
+            .padding(30)
+        }
+        .accessibilityIdentifier("room.watcherLobby")
     }
 }
 
@@ -520,6 +636,37 @@ struct RoomLobbyView: View {
                     .font(.caption)
                     .foregroundStyle(SoftWhite(0.7))
             }
+            Toggle(isOn: Binding(
+                get: { view.options?.botFill ?? false },
+                set: { value in
+                    Task { await match.connection.run { client, session, revision in try await client.setOptions(session, botFill: value, expectedRevision: revision) } }
+                }
+            )) {
+                optionLabel("Bots fill empty seats", detail: "A dropped player's seat plays on until they come back.")
+            }
+            .accessibilityIdentifier("room.botFill")
+            Toggle(isOn: Binding(
+                get: { view.options?.turnTimerSeconds != nil },
+                set: { value in
+                    Task {
+                        await match.connection.run { client, session, revision in
+                            try await client.setOptions(session, turnTimerSeconds: value ? 45 : nil, clearTurnTimer: !value, expectedRevision: revision)
+                        }
+                    }
+                }
+            )) {
+                optionLabel("Speed mode", detail: "45 seconds a turn, then a bot moves for you.")
+            }
+            .accessibilityIdentifier("room.speed")
+            Toggle(isOn: Binding(
+                get: { (view.options?.bestOf ?? 1) == 3 },
+                set: { value in
+                    Task { await match.connection.run { client, session, revision in try await client.setOptions(session, bestOf: value ? 3 : 1, expectedRevision: revision) } }
+                }
+            )) {
+                optionLabel("Best of three", detail: "First to win two games takes the series.")
+            }
+            .accessibilityIdentifier("room.bestOf")
             if !view.checkpointSlots.isEmpty {
                 SectionTitle(text: "Start From a Checkpoint")
                 ForEach(view.checkpointSlots) { checkpoint in
@@ -546,12 +693,27 @@ struct RoomLobbyView: View {
         .glassPanel(cornerRadius: 18)
     }
 
+    private func optionLabel(_ title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title).font(.subheadline.weight(.bold)).foregroundStyle(.white)
+            Text(detail).font(.caption).foregroundStyle(SoftWhite(0.7))
+        }
+    }
+
     private func guestSummary(_ view: RoomView) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             SectionTitle(text: "Room Settings")
             Text("\((view.variant ?? .classic).label) · \(view.presetId.label)")
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(.white)
+            if let options = view.options {
+                let extras = [options.botFill ? "Bots fill seats" : nil, options.turnTimerSeconds != nil ? "Speed" : nil, options.bestOf > 1 ? "Best of \(options.bestOf)" : nil].compactMap { $0 }
+                if !extras.isEmpty {
+                    Text(extras.joined(separator: " · "))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+            }
             Text("The host chooses these.")
                 .font(.caption)
                 .foregroundStyle(SoftWhite(0.65))
@@ -594,7 +756,7 @@ struct RoomLobbyView: View {
     private func activity(_ view: RoomView) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             SectionTitle(text: "Activity")
-            ForEach(view.activityFeed.suffix(6).reversed()) { item in
+            ForEach(view.activityFeed.prefix(6)) { item in
                 Text(displayText(item.message))
                     .font(.caption)
                     .foregroundStyle(SoftWhite(0.75))

@@ -27,3 +27,7 @@ Scope: contracts in `packages/shared/multiplayer.ts` and client mirror types in 
 
 - Clients should refresh room state on `revision_conflict`.
 - Stale/expired sessions should be explicitly cleared with user-facing recovery notice.
+
+## Room options, spectators, series and turn-by-turn rooms (2026-11-01)
+
+Additive only. `MultiplayerRoomView` gains the optional `role`, `options`, `turnClock`, `series`, `botSeatIds`, `spectatorCount`, `turnBased` and `replayAvailable`. New routes are `options`, `watch` and `replay`, plus the socket command `mp:cmd:options`. A room behaves as before unless its options are set. Six-letter room codes are turn-by-turn rooms, served under `/api/turn` on the website, with `push` and `turn-config` added there. Spectator ids start with `s`; spectators and turn rooms use plain requests only.

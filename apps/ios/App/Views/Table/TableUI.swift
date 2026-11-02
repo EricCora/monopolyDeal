@@ -53,6 +53,7 @@ final class TableUI {
     var showDiscards = false
     /// The card another player just played, shown large for a moment.
     var spotlight: PlaySpotlight?
+    var noStamp: JustSayNoStamp?
     /// Bumped each time the viewer completes a set, to start the celebration.
     var setBurstToken = 0
     var setBanner: String?

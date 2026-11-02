@@ -69,6 +69,17 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Auto-save + resume via `localStorage`
 - First-class `Classic` and `No Mercy` variants with variant-aware decks, multiplayer lobbies, saves, checkpoints, and rematches
 
+### New in this version
+
+- **Turn clock in every mode.** It counts up normally, and Speed gives 45 seconds a turn before a bot moves for you.
+- **Best of three**, locally and in rooms.
+- **Replays.** Watch a finished game back on the table. The last five are kept under Stats.
+- **Unlockable table styles and card backs**, earned from your stats and chosen in Settings.
+- **Bots fill dropped seats** so a live room keeps playing.
+- **Spectators.** Watch a live room with every hand hidden.
+- **Turn-by-turn rooms** that last 60 days, with web push where the browser supports it. These need the setup under Deploying Online Multiplayer.
+- **Reactions fly across the table**, and a Just Say No stamps it.
+
 ## Classic Rules
 
 - Two-color Rent charges every opponent through separate counter/payment windows; any-color Rent charges one chosen opponent.
@@ -336,6 +347,10 @@ VITE_MULTIPLAYER_API_URL=https://your-render-service.onrender.com
 ```
 
 - The frontend can then create rooms, join rooms, and reconnect over the internet using the hosted backend.
+
+### Turn-by-turn rooms
+
+These run as a Vercel Function, not on Render. They need a private Vercel Blob store connected to the project, which sets `BLOB_READ_WRITE_TOKEN`. Web push also needs `TURN_PUSH_PUBLIC_KEY` and `TURN_PUSH_PRIVATE_KEY` (make a pair with `npx web-push generate-vapid-keys`), and optionally `TURN_PUSH_SUBJECT`. Without the keys, rooms still work and only the notifications are off. Without the store, the room button reports an error.
 
 ### How updates work after setup
 

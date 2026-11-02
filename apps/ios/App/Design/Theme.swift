@@ -73,6 +73,24 @@ extension TableTheme {
                 Color(hex: 0x3A1272), Color(hex: 0x5B1A8E), Color(hex: 0x123A7A),
                 Color(hex: 0x0E0726), Color(hex: 0x2B0F58), Color(hex: 0x0A1A44),
             ]
+        case .sunset_lounge:
+            [
+                Color(hex: 0x2A1124), Color(hex: 0x5A1F33), Color(hex: 0x301030),
+                Color(hex: 0x7A2F33), Color(hex: 0xB5552F), Color(hex: 0x6E2345),
+                Color(hex: 0x1D0D22), Color(hex: 0x4A1A33), Color(hex: 0x1A0B1F),
+            ]
+        case .royal_velvet:
+            [
+                Color(hex: 0x1C0B2E), Color(hex: 0x351352), Color(hex: 0x1E0C35),
+                Color(hex: 0x4A1A6B), Color(hex: 0x6D2A8F), Color(hex: 0x421861),
+                Color(hex: 0x130723), Color(hex: 0x2C0F45), Color(hex: 0x10061E),
+            ]
+        case .midnight_vault:
+            [
+                Color(hex: 0x05070D), Color(hex: 0x0C111C), Color(hex: 0x06080F),
+                Color(hex: 0x12182A), Color(hex: 0x1F2740), Color(hex: 0x101627),
+                Color(hex: 0x030409), Color(hex: 0x0A0E18), Color(hex: 0x020308),
+            ]
         }
     }
 
@@ -81,6 +99,9 @@ extension TableTheme {
         case .premium_tabletop: Palette.gold
         case .classic_green: Color(hex: 0xF4E3A1)
         case .neon_arcade: Color(hex: 0x4DE3FF)
+        case .sunset_lounge: Color(hex: 0xFFC27A)
+        case .royal_velvet: Color(hex: 0xE7C6FF)
+        case .midnight_vault: Color(hex: 0xE9C46A)
         }
     }
 }
@@ -102,7 +123,7 @@ struct TableBackground: View {
                 colors: style.meshColors
             )
             FeltTexture()
-                .opacity(style == .neon_arcade ? 0.05 : 0.12)
+                .opacity(style == .neon_arcade || style == .midnight_vault ? 0.05 : 0.12)
                 .blendMode(.overlay)
             RadialGradient(colors: [.clear, .black.opacity(0.45)], center: .center, startRadius: 180, endRadius: 720)
         }

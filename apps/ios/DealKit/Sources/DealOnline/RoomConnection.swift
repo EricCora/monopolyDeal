@@ -289,6 +289,10 @@ public final class RoomConnection {
         }
     }
 
+    public func replay() async throws -> RoomReplayLog {
+        try await client.replay(session)
+    }
+
     public func leave(abandon: Bool) async {
         stop()
         _ = try? await client.leave(session, abandon: abandon, expectedRevision: revision)

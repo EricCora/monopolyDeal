@@ -129,3 +129,27 @@ final class UnlockablesAndReplayTests: XCTestCase {
         XCTAssertFalse(RoomClient.isTurnRoom("ABCDE"))
     }
 }
+
+final class ReactionTrackerTests: XCTestCase {
+    private func reaction(_ id: Int) -> RoomActivity {
+        RoomActivity(id: id, createdAt: 0, kind: "reaction", message: "", playerId: "p1", reaction: .wow)
+    }
+
+    func testOldReactionsStayStillWhenTheTableOpens() {
+        var tracker = ReactionTracker()
+        XCTAssertNil(tracker.note(reaction(4)))
+    }
+
+    func testARoomsFirstReactionFlies() {
+        var tracker = ReactionTracker()
+        XCTAssertNil(tracker.note(nil))
+        XCTAssertEqual(tracker.note(reaction(1))?.id, 1)
+    }
+
+    func testEachReactionFliesOnce() {
+        var tracker = ReactionTracker()
+        _ = tracker.note(reaction(1))
+        XCTAssertEqual(tracker.note(reaction(2))?.id, 2)
+        XCTAssertNil(tracker.note(reaction(2)))
+    }
+}

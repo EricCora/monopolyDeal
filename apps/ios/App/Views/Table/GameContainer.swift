@@ -6,6 +6,12 @@ import SwiftUI
 struct LocalGameView: View {
     @Environment(AppModel.self) private var app
     var match: LocalMatch
+    @State private var replay: ReplayRequest?
+
+    private var primaryTitle: String {
+        if let series = match.options.series, series.bestOf > 1, series.winnerId == nil { return "Next Game" }
+        return match.options.series != nil ? "New Series" : "Rematch"
+    }
 
     var body: some View {
         ZStack {
@@ -21,7 +27,10 @@ struct LocalGameView: View {
                     summary: summary,
                     game: game,
                     unlocked: match.unlocked,
-                    primaryTitle: "Rematch",
+                    primaryTitle: primaryTitle,
+                    newUnlocks: match.newUnlocks,
+                    series: match.options.series,
+                    onWatchReplay: match.log.map { log in { replay = ReplayRequest(log: log) } },
                     onPrimary: { app.rematch() },
                     onClose: { app.closeLocalMatch() }
                 )
@@ -31,6 +40,10 @@ struct LocalGameView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: match.shouldShowShield)
         .animation(.easeInOut(duration: 0.3), value: match.summary)
+        .fullScreenCover(item: $replay) { request in
+            ReplayView(log: request.log)
+                .environment(app)
+        }
     }
 }
 
@@ -107,6 +120,9 @@ struct PostGameView: View {
     var game: GameState
     var unlocked: [AchievementId]
     var primaryTitle: String?
+    var newUnlocks: [String] = []
+    var series: MatchSeries?
+    var onWatchReplay: (() -> Void)?
     var onPrimary: () -> Void
     var onClose: () -> Void
 
@@ -121,7 +137,9 @@ struct PostGameView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     hero
+                    if let series, series.bestOf > 1 { seriesScore(series) }
                     if !unlocked.isEmpty { achievementsRow }
+                    if !newUnlocks.isEmpty { unlocksRow }
                     recap
                     standings
                     buttons
@@ -152,6 +170,41 @@ struct PostGameView: View {
                 .foregroundStyle(SoftWhite(0.75))
         }
         .padding(.top, 20)
+    }
+
+    private func seriesScore(_ series: MatchSeries) -> some View {
+        let scores = game.players.map { "\($0.name) \(series.wins[$0.id] ?? 0)" }.joined(separator: ", ")
+        let winner = game.players.first { $0.id == series.winnerId }?.name
+        return VStack(spacing: 2) {
+            Text(winner.map { "\($0) takes the series" } ?? "Best of \(series.bestOf), game \(series.gameNumber)")
+                .font(.headline.weight(.heavy))
+                .foregroundStyle(Palette.gold)
+            Text(scores)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity)
+        .glassPanel()
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("postgame.series")
+    }
+
+    private var unlocksRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(newUnlocks, id: \.self) { item in
+                Label("\(item) unlocked", systemImage: "lock.open.fill")
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(.white)
+            }
+            Text("Choose it in Settings.")
+                .font(.caption)
+                .foregroundStyle(SoftWhite(0.7))
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassPanel(tint: Palette.gold.opacity(0.22))
+        .accessibilityIdentifier("postgame.unlocks")
     }
 
     private var achievementsRow: some View {
@@ -226,6 +279,13 @@ struct PostGameView: View {
                 Button(primaryTitle, action: onPrimary)
                     .buttonStyle(PrimaryButtonStyle())
                     .accessibilityIdentifier("postgame.primary")
+            }
+            if let onWatchReplay {
+                Button(action: onWatchReplay) {
+                    Label("Watch Replay", systemImage: "play.rectangle.fill")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .accessibilityIdentifier("postgame.replay")
             }
             HStack(spacing: 8) {
                 if let shareImage {
