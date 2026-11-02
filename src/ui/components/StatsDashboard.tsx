@@ -42,6 +42,9 @@ interface StatsDashboardProps {
   growthMetrics: GrowthMetricsV1;
   /** Shown after the charts, before the tables. */
   extras?: ReactNode;
+  /** Games with a saved replay, which can be opened from the history. */
+  replayIds?: Set<string>;
+  onOpenMatch?: (id: string) => void;
   onBack: () => void;
 }
 
@@ -62,7 +65,7 @@ function shortDate(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-export function StatsDashboard({ history, lifetime, growthMetrics, extras, onBack }: StatsDashboardProps) {
+export function StatsDashboard({ history, lifetime, growthMetrics, extras, replayIds, onOpenMatch, onBack }: StatsDashboardProps) {
   const [lifetimeSorting, setLifetimeSorting] = useState<SortingState>([{ id: 'wins', desc: true }]);
   const [matchSorting, setMatchSorting] = useState<SortingState>([{ id: 'endedAt', desc: true }]);
   const [filters, setFilters] = useState<StatsFilters>({});
@@ -138,8 +141,15 @@ export function StatsDashboard({ history, lifetime, growthMetrics, extras, onBac
         cell: (info) => formatDuration(info.getValue()),
       }),
       matchColumnHelper.accessor('totalEvents', { header: 'Total Events' }),
+      matchColumnHelper.display({
+        id: 'open',
+        header: 'Replay',
+        cell: ({ row }) => (replayIds?.has(row.original.id) && onOpenMatch ? (
+          <button type="button" className="glass-button" onClick={() => onOpenMatch(row.original.id)}>Open</button>
+        ) : '—'),
+      }),
     ],
-    [matchColumnHelper],
+    [matchColumnHelper, onOpenMatch, replayIds],
   );
 
   const lifetimeTable = useReactTable({

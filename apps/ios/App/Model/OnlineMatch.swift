@@ -89,7 +89,8 @@ final class OnlineMatch: TableSession {
         let log = GameLog(initial: room.initial, actions: room.actions)
         if let game, !isSpectating {
             let winner = game.players.first { $0.id == game.winnerId }?.name ?? "Nobody"
-            store.saveReplay(StoredReplay(id: "\(connection.session.roomCode)-\(Int(game.createdAt))", endedAt: game.updatedAt, title: "\(winner) won in \(game.turnCount) turns", log: log))
+            // The same id as the match record, so the history can find it.
+            store.saveReplay(StoredReplay(id: "\(Int(game.createdAt))-\(Int(game.updatedAt))", endedAt: game.updatedAt, title: "\(winner) won in \(game.turnCount) turns", log: log))
         }
         return log
     }
@@ -171,6 +172,8 @@ final class OnlineMatch: TableSession {
         summary = PostGame.summary(game, lifetime: record.lifetime)
         unlocked = record.unlocked
         newUnlocks = Unlockables.newlyUnlocked(before: before, after: store.achievements().counters)
+        // Kept now, so this game can be watched from the history later.
+        if view.replayAvailable == true { Task { _ = await fetchReplay() } }
         onFeedback(.win)
     }
 }

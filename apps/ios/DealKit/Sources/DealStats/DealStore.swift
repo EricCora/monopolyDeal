@@ -211,7 +211,7 @@ public final class DealStore: @unchecked Sendable {
 
     // MARK: Replays
 
-    public static let maxReplays = 5
+    public static let maxReplays = 50
 
     public func replays() -> [StoredReplay] { load([StoredReplay].self, "replays") ?? [] }
 

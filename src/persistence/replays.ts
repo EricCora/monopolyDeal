@@ -5,7 +5,7 @@ import type { Action, GameState } from '../engine/types';
 
 const REPLAYS_KEY = 'monopolyDeal.replays.v1';
 const ACTIVE_REPLAY_KEY = 'monopolyDeal.activeReplay.v1';
-const MAX_REPLAYS = 5;
+const MAX_REPLAYS = 20;
 
 export interface GameReplayLog {
   initial: GameState;

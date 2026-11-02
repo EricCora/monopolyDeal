@@ -86,6 +86,44 @@ final class PlaytestRoundTests: XCTestCase {
         shot("game-log")
     }
 
+    func testAMatchInTheHistoryOpensItsLogAndReplay() throws {
+        app.launchArguments = ["-seed", "5", "-botDelayMs", "60", "-speedTurnSeconds", "1", "-winSets", "1", "-storeDirectory", "uitest-\(UUID().uuidString)"]
+        app.launch()
+        let newGame = app.buttons["home.newGame"]
+        XCTAssertTrue(newGame.waitForExistence(timeout: 20))
+        newGame.tap()
+        app.segmentedControls["setup.speed"].buttons["Speed"].tap()
+        app.buttons["setup.controller.1"].tap()
+        app.buttons["Bot"].firstMatch.tap()
+        app.swipeUp()
+        app.buttons["setup.start"].tap()
+        XCTAssertTrue(app.staticTexts["postgame.winner"].waitForExistence(timeout: 240))
+        app.buttons["postgame.done"].tap()
+        let stats = app.buttons["home.stats"]
+        XCTAssertTrue(stats.waitForExistence(timeout: 5))
+        stats.tap()
+        sleep(1)
+        shot("stats")
+        let match = app.buttons["stats.match"].firstMatch
+        for _ in 0..<6 where !match.isHittable { app.swipeUp() }
+        shot("history")
+        match.tap()
+        XCTAssertTrue(app.buttons["match.replay"].waitForExistence(timeout: 5))
+        sleep(1)
+        shot("match-detail")
+        app.buttons["match.replay"].tap()
+        XCTAssertTrue(app.staticTexts["replay.position"].waitForExistence(timeout: 5))
+        app.buttons["replay.play"].tap()
+        let hand = app.buttons["replay.hand"]
+        hand.tap()
+        app.buttons["Player 2"].firstMatch.tap()
+        sleep(1)
+        shot("replay-player-2")
+        app.buttons["replay.log"].tap()
+        sleep(1)
+        shot("replay-log")
+    }
+
     func testRoomWithABotAndTheLobbyBetweenMatches() throws {
         let server = try XCTUnwrap(ProcessInfo.processInfo.environment["DEAL_TEST_SERVER_URL"], "Set TEST_RUNNER_DEAL_TEST_SERVER_URL.")
         app.launchArguments = ["-serverURL", server, "-route", "online", "-storeDirectory", "uitest-\(UUID().uuidString)"]

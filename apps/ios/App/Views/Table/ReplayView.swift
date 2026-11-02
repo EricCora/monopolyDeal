@@ -17,6 +17,8 @@ final class ReplayMatch: TableSession {
     private(set) var playing = true
     private(set) var speed = 1
     private var task: Task<Void, Never>?
+    /// Whose hand is showing. Nil follows whoever is deciding. It's a finished game, so anyone's is fair.
+    var revealedPlayerId: PlayerId?
 
     init(log: GameLog) {
         positions = log.positions()
@@ -26,7 +28,7 @@ final class ReplayMatch: TableSession {
     var game: GameState? { positions[min(index, last)] }
     var prompt: TurnPrompt? { game.map(Engine.nextPrompt) }
     var legalActions: [LegalAction] { [] }
-    var viewerId: PlayerId? { prompt?.playerId }
+    var viewerId: PlayerId? { revealedPlayerId ?? prompt?.playerId }
     var isPaused: Bool { false }
     var canPause: Bool { false }
     var pauseMessage: String? { nil }
@@ -100,6 +102,7 @@ struct ReplayView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     @State private var match: ReplayMatch
+    @State private var showLog = false
 
     init(log: GameLog) {
         _match = State(initialValue: ReplayMatch(log: log))
@@ -110,6 +113,11 @@ struct ReplayView: View {
             .environment(\.cardBackStyle, app.preferences.cardBack)
             .onAppear { match.begin() }
             .onDisappear { match.end() }
+            .sheet(isPresented: $showLog) {
+                EventLogSheet(events: match.game?.history ?? [], playerNames: match.game?.players.map(\.name) ?? [])
+                    .presentationDetents([.medium, .large])
+                    .presentationBackground(.ultraThinMaterial)
+            }
     }
 
     private var bar: some View {
@@ -131,6 +139,8 @@ struct ReplayView: View {
                 .accessibilityIdentifier("replay.play")
                 roundButton("forward.frame.fill", label: "Next move") { match.step(1) }
                     .disabled(match.index >= match.last)
+                roundButton("list.bullet", label: "Game log") { showLog = true }
+                    .accessibilityIdentifier("replay.log")
                 Button("\(match.speed)x") { match.nextSpeed() }
                     .font(.subheadline.weight(.heavy))
                     .foregroundStyle(.white)
@@ -139,6 +149,7 @@ struct ReplayView: View {
                     .accessibilityLabel("Playback speed \(match.speed) times")
             }
             HStack(spacing: 8) {
+                handPicker
                 Slider(
                     value: Binding(get: { Double(match.index) }, set: { match.seek(Int($0)) }),
                     in: 0...Double(max(match.last, 1)),
@@ -151,6 +162,30 @@ struct ReplayView: View {
                     .accessibilityIdentifier("replay.position")
             }
         }
+    }
+
+    private var handPicker: some View {
+        let players = match.game?.players ?? []
+        let shown = players.first { $0.id == match.revealedPlayerId }?.name ?? "Follow Play"
+        return Menu {
+            Button("Follow Play", systemImage: "arrow.triangle.turn.up.right.circle") { match.revealedPlayerId = nil }
+            ForEach(players, id: \.id) { player in
+                Button(player.name, systemImage: match.revealedPlayerId == player.id ? "checkmark" : "eye") {
+                    match.revealedPlayerId = player.id
+                }
+            }
+        } label: {
+            Label(shown, systemImage: "eye.fill")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .frame(maxWidth: 120)
+                .padding(.horizontal, 10)
+                .frame(height: 32)
+                .dealGlass(interactive: true, in: Capsule())
+        }
+        .accessibilityLabel("Whose hand to show: \(shown)")
+        .accessibilityIdentifier("replay.hand")
     }
 
     private func roundButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {

@@ -1002,7 +1002,7 @@ struct EventLogSheet: View {
     }
 }
 
-private struct LogTurnCard: View {
+struct LogTurnCard: View {
     var turn: LogTurn
 
     var body: some View {

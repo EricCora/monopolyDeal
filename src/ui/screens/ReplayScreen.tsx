@@ -25,6 +25,8 @@ export function ReplayScreen({ log, reducedMotion, onClose }: ReplayScreenProps)
   const last = positions.length - 1;
   const game = positions[Math.min(index, last)];
   const prompt: TurnPrompt = getNextPrompt(game);
+  // A finished game, so anyone's hand is fair. Without a choice it follows whoever is deciding.
+  const [revealedSeat, setRevealedSeat] = useState<string | null>(null);
 
   useEffect(() => {
     if (!playing || index >= last) return undefined;
@@ -39,7 +41,7 @@ export function ReplayScreen({ log, reducedMotion, onClose }: ReplayScreenProps)
       game={game}
       prompt={prompt}
       flightKey={index}
-      replayBar={(
+      replayBar={(openLog) => (
         <div className="replay-bar glass-panel" role="group" aria-label="Replay controls">
           <div className="replay-buttons">
             <button type="button" className="icon-button" aria-label="Close replay" onClick={onClose}><Icon name="close" /></button>
@@ -55,8 +57,17 @@ export function ReplayScreen({ log, reducedMotion, onClose }: ReplayScreenProps)
               <Icon name={isPlaying ? 'pause' : 'pass_go'} /> {isPlaying ? 'Pause' : index >= last ? 'Watch Again' : 'Play'}
             </button>
             <button type="button" className="icon-button" aria-label="Next move" disabled={index >= last} onClick={() => { setPlaying(false); setIndex((current) => Math.min(current + 1, last)); }}><Icon name="chevron" /></button>
+            <button type="button" className="icon-button" aria-label="Game log" onClick={openLog}><Icon name="list" /></button>
             <button type="button" className="icon-button replay-speed" aria-label={`Playback speed ${speed} times`} onClick={() => setSpeed((current) => SPEEDS[(SPEEDS.indexOf(current) + 1) % SPEEDS.length])}>{speed}x</button>
           </div>
+          <label className="replay-hand">
+            <Icon name="eye" />
+            <span className="sr-only">Whose hand to show</span>
+            <select value={revealedSeat ?? ''} onChange={(event) => setRevealedSeat(event.target.value || null)}>
+              <option value="">Follow Play</option>
+              {game.players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
+            </select>
+          </label>
           <label className="replay-scrub">
             <span className="sr-only">Move</span>
             <input type="range" min={0} max={last} value={Math.min(index, last)} onChange={(event) => { setPlaying(false); setIndex(Number(event.target.value)); }} />
@@ -68,7 +79,7 @@ export function ReplayScreen({ log, reducedMotion, onClose }: ReplayScreenProps)
       reducedMotion={reducedMotion}
       legalActions={[]}
       contextualActions={[]}
-      revealedPlayerId={prompt.playerId}
+      revealedPlayerId={revealedSeat ?? prompt.playerId}
       playableCardIds={new Set()}
       selectedCardId={null}
       selectedPaymentCards={[]}

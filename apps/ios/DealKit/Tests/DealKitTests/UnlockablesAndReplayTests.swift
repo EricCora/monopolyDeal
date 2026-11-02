@@ -88,10 +88,13 @@ final class UnlockablesAndReplayTests: XCTestCase {
         XCTAssertEqual(GameLog(initial: initial, actions: [wrongPlayer]).positions().count, 1)
     }
 
-    func testTheNewestFiveAreKept() {
+    func testOnlyTheNewestAreKept() {
         let log = playedGame().log
-        for index in 0..<7 { store.saveReplay(StoredReplay(id: "g\(index)", endedAt: Double(index), title: "", log: log)) }
-        XCTAssertEqual(store.replays().map(\.id), ["g6", "g5", "g4", "g3", "g2"])
+        for index in 0..<(DealStore.maxReplays + 2) { store.saveReplay(StoredReplay(id: "g\(index)", endedAt: Double(index), title: "", log: log)) }
+        let kept = store.replays().map(\.id)
+        XCTAssertEqual(kept.count, DealStore.maxReplays)
+        XCTAssertEqual(kept.first, "g\(DealStore.maxReplays + 1)")
+        XCTAssertFalse(kept.contains("g1"))
     }
 
     func testAnActiveLogOnlyResumesItsOwnGame() {

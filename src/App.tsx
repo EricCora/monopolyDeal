@@ -1008,7 +1008,19 @@ function App() {
     const nextAchievements = applyMatchToAchievementState(loadAchievementState(), onlineRecord);
     saveAchievementState(nextAchievements);
     setAchievementState(nextAchievements);
-  }, [appendMatchRecord, multiplayerGame, multiplayerRoomView, recordGrowthMetric, screen]);
+    // Kept now, so this game can be watched from the history later.
+    if (multiplayerRoomView.replayAvailable && multiplayerSession) {
+      const winnerName = onlineRecord.winnerName ?? 'Nobody';
+      void fetchMultiplayerReplay(multiplayerSession, multiplayerApiBase)
+        .then((log) => saveReplay({
+          ...log,
+          id: onlineRecord.id,
+          endedAt: onlineRecord.endedAt,
+          title: `${winnerName} won in ${onlineRecord.turnCount} turns`,
+        }))
+        .catch(() => undefined);
+    }
+  }, [appendMatchRecord, multiplayerApiBase, multiplayerGame, multiplayerRoomView, multiplayerSession, recordGrowthMetric, screen]);
 
   useEffect(() => {
     const yourPlayerId = multiplayerRoomView?.yourPlayerId;

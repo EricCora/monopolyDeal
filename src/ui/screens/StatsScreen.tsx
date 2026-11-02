@@ -1,7 +1,10 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import type { AchievementId, DailyChallengeV1, GrowthMetricsV1, LifetimeStatsV1, MatchRecordV1 } from '../../stats';
 import type { StoredReplay } from '../../persistence/replays';
+import { replayPositions } from '../../replay/positions';
 import { Icon, type IconName } from '../components/icons';
+import { RecentEvents } from '../components/RecentEvents';
+import { Sheet } from './GameTableScreen';
 
 const StatsDashboard = lazy(() =>
   import('../components/StatsDashboard').then((module) => ({ default: module.StatsDashboard })),
@@ -25,7 +28,32 @@ const ACHIEVEMENTS: Array<{ id: AchievementId; label: string; detail: string; ic
   { id: 'quick_win', label: 'Quick Win', detail: 'Win within 12 turns.', icon: 'pass_go' },
 ];
 
+/** One game from the history: its log, and a way to watch it back. */
+function MatchDetail({ match, replay, onWatch, onClose }: {
+  match: MatchRecordV1;
+  replay: StoredReplay;
+  onWatch: () => void;
+  onClose: () => void;
+}) {
+  const final = useMemo(() => {
+    const positions = replayPositions(replay);
+    return positions[positions.length - 1];
+  }, [replay]);
+  return (
+    <Sheet label="Match details" title={match.winnerName ? `${match.winnerName} won` : 'No winner'} tall onClose={onClose}>
+      <p className="menu-note">{match.players.join(', ')} · {match.turnCount} turns</p>
+      <button type="button" className="primary-button" onClick={onWatch}><Icon name="pass_go" /> Watch Replay</button>
+      <p className="section-title">Game Log</p>
+      <RecentEvents events={final.history} playerNames={final.players.map((player) => player.name)} />
+    </Sheet>
+  );
+}
+
 export function StatsScreen({ history, lifetime, growthMetrics, unlockedAchievements = [], dailyChallenge, replays = [], onWatchReplay, onBack }: StatsScreenProps) {
+  const [openMatchId, setOpenMatchId] = useState<string | null>(null);
+  const replayIds = useMemo(() => new Set(replays.map((replay) => replay.id)), [replays]);
+  const openMatch = history.find((match) => match.id === openMatchId);
+  const openReplay = replays.find((replay) => replay.id === openMatchId);
   const extras = (
     <>
       <section className="stats-progress" aria-label="Achievements">
@@ -53,17 +81,6 @@ export function StatsScreen({ history, lifetime, growthMetrics, unlockedAchievem
           </small>
         </section>
       ) : null}
-      {replays.length > 0 && onWatchReplay ? (
-        <section className="stats-progress" aria-label="Replays">
-          <p className="section-title">Replays</p>
-          {replays.map((replay) => (
-            <button key={replay.id} type="button" className="stats-replay" onClick={() => onWatchReplay(replay)}>
-              <Icon name="pass_go" />
-              <span>{replay.title}<small>{new Date(replay.endedAt).toLocaleString()}</small></span>
-            </button>
-          ))}
-        </section>
-      ) : null}
     </>
   );
   return (
@@ -75,7 +92,10 @@ export function StatsScreen({ history, lifetime, growthMetrics, unlockedAchievem
         </section>
       }
     >
-      <StatsDashboard history={history} lifetime={lifetime} growthMetrics={growthMetrics} extras={extras} onBack={onBack} />
+      <StatsDashboard history={history} lifetime={lifetime} growthMetrics={growthMetrics} extras={extras} onOpenMatch={(id) => setOpenMatchId(id)} replayIds={replayIds} onBack={onBack} />
+      {openMatch && openReplay && onWatchReplay ? (
+        <MatchDetail match={openMatch} replay={openReplay} onWatch={() => onWatchReplay(openReplay)} onClose={() => setOpenMatchId(null)} />
+      ) : null}
     </Suspense>
   );
 }

@@ -55,7 +55,7 @@ extension TableSession {
     var viewer: PlayerState? { viewerId.flatMap { id in game?.players.first { $0.id == id } } }
 
     /// True when the phone's player is the one the game is waiting on.
-    var isViewersPrompt: Bool { prompt != nil && prompt?.playerId == viewerId }
+    var isViewersPrompt: Bool { !isReplay && prompt != nil && prompt?.playerId == viewerId }
 
     /// The color a card on the table is currently played as, so a Wild shows that color upright.
     func assignedColor(of cardId: String) -> PropertyColor? {

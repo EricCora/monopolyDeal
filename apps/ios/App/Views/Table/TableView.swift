@@ -218,7 +218,7 @@ struct TableView: View {
     private var turnTitle: String {
         guard let game = session.game else { return "" }
         let current = game.players[game.currentPlayerIndex]
-        return current.id == session.viewerId ? "Your turn" : "\(current.name)'s turn"
+        return current.id == session.viewerId && !session.isReplay ? "Your turn" : "\(current.name)'s turn"
     }
 
     private func subtitleText(_ text: String) -> some View {

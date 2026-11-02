@@ -25,6 +25,8 @@ struct StatsView: View {
         }
     }
 
+    @State private var replays: [String: StoredReplay] = [:]
+
     private var matches: [MatchRecord] {
         app.history.filter { match in
             (playerFilter == nil || match.players.contains(playerFilter!))
@@ -65,7 +67,6 @@ struct StatsView: View {
                     if !winRows.isEmpty { winsChart }
                     if matches.count > 1 { lengthChart }
                     achievements
-                    if !replays.isEmpty { replaysPanel }
                     daily
                     history
                 }
@@ -76,39 +77,13 @@ struct StatsView: View {
         }
         .navigationTitle("Stats")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { app.reloadStoredData() }
-    }
-
-    private var replays: [StoredReplay] { app.store.replays() }
-
-    private var replaysPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionTitle(text: "Replays")
-            ForEach(replays) { replay in
-                Button {
-                    app.replayToWatch = ReplayRequest(log: replay.log)
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "play.circle.fill")
-                            .foregroundStyle(Palette.gold)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(replay.title)
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(.white)
-                            Text(Date(timeIntervalSince1970: replay.endedAt / 1000).formatted(date: .abbreviated, time: .shortened))
-                                .font(.caption2)
-                                .foregroundStyle(SoftWhite(0.65))
-                        }
-                        Spacer()
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("stats.replay")
-            }
+        .navigationDestination(for: MatchRecord.self) { match in
+            MatchDetailView(match: match, replay: replays[match.id])
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassPanel()
+        .onAppear {
+            app.reloadStoredData()
+            replays = Dictionary(app.store.replays().map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        }
     }
 
     private var filters: some View {
@@ -171,27 +146,38 @@ struct StatsView: View {
     }
 
     private var winsChart: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let most = max(winRows.map(\.wins).max() ?? 1, 1)
+        return VStack(alignment: .leading, spacing: 10) {
             SectionTitle(text: "Wins by Player")
-            Chart(winRows) { row in
-                BarMark(x: .value("Wins", row.wins), y: .value("Player", row.name))
-                    .foregroundStyle(Palette.gold)
-                    .cornerRadius(5)
-                    .annotation(position: .trailing) {
-                        Text("\(row.wins) of \(row.games)")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(SoftWhite(0.75))
+            ForEach(winRows) { row in
+                HStack(spacing: 10) {
+                    Text(row.name)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(SoftWhite(0.9))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(width: 84, alignment: .leading)
+                    GeometryReader { bar in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.08))
+                            if row.wins > 0 {
+                                Capsule()
+                                    .fill(Palette.gold)
+                                    .frame(width: bar.size.width * CGFloat(row.wins) / CGFloat(most))
+                            }
+                        }
                     }
-            }
-            .chartXAxis(.hidden)
-            .chartYAxis {
-                AxisMarks { _ in
-                    AxisValueLabel().foregroundStyle(SoftWhite(0.85))
+                    .frame(height: 16)
+                    Text("\(row.wins) of \(row.games)")
+                        .font(.caption2.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(SoftWhite(0.75))
+                        .frame(width: 48, alignment: .trailing)
                 }
+                .accessibilityElement(children: .combine)
             }
-            .frame(height: CGFloat(winRows.count) * 34 + 8)
         }
         .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .glassPanel(cornerRadius: 18)
     }
 
@@ -269,25 +255,34 @@ struct StatsView: View {
                     .foregroundStyle(SoftWhite(0.7))
             }
             ForEach(matches) { match in
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack {
-                        Text(match.winnerName.map { "\($0) won" } ?? "No winner")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(.white)
-                        Spacer()
-                        Text(match.mode.label)
-                            .font(.caption2.weight(.heavy))
-                            .foregroundStyle(Palette.gold)
+                NavigationLink(value: match) {
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text(match.winnerName.map { "\($0) won" } ?? "No winner")
+                                    .font(.subheadline.weight(.bold))
+                                    .foregroundStyle(.white)
+                                Spacer()
+                                Text(match.mode.label)
+                                    .font(.caption2.weight(.heavy))
+                                    .foregroundStyle(Palette.gold)
+                            }
+                            Text(match.players.joined(separator: ", "))
+                                .font(.caption)
+                                .foregroundStyle(SoftWhite(0.75))
+                            Text("\(match.turnCount) turns · \(formatDuration(match.durationSec)) · \(match.endedDate.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.caption2)
+                                .foregroundStyle(SoftWhite(0.55))
+                        }
+                                Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(SoftWhite(0.5))
                     }
-                    Text(match.players.joined(separator: ", "))
-                        .font(.caption)
-                        .foregroundStyle(SoftWhite(0.75))
-                    Text("\(match.turnCount) turns · \(formatDuration(match.durationSec)) · \(match.endedDate.formatted(date: .abbreviated, time: .shortened))")
-                        .font(.caption2)
-                        .foregroundStyle(SoftWhite(0.55))
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
                 }
-                .padding(.vertical, 4)
-                .accessibilityElement(children: .combine)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("stats.match")
             }
         }
         .padding(14)

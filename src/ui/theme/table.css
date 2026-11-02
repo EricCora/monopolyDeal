@@ -2295,3 +2295,27 @@
   visibility: hidden;
 }
 
+.replay-hand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.replay-hand svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.replay-hand select {
+  flex: 1;
+  min-height: 34px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font: inherit;
+}
+

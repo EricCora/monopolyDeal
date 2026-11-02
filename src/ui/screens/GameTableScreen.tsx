@@ -159,7 +159,7 @@ interface GameTableScreenProps {
   /** Replays step the card flights by move, since their timestamps aren't meaningful. */
   flightKey?: number;
   /** Replays swap the action bar and hand controls for these. */
-  replayBar?: ReactNode;
+  replayBar?: (openLog: () => void) => ReactNode;
   onPauseToggle: () => void;
   /** Leaves the results for the room, where chat and the next game's setup are. */
   onBackToLobby?: () => void;
@@ -355,7 +355,7 @@ interface SheetProps {
   children: ReactNode;
 }
 
-function Sheet({ label, title, tall = false, onClose, children }: SheetProps) {
+export function Sheet({ label, title, tall = false, onClose, children }: SheetProps) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -624,7 +624,7 @@ export function GameTableScreen({
   const viewer = game.players.find((player) => player.id === viewerId) ?? null;
   const opponents = game.players.filter((player) => player.id !== viewerId);
   const revealedPlayerIdMatches = isMultiplayer || revealedPlayerId === prompt.playerId;
-  const isViewersPrompt = Boolean(viewer && prompt.playerId === viewer.id && !over.done && revealedPlayerIdMatches);
+  const isViewersPrompt = Boolean(!replayBar && viewer && prompt.playerId === viewer.id && !over.done && revealedPlayerIdMatches);
 
   const selectionTargetCardIds = useMemo(() => {
     const targets = new Set<string>();
@@ -954,7 +954,7 @@ export function GameTableScreen({
 
   // Top bar text
   const currentPlayer = game.players[game.currentPlayerIndex];
-  const turnTitle = currentPlayer.id === viewerId ? 'Your turn' : `${currentPlayer.name}'s turn`;
+  const turnTitle = currentPlayer.id === viewerId && !replayBar ? 'Your turn' : `${currentPlayer.name}'s turn`;
   const variantLabel = variant === 'no_mercy' ? 'No Mercy' : 'Classic';
   const seriesScore = series
     ? ` · Game ${series.gameNumber} · ${game.players.map((player) => series.wins[player.id] ?? 0).join('–')}`
@@ -1316,7 +1316,7 @@ export function GameTableScreen({
             </div>
 
             <div className="action-bar">
-              {replayBar ?? (<>
+              {replayBar ? replayBar(() => setLogOpen(true)) : (<>
               {showUndo ? (
                 <>
                   <button type="button" className="secondary-button is-icon" aria-label="Undo Last Play" onClick={onUndoLastPlay} disabled={inputBlocked}><Icon name="undo" /></button>

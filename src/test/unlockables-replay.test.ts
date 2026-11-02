@@ -60,10 +60,13 @@ describe('replays', () => {
     expect(positions).toHaveLength(1);
   });
 
-  it('keeps the newest five', () => {
+  it('keeps only the newest', () => {
     const { initial } = playGame();
-    for (let index = 0; index < 7; index += 1) saveReplay({ id: `g${index}`, endedAt: index, title: `Game ${index}`, initial, actions: [] });
-    expect(loadReplays().map((entry) => entry.id)).toEqual(['g6', 'g5', 'g4', 'g3', 'g2']);
+    for (let index = 0; index < 22; index += 1) saveReplay({ id: `g${index}`, endedAt: index, title: `Game ${index}`, initial, actions: [] });
+    const kept = loadReplays().map((entry) => entry.id);
+    expect(kept).toHaveLength(20);
+    expect(kept[0]).toBe('g21');
+    expect(kept).not.toContain('g1');
   });
 
   it('only resumes a log that belongs to the same game', () => {
