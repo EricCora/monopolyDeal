@@ -12,7 +12,7 @@ final class SetRulesTests: XCTestCase {
     }
 
     private func bank(_ state: GameState) -> GameState {
-        let result = Engine.applyAction(state, Action(type: .play_to_bank, playerId: "p1", cardId: "money_1#a"))
+        let result = Engine.applyAction(state, Action(.play_to_bank, playerId: "p1").with { $0.cardId = "money_1#a" })
         XCTAssertNil(result.error)
         return result.state
     }
@@ -37,7 +37,7 @@ final class SetRulesTests: XCTestCase {
         var state = table()
         state.players[0].properties[.brown] = place(.brown, ["wild_brown_light_blue#a", "wild_all#a"])
         state.players[0].hand = ["brown_1#a"]
-        let next = Engine.applyAction(state, Action(type: .play_property, playerId: "p1", cardId: "brown_1#a", color: .brown)).state
+        let next = Engine.applyAction(state, Action(.play_property, playerId: "p1").with { $0.cardId = "brown_1#a"; $0.color = .brown }).state
         XCTAssertEqual(Set(next.players[0].properties[.brown].map(\.setId)).count, 2)
         XCTAssertEqual(Engine.countCompleteSets(next.players[0], .classic), 1)
     }
