@@ -15,6 +15,8 @@ public final class RoomConnection {
     public private(set) var view: RoomView?
     public private(set) var status: Status = .connecting
     public private(set) var session: RoomSession
+    /// How far the server's clock is ahead of this device's, in milliseconds.
+    public private(set) var serverClockOffsetMs: Double = 0
     public var lastError: OnlineError?
     /// Set when the seat is gone for good. The owner should clear the stored session.
     public private(set) var endedReason: String?
@@ -30,6 +32,8 @@ public final class RoomConnection {
     private var healedRevision: Int?
 
     public static let pollInterval: Duration = .seconds(2)
+    /// A turn-by-turn room moves slowly and runs on someone's free quota, so it looks less often.
+    public static let turnRoomPollInterval: Duration = .seconds(12)
     /// The server marks a seat disconnected when it hasn't been seen for a while, and an
     /// open event stream doesn't count, so a quiet room still needs a periodic fetch.
     public static let keepAliveInterval: Duration = .seconds(15)
@@ -41,6 +45,14 @@ public final class RoomConnection {
 
     private var revision: Int? { view?.revision }
 
+    private var isTurnRoom: Bool { RoomClient.isTurnRoom(session.roomCode) }
+
+    /// Spectators hold no seat, so there's nothing to reclaim or keep alive.
+    private var isSpectator: Bool { session.playerId.hasPrefix("s") }
+
+    /// Turn rooms have no live stream, and a spectator's token doesn't open one.
+    private var pollsOnly: Bool { isTurnRoom || isSpectator }
+
     // MARK: Lifecycle
 
     /// Reclaims the seat and starts listening. Safe to call again after a drop.
@@ -48,15 +60,22 @@ public final class RoomConnection {
         stop()
         status = view == nil ? .connecting : .reconnecting
         do {
-            let next = try await client.reconnect(session, expectedRevision: revision)
-            if next != session {
-                session = next
-                onSessionChange?(next)
+            if !isSpectator {
+                let next = try await client.reconnect(session, expectedRevision: revision)
+                if next != session {
+                    session = next
+                    onSessionChange?(next)
+                }
             }
             try await fetch()
             lastError = nil
-            startStream()
-            startKeepAlive()
+            if pollsOnly {
+                status = .live
+                startPolling()
+            } else {
+                startStream()
+                startKeepAlive()
+            }
         } catch let error as OnlineError {
             handle(error)
             if !error.endsSession { startPolling() }
@@ -116,9 +135,10 @@ public final class RoomConnection {
     private func startPolling() {
         guard pollTask == nil else { return }
         if status != .live { status = .polling }
+        let interval = isTurnRoom ? RoomConnection.turnRoomPollInterval : RoomConnection.pollInterval
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: RoomConnection.pollInterval)
+                try? await Task.sleep(for: interval)
                 guard let self, !Task.isCancelled else { return }
                 await self.refresh()
             }
@@ -140,6 +160,7 @@ public final class RoomConnection {
         // Replies can arrive out of order, so an older revision never replaces a newer one.
         if let view, next.revision < view.revision, next.roomCode == view.roomCode { return }
         view = next
+        serverClockOffsetMs = next.serverTime - Date().timeIntervalSince1970 * 1000
         if status == .disconnected || status == .reconnecting || status == .connecting {
             status = pollTask == nil ? .live : .polling
         }

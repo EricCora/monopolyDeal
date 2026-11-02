@@ -8,12 +8,17 @@ import FoundationNetworking
 /// Socket.IO transport is a faster path to the same routes, so neither is required.
 public struct RoomClient: Sendable {
     public static let productionURL = URL(string: "https://monopolydeal-multiplayer.onrender.com")!
+    /// Turn-by-turn rooms live on the website, because the free room server forgets everything when it sleeps.
+    public static let productionTurnURL = URL(string: "https://monopoly-deal-smoky.vercel.app")!
+    public static let turnRoomCodeLength = 6
 
     public let baseURL: URL
+    public let turnBaseURL: URL
     private let session: URLSession
 
-    public init(baseURL: URL = RoomClient.productionURL) {
+    public init(baseURL: URL = RoomClient.productionURL, turnBaseURL: URL = RoomClient.productionTurnURL) {
         self.baseURL = baseURL
+        self.turnBaseURL = turnBaseURL
         let configuration = URLSessionConfiguration.default
         // The free hosting tier takes around 20 seconds to wake a sleeping server.
         configuration.timeoutIntervalForRequest = 60
@@ -25,11 +30,17 @@ public struct RoomClient: Sendable {
     /// For tests that answer requests themselves.
     init(baseURL: URL, configuration: URLSessionConfiguration) {
         self.baseURL = baseURL
+        turnBaseURL = baseURL
         session = URLSession(configuration: configuration)
     }
 
+    public static func isTurnRoom(_ code: String) -> Bool { code.count == turnRoomCodeLength }
+
+    private var turnRoomsURL: URL { turnBaseURL.appendingPathComponent("api/turn/api/multiplayer/rooms") }
+
     private func roomURL(_ code: String, _ operation: String) -> URL {
-        baseURL.appendingPathComponent("api/multiplayer/rooms").appendingPathComponent(code).appendingPathComponent(operation)
+        let rooms = Self.isTurnRoom(code) ? turnRoomsURL : baseURL.appendingPathComponent("api/multiplayer/rooms")
+        return rooms.appendingPathComponent(code).appendingPathComponent(operation)
     }
 
     private func send<T: Decodable>(_ type: T.Type, _ request: URLRequest) async throws -> T {
@@ -110,6 +121,18 @@ public struct RoomClient: Sendable {
         return try makeSession(reply, name: playerName)
     }
 
+    /// A room that lasts for days, where players take their turns when they like.
+    public func createTurnRoom(playerName: String) async throws -> RoomSession {
+        let reply = try await post(RoomSessionResponse.self, turnRoomsURL, ["playerName": playerName])
+        return try makeSession(reply, name: playerName)
+    }
+
+    /// Takes a place at the table with every hand hidden.
+    public func watchRoom(code: String, playerName: String) async throws -> RoomSession {
+        let reply = try await post(RoomSessionResponse.self, roomURL(code, "watch"), ["playerName": playerName])
+        return try makeSession(reply, name: playerName)
+    }
+
     public func joinRoom(code: String, playerName: String) async throws -> RoomSession {
         let reply = try await post(RoomSessionResponse.self, roomURL(code, "join"), ["playerName": playerName])
         return try makeSession(reply, name: playerName)
@@ -139,6 +162,16 @@ public struct RoomClient: Sendable {
         return try await send(RoomView.self, URLRequest(url: components.url!))
     }
 
+    /// A finished game's opening state and moves.
+    public func replay(_ session: RoomSession) async throws -> RoomReplayLog {
+        var components = URLComponents(url: roomURL(session.roomCode, "replay"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "playerId", value: session.playerId),
+            URLQueryItem(name: "sessionToken", value: session.sessionToken),
+        ]
+        return try await send(RoomReplayLog.self, URLRequest(url: components.url!))
+    }
+
     // MARK: Commands
 
     public func start(_ session: RoomSession, checkpointId: String? = nil, expectedRevision: Int?) async throws {
@@ -162,6 +195,16 @@ public struct RoomClient: Sendable {
 
     public func setVariant(_ session: RoomSession, _ variant: GameVariant, expectedRevision: Int?) async throws {
         try await command(session, "variant", expectedRevision: expectedRevision, extra: ["variant": variant.rawValue])
+    }
+
+    /// Only the options passed change. `turnTimerSeconds` of nil leaves the timer alone; use `clearTurnTimer` to remove it.
+    public func setOptions(_ session: RoomSession, botFill: Bool? = nil, turnTimerSeconds: Int? = nil, clearTurnTimer: Bool = false, bestOf: Int? = nil, expectedRevision: Int?) async throws {
+        var extra: [String: Any] = [:]
+        if let botFill { extra["botFill"] = botFill }
+        if let turnTimerSeconds { extra["turnTimerSeconds"] = turnTimerSeconds }
+        if clearTurnTimer { extra["turnTimerSeconds"] = NSNull() }
+        if let bestOf { extra["bestOf"] = bestOf }
+        try await command(session, "options", expectedRevision: expectedRevision, extra: extra)
     }
 
     public func setReady(_ session: RoomSession, ready: Bool, expectedRevision: Int?) async throws {

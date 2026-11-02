@@ -18,19 +18,23 @@ public struct SavedSlot: Codable, Hashable, Sendable, Identifiable {
 }
 
 public enum TableTheme: String, Codable, CaseIterable, Hashable, Sendable {
-    case premium_tabletop, classic_green, neon_arcade
+    case premium_tabletop, classic_green, neon_arcade, sunset_lounge, royal_velvet, midnight_vault
 
     public var label: String {
         switch self {
         case .premium_tabletop: "Premium Tabletop"
         case .classic_green: "Classic Felt"
         case .neon_arcade: "Neon Arcade"
+        case .sunset_lounge: "Sunset Lounge"
+        case .royal_velvet: "Royal Velvet"
+        case .midnight_vault: "Midnight Vault"
         }
     }
 }
 
 public struct Preferences: Codable, Hashable, Sendable {
     public var tableStyle = TableTheme.premium_tabletop
+    public var cardBack = CardBackStyle.classic_red
     public var reducedEffects = false
     public var confirmRiskyActions = true
     public var soundEnabled = true
@@ -45,7 +49,7 @@ public struct Preferences: Codable, Hashable, Sendable {
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case tableStyle, reducedEffects, confirmRiskyActions, soundEnabled, hapticsEnabled, coachEnabled
+        case tableStyle, cardBack, reducedEffects, confirmRiskyActions, soundEnabled, hapticsEnabled, coachEnabled
         case hardCoach, customRulesEnabled, onlineName, gamePaused, pausedGameId
     }
 
@@ -53,6 +57,7 @@ public struct Preferences: Codable, Hashable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         tableStyle = (try? c.decodeIfPresent(TableTheme.self, forKey: .tableStyle)) ?? .premium_tabletop
+        cardBack = (try? c.decodeIfPresent(CardBackStyle.self, forKey: .cardBack)) ?? .classic_red
         reducedEffects = (try? c.decodeIfPresent(Bool.self, forKey: .reducedEffects)) ?? false
         confirmRiskyActions = (try? c.decodeIfPresent(Bool.self, forKey: .confirmRiskyActions)) ?? true
         soundEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .soundEnabled)) ?? true
@@ -202,6 +207,39 @@ public final class DealStore: @unchecked Sendable {
 
     public func clearStats() {
         ["matchHistory", "lifetimeStats", "achievements", "dailyChallenge"].forEach(remove)
+    }
+
+    // MARK: Replays
+
+    public static let maxReplays = 5
+
+    public func replays() -> [StoredReplay] { load([StoredReplay].self, "replays") ?? [] }
+
+    public func saveReplay(_ replay: StoredReplay) {
+        save(Array(([replay] + replays().filter { $0.id != replay.id }).prefix(Self.maxReplays)), "replays")
+    }
+
+    /// The running game's log, if it belongs to this game.
+    public func activeReplay(for game: GameState) -> GameLog? {
+        guard let log = load(GameLog.self, "activeReplay"), log.initial.createdAt == game.createdAt else { return nil }
+        return log
+    }
+
+    public func saveActiveReplay(_ log: GameLog?) {
+        if let log { save(log, "activeReplay") } else { remove("activeReplay") }
+    }
+
+    // MARK: Match options
+
+    public func matchOptions(for game: GameState) -> MatchOptions {
+        guard let stored = load(MatchOptions.self, "matchOptions"), stored.gameCreatedAt == game.createdAt else { return MatchOptions() }
+        return stored
+    }
+
+    public func saveMatchOptions(_ options: MatchOptions, for game: GameState) {
+        var stored = options
+        stored.gameCreatedAt = game.createdAt
+        save(stored, "matchOptions")
     }
 
     // MARK: Preferences

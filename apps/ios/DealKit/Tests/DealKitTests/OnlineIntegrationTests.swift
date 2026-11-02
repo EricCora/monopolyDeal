@@ -14,7 +14,7 @@ final class OnlineIntegrationTests: XCTestCase {
         guard let url = ProcessInfo.processInfo.environment["DEAL_TEST_SERVER_URL"].flatMap(URL.init(string:)) else {
             throw XCTSkip("Set DEAL_TEST_SERVER_URL to run against a server.")
         }
-        client = RoomClient(baseURL: url)
+        client = RoomClient(baseURL: url, turnBaseURL: url)
     }
 
     private func waitFor(_ what: String, timeout: Duration = .seconds(30), _ condition: () -> Bool) async throws {
@@ -363,6 +363,116 @@ final class OnlineIntegrationTests: XCTestCase {
         await guest.leave(abandon: true)
         let view = try await client.state(hostSession)
         XCTAssertEqual(view.players.map(\.name), ["Host"])
+    }
+
+    private func playToTheEnd(_ seats: [RoomConnection]) async throws {
+        for _ in 0..<4000 {
+            if seats[0].view?.isFinished == true { return }
+            var moved = false
+            for seat in seats where await playOneMove(seat) { moved = true }
+            if !moved { try await Task.sleep(for: .milliseconds(30)) }
+        }
+        XCTFail("The match never finished")
+    }
+
+    func testRoomOptionsSpectatorClockSeriesAndReplay() async throws {
+        let hostSession = try await client.createRoom(playerName: "Host")
+        let host = RoomConnection(client: client, session: hostSession)
+        await host.connect()
+        defer { host.stop() }
+        await host.run { client, session, revision in
+            try await client.setOptions(session, botFill: true, turnTimerSeconds: 45, bestOf: 3, expectedRevision: revision)
+        }
+        XCTAssertEqual(host.view?.options?.botFill, true)
+        XCTAssertEqual(host.view?.options?.turnTimerSeconds, 45)
+        XCTAssertEqual(host.view?.options?.bestOf, 3)
+
+        let guestSession = try await client.joinRoom(code: hostSession.roomCode, playerName: "Guest")
+        let guest = RoomConnection(client: client, session: guestSession)
+        await guest.connect()
+        defer { guest.stop() }
+        await readyUp(guest)
+        await host.refresh()
+        await readyUp(host)
+        try await start(host)
+
+        XCTAssertNotNil(host.view?.turnClock?.deadlineMs)
+        XCTAssertEqual(host.view?.series?.gameNumber, 1)
+
+        let watcherSession = try await client.watchRoom(code: hostSession.roomCode, playerName: "Sam")
+        let watcher = RoomConnection(client: client, session: watcherSession)
+        await watcher.connect()
+        defer { watcher.stop() }
+        let seen = try XCTUnwrap(watcher.view)
+        XCTAssertTrue(seen.isSpectator)
+        XCTAssertTrue(seen.legalActions.isEmpty)
+        let hands = seen.gameState?.players.flatMap(\.hand) ?? []
+        XCTAssertFalse(hands.isEmpty)
+        XCTAssertTrue(hands.allSatisfy { $0 == Catalog.hiddenCardId })
+        await host.refresh()
+        XCTAssertEqual(host.view?.spectatorCount, 1)
+
+        try await playToTheEnd([host, guest])
+        await host.refresh()
+        let finished = try XCTUnwrap(host.view)
+        XCTAssertEqual(finished.series?.wins.values.reduce(0, +), 1)
+        XCTAssertEqual(finished.replayAvailable, true)
+        let log = try await client.replay(host.session)
+        let rebuilt = GameLog(initial: log.initial, actions: log.actions).positions()
+        XCTAssertEqual(rebuilt.count, log.actions.count + 1)
+        XCTAssertTrue(Engine.isGameOver(try XCTUnwrap(rebuilt.last)).done)
+    }
+
+    func testABotPlaysADroppedSeatWhenTheRoomAsks() async throws {
+        let hostSession = try await client.createRoom(playerName: "Host")
+        let host = RoomConnection(client: client, session: hostSession)
+        await host.connect()
+        defer { host.stop() }
+        await host.run { client, session, revision in try await client.setOptions(session, botFill: true, expectedRevision: revision) }
+        let guestSession = try await client.joinRoom(code: hostSession.roomCode, playerName: "Guest")
+        let guest = RoomConnection(client: client, session: guestSession)
+        await guest.connect()
+        await readyUp(guest)
+        await host.refresh()
+        await readyUp(host)
+        try await start(host)
+        await guest.leave(abandon: false)
+        try await waitFor("a bot to take the seat", timeout: .seconds(45)) {
+            host.view?.botSeatIds?.contains(guestSession.playerId) == true
+        }
+        XCTAssertEqual(host.view?.paused, false)
+    }
+
+    func testATurnRoomPlaysThroughRequestsAlone() async throws {
+        let aSession = try await client.createTurnRoom(playerName: "Ann")
+        XCTAssertEqual(aSession.roomCode.count, RoomClient.turnRoomCodeLength)
+        let a = RoomConnection(client: client, session: aSession)
+        await a.connect()
+        defer { a.stop() }
+        XCTAssertEqual(a.view?.turnBased, true)
+        let bSession = try await client.joinRoom(code: aSession.roomCode, playerName: "Bo")
+        let b = RoomConnection(client: client, session: bSession)
+        await b.connect()
+        defer { b.stop() }
+        await readyUp(b)
+        await a.refresh()
+        await readyUp(a)
+        try await start(a)
+        await b.refresh()
+        XCTAssertEqual(b.view?.started, true)
+        // A few turns are enough to show moves pass between the two.
+        for _ in 0..<30 {
+            _ = await playOneMove(a)
+            _ = await playOneMove(b)
+        }
+        let turn = try XCTUnwrap(a.view?.gameState?.turnCount)
+        XCTAssertGreaterThan(turn, 1)
+        // The seat comes back on a fresh connection.
+        a.stop()
+        let again = RoomConnection(client: client, session: a.session)
+        await again.connect()
+        defer { again.stop() }
+        XCTAssertEqual(again.view?.gameState?.turnCount, turn)
     }
 
     func testJoiningAMissingRoomExplainsItself() async {

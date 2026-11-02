@@ -45,6 +45,43 @@ public enum RoomReaction: String, Codable, CaseIterable, Hashable, Sendable {
     }
 }
 
+extension RoomReaction {
+    public var emoji: String {
+        switch self {
+        case .nice: "👍"
+        case .wow: "🤯"
+        case .gg: "🎉"
+        case .oops: "😬"
+        }
+    }
+}
+
+public struct RoomOptions: Codable, Hashable, Sendable {
+    /// A dropped seat plays on as a bot instead of pausing the room.
+    public var botFill: Bool
+    /// Seconds per turn before a bot moves for the player. Nil shows a count-up clock only.
+    public var turnTimerSeconds: Int?
+    public var bestOf: Int
+}
+
+public struct RoomTurnClock: Codable, Hashable, Sendable {
+    public var playerId: PlayerId
+    public var startedAt: Double
+    public var deadlineMs: Double?
+}
+
+public struct RoomSeries: Codable, Hashable, Sendable {
+    public var bestOf: Int
+    public var wins: [String: Int]
+    public var gameNumber: Int
+    public var winnerId: PlayerId?
+}
+
+public struct RoomReplayLog: Codable, Hashable, Sendable {
+    public var initial: GameState
+    public var actions: [Action]
+}
+
 public struct RoomPlayer: Codable, Hashable, Sendable, Identifiable {
     public var id: PlayerId
     public var name: String
@@ -112,7 +149,17 @@ public struct RoomView: Codable, Hashable, Sendable {
     public var chatMessages: [RoomChatMessage]
     public var typingPlayerIds: [PlayerId]
     public var lastEventId: Int
+    // Newer servers send these. Older rooms and snapshots leave them out.
+    public var role: String?
+    public var options: RoomOptions?
+    public var turnClock: RoomTurnClock?
+    public var series: RoomSeries?
+    public var botSeatIds: [PlayerId]?
+    public var spectatorCount: Int?
+    public var turnBased: Bool?
+    public var replayAvailable: Bool?
 
+    public var isSpectator: Bool { role == "spectator" }
     public var isHost: Bool { hostPlayerId == yourPlayerId }
     public var isFinished: Bool { status == "finished" }
     public var hasEnded: Bool { roomRuntimeState == "ended_timeout" }
@@ -131,6 +178,9 @@ public struct RoomView: Codable, Hashable, Sendable {
 
     /// The host can pause a running match, or resume one they paused.
     public var canHostTogglePause: Bool { isHost && (!paused || isPausedManually) }
+
+    /// The feed lists the newest first.
+    public var latestReaction: RoomActivity? { activityFeed.first { $0.kind == "reaction" } }
 
     private var droppedPlayers: [RoomPlayer] { players.filter { !$0.connected } }
 

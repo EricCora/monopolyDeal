@@ -23,7 +23,7 @@ interface UnlockRule {
 
 const TABLE_STYLE_RULES: Partial<Record<TableStylePreset, UnlockRule>> = {
   sunset_lounge: { needs: 'Win a game', isUnlocked: (progress) => progress.wins >= 1 },
-  royal_velvet: { needs: 'Play 100 action cards', isUnlocked: (progress) => progress.actions >= 100 },
+  royal_velvet: { needs: 'Make 100 moves', isUnlocked: (progress) => progress.actions >= 100 },
   midnight_vault: { needs: 'Win 10 games', isUnlocked: (progress) => progress.wins >= 10 },
 };
 
