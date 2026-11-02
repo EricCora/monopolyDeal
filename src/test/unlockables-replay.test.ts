@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { chooseHeuristicAction } from '../ai';
 import { applyAction, createGame, getLegalActions, getNextPrompt, isGameOver, type Action } from '../engine';
 import { loadActiveReplay, loadReplays, saveActiveReplay, saveReplay } from '../persistence/replays';
 import { replayStateFingerprint } from '../replay/serialize';
@@ -33,15 +34,13 @@ describe('replays', () => {
     const initial = createGame({ seed: 11, players: [{ id: 'p1', name: 'Ann' }, { id: 'p2', name: 'Bob' }] });
     let state = initial;
     const actions: Action[] = [];
-    for (let step = 0; step < 4000 && !isGameOver(state).done; step += 1) {
-      const legal = getLegalActions(state, getNextPrompt(state).playerId);
-      const choice = legal.find((entry) => entry.action.type === 'play_property')
-        ?? legal.find((entry) => entry.action.type === 'draw_cards')
-        ?? legal.find((entry) => entry.action.type === 'pass_turn')
-        ?? legal[0];
-      const result = applyAction(state, choice.action);
+    for (let step = 0; step < 3000 && !isGameOver(state).done; step += 1) {
+      const actorId = getNextPrompt(state).playerId;
+      const legal = getLegalActions(state, actorId);
+      const action = chooseHeuristicAction(state, actorId, legal)?.action ?? legal[0].action;
+      const result = applyAction(state, action);
       state = result.state;
-      actions.push(choice.action);
+      actions.push(action);
     }
     return { initial, actions, final: state };
   }
