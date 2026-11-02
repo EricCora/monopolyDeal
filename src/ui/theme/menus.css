@@ -26,8 +26,7 @@
   left: 0;
 }
 
-.menu-nav h2,
-.panel > h2 {
+.menu-nav h2 {
   font-size: 1.06rem;
   font-weight: 700;
   text-align: center;
@@ -263,10 +262,6 @@
 .action-sheet button.is-cancel {
   color: #fff;
   font-weight: 700;
-}
-
-.action-sheet button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
 }
 
 /* Setup */
@@ -579,6 +574,10 @@
   gap: 18px;
 }
 
+.settings-footnote {
+  padding: 0 14px;
+}
+
 .settings-subtitle {
   font-size: 0.8rem;
   color: var(--soft-65);
@@ -730,10 +729,6 @@
 }
 
 /* Saved games */
-.saved-games-screen > h2 {
-  font-size: 1.06rem;
-}
-
 .saved-games-subtitle,
 .saved-games-capacity,
 .saved-games-empty {
@@ -778,12 +773,6 @@
 .stats-panel {
   width: min(100%, 720px);
   gap: 14px;
-}
-
-.stats-panel h2 {
-  font-size: 1.06rem;
-  font-weight: 700;
-  text-align: center;
 }
 
 .stats-subtitle,

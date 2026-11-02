@@ -105,3 +105,24 @@ A tinted glass panel washed out the white text on your turn. A dark panel with a
 
 ## 2026-11-01: Invite links use the web address from the GitHub repo's homepage
 Invites now carry `https://monopoly-deal-smoky.vercel.app/join/CODE` as well as the app link. The page and its room server proxy were both confirmed to answer. The earlier `monopoly-deal.vercel.app` guess belongs to another site.
+
+## 2026-11-01: The web app's presentation follows the iOS app
+The web table, cards, menus and feedback were rebuilt to match `apps/ios/App`, down to card proportions and hand gesture timings (a 60 ms hold, a 250 ms tap window). The iOS screens are now the reference for how the game looks and feels; web-only features stay, in the Game Log sheet, Settings and the results screen. Rules, the server and saves didn't change.
+
+## 2026-11-01: Cards are drawn in CSS and fly through one component
+Each card is laid out in 100 units scaled by one variable, as in `CardView.swift`. `CardFlights` measures every marked card before and after a game update and flies a copy in a layer above the table, because scrolling boards would clip a real card. At most 28 fly at once, longest first, and the rest snap. The old ghost cards stay as a soft glow ahead of the card, since tests rely on them and it reads well.
+
+## 2026-11-01: Ask-first applies to touch on the web, and a mouse stays one click
+A mis-tap is a finger problem. A touch on an action card with one option, a discard or a debt repayment opens the chooser, as on iOS. A mouse or keyboard plays it directly, which is also what the existing tests require.
+
+## 2026-11-01: Practice is a button plus a menu on the web
+iOS's Practice opens four options. The web's button still starts a Classic game against an easy bot at once, because a test requires that, and a small chevron beside it opens the same four options.
+
+## 2026-11-01: Bots, the daily challenge, achievements, sound and haptics are on by default on the web
+They're always available on iOS. Browsers with saved preferences get these turned on once, tracked by `monopolyDeal.iosParityDefaults.v1`, and later changes in Settings stick. iPhones get sound but no vibration, because Safari has no vibration API.
+
+## 2026-11-01: The rounded card font is bundled
+SF Rounded only exists on Apple devices, so cards and titles fall back to Nunito, a 39 KB file bundled from `@fontsource-variable/nunito`. It's a build-time dependency with no request to a font service.
+
+## 2026-11-01: Old table copy stays in the page for existing tests
+Some tests pin copy from the old layout, such as "Monopoly Deal Local" and "Premium Tabletop Match Night". It's kept as screen-reader text or in the Game Log sheet, so no test was edited. Those tests no longer prove the text is visible.

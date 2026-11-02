@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Icon } from './icons';
 import {
   createColumnHelper,
   flexRender,
@@ -39,6 +40,8 @@ interface StatsDashboardProps {
   history: MatchRecordV1[];
   lifetime: LifetimeStatsV1;
   growthMetrics: GrowthMetricsV1;
+  /** Shown after the charts, before the tables. */
+  extras?: ReactNode;
   onBack: () => void;
 }
 
@@ -59,7 +62,7 @@ function shortDate(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-export function StatsDashboard({ history, lifetime, growthMetrics, onBack }: StatsDashboardProps) {
+export function StatsDashboard({ history, lifetime, growthMetrics, extras, onBack }: StatsDashboardProps) {
   const [lifetimeSorting, setLifetimeSorting] = useState<SortingState>([{ id: 'wins', desc: true }]);
   const [matchSorting, setMatchSorting] = useState<SortingState>([{ id: 'endedAt', desc: true }]);
   const [filters, setFilters] = useState<StatsFilters>({});
@@ -163,7 +166,10 @@ export function StatsDashboard({ history, lifetime, growthMetrics, onBack }: Sta
 
   return (
     <section className="panel card-enter stats-panel">
-      <h2>Stats & History</h2>
+      <header className="menu-nav">
+        <button type="button" className="icon-button" onClick={onBack} aria-label="Back"><Icon name="back" /></button>
+        <h2>Stats & History</h2>
+      </header>
       <p className="stats-subtitle">Sortable tables, trend plots, and lifetime performance metrics.</p>
 
       <section className="stats-filters" aria-label="Stats filters">
@@ -434,6 +440,8 @@ export function StatsDashboard({ history, lifetime, growthMetrics, onBack }: Sta
         </article>
       </section>
 
+      {extras}
+
       <section className="stats-table-card">
         <h3>Lifetime Players</h3>
         <div className="stats-table-wrap">
@@ -527,9 +535,6 @@ export function StatsDashboard({ history, lifetime, growthMetrics, onBack }: Sta
         </div>
       </section>
 
-      <div className="actions">
-        <button onClick={onBack}>Back</button>
-      </div>
     </section>
   );
 }

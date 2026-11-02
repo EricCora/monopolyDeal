@@ -18,6 +18,8 @@ interface Measured {
 type Snapshot = Map<string, Measured> | null;
 
 const FLIGHT_MS = 420;
+// A big reshuffle snaps its shortest moves, so a crowded board stays smooth.
+const MAX_FLIGHTS = 28;
 const EASING = 'cubic-bezier(0.2, 0.85, 0.25, 1)';
 
 function measure(element: HTMLElement): Measured | null {
@@ -54,6 +56,7 @@ export class CardFlights extends Component<CardFlightsProps> {
 
   componentDidUpdate(_previous: CardFlightsProps, _state: unknown, snapshot: Snapshot) {
     if (!snapshot || !this.root.current) return;
+    const flights: Array<{ element: HTMLElement; from: Pick<Measured, 'x' | 'y' | 'width'>; to: Measured; distance: number }> = [];
     this.root.current.querySelectorAll<HTMLElement>('[data-flip-id]').forEach((element) => {
       const now = measure(element);
       if (!now) return;
@@ -66,9 +69,14 @@ export class CardFlights extends Component<CardFlightsProps> {
         const rect = origin.getBoundingClientRect();
         from = { x: rect.left + rect.width / 2, y: rect.top + 24, width: now.width * 0.4 };
       }
-      if (Math.hypot(from.x - now.x, from.y - now.y) < 3 && from.width === now.width) return;
-      this.fly(element, from, now);
+      const distance = Math.hypot(from.x - now.x, from.y - now.y);
+      if (distance < 3 && from.width === now.width) return;
+      flights.push({ element, from, to: now, distance });
     });
+    flights
+      .sort((left, right) => right.distance - left.distance)
+      .slice(0, MAX_FLIGHTS)
+      .forEach(({ element, from, to }) => this.fly(element, from, to));
   }
 
   private fly(element: HTMLElement, from: Pick<Measured, 'x' | 'y' | 'width'>, to: Measured) {

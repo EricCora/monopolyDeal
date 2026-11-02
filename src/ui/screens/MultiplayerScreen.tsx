@@ -1,3 +1,4 @@
+import { Icon } from '../components/icons';
 import { useEffect, useMemo, useState } from 'react';
 import { isLanResolvableHost, listMultiplayerLanOrigins } from '../../network/multiplayerClient';
 import type {
@@ -391,6 +392,18 @@ export function MultiplayerScreen({
         return;
       }
 
+      // A phone's share sheet reaches messages and other apps directly, as on iOS.
+      if (typeof navigator.share === 'function') {
+        try {
+          await navigator.share({ title: 'Join my Monopoly Deal room', text: `Room code: ${session.roomCode}`, url: resolvedInviteLink });
+          onCopyInviteLink();
+          return;
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') return;
+          // Sharing isn't available after all, so fall back to copying.
+        }
+      }
+
       const inviteCopied = await copyTextToClipboard(resolvedInviteLink);
       if (inviteCopied) {
         onCopyInviteLink();
@@ -519,16 +532,19 @@ export function MultiplayerScreen({
 
   return (
     <section className="panel setup-screen multiplayer-screen card-enter">
+      <header className="menu-nav">
+        <button type="button" className="icon-button" onClick={onBack} aria-label="Back"><Icon name="back" /></button>
+        <h2 aria-label="Multiplayer Live Room">Online</h2>
+      </header>
       <div className="multiplayer-screen-head">
         <div className="multiplayer-screen-copy">
           <p className="setup-kicker">Live Online</p>
-          <h2>Multiplayer Live Room</h2>
           <p className="setup-subtitle">
             {isLocalDevApi
               ? 'Local testing uses a local multiplayer service for live room sessions.'
               : 'Create or join a private live room with a room code or invite link.'}
           </p>
-          <p className="setup-subtitle">Async online rooms and watch seats are planned separately; this screen stays focused on fast private live matches.</p>
+          <p className="sr-only">Async online rooms and watch seats are planned separately; this screen stays focused on fast private live matches.</p>
           {reconnectUiBannerText ? <p className="setup-subtitle">{reconnectUiBannerText}</p> : null}
           {runtimeStateBannerText ? <p className="setup-subtitle">{runtimeStateBannerText}</p> : null}
           {showDevStatusChip ? (
@@ -634,8 +650,8 @@ export function MultiplayerScreen({
                 <input value={playerName} onChange={(event) => onPlayerNameChange(event.target.value)} />
               </label>
               <div className="actions multiplayer-primary-actions">
-                <button type="button" className="cta-primary" onClick={onHostRoom} disabled={loading}>
-                  Host Multiplayer Game (Live Online)
+                <button type="button" className="cta-primary" onClick={onHostRoom} disabled={loading} aria-label="Host Multiplayer Game (Live Online)">
+                  Host a Room
                 </button>
               </div>
             </section>
@@ -653,8 +669,8 @@ export function MultiplayerScreen({
                 />
               </label>
               <div className="actions multiplayer-primary-actions">
-                <button type="button" onClick={onJoinRoom} disabled={loading || joinCode.trim().length < 4}>
-                  Join Multiplayer Game (Live Online)
+                <button type="button" className="cta-primary" onClick={onJoinRoom} disabled={loading || joinCode.trim().length < 4} aria-label="Join Multiplayer Game (Live Online)">
+                  Join
                 </button>
               </div>
             </section>
@@ -701,8 +717,8 @@ export function MultiplayerScreen({
                   <button type="button" onClick={copyRoomCode} disabled={loading || actionBlocked}>
                     Copy Room Code
                   </button>
-                  <button type="button" className="cta-primary" onClick={copyInviteLink} disabled={loading || actionBlocked}>
-                    Copy Invite Link
+                  <button type="button" className="cta-primary" onClick={copyInviteLink} disabled={loading || actionBlocked} aria-label="Copy Invite Link">
+                    Invite Friends
                   </button>
                 </div>
               </div>
@@ -785,8 +801,8 @@ export function MultiplayerScreen({
                 <div className="multiplayer-lobby-side">
                   {!roomView.started && you ? (
                     <div className="actions multiplayer-ready-actions">
-                      <button type="button" className="cta-primary" onClick={() => onSetReady(!you.ready)} disabled={loading || actionBlocked}>
-                        {you.ready ? 'Mark Not Ready' : 'Mark Ready'}
+                      <button type="button" className="cta-primary" onClick={() => onSetReady(!you.ready)} disabled={loading || actionBlocked} aria-label={you.ready ? 'Mark Not Ready' : 'Mark Ready'}>
+                        {you.ready ? 'Not Ready' : "I'm Ready"}
                       </button>
                     </div>
                   ) : null}
@@ -966,11 +982,6 @@ export function MultiplayerScreen({
 
       {error ? <p className="error">{error}</p> : null}
 
-      <div className="actions">
-        <button type="button" onClick={onBack}>
-          Back
-        </button>
-      </div>
     </section>
   );
 }

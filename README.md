@@ -15,24 +15,16 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 - Undo for reversible plays during the active turn
 - Match history and lifetime win stats
 - Dedicated Settings screen for display options and dev tooling
-- Arcade-flagship visual direction with animated table ambiance, richer card surfaces, and stronger motion feedback
+- The same look and feel as the iOS app: a full-screen felt table, vector cards, glass panels and three table styles
+- A hand you can tap to play from, drag up from, or hold and slide along to read each card, with a shake and a reason when a card can't be played
+- Cards fly between hand, board and discard for every player's moves, with a spotlight on opponents' action cards and a gold burst for each completed set
+- A floating panel for every interruption, a bottom-sheet chooser, and sheets for an opponent's board, the discard pile, the game log and an inspected card
+- Wide windows get a side column for opponents, and glass gives way to solid panels under Increase Contrast and Reduce Transparency
 - In-match Pause/Resume control with persistent paused state
 - Dev Mode tools to seed or reseed sample stats/history data
-- Responsive hand layout (fan auto-scales and falls back to rail when space is tight)
 - Property cards with rent ladder cells for faster set-to-rent readability
 - Post-game brag image share (clipboard with download fallback)
-- Home hero with animated card-back atmosphere and stronger CTA emphasis
-- Home hero quick-facts strip and cleaner decorative card tableau so the landing page reads faster without overlapping scene labels
-- Post-game celebration refresh with trophy treatment and richer confetti pulse
-- Guided turn rail with draw/play/end-step progress and clearer required-action cues
-- Prompt-reactive table focus strips and zone spotlights so draw/payment/selection/discard states reshape the active play surface instead of only changing copy
-- New command-strip table header with active-player/step/pressure/pending status, plus one-tap timeline and insight toggles
-- Priority turn banner and player-state chips that keep mandatory flows (payment/response/selection/discard) visible at a glance
-- Pass-and-play reveal overlay now previews the next player, opening step, and turn number before the hand is revealed
-- Discard pile now supports an in-panel browser (newest-to-oldest horizontal scroll) while keeping a compact top-stack preview
 - Explicit pending-action messaging (rent, debt, counter chains, and steals) shown directly in the active UI, not just the event log
-- Pending selection flows now highlight valid property targets directly on the table to reduce trial clicks
-- Wild property repositioning now supports direct table interaction: tap a movable wild card, then tap a highlighted destination lane (`Move Here`)
 - In-panel "money requested" banners so payment requests are obvious for the affected player
 - Risky action confirmation dialog for high-impact targeted/rent plays
 - Payment assistant auto-select for pending payment flows
@@ -170,14 +162,15 @@ The installed app opens in its own full-screen window. Local saves and settings 
 
 Use the `Settings` screen from Home (or the in-game top bar) to control:
 
-- Reduced celebration effects
+- Reduce Effects, High Contrast, sound and haptics (on by default; iPhones have no vibration in a browser)
+- Coach hints, Thorough Coach and Custom Classic Rules
 - Text scale (`normal` / `large`)
 - Table density (`cozy` / `compact`)
 - Risky action confirmations on/off
 - Rules hint visibility on/off
 - Dev Mode toggle and sample data reseed tools
 - Local data controls (clear match history + lifetime stats + growth telemetry)
-- Experimental features toggle section (AI/replay/challenges/achievements/custom rules)
+- Experimental features toggle section (bots/replay/challenges/achievements/event log)
   - Collapsed by default to reduce settings clutter
   - Includes multiplayer rollback toggles for live push updates and reactions
 - Table style selector (`Premium Tabletop` / `Classic Felt` / `Neon Arcade`) persisted in local preferences

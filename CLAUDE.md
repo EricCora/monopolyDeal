@@ -6,7 +6,7 @@ Web and iOS apps with Classic and No Mercy variants: local pass-and-play, practi
 
 ## Layout
 - `src/engine/`: pure, deterministic rules. Change rules here first, with a passing and a rejected case in the tests.
-- `src/App.tsx`, `src/ui/`: local game orchestration and screens.
+- `src/App.tsx`, `src/ui/`: local game orchestration and screens. `src/ui/table/` holds table pieces. The look and feel follow `apps/ios/App`.
 - `src/app/useMultiplayerRoom.ts`, `src/network/`: online client, reconnect and transport.
 - `apps/server/src/`: authoritative room server.
 - `apps/ios/`: the SwiftUI app. `DealKit/` holds the Swift engine, bots, stats and room client; `App/` holds the screens.

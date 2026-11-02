@@ -33,7 +33,7 @@ import {
   loadGrowthMetrics,
   loadLifetimeStats,
   loadMatchHistory,
-  loadUiPreferences,
+  loadUiPreferencesWithParityDefaults,
   renameSavedGameSlot,
   saveActiveGame,
   upsertSavedGameSlot,
@@ -163,6 +163,7 @@ function actionToCardId(action: Action): string | null {
   if (action.type === 'play_property') return action.cardId;
   if (action.type === 'play_action') return action.cardId;
   if (action.type === 'discard_card') return action.cardId;
+  if (action.type === 'repay_debt') return action.cardId;
   if (action.type === 'counter_response' && action.useJustSayNo && action.cardId) return action.cardId;
   return null;
 }
@@ -298,7 +299,7 @@ function App() {
   const [multiplayerChatOpen, setMultiplayerChatOpen] = useState(false);
   const [multiplayerChatUnread, setMultiplayerChatUnread] = useState(0);
   const [turnSnapshots, setTurnSnapshots] = useState<GameState[]>([]);
-  const [uiPreferences, setUiPreferences] = useState<UiPreferencesV1>(() => loadUiPreferences());
+  const [uiPreferences, setUiPreferences] = useState<UiPreferencesV1>(() => loadUiPreferencesWithParityDefaults());
   const [devSeedStatus, setDevSeedStatus] = useState<DevSeedStatus>(null);
   const postGameTitleRef = useRef<HTMLHeadingElement | null>(null);
   const finalizedMatchRef = useRef<string | null>(null);
@@ -535,9 +536,8 @@ function App() {
     if (!uiPreferences.experimental.aiCoach) return null;
     if (promptPlayerState?.controller === 'bot') return null;
     if (legalActions.length === 0) return null;
-    const mode = uiPreferences.experimental.aiOpponents ? 'hard' : 'easy';
-    return buildCoachHint(game, prompt.playerId, legalActions, mode);
-  }, [game, legalActions, prompt, promptPlayerState?.controller, uiPreferences.experimental.aiCoach, uiPreferences.experimental.aiOpponents]);
+    return buildCoachHint(game, prompt.playerId, legalActions, uiPreferences.hardCoach ? 'hard' : 'easy');
+  }, [game, legalActions, prompt, promptPlayerState?.controller, uiPreferences.experimental.aiCoach, uiPreferences.hardCoach]);
   const unlockedAchievements = useMemo(() => getUnlockedAchievementIds(achievementState), [achievementState]);
 
   useEffect(() => {
@@ -573,6 +573,12 @@ function App() {
 
     if (action.type === 'counter_response' && action.useJustSayNo) {
       return 'Play Just Say No';
+    }
+
+    if (action.type === 'discard_card') return 'Discard';
+
+    if (action.type === 'repay_debt') {
+      return action.creditorPlayerId ? `Repay ${playerNameById(action.creditorPlayerId)}` : 'Repay debt';
     }
 
     return 'Play card';
@@ -704,6 +710,15 @@ function App() {
         || multiplayerPrompt.kind === 'response'
         || multiplayerPrompt.kind === 'discard'),
   );
+  const multiplayerSummary = useMemo(() => {
+    if (!multiplayerGame || !isGameOver(multiplayerGame).done) return null;
+    try {
+      // Other players' hands are hidden from this seat, and nothing here shows them.
+      return buildPostGameSummary({ ...multiplayerGame, players: multiplayerGame.players.map((player) => ({ ...player, hand: [] })) }, lifetime);
+    } catch {
+      return null;
+    }
+  }, [lifetime, multiplayerGame]);
   const multiplayerMaxPlaysPerTurn = maxPlaysPerTurnFor(multiplayerGame);
   const multiplayerMaxHandAtEndTurn = maxHandAtEndTurnFor(multiplayerGame);
   const multiplayerMainPhaseExhausted = Boolean(
@@ -1883,20 +1898,20 @@ function App() {
     return true;
   };
 
-  const sharePostGameImage = async () => {
-    if (!postGameSummary || isSharing) return;
+  const sharePostGameImage = async (summary: PostGameSummary | null = postGameSummary) => {
+    if (!summary || isSharing) return;
     recordGrowthMetric('share_image_clicked');
     setIsSharing(true);
     setShareStatus(null);
     try {
-      const blob = await generatePostGameSharePng(postGameSummary);
+      const blob = await generatePostGameSharePng(summary);
       const copied = await copyImageToClipboard(blob).catch(() => false);
       if (copied) {
         recordGrowthMetric('share_image_success');
         setShareStatus({ tone: 'success', message: 'Brag image copied to your clipboard.' });
         return;
       }
-      downloadBlob(blob, postGameShareFilename(postGameSummary));
+      downloadBlob(blob, postGameShareFilename(summary));
       recordGrowthMetric('share_image_success');
       setShareStatus({ tone: 'success', message: 'Brag image downloaded. Share it in your group chat.' });
     } catch {
@@ -2120,6 +2135,10 @@ function App() {
               : null
           }
           shouldShowShield={false}
+          multiplayerSummary={multiplayerSummary}
+          isSharingResult={isSharing}
+          shareResultStatus={shareStatus?.message ?? null}
+          onShareResult={() => void sharePostGameImage(multiplayerSummary)}
           turnStatusText={multiplayerTurnStatusText}
           isMandatoryPrompt={multiplayerIsMandatoryPrompt}
           mainPhaseExhausted={multiplayerMainPhaseExhausted}
@@ -2256,6 +2275,8 @@ function App() {
           history={history}
           lifetime={lifetime}
           growthMetrics={growthMetrics}
+          unlockedAchievements={unlockedAchievements}
+          dailyChallenge={dailyChallenge}
           onBack={() => setScreen('home')}
         />
       ) : null}
@@ -2280,6 +2301,7 @@ function App() {
           devSeedStatus={devSeedStatus}
           onToggleReducedEffects={(enabled) => setUiPreferences((prev) => ({ ...prev, reducedEffects: enabled }))}
           onToggleHighContrast={(enabled) => setUiPreferences((prev) => ({ ...prev, highContrast: enabled }))}
+          onToggleHardCoach={(enabled) => setUiPreferences((prev) => ({ ...prev, hardCoach: enabled }))}
           onToggleSound={(enabled) => setUiPreferences((prev) => ({ ...prev, soundEnabled: enabled }))}
           onToggleHaptics={(enabled) => setUiPreferences((prev) => ({ ...prev, hapticsEnabled: enabled }))}
           onChangeTextScale={(value) => setUiPreferences((prev) => ({ ...prev, textScale: value }))}
@@ -2321,7 +2343,7 @@ function App() {
           formatDuration={formatDuration}
           onToggleReduceEffects={(enabled) => setUiPreferences((prev) => ({ ...prev, reducedEffects: enabled }))}
           onStartRematch={startRematch}
-          onShareImage={sharePostGameImage}
+          onShareImage={() => void sharePostGameImage()}
           onOpenSetup={() => {
             const names = game?.players.map((player) => player.name);
             const controllers = game?.players.map((player) => player.controller ?? 'human');

@@ -96,7 +96,9 @@ export function HandFan({
 
   const layout = useMemo(() => {
     const count = Math.max(cards.length, 1);
-    const cardWidth = containerWidth > 700 ? 170 : Math.round(Math.min(118, (containerWidth || 400) * 0.27));
+    // A short window, such as a phone on its side, still has to fit the board above the hand.
+    const heightLimit = (window.innerHeight * 0.3) / CARD_ASPECT_RATIO;
+    const cardWidth = Math.round(Math.min(containerWidth > 700 ? 170 : Math.min(118, (containerWidth || 400) * 0.27), heightLimit));
     const width = containerWidth || 400;
     // The outer cards tilt, so they need some margin to stay on screen.
     const available = width - cardWidth - (isFanned ? 12 : 34);
@@ -229,6 +231,7 @@ export function HandFan({
   };
 
   const midpoint = (cards.length - 1) / 2;
+  const firstNewIndex = cards.findIndex((cardId) => !initialCards.has(cardId));
   const maxTilt = isFanned ? 1.2 : (cards.length > 7 || layout.tight ? 2.2 : 3.2);
   const style: CSSProperties = {
     ['--hand-card-w' as string]: `${cardWidth}px`,
@@ -271,8 +274,10 @@ export function HandFan({
         const y = lift + (selected && !isFanned ? -24 : 0) + (isDragging ? drag.y : 0);
         const tilt = isDragging || isFocused || isHovered ? 0 : offset * maxTilt;
         const scale = isFocused ? FOCUS_SCALE : isHovered ? HOVER_SCALE : 1;
-        const arrives = opening || !initialCards.has(cardId);
-        const arrivalIndex = opening ? index : 0;
+        const isInitial = initialCards.has(cardId);
+        const arrives = opening || !isInitial;
+        // The opening hand comes one card at a time. Later draws come together, slightly apart.
+        const arrivalIndex = isInitial ? index : Math.max(0, index - firstNewIndex);
         return (
           <div
             key={cardId}

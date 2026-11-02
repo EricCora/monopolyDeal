@@ -17,7 +17,7 @@ import { playRestriction } from '../../engine/playRestriction';
 import { CardFlights } from '../components/CardFlights';
 import { cardSummary } from '../cards';
 import { CardView } from '../components/CardView';
-import { GoldBurst } from '../components/Effects';
+import { Confetti, GoldBurst } from '../components/Effects';
 import { HandFan } from '../components/HandFan';
 import { Icon } from '../components/icons';
 import { PlayChooser, type ActionVariantView } from '../components/PlayChooser';
@@ -31,6 +31,7 @@ import {
   type MultiplayerSessionPresetId,
 } from '../experience';
 import type { FeedbackTone } from '../../app/useFeedback';
+import type { PostGameSummary } from '../../stats';
 import { PromptPanel, type PanelChoice } from '../table/PromptPanel';
 import { bankTotal, boardLanes, type BoardLane } from '../table/boardModel';
 import {
@@ -141,6 +142,10 @@ interface GameTableScreenProps {
   showDebugActions: boolean;
   actionDetailText: (item: LegalAction) => string | null;
   onFeedback?: (tone: FeedbackTone) => void;
+  multiplayerSummary?: PostGameSummary | null;
+  isSharingResult?: boolean;
+  shareResultStatus?: string | null;
+  onShareResult?: () => void;
   onPauseToggle: () => void;
   onRefreshMultiplayer?: () => void;
   onExitMultiplayer?: () => void;
@@ -418,6 +423,10 @@ export function GameTableScreen({
   showDebugActions,
   actionDetailText,
   onFeedback,
+  multiplayerSummary = null,
+  isSharingResult = false,
+  shareResultStatus = null,
+  onShareResult,
   onPauseToggle,
   onRefreshMultiplayer,
   onExitMultiplayer,
@@ -519,6 +528,9 @@ export function GameTableScreen({
       });
     return map;
   }, [activityFeed, clockNow, isMultiplayer]);
+  const centerReaction = isMultiplayer
+    ? activityFeed.find((item) => item.kind === 'reaction' && clockNow - item.createdAt <= 1_600) ?? null
+    : null;
   const selectionPendingKind = prompt.kind === 'selection' ? game.pending?.kind ?? null : null;
   const multiplayerPreset = isMultiplayer && multiplayerPresetId
     ? getMultiplayerSessionPresetDefinition(multiplayerPresetId)
@@ -730,11 +742,15 @@ export function GameTableScreen({
     const actorId = lastLink?.playerId ?? game.players[game.currentPlayerIndex].id;
     if (actorId === viewerId) return undefined;
     const name = game.players.find((player) => player.id === actorId)?.name ?? actorId;
-    const id = Date.now();
-    setSpotlight({ id, cardId: discardTop, playerName: name });
-    const timer = window.setTimeout(() => setSpotlight((current) => (current?.id === id ? null : current)), 1500);
-    return () => window.clearTimeout(timer);
+    setSpotlight({ id: Date.now(), cardId: discardTop, playerName: name });
+    return undefined;
   }, [discardTop, game.currentPlayerIndex, game.pending, game.players, reducedMotion, variant, viewerId]);
+
+  useEffect(() => {
+    if (!spotlight) return undefined;
+    const timer = window.setTimeout(() => setSpotlight(null), 1500);
+    return () => window.clearTimeout(timer);
+  }, [spotlight]);
 
   // Completing a set gets a gold burst and a banner.
   const viewerCompleteSets = viewer ? getSetCompletionCount(viewer, variant) : 0;
@@ -744,11 +760,15 @@ export function GameTableScreen({
     previousSetsRef.current = { viewerId, count: viewerCompleteSets };
     if (previous.viewerId !== viewerId || viewerCompleteSets <= previous.count) return undefined;
     onFeedback?.('win');
-    const token = Date.now();
-    setSetBanner({ token, text: `Set complete! ${viewerCompleteSets} of ${winCompleteSets}` });
-    const timer = window.setTimeout(() => setSetBanner((current) => (current?.token === token ? null : current)), 1600);
-    return () => window.clearTimeout(timer);
+    setSetBanner({ token: Date.now(), text: `Set complete! ${viewerCompleteSets} of ${winCompleteSets}` });
+    return undefined;
   }, [onFeedback, viewerCompleteSets, viewerId, winCompleteSets]);
+
+  useEffect(() => {
+    if (!setBanner) return undefined;
+    const timer = window.setTimeout(() => setSetBanner(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [setBanner]);
 
   // A nudge when the game comes round to you.
   const previousYoursRef = useRef(isViewersPrompt);
@@ -1071,7 +1091,8 @@ export function GameTableScreen({
         <div className="room-bar" aria-label="Room">
           <span className={`connection-pill ${CONNECTION_TONE[multiplayerConnectionState ?? 'connected'] ?? 'is-good'}`}>
             <span className="connection-dot" aria-hidden="true" />
-            {connectionStatusLabel ? `Connection: ${connectionStatusLabel}` : 'Connected'}
+            <span className="sr-only">{`Connection: ${connectionStatusLabel ?? 'Connected'}`}</span>
+            <span aria-hidden="true">{(connectionStatusLabel ?? 'Connected').replace(/^Connected \(Live\)$/, 'Live')}</span>
           </span>
           {multiplayerRoomCode ? <span className="room-bar-code">Room {multiplayerRoomCode}</span> : null}
         </div>
@@ -1283,9 +1304,15 @@ export function GameTableScreen({
       ) : null}
 
       <div className="table-moments" aria-live="polite">
+        {centerReaction ? (
+          <div key={centerReaction.id} className="reaction-burst glass-panel" aria-hidden="true">
+            <span>{reactionEmoji(centerReaction.reaction)}</span>
+            <strong>{(centerReaction.reaction ?? '').toUpperCase() === 'GG' ? 'GG' : `${(centerReaction.reaction ?? '').slice(0, 1).toUpperCase()}${(centerReaction.reaction ?? '').slice(1)}`}</strong>
+          </div>
+        ) : null}
         {spotlight ? (
           <div key={spotlight.id} className="play-spotlight">
-            <span className="play-spotlight-label glass-panel">{spotlight.playerName} played</span>
+            <span className="play-spotlight-label glass-panel">{spotlight.playerName} played<span className="sr-only"> {getCardDisplayName(spotlight.cardId, variant)}</span></span>
             <CardView cardId={spotlight.cardId} width={210} gameVariant={variant} decorative />
           </div>
         ) : null}
@@ -1611,29 +1638,69 @@ export function GameTableScreen({
 
       {isMultiplayer && over.done ? (
         <div className="winner-overlay full-overlay" role="dialog" aria-modal="true" aria-label="Multiplayer winner">
+          {!reducedMotion ? <Confetti /> : null}
           <div className="overlay-card card-enter">
             <span className="overlay-icon is-gold"><Icon name="trophy" /></span>
-            <h3>Match Complete</h3>
-            <p>Winner: <strong>{winnerName ?? 'Unknown player'}</strong></p>
-            {multiplayerPreset ? <p>Selected preset: <strong>{multiplayerPreset.label}</strong>. {multiplayerPreset.readySummary}</p> : null}
-            <p className="overlay-note">Use Exit Match to leave and keep reconnect access, or Forget Room to disconnect permanently.</p>
-            {onSetMultiplayerPreset ? (
-              <div className="overlay-actions">
-                {MULTIPLAYER_SESSION_PRESET_OPTIONS.map((option) => (
-                  <button key={option.value} type="button" className="glass-button" onClick={() => onSetMultiplayerPreset(option.value)} disabled={checkpointLoading}>
-                    {getMultiplayerSessionPresetDefinition(option.value).label}
-                  </button>
-                ))}
-              </div>
+            <h3>{winnerName === viewer?.name ? 'You win!' : `${winnerName ?? 'Nobody'} wins!`}</h3>
+            <p className="sr-only">Match Complete</p>
+            <p className="winner-line">Winner: <strong>{winnerName ?? 'Unknown player'}</strong></p>
+            {multiplayerSummary ? (
+              <>
+                <p className="postgame-meta">{multiplayerSummary.turnCount} turns</p>
+                <section className="glass-panel postgame-recap" aria-label="Recap highlights">
+                  <div className="recap-row">
+                    <span className="recap-icon"><Icon name="flag" /></span>
+                    <div><p className="recap-title">Winning Move</p><p className="recap-text">{readable(multiplayerSummary.winningMove)}</p></div>
+                  </div>
+                  <div className="recap-row">
+                    <span className="recap-icon"><Icon name="trend" /></span>
+                    <div><p className="recap-title">Momentum Shift</p><p className="recap-text">{readable(multiplayerSummary.momentumShift)}</p></div>
+                  </div>
+                </section>
+                <section className="glass-panel postgame-standings" aria-label="Final standings">
+                  <ul className="postgame-standing-list">
+                    {multiplayerSummary.players.map((row) => (
+                      <li key={row.playerId} className={`postgame-standing ${row.isWinner ? 'is-winner' : ''}`}>
+                        <span className="postgame-rank">{row.rank}</span>
+                        <span className="postgame-who"><strong>{row.name}</strong></span>
+                        <span className="postgame-score"><strong>{row.completeSets} {row.completeSets === 1 ? 'set' : 'sets'}</strong><small>Bank ${row.bankValue}</small></span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              </>
             ) : null}
             {rematchStatusText ? <p>{rematchStatusText}</p> : null}
             {onRematchMultiplayer ? (
               <button type="button" className="primary-button" onClick={onRematchMultiplayer} disabled={checkpointLoading || !canRematchMultiplayer}>Play Rematch</button>
             ) : null}
+            {onSetMultiplayerPreset ? (
+              <div className="overlay-actions" aria-label="Next match preset">
+                {MULTIPLAYER_SESSION_PRESET_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`glass-button ${multiplayerPresetId === option.value ? 'is-chosen' : ''}`}
+                    onClick={() => onSetMultiplayerPreset(option.value)}
+                    disabled={checkpointLoading}
+                  >
+                    {getMultiplayerSessionPresetDefinition(option.value).label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {multiplayerPreset ? <p className="overlay-note">Selected preset: <strong>{multiplayerPreset.label}</strong>. {multiplayerPreset.readySummary}</p> : null}
             <div className="overlay-actions">
+              {onShareResult && multiplayerSummary ? (
+                <button type="button" className="secondary-button" onClick={onShareResult} disabled={isSharingResult} aria-label="Share Brag Image">
+                  <Icon name="share" /> {isSharingResult ? 'Preparing...' : 'Share'}
+                </button>
+              ) : null}
               <button type="button" className="secondary-button" onClick={onExitMultiplayer} disabled={checkpointLoading}>Exit Match</button>
               <button type="button" className="secondary-button is-danger-text" onClick={onForgetMultiplayer} disabled={checkpointLoading}>Forget Room</button>
             </div>
+            {shareResultStatus ? <p className="overlay-note">{shareResultStatus}</p> : null}
+            <p className="overlay-note">Use Exit Match to leave and keep reconnect access, or Forget Room to disconnect permanently.</p>
           </div>
         </div>
       ) : null}

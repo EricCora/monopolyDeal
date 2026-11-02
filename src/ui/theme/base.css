@@ -212,8 +212,10 @@ button {
   transition: transform 160ms var(--snappy), background-color 160ms ease, opacity 160ms ease;
 }
 
-button:hover:not(:disabled) {
-  background-color: rgba(255, 255, 255, 0.13);
+@media (hover: hover) {
+  button:hover:not(:disabled) {
+    filter: brightness(1.12);
+  }
 }
 
 button:active:not(:disabled) {
@@ -267,11 +269,6 @@ button.cta-primary {
   color: var(--ink);
   font-size: 1.06rem;
   font-weight: 700;
-}
-
-.primary-button:hover:not(:disabled),
-button.cta-primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, #f6d269, #dcb44d);
 }
 
 .primary-button.is-accent {

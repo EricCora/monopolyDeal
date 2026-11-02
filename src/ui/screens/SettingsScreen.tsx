@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { UiPreferencesV1 } from '../../persistence/storage';
+import { Icon } from '../components/icons';
 import { TABLE_STYLE_OPTIONS } from '../experience';
 
 type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
@@ -17,6 +18,7 @@ interface SettingsScreenProps {
   onToggleConfirmRiskyActions: (enabled: boolean) => void;
   onToggleRulesDrawerHints: (enabled: boolean) => void;
   onToggleExperimentalFlag: (flag: keyof UiPreferencesV1['experimental'], enabled: boolean) => void;
+  onToggleHardCoach?: (enabled: boolean) => void;
   onToggleDevMode: (enabled: boolean) => void;
   onReseedDevData: () => void;
   onClearStatsData: () => void;
@@ -43,6 +45,7 @@ export function SettingsScreen({
   onToggleConfirmRiskyActions,
   onToggleRulesDrawerHints,
   onToggleExperimentalFlag,
+  onToggleHardCoach,
   onToggleDevMode,
   onReseedDevData,
   onClearStatsData,
@@ -74,23 +77,22 @@ export function SettingsScreen({
 
   return (
     <section className="panel settings-screen card-enter">
-      <h2>Settings</h2>
-      <p className="settings-subtitle">Tune visuals, controls, and experimentation without leaving your current table flow.</p>
-
-      <div className="actions settings-top-actions">
-        <button type="button" onClick={onBack}>Back</button>
-      </div>
+      <header className="menu-nav">
+        <button type="button" className="icon-button" onClick={onBack} aria-label="Back"><Icon name="back" /></button>
+        <h2>Settings</h2>
+      </header>
 
       <section className="settings-section" aria-label="Display settings">
-        <h3>Display</h3>
-        <div className="settings-grid">
-          {renderToggle('Reduced Celebration Effects', uiPreferences.reducedEffects, onToggleReducedEffects)}
-          {renderToggle('High Contrast Mode', uiPreferences.highContrast, onToggleHighContrast)}
-          {renderToggle('Sound Effects', uiPreferences.soundEnabled, onToggleSound)}
-          {renderToggle('Haptic Feedback (supported devices)', uiPreferences.hapticsEnabled, onToggleHaptics)}
-        </div>
-
+        <h3>Table</h3>
         <div className="settings-select-grid">
+          <label className="settings-field">
+            <span>Table Style</span>
+            <select value={uiPreferences.tableStyle} onChange={(event) => onChangeTableStyle(event.target.value as UiPreferencesV1['tableStyle'])}>
+              {TABLE_STYLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
           <label className="settings-field">
             <span>Text Scale</span>
             <select value={uiPreferences.textScale} onChange={(event) => onChangeTextScale(event.target.value as UiPreferencesV1['textScale'])}>
@@ -105,23 +107,67 @@ export function SettingsScreen({
               <option value="compact">Compact</option>
             </select>
           </label>
-          <label className="settings-field">
-            <span>Table Style</span>
-            <select value={uiPreferences.tableStyle} onChange={(event) => onChangeTableStyle(event.target.value as UiPreferencesV1['tableStyle'])}>
-              {TABLE_STYLE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
+        </div>
+        <div className="settings-grid">
+          {renderToggle('Reduce Effects', uiPreferences.reducedEffects, onToggleReducedEffects)}
+          {renderToggle('High Contrast Mode', uiPreferences.highContrast, onToggleHighContrast)}
+        </div>
+      </section>
+
+      <section className="settings-section" aria-label="Feedback settings">
+        <h3>Feedback</h3>
+        <div className="settings-grid">
+          {renderToggle('Sound Effects', uiPreferences.soundEnabled, onToggleSound)}
+          {renderToggle('Haptic Feedback (supported devices)', uiPreferences.hapticsEnabled, onToggleHaptics)}
         </div>
       </section>
 
       <section className="settings-section" aria-label="Gameplay preferences">
-        <h3>Gameplay Preferences</h3>
+        <h3>Gameplay</h3>
         <div className="settings-grid">
           {renderToggle('Confirm Risky Actions', uiPreferences.confirmRiskyActions, onToggleConfirmRiskyActions)}
+          {renderToggle('Coach Hints', uiPreferences.experimental.aiCoach, (enabled) => onToggleExperimentalFlag('aiCoach', enabled))}
+          {uiPreferences.experimental.aiCoach && onToggleHardCoach
+            ? renderToggle('Thorough Coach', Boolean(uiPreferences.hardCoach), onToggleHardCoach)
+            : null}
+          {renderToggle('Custom Classic Rules', uiPreferences.experimental.customRules, (enabled) => onToggleExperimentalFlag('customRules', enabled))}
           {renderToggle('Show Rules Hints', uiPreferences.showRulesDrawerHints, onToggleRulesDrawerHints)}
         </div>
+        <p className="settings-subtitle settings-footnote">Custom rules add sets to win, hand limit and plays per turn to New Game. No Mercy always uses the official rules.</p>
+      </section>
+
+      <section className="settings-section settings-danger-zone" aria-label="Data controls">
+        <h3>Data</h3>
+        <div className="actions">
+          <button type="button" className="settings-danger-action" onClick={onClearStatsData}>
+            Clear Stats & History
+          </button>
+        </div>
+        <p className="settings-subtitle settings-footnote">This removes local match history and stats.</p>
+      </section>
+
+      <section className="settings-section" aria-label="Experimental features">
+        <button
+          type="button"
+          className="settings-accordion-button"
+          aria-expanded={experimentalOpen}
+          onClick={() => setExperimentalOpen((prev) => !prev)}
+        >
+          <span>Experimental Features</span>
+          <small>{experimentalEnabledCount} enabled</small>
+        </button>
+        {experimentalOpen ? (
+          <div className="settings-grid settings-grid-experimental">
+            {renderToggle('AI Opponents', uiPreferences.experimental.aiOpponents, (enabled) => onToggleExperimentalFlag('aiOpponents', enabled))}
+            {renderToggle('Replay Timeline', uiPreferences.experimental.replayTimeline, (enabled) => onToggleExperimentalFlag('replayTimeline', enabled))}
+            {renderToggle('Daily Challenges', uiPreferences.experimental.dailyChallenges, (enabled) => onToggleExperimentalFlag('dailyChallenges', enabled))}
+            {renderToggle('Achievements', uiPreferences.experimental.achievements, (enabled) => onToggleExperimentalFlag('achievements', enabled))}
+            {renderToggle('Enhanced Event Log', uiPreferences.experimental.enhancedEventLog, (enabled) => onToggleExperimentalFlag('enhancedEventLog', enabled))}
+            {renderToggle('Contextual Action Previews', uiPreferences.experimental.contextualActionPreviews, (enabled) => onToggleExperimentalFlag('contextualActionPreviews', enabled))}
+            {renderToggle('Multiplayer Live Push Updates', uiPreferences.experimental.multiplayerPushEnabled, (enabled) => onToggleExperimentalFlag('multiplayerPushEnabled', enabled))}
+            {renderToggle('Multiplayer Reactions', uiPreferences.experimental.multiplayerReactionsEnabled, (enabled) => onToggleExperimentalFlag('multiplayerReactionsEnabled', enabled))}
+          </div>
+        ) : null}
       </section>
 
       <section className="settings-section" aria-label="Development tools">
@@ -136,46 +182,6 @@ export function SettingsScreen({
         </div>
         {statusMessage ? <p className="settings-status">{statusMessage}</p> : null}
       </section>
-
-      <section className="settings-section" aria-label="Experimental features">
-        <button
-          type="button"
-          className="settings-accordion-button"
-          aria-expanded={experimentalOpen}
-          onClick={() => setExperimentalOpen((prev) => !prev)}
-        >
-          <span>Experimental Features</span>
-          <small>{experimentalEnabledCount} enabled</small>
-        </button>
-        <p className="settings-subtitle">
-          Advanced features under active development. Leave off for the most stable experience.
-        </p>
-        {experimentalOpen ? (
-          <div className="settings-grid settings-grid-experimental">
-            {renderToggle('AI Opponents', uiPreferences.experimental.aiOpponents, (enabled) => onToggleExperimentalFlag('aiOpponents', enabled))}
-            {renderToggle('AI Coach Hints', uiPreferences.experimental.aiCoach, (enabled) => onToggleExperimentalFlag('aiCoach', enabled))}
-            {renderToggle('Replay Timeline', uiPreferences.experimental.replayTimeline, (enabled) => onToggleExperimentalFlag('replayTimeline', enabled))}
-            {renderToggle('Daily Challenges', uiPreferences.experimental.dailyChallenges, (enabled) => onToggleExperimentalFlag('dailyChallenges', enabled))}
-            {renderToggle('Achievements', uiPreferences.experimental.achievements, (enabled) => onToggleExperimentalFlag('achievements', enabled))}
-            {renderToggle('Custom Rules', uiPreferences.experimental.customRules, (enabled) => onToggleExperimentalFlag('customRules', enabled))}
-            {renderToggle('Enhanced Event Log', uiPreferences.experimental.enhancedEventLog, (enabled) => onToggleExperimentalFlag('enhancedEventLog', enabled))}
-            {renderToggle('Contextual Action Previews', uiPreferences.experimental.contextualActionPreviews, (enabled) => onToggleExperimentalFlag('contextualActionPreviews', enabled))}
-            {renderToggle('Multiplayer Live Push Updates', uiPreferences.experimental.multiplayerPushEnabled, (enabled) => onToggleExperimentalFlag('multiplayerPushEnabled', enabled))}
-            {renderToggle('Multiplayer Reactions', uiPreferences.experimental.multiplayerReactionsEnabled, (enabled) => onToggleExperimentalFlag('multiplayerReactionsEnabled', enabled))}
-          </div>
-        ) : null}
-      </section>
-
-      <section className="settings-section settings-danger-zone" aria-label="Data controls">
-        <h3>Data Controls</h3>
-        <p className="settings-subtitle">Use carefully. This removes local match history and stats telemetry.</p>
-        <div className="actions">
-          <button type="button" className="settings-danger-action" onClick={onClearStatsData}>
-            Clear Stats & History
-          </button>
-        </div>
-      </section>
-
     </section>
   );
 }

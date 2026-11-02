@@ -9,6 +9,7 @@ export interface PostGameShareModel {
   highlightCards: string;
   endedAtLabel: string;
   appUrl: string;
+  players: Array<{ rank: number; name: string; completeSets: number; bankValue: number }>;
 }
 
 function xmlEscape(value: string): string {
@@ -62,54 +63,50 @@ export function buildPostGameShareModel(summary: PostGameSummary): PostGameShare
     highlightCards: summary.highlightCards.length > 0 ? summary.highlightCards.join(' • ') : 'No standout cards recorded',
     endedAtLabel: new Date(summary.endedAt).toLocaleString(),
     appUrl,
+    players: summary.players.map(({ rank, name, completeSets, bankValue }) => ({ rank, name, completeSets, bankValue })),
   };
 }
 
+// The brag image, matching `ShareCardView` in the iOS app: 380 x 420 points, drawn at three times that.
+const SHARE_WIDTH = 1140;
+const SHARE_HEIGHT = 1260;
+const ROUNDED_FONT = "ui-rounded, 'SF Pro Rounded', 'Nunito Variable', -apple-system, 'Segoe UI', sans-serif";
+const BODY_FONT = "-apple-system, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif";
+
 function buildSvg(model: PostGameShareModel): string {
-  const winningMoveLines = wrapLines(model.winningMove, 54, 2).map(xmlEscape);
-  const momentumLines = wrapLines(model.momentumShift, 54, 2).map(xmlEscape);
-  const highlightCardsLine = xmlEscape(model.highlightCards);
+  const headline = model.winnerName === 'You' ? 'I won Monopoly Deal' : `${model.winnerName} won Monopoly Deal`;
+  const headlineLines = wrapLines(headline, 22, 2).map(xmlEscape);
+  const moveLines = wrapLines(model.winningMove.replaceAll('_', ' '), 52, 2).map(xmlEscape);
+  const plural = (count: number) => `${count} ${count === 1 ? 'set' : 'sets'}`;
+  const standingsTop = 440 + headlineLines.length * 90;
+  const rows = model.players.slice(0, 5).map((player, index) => {
+    const y = standingsTop + 150 + index * 66;
+    return `
+    <text x="110" y="${y}" fill="#fff" font-size="45" font-family="${BODY_FONT}" font-weight="700">${player.rank}. ${xmlEscape(player.name)}</text>
+    <text x="1030" y="${y}" fill="#fff" font-size="45" font-family="${BODY_FONT}" text-anchor="end">${plural(player.completeSets)} · $${player.bankValue}</text>`;
+  }).join('');
+  const moveTop = standingsTop + 180 + Math.min(model.players.length, 5) * 66;
   return `
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<svg xmlns="http://www.w3.org/2000/svg" width="${SHARE_WIDTH}" height="${SHARE_HEIGHT}" viewBox="0 0 ${SHARE_WIDTH} ${SHARE_HEIGHT}">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#fff7e4"/>
-      <stop offset="100%" stop-color="#e7efe9"/>
+    <linearGradient id="base" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1726"/>
+      <stop offset="100%" stop-color="#09121f"/>
     </linearGradient>
-    <radialGradient id="burstA" cx="0.2" cy="0.15" r="0.5">
-      <stop offset="0%" stop-color="#f4c067" stop-opacity="0.35"/>
-      <stop offset="100%" stop-color="#f4c067" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="burstB" cx="0.9" cy="0.05" r="0.45">
-      <stop offset="0%" stop-color="#67b8aa" stop-opacity="0.3"/>
-      <stop offset="100%" stop-color="#67b8aa" stop-opacity="0"/>
+    <radialGradient id="center" cx="0.5" cy="0.45" r="0.6">
+      <stop offset="0%" stop-color="#17495a"/>
+      <stop offset="100%" stop-color="#17495a" stop-opacity="0"/>
     </radialGradient>
   </defs>
-  <rect width="1200" height="630" fill="url(#bg)" />
-  <rect width="1200" height="630" fill="url(#burstA)" />
-  <rect width="1200" height="630" fill="url(#burstB)" />
-  <rect x="50" y="50" width="1100" height="530" rx="26" fill="#fffdfa" stroke="#d9ccb5" stroke-width="3" />
-
-  <text x="90" y="116" fill="#51606b" font-size="30" font-family="Avenir Next, Segoe UI, sans-serif" font-weight="700">Monopoly Deal Local</text>
-  <text x="90" y="190" fill="#1f2f3c" font-size="68" font-family="Trebuchet MS, Gill Sans, sans-serif" font-weight="800">${xmlEscape(model.winnerName)} Wins!</text>
-
-  <text x="90" y="256" fill="#4a5a66" font-size="34" font-family="Avenir Next, Segoe UI, sans-serif">Turns: ${model.turns}</text>
-  <text x="330" y="256" fill="#4a5a66" font-size="34" font-family="Avenir Next, Segoe UI, sans-serif">Duration: ${xmlEscape(model.durationLabel)}</text>
-  <text x="650" y="256" fill="#4a5a66" font-size="34" font-family="Avenir Next, Segoe UI, sans-serif">Finished: ${xmlEscape(model.endedAtLabel)}</text>
-
-  <rect x="90" y="292" width="1020" height="212" rx="18" fill="#f8f2e4" stroke="#d7c8a9" stroke-dasharray="8 8" />
-  <text x="120" y="338" fill="#2d3d49" font-size="30" font-family="Trebuchet MS, Gill Sans, sans-serif" font-weight="700">Winning move</text>
-  ${winningMoveLines
-    .map((line, index) => `<text x="120" y="${374 + index * 34}" fill="#465764" font-size="30" font-family="Avenir Next, Segoe UI, sans-serif">${line}</text>`)
-    .join('\n')}
-  <text x="120" y="440" fill="#2d3d49" font-size="30" font-family="Trebuchet MS, Gill Sans, sans-serif" font-weight="700">Momentum shift</text>
-  ${momentumLines
-    .map((line, index) => `<text x="120" y="${476 + index * 30}" fill="#465764" font-size="27" font-family="Avenir Next, Segoe UI, sans-serif">${line}</text>`)
-    .join('\n')}
-  <text x="120" y="534" fill="#2d3d49" font-size="24" font-family="Avenir Next, Segoe UI, sans-serif">Highlight cards: ${highlightCardsLine}</text>
-
-  <text x="90" y="580" fill="#1d6b4f" font-size="31" font-family="Avenir Next, Segoe UI, sans-serif" font-weight="700">${xmlEscape(model.appUrl)}</text>
-  <text x="90" y="610" fill="#51606b" font-size="24" font-family="Avenir Next, Segoe UI, sans-serif">Pass-and-play for 2-5 players</text>
+  <rect width="${SHARE_WIDTH}" height="${SHARE_HEIGHT}" fill="url(#base)"/>
+  <rect width="${SHARE_WIDTH}" height="${SHARE_HEIGHT}" fill="url(#center)"/>
+  <g transform="translate(450 120) scale(10)" fill="#f2c54f">
+    <path d="M7 3h10v2h4v3a4 4 0 0 1-4 4h-.4a5 5 0 0 1-3.600 2.900V18h3v3H8v-3h3v-3.100A5 5 0 0 1 7.400 12H7a4 4 0 0 1-4-4V5h4zm0 4H5v1a2 2 0 0 0 2 2zm10 0v3a2 2 0 0 0 2-2V7z"/>
+  </g>
+  ${headlineLines.map((line, index) => `<text x="570" y="${450 + index * 90}" fill="#fff" font-size="78" font-weight="900" text-anchor="middle" font-family="${ROUNDED_FONT}">${line}</text>`).join('')}
+  <text x="570" y="${standingsTop + 50}" fill="#fff" opacity="0.8" font-size="45" font-weight="600" text-anchor="middle" font-family="${BODY_FONT}">${model.turns} turns · ${xmlEscape(model.durationLabel)}</text>
+  ${rows}
+  ${moveLines.map((line, index) => `<text x="570" y="${moveTop + index * 50}" fill="#fff" opacity="0.8" font-size="39" font-weight="500" text-anchor="middle" font-family="${BODY_FONT}">${line}</text>`).join('')}
 </svg>`.trim();
 }
 
@@ -131,8 +128,8 @@ export async function generatePostGameSharePng(summary: PostGameSummary): Promis
   try {
     const image = await loadImage(svgUrl);
     const canvas = document.createElement('canvas');
-    canvas.width = 1200;
-    canvas.height = 630;
+    canvas.width = SHARE_WIDTH;
+    canvas.height = SHARE_HEIGHT;
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas rendering is unavailable.');
     context.drawImage(image, 0, 0);

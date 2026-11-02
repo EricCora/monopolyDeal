@@ -72,10 +72,6 @@
   text-align: left;
 }
 
-.table-menu button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
-}
-
 .table-menu button.is-danger {
   color: #ff8b8e;
 }
@@ -108,6 +104,12 @@
   font-weight: 500;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+@media (max-width: 400px) {
+  .table-title span {
+    font-size: 0.66rem;
+  }
 }
 
 .plays-pips {
@@ -321,10 +323,6 @@
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   box-shadow: none;
-}
-
-.opponent-open:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.04);
 }
 
 .opponent-open:active:not(:disabled) {
@@ -640,7 +638,8 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 46px;
+  /* Tall enough for two lines, so a longer message doesn't shove the board and set off card flights. */
+  min-height: 56px;
   padding: 5px 12px;
   border-radius: 14px;
   background: rgba(0, 0, 0, 0.5);
@@ -1010,10 +1009,6 @@
   transition: translate 200ms var(--snappy);
 }
 
-.panel-card-button:hover:not(:disabled) {
-  background: transparent;
-}
-
 .panel-card-button.is-selected {
   translate: 0 -4px;
   box-shadow: 0 0 0 3px var(--gold);
@@ -1133,7 +1128,7 @@
 .table-moments {
   position: absolute;
   inset: 0 0 30% 0;
-  z-index: 50;
+  z-index: 65;
   display: grid;
   place-items: center;
   pointer-events: none;
@@ -1156,6 +1151,7 @@
 }
 
 .play-spotlight-label {
+  background: rgba(0, 0, 0, 0.5);
   padding: 7px 14px;
   border-radius: 99px;
   font-size: 0.88rem;
@@ -1165,6 +1161,25 @@
 @keyframes spotlight-pop {
   from { opacity: 0; scale: 0.6; }
   to { opacity: 1; scale: 1; }
+}
+
+.reaction-burst {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 26px;
+  border-radius: 30px;
+  animation: pop-in 240ms var(--snappy);
+}
+
+.reaction-burst span {
+  font-size: 3.4rem;
+  line-height: 1;
+}
+
+.reaction-burst strong {
+  font-size: 1.4rem;
+  font-weight: 900;
 }
 
 .set-banner-wrap {
@@ -1796,6 +1811,37 @@
   backdrop-filter: blur(24px);
 }
 
+.winner-overlay {
+  align-items: start;
+  overflow-y: auto;
+  padding-top: max(var(--safe-top), 30px);
+}
+
+.winner-overlay .overlay-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 560px);
+}
+
+.winner-overlay .postgame-recap,
+.winner-overlay .postgame-standings {
+  width: 100%;
+  text-align: left;
+}
+
+.winner-line {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.glass-button.is-chosen {
+  background: var(--gold);
+  color: var(--ink);
+}
+
 .overlay-card {
   display: grid;
   justify-items: center;
@@ -1848,6 +1894,12 @@
   width: 100%;
 }
 
+/* A keyboard player sees which card is focused. */
+.hand-fan-card:has(.card-view:focus-visible) {
+  translate: 0 -14px;
+  z-index: 150 !important;
+}
+
 /* Wide screens get a side column and a bigger board. */
 @media (min-width: 701px) {
   .game-table-screen {
@@ -1886,5 +1938,39 @@
 
   .mini-board {
     max-height: 160px;
+  }
+}
+
+/* A phone on its side is wide but very short. */
+@media (max-height: 560px) {
+  .game-table-screen {
+    --board-card-w: 56px;
+    gap: 4px;
+  }
+
+  .table-main {
+    gap: 4px;
+  }
+
+  .table-status {
+    min-height: 40px;
+  }
+
+  .player-board {
+    padding: 6px;
+  }
+
+  .action-bar,
+  .action-bar .primary-button,
+  .action-bar .secondary-button {
+    min-height: 38px;
+  }
+
+  .opponents-area .mini-board {
+    display: none;
+  }
+
+  .opponents-area .opponent-summary .set-progress-bar {
+    display: flex;
   }
 }

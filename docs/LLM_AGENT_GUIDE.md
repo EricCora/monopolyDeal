@@ -257,7 +257,7 @@ When card rendering, responsive layout, or modal/prompt orchestration changes:
 - Multiplayer stale-session recovery UI is split between `useMultiplayerRoom` and `MultiplayerScreen`; avoid reintroducing `session && !roomView` infinite loading loops.
 - In-table social signaling now uses chat-dock reaction tray + transient reaction bursts; avoid restoring tiny fixed reaction rows.
 - Steal visibility and draw animation are driven by `GameEvent.details`; preserve additive compatibility for older histories with no `details`.
-- Card rendering/fit is split between `src/ui/components/CardView.tsx`, `src/ui/components/HandFan.tsx`, and `src/ui/theme/components/cards.css`.
+- Card rendering/fit is split between `src/ui/components/CardView.tsx`, `src/ui/components/HandFan.tsx`, and `src/ui/theme/components/cards.css`. Card movement is `src/ui/components/CardFlights.tsx`, table pieces are in `src/ui/table/`, and `apps/ios/App` is the visual reference.
 - Card visual metadata now includes optional action SVG icon paths; keep text badge fallback visible for resilience.
 - Draw-phase prompt intentionally uses rail hand layout for readability; non-draw prompts still use auto-fit.
 - Rent/double-rent/counter interactions and manual `pay_request` validation are edge-case heavy.

@@ -434,7 +434,8 @@ export function PromptPanel(props: PromptPanelProps) {
         </>
       );
     }
-    const others = contextualActions.filter((item) => item.action.type !== 'draw_cards' && item.action.type !== 'pass_turn');
+    // Wild moves start from a tap on the Wild itself, so they don't need a panel.
+    const others = contextualActions.filter((item) => !['draw_cards', 'pass_turn', 'move_wild'].includes(item.action.type));
     return others.length > 0 ? <ChoiceList items={others} props={props} /> : null;
   })();
 

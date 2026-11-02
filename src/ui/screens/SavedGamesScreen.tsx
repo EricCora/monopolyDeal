@@ -1,4 +1,5 @@
 import type { SavedGameSlotV1 } from '../../persistence/storage';
+import { Icon } from '../components/icons';
 
 interface SavedGamesScreenProps {
   slots: SavedGameSlotV1[];
@@ -36,15 +37,15 @@ export function SavedGamesScreen({
 
   return (
     <section className="panel saved-games-screen card-enter">
-      <h2>Saved Games</h2>
+      <header className="menu-nav">
+        <button type="button" className="icon-button" onClick={onBack} aria-label="Back"><Icon name="back" /></button>
+        <h2>Saved Games</h2>
+      </header>
       <p className="saved-games-subtitle">Manage up to 5 manual save slots. Quick Resume still uses active autosave.</p>
 
       <div className="saved-games-toolbar actions">
-        <button type="button" onClick={onSaveCurrentToNewSlot} disabled={!canSaveCurrent || slotsRemaining === 0}>
+        <button type="button" className="cta-primary" onClick={onSaveCurrentToNewSlot} disabled={!canSaveCurrent || slotsRemaining === 0}>
           Save Current Game
-        </button>
-        <button type="button" onClick={onBack}>
-          Back
         </button>
       </div>
 

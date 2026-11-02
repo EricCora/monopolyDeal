@@ -66,6 +66,8 @@ export interface UiPreferencesV1 {
   reducedEffects: boolean;
   tableDensity: 'cozy' | 'compact';
   tableStyle: TableStylePreset;
+  /** The coach simulates ahead instead of using the quick heuristic. Local games only. */
+  hardCoach?: boolean;
   textScale: 'normal' | 'large';
   confirmRiskyActions: boolean;
   showRulesDrawerHints: boolean;
@@ -520,6 +522,7 @@ export function loadUiPreferences(): UiPreferencesV1 {
       reducedEffects: Boolean(parsed.reducedEffects),
       tableDensity: density,
       tableStyle,
+      ...(parsed.hardCoach ? { hardCoach: true } : {}),
       textScale,
       confirmRiskyActions: parsed.confirmRiskyActions !== false,
       showRulesDrawerHints: parsed.showRulesDrawerHints !== false,
@@ -546,6 +549,26 @@ export function loadUiPreferences(): UiPreferencesV1 {
   } catch {
     return defaultUiPreferences();
   }
+}
+
+const IOS_PARITY_DEFAULTS_KEY = 'monopolyDeal.iosParityDefaults.v1';
+
+/**
+ * Bots, the daily challenge, achievements, sound and haptics are always on in the iOS app, and
+ * are now on by default here. Browsers that saved the old defaults get the new ones once, and
+ * any later change a player makes in Settings sticks.
+ */
+export function loadUiPreferencesWithParityDefaults(): UiPreferencesV1 {
+  const preferences = loadUiPreferences();
+  if (localStorage.getItem(IOS_PARITY_DEFAULTS_KEY)) return preferences;
+  localStorage.setItem(IOS_PARITY_DEFAULTS_KEY, '1');
+  if (!localStorage.getItem(UI_PREFERENCES_KEY)) return preferences;
+  return {
+    ...preferences,
+    soundEnabled: true,
+    hapticsEnabled: true,
+    experimental: { ...preferences.experimental, aiOpponents: true, dailyChallenges: true, achievements: true },
+  };
 }
 
 export function saveUiPreferences(preferences: UiPreferencesV1): void {
