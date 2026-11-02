@@ -45,11 +45,10 @@ import { redactSensitiveToken } from './logging.ts';
 import { createMemoryTurnStore, handleTurnRoomRequest } from './turnRooms.ts';
 import { collectBody, RequestBodyError, SlidingWindowRateLimiter } from './httpSafeguards.ts';
 import type { PlayerId } from '../../../src/engine/index.ts';
+import type { MultiplayerSessionPresetId } from '../../../src/ui/experience.ts';
 import type {
-  ActionRejectedReason,
   ActionRejectedResponse,
   MultiplayerSocketAck,
-  MultiplayerSessionPresetId,
   MultiplayerSocketAuthPayload,
   MultiplayerSocketCommandName,
   MultiplayerSocketCommandPayloadMap,
@@ -68,6 +67,8 @@ import {
   isValidMultiplayerAction,
   optionalTrimmedString,
   resolveMatchSeed,
+  isActionRejectionCandidate,
+  mapActionErrorToRejectedReason,
 } from './validation.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -522,7 +523,7 @@ function registerSocketCommand<Name extends MultiplayerSocketCommandName>(
     payload: SocketCommandPayload<Name>,
   ) => Promise<SocketCommandResponse<Name>> | SocketCommandResponse<Name>,
 ): void {
-  socket.on(commandName, async (payload: SocketCommandPayload<Name>, ack?: SocketAckCallback<Name>) => {
+  socket.on(commandName as string, async (payload: SocketCommandPayload<Name>, ack?: SocketAckCallback<Name>) => {
     const commandStartedAt = Date.now();
     const respond = typeof ack === 'function' ? ack : null;
     if (!respond) return;
