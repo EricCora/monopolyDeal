@@ -31,3 +31,8 @@ Scope: contracts in `packages/shared/multiplayer.ts` and client mirror types in 
 ## Room options, spectators, series and turn-by-turn rooms (2026-11-01)
 
 Additive only. `MultiplayerRoomView` gains the optional `role`, `options`, `turnClock`, `series`, `botSeatIds`, `spectatorCount`, `turnBased` and `replayAvailable`. New routes are `options`, `watch` and `replay`, plus the socket command `mp:cmd:options`. A room behaves as before unless its options are set. Six-letter room codes are turn-by-turn rooms, served under `/api/turn` on the website, with `push` and `turn-config` added there. Spectator ids start with `s`; spectators and turn rooms use plain requests only.
+
+## Bot seats and the room between matches (2026-11-02)
+
+Additive. Player summaries gain optional `isBot` and `botDifficulty`, and room options gain `botDifficulty`. A new `bots` route takes `op` (`add`, `remove` or `difficulty`), `difficulty` and `targetSeatId`. The target can't be called `seatId`, because the server reads that as the caller's identity. `join`, `variant` and options now also work while a room is `finished`. Game state's players carry `controller: 'bot'` for bot seats, which older clients already understand.
+

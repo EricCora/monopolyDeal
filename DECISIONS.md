@@ -78,6 +78,18 @@ Eric reviewed this while playing on iOS and kept the rule. The app now says why,
 ## 2026-11-02: A two-color Wild and an any-color Wild make a complete set
 Eric hit this in a playtest and said it's valid. Classic now matches No Mercy: only a set made entirely of any-color Wilds falls short.
 
+## 2026-11-02: Auto-Select pays from the bank first, and bots hold strong cards
+Auto-Select used to prefer an exact single card, so it could hand over a property while the bank could cover the debt. It now spends the bank first, plain money before banked action cards, then cards outside complete sets, then the cheapest complete set. A banked Deal Breaker is only $5, so paying with it beats giving up properties. It still gets used when it's the only bank card. The real fix is upstream: bots and timed-out turns no longer bank a Deal Breaker, Just Say No, Sly Deal, Forced Deal or Super Sly Deal unless the hand is over the limit.
+
+## 2026-11-02: Rent choices run from most to least, and show the amount
+Eric's message said a rent card "shouldn't" show this order. The chooser wasn't sorted at the time, so that was read as a typo for "should". **Assumption, not confirmed.** To undo it, remove `orderRentChoices` (web) and `orderingRent` (iOS).
+
+## 2026-11-02: Bots are real seats in a room
+A bot added by the host is a participant that's always connected and ready, with no client holding its token. Difficulty is stored per seat, and also applies to a bot covering a dropped player, with a room default until the host picks. Hard bots on the server have a 900 ms search limit, because the room server has one thread. In turn-by-turn rooms bots move inside the request that reached them, so a whole bot turn costs one Blob save.
+
+## 2026-11-02: A finished room works as the lobby between matches
+Nobody needs a new server state: a `finished` room accepts chat, ready, settings, bots and new players, and the host's Start is a rematch. Results stay up per client until that player taps Back to Lobby, so one player leaving doesn't interrupt another's results. Someone who dropped more than 30 seconds ago, or left for good, no longer blocks the next game; they lose their seat.
+
 ## 2026-11-02: Partial piles of one color rejoin by themselves
 Paying with a card can leave 2/3 and 1/3 piles, and standard cards can't be moved by hand, so a player could hold a winning table and never win. When nothing is mid-resolution, the engine moves cards from later partial piles to the first, carrying Shacks along. It skips a move that would put two Shacks on a complete set.
 

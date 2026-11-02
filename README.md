@@ -71,11 +71,13 @@ This project focuses on pass-and-play and private-room multiplayer gameplay with
 
 ### New in this version
 
-- **Turn clock in every mode.** It counts up normally, and Speed gives 45 seconds a turn before a bot moves for you.
+- **Turn clock in every mode.** It counts up normally, and Speed gives 30, 45 or 60 seconds a turn before a bot moves for you.
 - **Best of three**, locally and in rooms.
 - **Replays.** Watch a finished game back on the table. The last five are kept under Stats.
 - **Unlockable table styles and card backs**, earned from your stats and chosen in Settings.
 - **Bots fill dropped seats** so a live room keeps playing.
+- **Bots beside people.** A room's host can add bots and pick each one's difficulty.
+- **A lobby between matches.** After a game, everyone stays in the room with chat, the roster and settings.
 - **Spectators.** Watch a live room with every hand hidden.
 - **Turn-by-turn rooms** that last 60 days, with web push where the browser supports it. These need the setup under Deploying Online Multiplayer.
 - **Reactions fly across the table**, and a Just Say No stamps it.
