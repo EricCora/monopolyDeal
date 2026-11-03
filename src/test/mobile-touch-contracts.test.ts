@@ -30,7 +30,7 @@ describe('mobile/touch layout contracts', () => {
 
   it('keeps the whole table on screen, with the player\'s board and hand in reach on narrow layouts', () => {
     expect(tableCss).toMatch(/\.game-table-screen\s*{[\s\S]*position:\s*fixed;[\s\S]*inset:\s*0;[\s\S]*overflow:\s*hidden;/);
-    expect(tableCss).toMatch(/grid-template-areas:\s*'opponents'\s*'status'\s*'board'\s*'actions'\s*'hand';/);
+    expect(tableCss).toMatch(/grid-template-areas:\s*'status'\s*'table'\s*'actions'\s*'hand';/);
   });
 
   it('leaves touches on the hand to its gestures, so holding and sliding never scrolls the page', () => {
