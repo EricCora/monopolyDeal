@@ -408,7 +408,7 @@
   max-width: 160px;
   padding: 5px 12px 5px 6px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.72);
+  background: #120c0e;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 4px 12px rgba(0, 0, 0, 0.35);
   transform: translate(-50%, -50%);
   white-space: nowrap;
@@ -419,7 +419,7 @@
 }
 
 .poker-table .seat-pill.is-prompted {
-  background: color-mix(in srgb, var(--gold) 22%, rgba(0, 0, 0, 0.72));
+  background: #3a2e12;
 }
 
 .poker-table .seat-pill .opponent-open {
@@ -444,7 +444,7 @@
   gap: 6px;
   font-size: 0.68rem;
   font-weight: 600;
-  color: var(--soft-75);
+  color: #fff;
 }
 
 .seat-piles {
@@ -520,7 +520,7 @@
   height: 38px;
   padding: 0 16px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.72);
+  background: #120c0e;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
   transform: translate(-50%, -50%);
   white-space: nowrap;

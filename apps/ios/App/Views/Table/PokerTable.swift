@@ -164,11 +164,15 @@ struct PokerTable: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 38)
-        .background(Capsule().fill(Color.black.opacity(0.72)))
+        // The glow is on the pill only, so the name stays crisp.
+        .background(
+            Capsule()
+                .fill(Color(hex: 0x120C0E))
+                .shadow(color: isCurrent(player) ? accent.opacity(0.45) : .clear, radius: 10)
+        )
         .overlay(
             Capsule().strokeBorder(isCurrent(player) ? accent : .white.opacity(0.14), lineWidth: isCurrent(player) ? 1.5 : 1)
         )
-        .shadow(color: isCurrent(player) ? accent.opacity(0.45) : .clear, radius: 10)
         .accessibilityElement(children: .combine)
     }
 
@@ -362,7 +366,6 @@ private struct SeatPill: View {
             .padding(.vertical, 5)
             .background(background)
             .overlay(ring)
-            .shadow(color: shadowColor, radius: isCurrent ? 10 : 6)
             .fixedSize()
         }
         .buttonStyle(.plain)
@@ -389,7 +392,7 @@ private struct SeatPill: View {
             if botPlaying {
                 Text("Bot playing").foregroundStyle(Palette.gold)
             } else {
-                Text("\(player.hand.count) in hand").foregroundStyle(SoftWhite(0.8))
+                Text("\(player.hand.count) in hand").foregroundStyle(.white)
             }
             SetCountBadge(count: Engine.countCompleteSets(player, variant), needed: needed)
             if variant == .no_mercy { DebtBadge(player: player) }
@@ -397,8 +400,11 @@ private struct SeatPill: View {
         .font(.caption2.weight(.semibold))
     }
 
+    /// The glow is on the pill only, so the name stays crisp.
     private var background: some View {
-        Capsule().fill(isPrompted ? Palette.gold.opacity(0.22) : Color.black.opacity(0.72))
+        Capsule()
+            .fill(isPrompted ? Color(hex: 0x3A2E12) : Color(hex: 0x120C0E))
+            .shadow(color: shadowColor, radius: isCurrent ? 10 : 6)
     }
 
     private var ring: some View {
