@@ -3,7 +3,6 @@ import DealStats
 import SwiftUI
 
 struct HomeView: View {
-    @ScaledMetric(relativeTo: .largeTitle) private var titleSize = 42.0
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -13,18 +12,19 @@ struct HomeView: View {
 
     var body: some View {
         ZStack {
-            TableBackground(style: app.preferences.tableStyle)
+            HomeBackground()
             GeometryReader { geometry in
                 ScrollView {
-                    VStack(spacing: 18) {
-                        hero
-                        if let active = app.activeGame { continueCard(active) }
-                        playButtons
-                        dailyCard
-                        menuGrid
+                    VStack(spacing: 16) {
+                        hero(width: min(geometry.size.width, 560) - 32)
+                        newGameButton
+                        modeTiles
+                        if let active = app.activeGame { continuePanel(active) }
+                        menuRow
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 24)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
                     .frame(maxWidth: 560)
                     .frame(maxWidth: .infinity, minHeight: geometry.size.height)
                 }
@@ -41,136 +41,122 @@ struct HomeView: View {
         .sheet(isPresented: $showRules) { RulesView() }
     }
 
-    private var hero: some View {
-        VStack(spacing: 8) {
-            ZStack {
-                heroCard("rent_color#1", angle: -24, x: -82, y: 22, lift: 3)
-                heroCard("wild_all#1", angle: -11, x: -41, y: 6, lift: -3)
-                heroCard("deal_breaker#1", angle: 13, x: 41, y: 6, lift: 4)
-                heroCard("money_10#1", angle: 25, x: 82, y: 24, lift: -4)
-                heroCard("red_1#1", angle: 0, x: 0, y: 0, lift: 6)
+    // MARK: Hero
+
+    private func hero(width: CGFloat) -> some View {
+        let scale = min(1, width * 0.62 / 250)
+        return ZStack(alignment: .bottomLeading) {
+            HomeSkyline()
+                .frame(height: 150 * scale)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.horizontal, -16)
+
+            HomeCardHand(floating: floating)
+                .scaleEffect(scale)
+                .frame(width: 170 * scale, height: 200 * scale)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.bottom, 6)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HomeLogo()
+                    .scaleEffect(scale, anchor: .topLeading)
+                    .frame(width: 250 * scale, height: 220 * scale, alignment: .topLeading)
+                    .accessibilityElement()
+                    .accessibilityLabel("Monopoly Deal")
+                    .accessibilityAddTraits(.isHeader)
+                Text("Collect three sets. Trust no one.")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.5), radius: 4, y: 2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(height: 210)
-            .padding(.top, 10)
-            .accessibilityHidden(true)
-
-            Text("Monopoly Deal")
-                .font(.system(size: titleSize, weight: .black, design: .rounded))
-                .foregroundStyle(LinearGradient(colors: [.white, Palette.gold], startPoint: .top, endPoint: .bottom))
-                .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
-                .minimumScaleFactor(0.7)
-                .lineLimit(1)
-            Text("Collect three sets. Trust no one.")
-                .font(.subheadline.weight(.medium))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(SoftWhite(0.74))
+            .padding(.bottom, 10)
         }
+        .frame(height: 220 * scale + 60)
     }
 
-    private func heroCard(_ id: String, angle: Double, x: CGFloat, y: CGFloat, lift: CGFloat) -> some View {
-        CardView(cardId: id, variant: .classic, width: 116)
-            .shadow(color: .black.opacity(0.45), radius: 10, y: 6)
-            .rotationEffect(.degrees(angle + (floating ? lift * 0.25 : 0)))
-            .offset(x: x, y: y + (floating ? lift : 0))
-    }
+    // MARK: Play
 
-    private func continueCard(_ active: ActiveGame) -> some View {
+    private var newGameButton: some View {
         Button {
-            app.resumeActive()
+            app.path.append(.setup)
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "play.circle.fill")
-                    .font(.largeTitle)
-                    .foregroundStyle(Palette.gold)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Continue Game")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.white)
-                    Text("\(active.gameState.players.map(\.name).joined(separator: ", ")) · Turn \(active.gameState.turnCount)")
-                        .font(.caption)
-                        .foregroundStyle(SoftWhite(0.7))
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(SoftWhite(0.5))
+            HStack(spacing: 16) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 30, weight: .black))
+                Text("New Game")
+                    .font(.system(.largeTitle, design: .rounded, weight: .heavy))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
             }
-            .padding(14)
-            .dealGlass(tint: Palette.gold.opacity(0.18), interactive: true, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .foregroundStyle(HomePalette.buttonInk)
+            .padding(.horizontal, 24)
+            .frame(maxWidth: .infinity, minHeight: 76)
+            .background(
+                Capsule()
+                    .fill(LinearGradient(colors: [HomePalette.buttonGold, HomePalette.buttonGoldDeep], startPoint: .top, endPoint: .bottom))
+                    .shadow(color: HomePalette.buttonGoldDeep.opacity(0.6), radius: 14, y: 4)
+            )
+            .overlay(Capsule().strokeBorder(.white.opacity(0.55), lineWidth: 1.5))
+            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("home.continue")
+        .buttonStyle(HomePressStyle())
+        .accessibilityIdentifier("home.newGame")
     }
 
-    private var playButtons: some View {
-        VStack(spacing: 10) {
+    private var modeTiles: some View {
+        let row = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
+        let daily = app.dailyChallenge
+        return row {
             Button {
-                app.path.append(.setup)
+                practiceOptions = true
             } label: {
-                Label("New Game", systemImage: "person.2.fill")
+                HomeModeTile(title: "Practice", detail: "Learn & refine", icon: "person.3.fill", colors: HomePalette.practice) { EmptyView() }
             }
-            .buttonStyle(PrimaryButtonStyle())
-            .accessibilityIdentifier("home.newGame")
-
-            (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))) {
-                Button {
-                    practiceOptions = true
-                } label: {
-                    Label("Practice", systemImage: "cpu.fill")
-                }
-                .buttonStyle(SecondaryButtonStyle())
-                .accessibilityIdentifier("home.practice")
-                .confirmationDialog("Practice Against a Bot", isPresented: $practiceOptions, titleVisibility: .visible) {
-                    Button("Classic, Easy") { app.startPractice() }
-                        .accessibilityIdentifier("practice.classicEasy")
-                    Button("Classic, Hard") { app.startPractice(hard: true) }
-                    Button("No Mercy, Easy") { app.startPractice(variant: .no_mercy) }
-                        .accessibilityIdentifier("practice.noMercyEasy")
-                    Button("No Mercy, Hard") { app.startPractice(variant: .no_mercy, hard: true) }
-                    Button("Cancel", role: .cancel) {}
-                }
-
-                Button {
-                    app.path.append(.online)
-                } label: {
-                    Label("Online", systemImage: "globe")
-                }
-                .buttonStyle(SecondaryButtonStyle())
-                .accessibilityIdentifier("home.online")
+            .buttonStyle(HomePressStyle())
+            .accessibilityIdentifier("home.practice")
+            .confirmationDialog("Practice Against a Bot", isPresented: $practiceOptions, titleVisibility: .visible) {
+                Button("Classic, Easy") { app.startPractice() }
+                    .accessibilityIdentifier("practice.classicEasy")
+                Button("Classic, Hard") { app.startPractice(hard: true) }
+                Button("No Mercy, Easy") { app.startPractice(variant: .no_mercy) }
+                    .accessibilityIdentifier("practice.noMercyEasy")
+                Button("No Mercy, Hard") { app.startPractice(variant: .no_mercy, hard: true) }
+                Button("Cancel", role: .cancel) {}
             }
+
+            Button {
+                app.path.append(.online)
+            } label: {
+                HomeModeTile(title: "Online", detail: "Play with friends", icon: "globe", colors: HomePalette.online, showsLiveDot: true) { EmptyView() }
+            }
+            .buttonStyle(HomePressStyle())
+            .accessibilityIdentifier("home.online")
+
+            Button {
+                app.startDailyChallenge()
+            } label: {
+                HomeModeTile(
+                    title: "Daily Challenge",
+                    detail: daily.completed ? "Beaten in \(daily.bestTurnCount ?? 0) turns" : "Win within \(daily.targetTurns) turns",
+                    icon: daily.completed ? "checkmark.seal.fill" : "calendar",
+                    colors: HomePalette.daily
+                ) {
+                    Image(systemName: daily.completed ? "checkmark" : "sparkle")
+                        .font(.system(size: 15, weight: .black))
+                        .foregroundStyle(HomePalette.buttonInk)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(HomePalette.buttonGold))
+                        .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1))
+                }
+            }
+            .buttonStyle(HomePressStyle())
+            .accessibilityLabel("Daily Challenge")
+            .accessibilityValue(dailyDetail)
+            .accessibilityIdentifier("home.daily")
         }
-    }
-
-    private var dailyCard: some View {
-        Button {
-            app.startDailyChallenge()
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Palette.gold.opacity(0.2))
-                    Image(systemName: app.dailyChallenge.completed ? "checkmark.seal.fill" : "calendar")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(Palette.gold)
-                }
-                .frame(width: 44, height: 44)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Daily Challenge")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.white)
-                    Text(dailyDetail)
-                        .font(.caption)
-                        .foregroundStyle(.white)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(12)
-            .dealGlass(interactive: true, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("home.daily")
+        .fixedSize(horizontal: false, vertical: !typeSize.isAccessibilitySize)
     }
 
     private var dailyDetail: String {
@@ -180,26 +166,111 @@ struct HomeView: View {
         return "Today's deal: win within \(challenge.targetTurns) turns."
     }
 
-    private var menuGrid: some View {
-        let row = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
-        return VStack(spacing: 10) {
-            row {
-                menuTile("Saved Games", icon: "square.stack.fill", id: "home.saved") { app.path.append(.saved) }
-                menuTile("Stats", icon: "chart.bar.fill", id: "home.stats") { app.path.append(.stats) }
+    // MARK: Continue
+
+    private func continuePanel(_ active: ActiveGame) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "clock")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(SoftWhite(0.85))
+                Text("Continue Playing")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.white)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 6)
+                Button {
+                    app.path.append(.saved)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("See All")
+                        Image(systemName: "chevron.right").font(.caption.weight(.bold))
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(SoftWhite(0.75))
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("See All Saved Games")
             }
-            row {
-                menuTile("Rules", icon: "book.fill", id: "home.rules") { showRules = true }
-                menuTile("Settings", icon: "gearshape.fill", id: "home.settings") { app.path.append(.settings) }
+
+            Button {
+                app.resumeActive()
+            } label: {
+                HStack(spacing: 14) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(.black.opacity(0.25))
+                        ZStack {
+                            CardView(cardId: "wild_all#1", variant: .classic, width: 30).rotationEffect(.degrees(-16)).offset(x: -12)
+                            CardView(cardId: "deal_breaker#1", variant: .classic, width: 30).rotationEffect(.degrees(-2))
+                            CardView(cardId: "red_1#1", variant: .classic, width: 30).rotationEffect(.degrees(14)).offset(x: 12)
+                        }
+                    }
+                    .frame(width: 72, height: 64)
+                    .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(active.gameState.resolvedVariant.label) Game")
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        Text("\(active.gameState.players.count) players · Turn \(active.gameState.turnCount)")
+                            .font(.subheadline)
+                            .foregroundStyle(SoftWhite(0.72))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    Spacer(minLength: 6)
+                    Label("Resume", systemImage: "play.fill")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 44)
+                        .background(
+                            Capsule().fill(LinearGradient(colors: [HomePalette.resume.0, HomePalette.resume.1], startPoint: .top, endPoint: .bottom))
+                        )
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.black.opacity(0.12)))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
+            .buttonStyle(HomePressStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Continue Game")
+            .accessibilityValue("\(active.gameState.players.map(\.name).joined(separator: ", ")), turn \(active.gameState.turnCount)")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("home.continue")
         }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(HomePalette.panel))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(0.14), lineWidth: 1))
     }
 
-    private func menuTile(_ title: String, icon: String, id: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: icon)
+    // MARK: Menu
+
+    private var menuRow: some View {
+        let tiles: [(String, String, String, () -> Void)] = [
+            ("Saved Games", "archivebox.fill", "home.saved", { app.path.append(.saved) }),
+            ("Stats", "chart.bar.fill", "home.stats", { app.path.append(.stats) }),
+            ("Rules", "book.fill", "home.rules", { showRules = true }),
+            ("Settings", "gearshape.fill", "home.settings", { app.path.append(.settings) }),
+        ]
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: typeSize.isAccessibilitySize ? 2 : 4)
+        return LazyVGrid(columns: columns, spacing: 10) {
+            ForEach(tiles, id: \.2) { title, icon, id, action in
+                Button(action: action) {
+                    HomeMenuTile(title: title, icon: icon)
+                }
+                .buttonStyle(HomePressStyle())
+                .accessibilityLabel(title)
+                .accessibilityIdentifier(id)
+            }
         }
-        .buttonStyle(SecondaryButtonStyle())
-        .accessibilityIdentifier(id)
     }
 }
 

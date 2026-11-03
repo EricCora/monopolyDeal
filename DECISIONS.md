@@ -187,3 +187,6 @@ A game in the history opens to its log and replay, matched by the record's id. i
 ## 2026-11-02: One agent at a time on simulators and rules
 Eric plans to run agents concurrently. Tests, ports and iOS build folders are safe per worktree, but simulators and the phone are shared, and a rule change touches two engines and recorded traces. `docs/PARALLEL_WORK.md` has the working rules.
 
+
+## 2026-11-02: The home screen has its own look
+Eric asked for a home screen matching a reference image: a dusk sky with a skyline, a wordmark, a gold New Game button, colored Practice, Online and Daily Challenge tiles, a Continue Playing panel and a row of four tiles. It keeps that sky whatever the table style, which still applies to every other screen. The reference's mascot isn't drawn; a fanned hand of the game's own cards stands in its place. The Online tile says "Play with friends" instead of a live player count, because nothing counts players. The web's Practice tile still starts an easy game at once, with a small corner button for the other choices, so its tests and quick start are unchanged.

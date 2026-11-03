@@ -441,7 +441,7 @@ function App() {
   const homeActiveGame = useMemo(() => {
     if (screen !== 'home') return null;
     const saved = loadActiveGame();
-    return saved ? { players: saved.gameState.players.map((player) => player.name), turn: saved.gameState.turnCount } : null;
+    return saved ? { players: saved.gameState.players.map((player) => player.name), turn: saved.gameState.turnCount, variant: saved.gameState.variant } : null;
   }, [screen]);
   const currentGameId = game ? gameIdentity(game) : null;
   const isPaused = Boolean(game && uiPreferences.gamePaused && uiPreferences.pausedGameId === currentGameId);

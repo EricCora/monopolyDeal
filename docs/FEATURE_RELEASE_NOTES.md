@@ -1,5 +1,9 @@
 # Release Notes
 
+## 2026-11-02: New home screen
+
+A dusk-sky home with a wordmark, a large New Game button, colored tiles for Practice, Online and the Daily Challenge, a Continue Playing panel and a row for Saved Games, Stats, Rules and Settings. Web and iOS match. See `DECISIONS.md`.
+
 ## 2026-11-02: Playtest round
 
 Sets and piles, a new game log, spreadable banks, bots beside people with per-seat difficulty, a lobby between matches, a timer slider, better Auto-Select and bot play, sorted rent choices, wins that count only for you, wrapped table rows, and match history with replays and hand reveal. See `docs/specs/2026-11-02-playtest-round.md` and `DECISIONS.md`.
