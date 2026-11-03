@@ -1111,15 +1111,58 @@
   margin-top: -54px;
 }
 
-.counter-summary {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+/* A card played on the viewer comes up large over a dimmed table, with the answers below. */
+.prompt-panel.is-card-up {
+  inset: 0;
+  z-index: 40;
+  grid-template-rows: minmax(0, 1fr) auto;
+  max-width: none;
+  max-height: none;
+  padding: max(var(--safe-top), 10px) max(var(--safe-right), 10px) max(var(--safe-bottom), 6px) max(var(--safe-left), 10px);
+  overflow: hidden;
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0.32);
+  animation: card-up-fade 320ms var(--snappy);
 }
 
-.counter-summary > div {
+@keyframes card-up-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.counter-card {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.55));
+  animation: panel-rise 320ms var(--snappy);
+}
+
+.counter-sheet {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 14px;
+  border-radius: 26px;
+  background: rgba(10, 16, 26, 0.68);
+  animation: panel-rise 320ms var(--snappy);
+}
+
+.counter-sheet .counter-summary {
   display: grid;
   gap: 4px;
+  text-align: center;
+}
+
+.counter-sheet .panel-button-row {
+  flex-direction: column;
+}
+
+.panel-button-row {
+  flex-direction: column;
+  width: min(100%, 420px);
 }
 
 .panel-button-row {

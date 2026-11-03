@@ -141,26 +141,29 @@ function CounterPanel(props: PromptPanelProps & { request: CounterRequest; varia
   const allow = legalActions.find((item) => item.action.type === 'counter_response' && !item.action.useJustSayNo);
   const last = request.chain[request.chain.length - 1];
   const heading = last ? `${nameOf(game, last.playerId)} said Just Say No` : `${nameOf(game, request.sourcePlayerId)} played on you`;
+  const cardWidth = Math.round(Math.min(300, Math.max(180, (typeof window === 'undefined' ? 390 : window.innerWidth) * 0.62)));
   return (
     <>
-      <div className="counter-summary">
-        <CardView cardId={last?.cardId ?? request.actionCardId} width={78} gameVariant={variant} decorative />
-        <div>
+      <div className="counter-card">
+        <CardView cardId={last?.cardId ?? request.actionCardId} width={cardWidth} gameVariant={variant} decorative />
+      </div>
+      <div className="counter-sheet glass-panel">
+        <div className="counter-summary">
           <h4>{heading}</h4>
           <p>{counterDetail(request, variant)}</p>
         </div>
-      </div>
-      <div className="panel-button-row">
-        {allow ? (
-          <button type="button" className="secondary-button" aria-label={allow.label} onClick={() => onRunAction(allow.action, allow)} disabled={disabled}>
-            {last ? 'Let It Stand' : 'Accept'}
-          </button>
-        ) : null}
-        {justSayNo ? (
-          <button type="button" className="primary-button is-danger" aria-label={justSayNo.label} onClick={() => onRunAction(justSayNo.action, justSayNo)} disabled={disabled}>
-            <Icon name="just_say_no" /> Just Say No
-          </button>
-        ) : null}
+        <div className="panel-button-row">
+          {justSayNo ? (
+            <button type="button" className="primary-button is-danger" aria-label={justSayNo.label} onClick={() => onRunAction(justSayNo.action, justSayNo)} disabled={disabled}>
+              <Icon name="just_say_no" /> Just Say No
+            </button>
+          ) : null}
+          {allow ? (
+            <button type="button" className="secondary-button" aria-label={allow.label} onClick={() => onRunAction(allow.action, allow)} disabled={disabled}>
+              {last ? 'Let It Stand' : 'Accept'}
+            </button>
+          ) : null}
+        </div>
       </div>
     </>
   );
@@ -440,5 +443,5 @@ export function PromptPanel(props: PromptPanelProps) {
   })();
 
   if (!content) return null;
-  return <section key={pending?.kind ?? prompt.kind} className="prompt-panel glass-panel" aria-label="Your move">{content}</section>;
+  return <section key={pending?.kind ?? prompt.kind} className={pending?.kind === 'counter' ? 'prompt-panel is-card-up' : 'prompt-panel glass-panel'} aria-label="Your move">{content}</section>;
 }

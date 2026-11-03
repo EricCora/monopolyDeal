@@ -11,7 +11,10 @@ struct PromptPanel: View {
 
     var body: some View {
         Group {
-            if session.isViewersPrompt, !session.isPaused, let content = panelContent {
+            if session.isViewersPrompt, !session.isPaused, case .counter(let request)? = session.game?.pending {
+                CounterPanel(session: session, actions: actions, request: request)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            } else if session.isViewersPrompt, !session.isPaused, let content = panelContent {
                 VStack(spacing: 10) { content }
                     .padding(14)
                     .frame(maxWidth: 620)
@@ -29,8 +32,8 @@ struct PromptPanel: View {
         switch game.pending {
         case .payment(let request):
             return AnyView(PaymentPanel(session: session, actions: actions, ui: ui, request: request))
-        case .counter(let request):
-            return AnyView(CounterPanel(session: session, actions: actions, request: request))
+        case .counter:
+            return nil
         case .rent(let request):
             return AnyView(RentTargetPanel(session: session, actions: actions, request: request))
         case .slyDeal(let request):
@@ -272,39 +275,54 @@ private struct CounterPanel: View {
         return isCounter ? "\(source) said Just Say No" : "\(source) played on you"
     }
 
+    /// Something is being done to the viewer, so the card comes up large over a lightly
+    /// dimmed table, which stays visible behind it, with the answers in a panel below.
     var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                CardView(cardId: request.chain.last?.cardId ?? request.actionCardId, variant: session.variant, width: 78)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(heading)
-                        .font(.headline.weight(.heavy))
-                        .foregroundStyle(.white)
-                    Text(detail)
-                        .font(.footnote)
-                        .foregroundStyle(SoftWhite(0.78))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+        GeometryReader { geometry in
+            let cardWidth = min(geometry.size.width * 0.62, geometry.size.height * 0.42 / CardView.aspect, 300)
+            VStack(spacing: 14) {
                 Spacer(minLength: 0)
-            }
-            HStack(spacing: 8) {
-                if let allow {
-                    Button(request.chain.isEmpty ? "Accept" : "Let It Stand") {
-                        actions.perform(allow.action)
+                CardView(cardId: request.chain.last?.cardId ?? request.actionCardId, variant: session.variant, width: cardWidth)
+                    .shadow(color: .black.opacity(0.55), radius: 24, y: 12)
+                Spacer(minLength: 0)
+                VStack(spacing: 10) {
+                    VStack(spacing: 4) {
+                        Text(heading)
+                            .font(.title3.weight(.heavy))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
+                        Text(detail)
+                            .font(.subheadline)
+                            .foregroundStyle(SoftWhite(0.82))
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .accessibilityIdentifier("counter.allow")
-                }
-                if let justSayNo {
-                    Button {
-                        actions.perform(justSayNo.action)
-                    } label: {
-                        Label("Just Say No", systemImage: "hand.raised.fill")
+                    .accessibilityElement(children: .combine)
+                    if let justSayNo {
+                        Button {
+                            actions.perform(justSayNo.action)
+                        } label: {
+                            Label("Just Say No", systemImage: "hand.raised.fill")
+                        }
+                        .buttonStyle(PrimaryButtonStyle(tint: Palette.danger))
+                        .accessibilityIdentifier("counter.jsn")
                     }
-                    .buttonStyle(PrimaryButtonStyle(tint: Palette.danger))
-                    .accessibilityIdentifier("counter.jsn")
+                    if let allow {
+                        Button(request.chain.isEmpty ? "Accept" : "Let It Stand") {
+                            actions.perform(allow.action)
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .accessibilityIdentifier("counter.allow")
+                    }
                 }
+                .padding(14)
+                .frame(maxWidth: 620)
+                .glassPanel(cornerRadius: 26, tint: Color.black.opacity(0.42))
+                .padding(.horizontal, 10)
+                .padding(.bottom, 6)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black.opacity(0.32).ignoresSafeArea())
         }
     }
 
