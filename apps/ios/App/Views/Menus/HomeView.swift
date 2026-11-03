@@ -450,6 +450,8 @@ struct SavedGamesView: View {
 struct SettingsView: View {
     @Environment(AppModel.self) private var app
     @State private var confirmClear = false
+    @State private var feedback = ""
+    @Environment(\.openURL) private var openURL
 
     private var counters: AchievementState.Counters { app.achievements.counters }
 
@@ -471,6 +473,17 @@ struct SettingsView: View {
             }
         }
         .disabled(!unlocked)
+    }
+
+    private func sendFeedback() {
+        var parts = URLComponents()
+        parts.scheme = "mailto"
+        parts.path = "tblsemail@gmail.com"
+        parts.queryItems = [
+            URLQueryItem(name: "subject", value: "Monopoly Deal feedback"),
+            URLQueryItem(name: "body", value: feedback.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n---\nSent from the iOS app"),
+        ]
+        if let url = parts.url { openURL(url) }
     }
 
     var body: some View {
@@ -509,6 +522,17 @@ struct SettingsView: View {
                 Text("Gameplay")
             } footer: {
                 Text("Custom rules add sets to win, hand limit and plays per turn to New Game. No Mercy always uses the official rules.")
+            }
+            Section {
+                TextField("Bugs, ideas, anything", text: $feedback, axis: .vertical)
+                    .lineLimit(3...8)
+                    .accessibilityIdentifier("settings.feedback")
+                Button("Email the Developer") { sendFeedback() }
+                    .disabled(feedback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            } header: {
+                Text("Send Feedback")
+            } footer: {
+                Text("Opens your email app with the message ready to send.")
             }
             Section("Data") {
                 Button("Clear Stats and History", role: .destructive) { confirmClear = true }

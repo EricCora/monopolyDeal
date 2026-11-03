@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { UiPreferencesV1 } from '../../persistence/storage';
 import { Icon } from '../components/icons';
+import { feedbackMailtoUrl } from '../feedbackMail';
 import { cardBackOptions, tableStyleOptions } from '../unlockables';
 
 type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
@@ -57,6 +58,7 @@ export function SettingsScreen({
 }: SettingsScreenProps) {
   const statusMessage = devStatusMessage(devSeedStatus);
   const [experimentalOpen, setExperimentalOpen] = useState(false);
+  const [feedback, setFeedback] = useState('');
 
   const experimentalEnabledCount = Object.values(uiPreferences.experimental).filter(Boolean).length;
 
@@ -152,6 +154,29 @@ export function SettingsScreen({
           {renderToggle('Show Rules Hints', uiPreferences.showRulesDrawerHints, onToggleRulesDrawerHints)}
         </div>
         <p className="settings-subtitle settings-footnote">Custom rules add sets to win, hand limit and plays per turn to New Game. No Mercy always uses the official rules.</p>
+      </section>
+
+      <section className="settings-section" aria-label="Send feedback">
+        <h3>Send Feedback</h3>
+        <label className="settings-field">
+          <span>Tell the developer what you think</span>
+          <textarea
+            rows={4}
+            value={feedback}
+            onChange={(event) => setFeedback(event.target.value)}
+            placeholder="Bugs, ideas, anything"
+          />
+        </label>
+        <div className="actions">
+          <button
+            type="button"
+            disabled={!feedback.trim()}
+            onClick={() => { window.location.href = feedbackMailtoUrl(feedback); }}
+          >
+            Email the Developer
+          </button>
+        </div>
+        <p className="settings-subtitle settings-footnote">Opens your email app with the message ready to send.</p>
       </section>
 
       <section className="settings-section settings-danger-zone" aria-label="Data controls">
