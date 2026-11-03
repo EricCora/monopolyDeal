@@ -73,10 +73,12 @@ interface SetLaneProps {
   extraClassName?: string;
   behavior: (entry: PropertyCardPlacement, lane: BoardLane) => TableCardBehavior;
   onInspect: (cardId: string) => void;
+  /** Replaces the label under the set, for an opponent's seat at the table. */
+  status?: string;
 }
 
 /** One physical set. A complete set gets a gold outline. */
-export function SetLane({ lane, variant, compact = false, laneRef, extraClassName = '', behavior, onInspect }: SetLaneProps) {
+export function SetLane({ lane, variant, compact = false, laneRef, extraClassName = '', behavior, onInspect, status: statusOverride }: SetLaneProps) {
   const propertyCount = lane.entries.filter((entry) => {
     const kind = getCardDefinition(entry.cardId, variant).kind;
     return kind === 'property' || kind === 'wild';
@@ -84,7 +86,7 @@ export function SetLane({ lane, variant, compact = false, laneRef, extraClassNam
   const setSize = getSetSize(lane.color);
   const label = formatPropertyColor(lane.color);
   // A full lane of Wilds can still be incomplete, so "2/2" alone would look like a bug.
-  const status = lane.isComplete ? 'Complete' : propertyCount >= setSize ? `Needs a ${label}` : `${propertyCount}/${setSize}`;
+  const status = statusOverride ?? (lane.isComplete ? 'Complete' : propertyCount >= setSize ? `Needs a ${label}` : `${propertyCount}/${setSize}`);
   return (
     <div
       className={`property-lane ${compact ? 'is-compact' : ''} ${lane.isComplete ? 'is-complete' : ''} ${extraClassName}`}
@@ -131,13 +133,15 @@ interface BankStackProps {
   extraClassName?: string;
   behavior: (cardId: string) => TableCardBehavior;
   onInspect: (cardId: string) => void;
+  /** Replaces "Bank $N" under the stack. */
+  totalLabel?: string;
 }
 
 /**
  * Only the newest cards are spread out, so a rich Bank doesn't crowd out the sets beside it.
  * The older ones stay stacked beneath, still in place for a payment to pick from.
  */
-export function BankStack({ player, variant, compact = false, bankRef, extraClassName = '', behavior, onInspect }: BankStackProps) {
+export function BankStack({ player, variant, compact = false, bankRef, extraClassName = '', behavior, onInspect, totalLabel }: BankStackProps) {
   const total = bankTotal(player, variant);
   const spreadFrom = Math.max(0, player.bank.length - (compact ? 4 : 5));
   return (
@@ -169,7 +173,7 @@ export function BankStack({ player, variant, compact = false, bankRef, extraClas
           );
         })}
       </div>
-      {compact ? null : <p className="bank-total">Bank ${total}</p>}
+      {compact ? null : <p className="bank-total">{totalLabel ?? `Bank $${total}`}</p>}
     </div>
   );
 }

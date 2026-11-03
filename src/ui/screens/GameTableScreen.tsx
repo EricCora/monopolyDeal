@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { formatPropertyColor, getCardDefinition, getCardDisplayName, type GameVariant, type PropertyColor } from '../../cards/catalog';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { formatPropertyColor, getCardDefinition, getCardDisplayName, getSetSize, type GameVariant, type PropertyColor } from '../../cards/catalog';
 import { pendingRequestBanner } from './pendingRequestBanner';
 import {
   getSetCompletionCount,
@@ -14,6 +14,8 @@ import {
   type TurnPrompt,
 } from '../../engine';
 import { playRestriction } from '../../engine/playRestriction';
+import { getRentAmount } from '../../engine/core';
+import { CENTRE, PILE_GAP, VIEWER_AREA, VIEWER_PILL, pileGrid, tableFrame, tableSeats, type Point } from '../table/seatLayout';
 import { CardFlights } from '../components/CardFlights';
 import { cardSummary } from '../cards';
 import { CardView } from '../components/CardView';
@@ -42,7 +44,6 @@ import {
   PlayerAvatar,
   SetCountBadge,
   SetLane,
-  SetProgressBar,
   type TableCardBehavior,
 } from '../table/tablePieces';
 import type { CardInput } from '../tapPolicy';
@@ -536,6 +537,10 @@ export function GameTableScreen({
   const inputBlocked = isPaused || reconnectBlockingState || forceInputBlocked;
   const deckRef = useRef<HTMLDivElement | null>(null);
   const discardPileRef = useRef<HTMLElement | null>(null);
+  const pokerTableRef = useRef<HTMLDivElement | null>(null);
+  const [pokerTableSize, setPokerTableSize] = useState({ width: 0, height: 0 });
+  // The hand, opened by hand on another player's turn.
+  const [handOpen, setHandOpen] = useState(false);
   const visibleHandZoneByPlayerIdRef = useRef<Record<string, HTMLDivElement | null>>({});
   const visibleBankZoneByPlayerIdRef = useRef<Record<string, HTMLDivElement | null>>({});
   const propertyLaneByKeyRef = useRef<Record<string, HTMLDivElement | null>>({});
@@ -622,7 +627,11 @@ export function GameTableScreen({
     ? multiplayerSeatPlayerId
     : revealedPlayerId ?? (humans.length === 1 ? humans[0].id : null);
   const viewer = game.players.find((player) => player.id === viewerId) ?? null;
-  const opponents = game.players.filter((player) => player.id !== viewerId);
+  // The table seats everyone else in turn order after the player at the bottom, so the next
+  // player sits on the left. With the hands hidden, the first player takes the bottom.
+  const bottomPlayer = viewer ?? game.players[0];
+  const bottomIndex = Math.max(0, game.players.findIndex((player) => player.id === bottomPlayer.id));
+  const seatedOpponents = game.players.map((_, offset) => game.players[(bottomIndex + offset) % game.players.length]).slice(1);
   const revealedPlayerIdMatches = isMultiplayer || revealedPlayerId === prompt.playerId;
   const isViewersPrompt = Boolean(!replayBar && viewer && prompt.playerId === viewer.id && !over.done && revealedPlayerIdMatches);
 
@@ -1054,7 +1063,7 @@ export function GameTableScreen({
     return transitionTargetKey === key ? `is-transition-target transition-tone-${transitionTargetTone ?? 'property'}` : '';
   };
 
-  const renderLanes = (player: PlayerState, compact: boolean) => {
+  const renderLanes = (player: PlayerState, compact: boolean, seatLabel?: (lane: BoardLane) => string) => {
     const lanes = boardLanes(player, variant);
     const seen = new Set<PropertyColor>();
     return lanes.map((lane) => {
@@ -1070,9 +1079,207 @@ export function GameTableScreen({
           laneRef={firstOfColor ? (node) => { propertyLaneByKeyRef.current[`${player.id}:${lane.color}`] = node; } : undefined}
           behavior={propertyBehavior(player)}
           onInspect={setInspectedCardId}
+          status={seatLabel?.(lane)}
         />
       );
     });
+  };
+
+  useEffect(() => {
+    const node = pokerTableRef.current;
+    if (!node) return undefined;
+    const sync = () => setPokerTableSize({ width: node.clientWidth, height: node.clientHeight });
+    sync();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(sync);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  // A player's turn ends with their hand folded again.
+  useEffect(() => {
+    setHandOpen(false);
+  }, [game.currentPlayerIndex]);
+
+  /** On other players' turns the hand folds away, so the table has the room. */
+  const handShown = !viewer || Boolean(replayBar) || handOpen || isViewersPrompt || currentPlayer.id === viewer.id;
+
+  /** An opponent's pile label: progress, with the rent when the cards are too small to show it. */
+  const seatPileLabel = (owner: PlayerState, small: boolean) => (lane: BoardLane) => {
+    const count = lane.entries.filter((entry) => {
+      const kind = getCardDefinition(entry.cardId, variant).kind;
+      return kind === 'property' || kind === 'wild';
+    }).length;
+    const setSize = getSetSize(lane.color);
+    if (lane.isComplete) return `${count}/${setSize} ✓`;
+    return small ? `${count}/${setSize} · $${getRentAmount(owner, lane.color, variant)}` : `${count}/${setSize}`;
+  };
+
+  const renderPokerTable = () => {
+    // jsdom measures nothing, so tests lay the table out at a phone's size.
+    const frame = tableFrame(pokerTableSize.width || 416, pokerTableSize.height || 560);
+    const seats = tableSeats(seatedOpponents.length);
+    const place = (point: Point): CSSProperties => {
+      const at = frame.point(point);
+      return { left: at.x, top: at.y };
+    };
+    const rail = 16 * frame.scale;
+    const pileWidth = Math.round(54 * frame.scale);
+    const viewerTopLeft = frame.point({ x: VIEWER_AREA.x, y: VIEWER_AREA.y });
+    const viewerCardWidth = Math.round(Math.min(46, 46 * frame.scale * 1.08));
+    return (
+      <>
+        <div
+          className="poker-rail"
+          aria-hidden="true"
+          style={{ left: frame.felt.x - rail, top: frame.felt.y - rail, width: frame.felt.width + rail * 2, height: frame.felt.height + rail * 2 }}
+        />
+        <div className="poker-felt" aria-hidden="true" style={{ left: frame.felt.x, top: frame.felt.y, width: frame.felt.width, height: frame.felt.height }} />
+
+        <div className="table-centre" style={{ ...place({ x: CENTRE.x + CENTRE.width / 2, y: CENTRE.y + CENTRE.height / 2 }), ['--pile-w' as string]: `${pileWidth}px` }}>
+            <div className="pile-stack" aria-label="Card piles">
+              <article className="draw-pile-card" aria-label={`${game.drawPile.length} cards in the deck`}>
+                <div ref={deckRef} className="table-draw-deck">
+                  {Array.from({ length: Math.min(3, game.drawPile.length) }, (_, index) => (
+                    <span key={index} style={{ ['--i' as string]: index }}><CardView cardId="money_1#0" faceUp={false} width={pileWidth} decorative /></span>
+                  ))}
+                </div>
+                <span className="pile-count">Draw {game.drawPile.length}</span>
+              </article>
+              <article
+                ref={discardPileRef}
+                className={`discard-pile-card ${transitionTargetKey === 'discard' ? `is-transition-target transition-tone-${transitionTargetTone ?? 'discard'}` : ''}`}
+              >
+                <button
+                  type="button"
+                  className="discard-pile-button"
+                  aria-label={`Discard pile, ${game.discardPile.length} cards`}
+                  onClick={() => setDiscardsOpen(true)}
+                >
+                  {discardTop ? (
+                    <span data-flip-id={discardTop}><CardView cardId={discardTop} width={pileWidth} gameVariant={variant} decorative /></span>
+                  ) : (
+                    <span className="discard-empty" />
+                  )}
+                  <span className="pile-count">Discard</span>
+                </button>
+              </article>
+            </div>
+        </div>
+
+        <div className={`opponents-area count-${seatedOpponents.length}`}>
+          {seatedOpponents.map((player, index) => {
+            const seat = seats[index];
+            if (!seat) return null;
+            const isPrompted = prompt.playerId === player.id;
+            const isCurrent = currentPlayer.id === player.id;
+            const connected = playerConnectionById[player.id]?.connected ?? true;
+            const tags = seatStatus(player);
+            const lanes = boardLanes(player, variant);
+            const piles = lanes.length + (player.bank.length > 0 ? 1 : 0);
+            const tallest = Math.min(4, Math.max(1, ...lanes.map((lane) => lane.entries.length), Math.min(player.bank.length, 4)));
+            const area = { width: seat.area.width * frame.scale, height: seat.area.height * frame.scale };
+            const grid = pileGrid(piles, tallest, area, 46 * frame.scale);
+            const rowWidth = grid.columns * grid.cardWidth + (grid.columns - 1) * PILE_GAP;
+            const small = grid.cardWidth < 40 && grid.cardWidth >= 28;
+            return (
+              <article key={player.id} className="table-seat">
+                <div
+                  className={`player opponent-summary seat-pill ${isPrompted ? 'is-prompted' : ''} ${isCurrent ? 'active' : ''} ${stealAlert?.sourcePlayerId === player.id ? 'is-steal-source' : ''} ${stealAlert?.targetPlayerId === player.id ? 'is-steal-target' : ''} ${isMultiplayer && !connected ? 'is-offline-seat' : ''}`}
+                  data-flip-origin={player.id}
+                  style={place(seat.pill)}
+                >
+                  <button type="button" className="opponent-open" aria-label={`Show ${player.name}'s whole board`} onClick={() => setInspectedOpponentId(player.id)} />
+                  <PlayerAvatar name={player.name} isBot={player.controller === 'bot' || botSeatIds.includes(player.id)} />
+                  <div className="seat-pill-copy">
+                    <header className="opponent-head">
+                      <h3>{player.name}</h3>
+                      {isMultiplayer && !connected && !isTurnBased ? (
+                        <span className="opponent-offline" title="Disconnected" role="img" aria-label="Disconnected"><Icon name="wifiOff" /></span>
+                      ) : null}
+                      {recentReactionsByPlayerId.get(player.id) ? (
+                        <span className="player-reaction-burst" aria-label={`${player.name} sent a reaction`}>
+                          {recentReactionsByPlayerId.get(player.id)}
+                        </span>
+                      ) : null}
+                    </header>
+                    <p className="opponent-stats">
+                      {botSeatIds.includes(player.id)
+                        ? <span className="opponent-bot-tag">Bot playing</span>
+                        : <span aria-label={`${player.hand.length} cards in hand`}>{player.hand.length} in hand</span>}
+                      <span className="sr-only">{`Bank ${bankTotal(player, variant)} dollars`}</span>
+                      <SetCountBadge count={getSetCompletionCount(player, variant)} needed={winCompleteSets} />
+                      {variant === 'no_mercy' ? <DebtBadge player={player} /> : null}
+                    </p>
+                    <span className="sr-only">{tags.join(', ')}</span>
+                  </div>
+                </div>
+                <div
+                  className="seat-piles"
+                  style={{
+                    ...place(seat.center),
+                    width: area.width,
+                    height: area.height,
+                    transform: `translate(-50%, -50%) rotate(${seat.rotation}deg)`,
+                    ['--board-card-w' as string]: `${grid.cardWidth}px`,
+                  }}
+                >
+                  <div className="seat-piles-rows" style={{ width: Math.min(area.width, rowWidth + 1) }}>
+                    {renderLanes(player, false, seatPileLabel(player, small))}
+                    {player.bank.length > 0 ? (
+                      <BankStack
+                        player={player}
+                        variant={variant}
+                        totalLabel={`$${bankTotal(player, variant)}`}
+                        extraClassName={transitionTargetKey === `bank:${player.id}` ? `is-transition-target transition-tone-${transitionTargetTone ?? 'bank'}` : ''}
+                        bankRef={(node) => { visibleBankZoneByPlayerIdRef.current[player.id] = node; }}
+                        behavior={bankBehavior(player)}
+                        onInspect={() => setInspectedOpponentId(player.id)}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+
+        <article className="table-seat is-bottom-seat">
+        <div
+          className={`player-board viewer-board ${viewer && currentPlayer.id === viewer.id ? 'active' : ''} ${pendingPayment?.targetPlayerId === bottomPlayer.id ? 'is-payment-requested' : ''}`}
+          style={{
+            left: viewerTopLeft.x,
+            top: viewerTopLeft.y,
+            width: VIEWER_AREA.width * frame.sx,
+            height: VIEWER_AREA.height * frame.sy,
+            ['--board-card-w' as string]: `${viewerCardWidth}px`,
+          }}
+        >
+          {isMultiplayer && viewer ? <span className="sr-only">Your Seat</span> : null}
+          <span className="sr-only">{seatStatus(bottomPlayer).join(', ')}</span>
+          <div className="player-board-scroll">
+            <div className="player-board-lanes">
+              <BankStack
+                player={bottomPlayer}
+                variant={variant}
+                extraClassName={transitionTargetKey === `bank:${bottomPlayer.id}` ? `is-transition-target transition-tone-${transitionTargetTone ?? 'bank'}` : ''}
+                bankRef={(node) => { visibleBankZoneByPlayerIdRef.current[bottomPlayer.id] = node; }}
+                behavior={bankBehavior(bottomPlayer)}
+                onInspect={() => (viewer ? setBankOpen(true) : setInspectedOpponentId(bottomPlayer.id))}
+              />
+              {renderLanes(bottomPlayer, false)}
+            </div>
+          </div>
+        </div>
+
+        <header className={`player-board-head viewer-pill ${currentPlayer.id === bottomPlayer.id ? 'is-current' : ''}`} style={place(VIEWER_PILL)}>
+          <h3>{bottomPlayer.name}</h3>
+          <SetCountBadge count={getSetCompletionCount(bottomPlayer, variant)} needed={winCompleteSets} />
+          {variant === 'no_mercy' ? <DebtBadge player={bottomPlayer} /> : null}
+        </header>
+        </article>
+      </>
+    );
   };
 
   const seatStatus = (player: PlayerState) => {
@@ -1166,33 +1373,6 @@ export function GameTableScreen({
 
         <PlaysPips used={game.turn.playsUsed} total={maxPlaysPerTurn} />
 
-        <div className="pile-stack" aria-label="Card piles">
-          <article className="draw-pile-card" aria-label={`${game.drawPile.length} cards in the deck`}>
-            <div ref={deckRef} className="table-draw-deck">
-              {Array.from({ length: Math.min(3, game.drawPile.length) }, (_, index) => (
-                <span key={index} style={{ ['--i' as string]: index }}><CardView cardId="money_1#0" faceUp={false} width={26} decorative /></span>
-              ))}
-            </div>
-            <span className="pile-count">{game.drawPile.length}</span>
-          </article>
-          <article
-            ref={discardPileRef}
-            className={`discard-pile-card ${transitionTargetKey === 'discard' ? `is-transition-target transition-tone-${transitionTargetTone ?? 'discard'}` : ''}`}
-          >
-            <button
-              type="button"
-              className="discard-pile-button"
-              aria-label={`Discard pile, ${game.discardPile.length} cards`}
-              onClick={() => setDiscardsOpen(true)}
-            >
-              {discardTop ? (
-                <span data-flip-id={discardTop}><CardView cardId={discardTop} width={28} gameVariant={variant} decorative /></span>
-              ) : (
-                <span className="discard-empty" />
-              )}
-            </button>
-          </article>
-        </div>
       </header>
 
       {isMultiplayer ? (
@@ -1218,62 +1398,6 @@ export function GameTableScreen({
       ) : null}
 
       <CardFlights className="table-main" flightKey={flightKey ?? game.updatedAt} enabled={!reducedMotion}>
-        <div className={`opponents-area count-${opponents.length}`}>
-          {opponents.map((player) => {
-            const isPrompted = prompt.playerId === player.id;
-            const isCurrent = currentPlayer.id === player.id;
-            const connected = playerConnectionById[player.id]?.connected ?? true;
-            const tags = seatStatus(player);
-            const hasCards = player.bank.length > 0 || boardLanes(player, variant).length > 0;
-            return (
-              <article
-                key={player.id}
-                className={`player opponent-summary glass-panel ${isPrompted ? 'is-prompted' : ''} ${isCurrent ? 'active' : ''} ${stealAlert?.sourcePlayerId === player.id ? 'is-steal-source' : ''} ${stealAlert?.targetPlayerId === player.id ? 'is-steal-target' : ''} ${isMultiplayer && !connected ? 'is-offline-seat' : ''}`}
-                data-flip-origin={player.id}
-              >
-                <button type="button" className="opponent-open" aria-label={`Show ${player.name}'s whole board`} onClick={() => setInspectedOpponentId(player.id)} />
-                <header className="opponent-head">
-                  <PlayerAvatar name={player.name} isBot={player.controller === 'bot' || botSeatIds.includes(player.id)} />
-                  <h3>{player.name}</h3>
-                  {botSeatIds.includes(player.id) ? <span className="opponent-bot-tag">Bot playing</span> : null}
-                  {isMultiplayer && !connected && !isTurnBased ? (
-                    <span className="opponent-offline" title="Disconnected" role="img" aria-label="Disconnected"><Icon name="wifiOff" /></span>
-                  ) : null}
-                  {recentReactionsByPlayerId.get(player.id) ? (
-                    <span className="player-reaction-burst" aria-label={`${player.name} sent a reaction`}>
-                      {recentReactionsByPlayerId.get(player.id)}
-                    </span>
-                  ) : null}
-                  <SetCountBadge count={getSetCompletionCount(player, variant)} needed={winCompleteSets} />
-                </header>
-                <p className="opponent-stats">
-                  <span aria-label={`${player.hand.length} cards in hand`}><Icon name="cards" /> {player.hand.length}</span>
-                  <span aria-label={`Bank ${bankTotal(player, variant)} dollars`}><Icon name="banknote" /> ${bankTotal(player, variant)}</span>
-                  {variant === 'no_mercy' ? <DebtBadge player={player} /> : null}
-                </p>
-                <span className="sr-only">{tags.join(', ')}</span>
-                {hasCards ? (
-                  <div className="mini-board">
-                    {renderLanes(player, true)}
-                    {player.bank.length > 0 ? (
-                      <BankStack
-                        player={player}
-                        variant={variant}
-                        compact
-                        extraClassName={transitionTargetKey === `bank:${player.id}` ? `is-transition-target transition-tone-${transitionTargetTone ?? 'bank'}` : ''}
-                        bankRef={(node) => { visibleBankZoneByPlayerIdRef.current[player.id] = node; }}
-                        behavior={bankBehavior(player)}
-                        onInspect={() => setInspectedOpponentId(player.id)}
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
-                <SetProgressBar player={player} variant={variant} />
-              </article>
-            );
-          })}
-        </div>
-
         <button
           type="button"
           className={`table-status ${isViewersPrompt ? 'is-yours' : ''}`}
@@ -1287,34 +1411,12 @@ export function GameTableScreen({
           </span>
         </button>
 
-        {viewer ? (
-          <article className={`player viewer-seat ${currentPlayer.id === viewer.id ? 'active' : ''} ${pendingPayment?.targetPlayerId === viewer.id ? 'is-payment-requested' : ''} is-self-seat`}>
-            <div className="player-board glass-panel">
-              <header className="player-board-head">
-                <h3>{viewer.name}</h3>
-                <SetCountBadge count={viewerCompleteSets} needed={winCompleteSets} />
-                {variant === 'no_mercy' ? <DebtBadge player={viewer} /> : null}
-              </header>
-              {isMultiplayer ? <span className="sr-only">Your Seat</span> : null}
-              <span className="sr-only">{seatStatus(viewer).join(', ')}</span>
-              <div className="player-board-scroll">
-                <div className="player-board-lanes">
-                  <BankStack
-                    player={viewer}
-                    variant={variant}
-                    extraClassName={transitionTargetKey === `bank:${viewer.id}` ? `is-transition-target transition-tone-${transitionTargetTone ?? 'bank'}` : ''}
-                    bankRef={(node) => { visibleBankZoneByPlayerIdRef.current[viewer.id] = node; }}
-                    behavior={bankBehavior(viewer)}
-                    onInspect={() => setBankOpen(true)}
-                  />
-                  {renderLanes(viewer, false)}
-                </div>
-                {viewer.bank.length === 0 && boardLanes(viewer, variant).length === 0 ? (
-                  <p className="player-board-empty">Your Bank and properties go here.</p>
-                ) : null}
-              </div>
-            </div>
+        <div className="poker-table" ref={pokerTableRef}>
+          {renderPokerTable()}
+        </div>
 
+        {viewer ? (
+          <article className={`player viewer-seat ${currentPlayer.id === viewer.id ? 'active' : ''} is-self-seat`}>
             <div className="action-bar">
               {replayBar ? replayBar(() => setLogOpen(true)) : (<>
               {showUndo ? (
@@ -1360,7 +1462,7 @@ export function GameTableScreen({
               className="player-zone hand-zone"
               ref={(node) => { visibleHandZoneByPlayerIdRef.current[viewer.id] = node as HTMLDivElement | null; }}
             >
-              <HandFan
+              {handShown ? <HandFan
                 key={viewer.id}
                 cards={viewer.hand}
                 playableCardIds={isViewersPrompt ? playableCardIds : new Set()}
@@ -1375,7 +1477,12 @@ export function GameTableScreen({
                 gameVariant={variant}
                 dealOpening={game.history.length === 0}
                 reducedMotion={reducedMotion}
-              />
+              /> : (
+                <button type="button" className="hand-bar glass-panel" onClick={() => setHandOpen(true)}>
+                  {`Your hand · ${viewer.hand.length} card${viewer.hand.length === 1 ? '' : 's'}`}
+                  <Icon name="chevron" />
+                </button>
+              )}
             </section>
           </article>
         ) : (

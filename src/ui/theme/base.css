@@ -67,6 +67,8 @@ body {
   --mesh-6: #0a1320; --mesh-7: #10283a; --mesh-8: #09121f;
   --felt-opacity: 0.12;
   --accent: var(--gold);
+  /* The poker table's felt, lightest in the middle. Mirrors TableTheme.feltColors. */
+  --felt-0: #2b5c4a; --felt-1: #1d4537; --felt-2: #14332a;
   position: relative;
   min-height: 100vh;
   min-height: 100dvh;
@@ -74,6 +76,7 @@ body {
 }
 
 .game-shell.table-style-classic-green {
+  --felt-0: #2e7a50; --felt-1: #1e5a3a; --felt-2: #123d27;
   --mesh-0: #0b3a26; --mesh-1: #0f4d32; --mesh-2: #0b3a26;
   --mesh-3: #11583a; --mesh-4: #187148; --mesh-5: #11583a;
   --mesh-6: #09301f; --mesh-7: #0d4229; --mesh-8: #09301f;
@@ -81,6 +84,7 @@ body {
 }
 
 .game-shell.table-style-neon-arcade {
+  --felt-0: #3b1a78; --felt-1: #2a115a; --felt-2: #170a38;
   --mesh-0: #140a2e; --mesh-1: #2a1160; --mesh-2: #0f1240;
   --mesh-3: #3a1272; --mesh-4: #5b1a8e; --mesh-5: #123a7a;
   --mesh-6: #0e0726; --mesh-7: #2b0f58; --mesh-8: #0a1a44;
@@ -89,6 +93,7 @@ body {
 }
 
 .game-shell.table-style-sunset-lounge {
+  --felt-0: #8a3a2c; --felt-1: #5e2230; --felt-2: #3a1424;
   --mesh-0: #2a1124; --mesh-1: #5a1f33; --mesh-2: #301030;
   --mesh-3: #7a2f33; --mesh-4: #b5552f; --mesh-5: #6e2345;
   --mesh-6: #1d0d22; --mesh-7: #4a1a33; --mesh-8: #1a0b1f;
@@ -96,6 +101,7 @@ body {
 }
 
 .game-shell.table-style-royal-velvet {
+  --felt-0: #5a2580; --felt-1: #3e1760; --felt-2: #250c3c;
   --mesh-0: #1c0b2e; --mesh-1: #351352; --mesh-2: #1e0c35;
   --mesh-3: #4a1a6b; --mesh-4: #6d2a8f; --mesh-5: #421861;
   --mesh-6: #130723; --mesh-7: #2c0f45; --mesh-8: #10061e;
@@ -103,6 +109,7 @@ body {
 }
 
 .game-shell.table-style-midnight-vault {
+  --felt-0: #22304a; --felt-1: #161f33; --felt-2: #0c111d;
   --mesh-0: #05070d; --mesh-1: #0c111c; --mesh-2: #06080f;
   --mesh-3: #12182a; --mesh-4: #1f2740; --mesh-5: #101627;
   --mesh-6: #030409; --mesh-7: #0a0e18; --mesh-8: #020308;

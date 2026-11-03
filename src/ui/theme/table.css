@@ -307,16 +307,254 @@
   flex: 1;
   min-height: 0;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  grid-template-areas: 'opponents' 'status' 'board' 'actions' 'hand';
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: 'status' 'table' 'actions' 'hand';
   gap: 8px;
 }
 
-.opponents-area { grid-area: opponents; }
 .table-status { grid-area: status; }
-.player-board, .viewer-hidden { grid-area: board; }
+.poker-table { grid-area: table; }
+.viewer-hidden { grid-area: hand; }
 .action-bar { grid-area: actions; }
 .hand-zone { grid-area: hand; }
+
+/* The poker table: an oval with everyone seated around it. Positions come from
+   src/ui/table/seatLayout.ts; each seat's piles are turned to face their owner. */
+.poker-table {
+  position: relative;
+  width: 100%;
+  max-width: 760px;
+  min-height: 0;
+  margin: 0 auto;
+}
+
+.poker-rail,
+.poker-felt {
+  position: absolute;
+  border-radius: 50%;
+}
+
+.poker-rail {
+  background: linear-gradient(180deg, #9a5a30, #6e3b1f 55%, #4e2913);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+}
+
+.poker-felt {
+  background: radial-gradient(ellipse at 50% 45%, var(--felt-0), var(--felt-1) 55%, var(--felt-2));
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.35), inset 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.poker-table .opponents-area,
+.poker-table .table-seat {
+  display: contents;
+}
+
+.table-centre {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+.table-centre .pile-stack {
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.table-centre .draw-pile-card,
+.table-centre .discard-pile-card {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: auto;
+  height: auto;
+}
+
+.table-centre .table-draw-deck {
+  position: relative;
+  width: calc(var(--pile-w, 50px) + 3px);
+  aspect-ratio: 1 / 1.4;
+}
+
+.table-centre .pile-count {
+  position: static;
+  padding: 0;
+  background: none;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+  transform: none;
+}
+
+.table-centre .discard-pile-button {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: auto;
+  height: auto;
+  min-height: 0;
+}
+
+.table-centre .discard-empty {
+  width: var(--pile-w, 50px);
+  aspect-ratio: 1 / 1.4;
+  border-radius: 5px;
+}
+
+.poker-table .seat-pill {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 160px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 4px 12px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+.poker-table .seat-pill.active {
+  box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.poker-table .seat-pill.is-prompted {
+  background: color-mix(in srgb, var(--gold) 22%, rgba(0, 0, 0, 0.72));
+}
+
+.poker-table .seat-pill .opponent-open {
+  border-radius: 999px;
+}
+
+.poker-table .seat-pill-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.poker-table .seat-pill .opponent-head h3 {
+  overflow: hidden;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+}
+
+.poker-table .seat-pill .opponent-stats {
+  gap: 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--soft-75);
+}
+
+.seat-piles {
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.seat-piles-rows {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.seat-piles .property-lane {
+  --reveal: calc(var(--lane-w) * 0.3);
+  gap: 2px;
+}
+
+.seat-piles .property-cards {
+  padding: 0;
+  box-shadow: none;
+}
+
+.seat-piles .property-card-wrap {
+  top: calc(var(--i) * var(--reveal));
+  left: 0;
+}
+
+.seat-piles .property-lane.is-complete .property-cards {
+  box-shadow: 0 0 0 1.5px var(--gold), 0 0 8px color-mix(in srgb, var(--gold) 50%, transparent);
+}
+
+/* A label wider than a small card hangs below it without widening the pile. */
+.seat-piles .property-lane-status,
+.seat-piles .bank-total {
+  display: flex;
+  justify-content: center;
+  width: var(--lane-w);
+  font-size: max(8px, min(11px, calc(var(--lane-w) * 0.24)));
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.seat-piles .bank-stack {
+  --bank-step: calc(var(--lane-w) * 0.12);
+  gap: 2px;
+}
+
+.seat-piles .bank-stack .zone-bank::before {
+  display: none;
+}
+
+.player-board.viewer-board {
+  position: absolute;
+  padding: 0;
+  background: none;
+}
+
+.viewer-board .player-board-lanes {
+  justify-content: center;
+}
+
+.poker-table .viewer-pill {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+.poker-table .viewer-pill h3 {
+  font-size: 0.86rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.poker-table .viewer-pill.is-current {
+  box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.hand-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 50px;
+  border-radius: 16px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.hand-bar .icon {
+  width: 14px;
+  height: 14px;
+  transform: rotate(-90deg);
+}
 
 .viewer-seat {
   display: contents;
@@ -2103,39 +2341,6 @@
     --board-card-w: 112px;
   }
 
-  .table-main {
-    grid-template-columns: 280px minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto auto;
-    grid-template-areas:
-      'opponents status'
-      'opponents board'
-      'actions actions'
-      'hand hand';
-    column-gap: 12px;
-  }
-
-  .opponents-area,
-  .opponents-area.count-3,
-  .opponents-area.count-4 {
-    grid-template-columns: minmax(0, 1fr);
-    align-content: start;
-    overflow-y: auto;
-    scrollbar-width: none;
-  }
-
-  .opponents-area.count-3 .mini-board,
-  .opponents-area.count-4 .mini-board {
-    display: flex;
-  }
-
-  .opponents-area.count-3 .opponent-summary:has(.mini-board) .set-progress-bar,
-  .opponents-area.count-4 .opponent-summary:has(.mini-board) .set-progress-bar {
-    display: none;
-  }
-
-  .mini-board {
-    max-height: 160px;
-  }
 }
 
 /* A phone on its side is wide but very short. */
