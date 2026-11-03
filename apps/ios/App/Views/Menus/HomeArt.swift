@@ -16,10 +16,10 @@ enum HomePalette {
     static let buttonInk = Color(hex: 0x2A1608)
     static let practice = (Color(hex: 0x3557A8), Color(hex: 0x223C7E))
     static let online = (Color(hex: 0x7140AE), Color(hex: 0x4B2382))
-    static let daily = (Color(hex: 0x1F9290), Color(hex: 0x116566))
+    static let daily = (Color(hex: 0x16807E), Color(hex: 0x0D5556))
     static let resume = (Color(hex: 0x9A4637), Color(hex: 0x6E2A2B))
     static let panel = Color(hex: 0x4A1830, opacity: 0.72)
-    static let tile = Color(hex: 0x5A2440, opacity: 0.78)
+    static let tile = Color(hex: 0x4E1C37)
 }
 
 /// The dusk sky behind the home screen, with a glow low on the horizon.
@@ -199,7 +199,7 @@ struct HomeModeTile<Badge: View>: View {
                 }
                 Text(detail)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(SoftWhite(0.85))
+                    .foregroundStyle(.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
             }
@@ -235,13 +235,15 @@ struct HomeMenuTile: View {
                 .frame(height: 30)
             Text(title)
                 .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .tracking(-0.3)
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 2)
         .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, minHeight: 80)
+        .frame(maxWidth: .infinity, minHeight: 80, maxHeight: .infinity)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(HomePalette.tile))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)

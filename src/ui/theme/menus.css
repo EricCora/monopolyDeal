@@ -66,7 +66,7 @@
 .home-hero {
   --hero-scale: min(1, calc((min(100vw, 560px) - 32px) * 0.62 / 250px));
   position: relative;
-  height: calc(220px * var(--hero-scale) + 60px);
+  height: calc(220px * var(--hero-scale) + 64px);
 }
 
 .home-skyline {
@@ -89,7 +89,7 @@
 .home-hand {
   position: absolute;
   right: 0;
-  bottom: 6px;
+  bottom: 34px;
   width: 170px;
   height: 200px;
   transform: scale(var(--hero-scale));
@@ -212,11 +212,16 @@
   letter-spacing: -1px;
 }
 
+/* A soft dark scrim keeps the tagline readable over the skyline's lit windows. */
 .home-subtitle {
+  justify-self: start;
+  margin-left: -8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
   font-size: 0.88rem;
   font-weight: 600;
   color: #fff;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .home-new-game {
@@ -306,12 +311,12 @@
   display: block;
   font-size: 0.75rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.85);
+  color: #fff;
 }
 
 .home-mode.is-practice { background: linear-gradient(180deg, #3557a8, #223c7e); }
 .home-mode.is-online { background: linear-gradient(180deg, #7140ae, #4b2382); }
-.home-mode.is-daily { background: linear-gradient(180deg, #1f9290, #116566); }
+.home-mode.is-daily { background: linear-gradient(180deg, #16807e, #0d5556); }
 
 .home-live-dot {
   display: inline-block;
@@ -477,7 +482,7 @@
 .home-menu {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .home-menu-tile {
@@ -490,7 +495,7 @@
   padding: 12px 6px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 18px;
-  background: rgba(90, 36, 64, 0.78);
+  background: #4e1c37;
   color: #fff;
   container-type: inline-size;
 }
@@ -504,6 +509,7 @@
   overflow: hidden;
   font-size: 0.88rem;
   font-weight: 600;
+  letter-spacing: -0.3px;
   white-space: nowrap;
 }
 

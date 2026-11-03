@@ -55,25 +55,31 @@ struct HomeView: View {
                 .scaleEffect(scale)
                 .frame(width: 170 * scale, height: 200 * scale)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .padding(.bottom, 6)
+                .padding(.bottom, 34)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 HomeLogo()
                     .scaleEffect(scale, anchor: .topLeading)
                     .frame(width: 250 * scale, height: 220 * scale, alignment: .topLeading)
-                    .accessibilityElement()
-                    .accessibilityLabel("Monopoly Deal")
-                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityRepresentation {
+                        Text("Monopoly Deal")
+                            .font(.largeTitle)
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                // A soft dark scrim keeps the tagline readable over the skyline's lit windows.
                 Text("Collect three sets. Trust no one.")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.5), radius: 4, y: 2)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(.black.opacity(0.35)))
+                    .padding(.leading, -8)
             }
             .padding(.bottom, 10)
         }
-        .frame(height: 220 * scale + 60)
+        .frame(height: 220 * scale + 64)
     }
 
     // MARK: Play
@@ -254,23 +260,22 @@ struct HomeView: View {
     // MARK: Menu
 
     private var menuRow: some View {
-        let tiles: [(String, String, String, () -> Void)] = [
-            ("Saved Games", "archivebox.fill", "home.saved", { app.path.append(.saved) }),
-            ("Stats", "chart.bar.fill", "home.stats", { app.path.append(.stats) }),
-            ("Rules", "book.fill", "home.rules", { showRules = true }),
-            ("Settings", "gearshape.fill", "home.settings", { app.path.append(.settings) }),
-        ]
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: typeSize.isAccessibilitySize ? 2 : 4)
-        return LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(tiles, id: \.2) { title, icon, id, action in
-                Button(action: action) {
-                    HomeMenuTile(title: title, icon: icon)
-                }
-                .buttonStyle(HomePressStyle())
-                .accessibilityLabel(title)
-                .accessibilityIdentifier(id)
-            }
+        let row = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+        return row {
+            menuTile("Saved Games", icon: "archivebox.fill", id: "home.saved") { app.path.append(.saved) }
+            menuTile("Stats", icon: "chart.bar.fill", id: "home.stats") { app.path.append(.stats) }
+            menuTile("Rules", icon: "book.fill", id: "home.rules") { showRules = true }
+            menuTile("Settings", icon: "gearshape.fill", id: "home.settings") { app.path.append(.settings) }
         }
+        .fixedSize(horizontal: false, vertical: !typeSize.isAccessibilitySize)
+    }
+
+    private func menuTile(_ title: String, icon: String, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HomeMenuTile(title: title, icon: icon)
+        }
+        .buttonStyle(HomePressStyle())
+        .accessibilityIdentifier(id)
     }
 }
 
