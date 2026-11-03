@@ -94,6 +94,18 @@ extension TableTheme {
         }
     }
 
+    /// The poker table's felt, lightest in the middle.
+    var feltColors: [Color] {
+        switch self {
+        case .premium_tabletop: [Color(hex: 0x2B5C4A), Color(hex: 0x1D4537), Color(hex: 0x14332A)]
+        case .classic_green: [Color(hex: 0x2E7A50), Color(hex: 0x1E5A3A), Color(hex: 0x123D27)]
+        case .neon_arcade: [Color(hex: 0x3B1A78), Color(hex: 0x2A115A), Color(hex: 0x170A38)]
+        case .sunset_lounge: [Color(hex: 0x8A3A2C), Color(hex: 0x5E2230), Color(hex: 0x3A1424)]
+        case .royal_velvet: [Color(hex: 0x5A2580), Color(hex: 0x3E1760), Color(hex: 0x250C3C)]
+        case .midnight_vault: [Color(hex: 0x22304A), Color(hex: 0x161F33), Color(hex: 0x0C111D)]
+        }
+    }
+
     var accent: Color {
         switch self {
         case .premium_tabletop: Palette.gold

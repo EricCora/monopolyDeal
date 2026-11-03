@@ -31,39 +31,32 @@ struct TableView: View {
         GeometryReader { geometry in
             let wide = geometry.size.width > 700
             let phoneHand = min(118, geometry.size.width * 0.27)
-            let phoneLane = geometry.size.height > 800 ? min(84, geometry.size.width * 0.19) : 62
             ZStack(alignment: .bottom) {
                 TableBackground(style: app.preferences.tableStyle)
 
                 VStack(spacing: 8) {
                     topBar
                     if let extras { extras }
-                    if wide {
-                        HStack(alignment: .top, spacing: 12) {
-                            OpponentColumn(session: session, ui: ui, wide: true)
-                                .frame(width: 280)
-                            VStack(spacing: 8) {
-                                statusRow
-                                playerBoard(cardWidth: 112)
-                            }
-                        }
-                    } else {
-                        OpponentColumn(session: session, ui: ui, wide: false, showsBoards: geometry.size.height > 760)
-                        statusRow
-                        playerBoard(cardWidth: phoneLane)
-                    }
+                    statusRow
+                    PokerTable(session: session, actions: actions, ui: ui, space: cardSpace, accent: app.preferences.tableStyle.accent)
+                        .frame(maxWidth: wide ? 760 : .infinity, maxHeight: .infinity)
                     if (session.isViewersPrompt || session.viewerId != nil) && !session.isReplay {
                         actionBar
                     }
-                    HandFan(
-                        session: session,
-                        actions: actions,
-                        ui: ui,
-                        cardWidth: wide ? 170 : phoneHand,
-                        space: cardSpace,
-                        animatesDeal: cardsAnimate
-                    )
-                    .allowsHitTesting(!session.isReplay)
+                    if handShown {
+                        HandFan(
+                            session: session,
+                            actions: actions,
+                            ui: ui,
+                            cardWidth: wide ? 170 : phoneHand,
+                            space: cardSpace,
+                            animatesDeal: cardsAnimate
+                        )
+                        .allowsHitTesting(!session.isReplay)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else if let viewer = session.viewer {
+                        handBar(viewer)
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 4)
@@ -150,6 +143,9 @@ struct TableView: View {
         .onChange(of: session.isViewersPrompt) { _, yours in
             if yours { AccessibilityNotification.Announcement("Your move").post() }
         }
+        .onChange(of: session.game?.currentPlayerIndex) {
+            ui.handOpen = false
+        }
         .onChange(of: session.prompt) {
             ui.notice = nil
             ui.chooser = nil
@@ -204,8 +200,6 @@ struct TableView: View {
             if let clock = session.turnClock { TurnClockPill(clock: clock) }
 
             PlaysPips(used: session.game?.turn.playsUsed ?? 0, total: session.game.map { Engine.ruleset($0).maxPlaysPerTurn } ?? 3)
-
-            PileStack(session: session, ui: ui)
         }
     }
 
@@ -334,24 +328,29 @@ struct TableView: View {
         }
     }
 
-    // MARK: Board
+    // MARK: Hand
 
-    @ViewBuilder
-    private func playerBoard(cardWidth: CGFloat) -> some View {
-        if let viewer = session.viewer {
-            PlayerBoard(player: viewer, session: session, actions: actions, cardWidth: cardWidth, space: cardSpace)
-                .frame(maxHeight: .infinity)
-        } else {
-            VStack(spacing: 8) {
-                Image(systemName: "eye.slash")
-                    .font(.title2)
-                Text(session.isSpectating ? "You're watching. Every hand stays hidden." : "Hands are hidden until the next player takes the phone.")
-                    .font(.subheadline)
-                    .multilineTextAlignment(.center)
+    /// On other players' turns the hand folds away, so the table has the room.
+    private var handShown: Bool {
+        guard let game = session.game, let viewerId = session.viewerId, !session.isReplay else { return true }
+        return ui.handOpen || session.isViewersPrompt || game.players[game.currentPlayerIndex].id == viewerId
+    }
+
+    private func handBar(_ viewer: PlayerState) -> some View {
+        Button {
+            withAnimation(.snappy) { ui.handOpen = true }
+        } label: {
+            HStack(spacing: 8) {
+                Text("Your hand · \(viewer.hand.count) card\(viewer.hand.count == 1 ? "" : "s")")
+                Image(systemName: "chevron.up")
             }
-            .foregroundStyle(SoftWhite(0.6))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .font(.subheadline.weight(.heavy))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .dealGlass(tint: Color.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("table.handBar")
     }
 
     // MARK: Action bar
@@ -467,6 +466,8 @@ struct TableView: View {
             return
         }
         guard actor != session.viewerId else { return }
+        // A card played on you already comes up large, waiting for your answer.
+        if case .counter(let request) = game.pending, request.awaitingPlayerId == session.viewerId { return }
         let spotlight = PlaySpotlight(cardId: newTop, playerName: session.playerName(actor))
         AccessibilityNotification.Announcement("\(spotlight.playerName) played \(CardText.spokenName(card))").post()
         guard !app.preferences.reducedEffects else { return }
@@ -659,55 +660,6 @@ private struct PlaysPips: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(used) of \(total) plays used")
         .accessibilityAddTraits(.isStaticText)
-    }
-}
-
-/// The deck and discard, drawn as small stacks.
-private struct PileStack: View {
-    var session: any TableSession
-    var ui: TableUI
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ZStack {
-                ForEach(0..<min(3, session.game?.drawPile.count ?? 0), id: \.self) { index in
-                    CardBack(width: 26)
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
-                        .offset(x: CGFloat(index) * 1.2, y: CGFloat(index) * -1.2)
-                }
-            }
-            .frame(width: 30, height: 40)
-            .overlay(alignment: .bottom) {
-                Text("\(session.game?.drawPile.count ?? 0)")
-                    .font(.caption2.weight(.heavy))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 5)
-                    .background(Capsule().fill(.black.opacity(0.65)))
-                    .offset(y: 5)
-                    .contentTransition(.numericText())
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(session.game?.drawPile.count ?? 0) cards in the deck")
-            .accessibilityIdentifier("table.deck")
-
-            Button {
-                ui.showDiscards = true
-            } label: {
-                Group {
-                    if let top = session.game?.discardPile.last {
-                        CardView(cardId: top, variant: session.variant, width: 28)
-                    } else {
-                        RoundedRectangle(cornerRadius: 3)
-                            .strokeBorder(.white.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [3]))
-                            .frame(width: 28, height: 39)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Discard pile, \(session.game?.discardPile.count ?? 0) cards")
-            .accessibilityHint("Shows every discarded card")
-            .accessibilityIdentifier("table.discards")
-        }
     }
 }
 

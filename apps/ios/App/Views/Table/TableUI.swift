@@ -55,6 +55,8 @@ final class TableUI {
     var spotlight: PlaySpotlight?
     var noStamp: JustSayNoStamp?
     var showBank = false
+    /// The hand, opened by hand on another player's turn.
+    var handOpen = false
     /// Bumped each time the viewer completes a set, to start the celebration.
     var setBurstToken = 0
     var setBanner: String?

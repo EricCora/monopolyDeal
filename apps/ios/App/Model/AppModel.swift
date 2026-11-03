@@ -137,6 +137,10 @@ final class AppModel {
     private func startFromSetupForAutoplay() {
         setup.variant = launch.autoplayVariant
         setup.playerCount = launch.autoplayPlayers
+        // Bots in every other seat keep you at the bottom of the table, for screenshots.
+        if UserDefaults.standard.bool(forKey: "autoplayBots") {
+            for index in 1..<setup.playerCount { setup.controllers[index] = .bot }
+        }
         startFromSetup()
     }
 
