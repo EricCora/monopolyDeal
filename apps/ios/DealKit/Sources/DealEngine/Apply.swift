@@ -1160,4 +1160,19 @@ extension Engine {
         if next.count > maxTurnSnapshots { next.remove(at: 1) }
         return next
     }
+
+    /// The moves a turn's player can take back. Mirrors `isReversibleActionType` in `apps/server/src/gameService.ts`.
+    public static let reversibleActionTypes: Set<ActionType> = [.draw_cards, .play_to_bank, .play_property, .play_action, .move_wild, .repay_debt]
+
+    /// Whether the turn's undo history survives this state. It doesn't once another player
+    /// has to answer, or the turn is over. Mirrors `shouldRetainTurnSnapshots` in `src/App.tsx`.
+    public static func shouldRetainTurnSnapshots(_ state: GameState, promptPlayerId: PlayerId) -> Bool {
+        if isGameOver(state).done { return false }
+        guard state.turn.phase == .action || (state.variant == .no_mercy && state.turn.phase == .debt) else { return false }
+        guard state.players[state.currentPlayerIndex].id == promptPlayerId else { return false }
+        switch state.pending {
+        case nil, .rent, .slyDeal, .forcedDeal, .dealBreaker, .debtCard, .noMercy: return true
+        case .counter, .payment: return false
+        }
+    }
 }

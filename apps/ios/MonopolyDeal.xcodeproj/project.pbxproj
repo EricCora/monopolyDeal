@@ -11,6 +11,7 @@
 		A10000000000000000000002 /* DealAI in Frameworks */ = {isa = PBXBuildFile; productRef = A20000000000000000000002 /* DealAI */; };
 		A10000000000000000000003 /* DealStats in Frameworks */ = {isa = PBXBuildFile; productRef = A20000000000000000000003 /* DealStats */; };
 		A10000000000000000000004 /* DealOnline in Frameworks */ = {isa = PBXBuildFile; productRef = A20000000000000000000004 /* DealOnline */; };
+		A10000000000000000000005 /* DealNearby in Frameworks */ = {isa = PBXBuildFile; productRef = A20000000000000000000005 /* DealNearby */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,6 +53,7 @@
 				A10000000000000000000002 /* DealAI in Frameworks */,
 				A10000000000000000000003 /* DealStats in Frameworks */,
 				A10000000000000000000004 /* DealOnline in Frameworks */,
+				A10000000000000000000005 /* DealNearby in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -109,6 +111,7 @@
 				A20000000000000000000002 /* DealAI */,
 				A20000000000000000000003 /* DealStats */,
 				A20000000000000000000004 /* DealOnline */,
+				A20000000000000000000005 /* DealNearby */,
 			);
 			productName = MonopolyDeal;
 			productReference = A60000000000000000000001 /* MonopolyDeal.app */;
@@ -413,6 +416,10 @@
 		A20000000000000000000004 /* DealOnline */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = DealOnline;
+		};
+		A20000000000000000000005 /* DealNearby */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DealNearby;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

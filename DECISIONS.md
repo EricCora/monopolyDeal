@@ -190,3 +190,12 @@ Eric plans to run agents concurrently. Tests, ports and iOS build folders are sa
 
 ## 2026-11-02: The home screen has its own look
 Eric asked for a home screen matching a reference image: a dusk sky with a skyline, a wordmark, a gold New Game button, colored Practice, Online and Daily Challenge tiles, a Continue Playing panel and a row of four tiles. It keeps that sky whatever the table style, which still applies to every other screen. The reference's mascot isn't drawn; a fanned hand of the game's own cards stands in its place. The Online tile says "Play with friends" instead of a live player count, because nothing counts players. The web's Practice tile still starts an easy game at once, with a small corner button for the other choices, so its tests and quick start are unchanged.
+## 2026-11-02: Nearby play runs on the host's phone, over Multipeer Connectivity
+Eric asked for games between nearby phones with no internet. One phone hosts and runs the Swift engine, playing the part of the room server: it masks hands, the deck and other people's debt cards as `maskForViewer` does, checks every move, and keeps the turn's undo history. Multipeer Connectivity was chosen because it uses both Bluetooth and peer-to-peer Wi-Fi with no router, and encrypts the link. The Network framework's peer-to-peer option has no Bluetooth. Letting every phone run the engine on shared moves was rejected, because each phone would then hold every hand. The spec is `docs/specs/2026-11-02-nearby-play.md`.
+
+## 2026-11-02: Nearby play is iOS only
+This is an exception to "every feature ships on web and iOS". A browser can't make Bluetooth or peer-to-peer Wi-Fi connections without a server to introduce the two, and that needs the internet. Nearby games are recorded in the history as their own mode, `nearby`, which only the iOS app writes.
+
+## 2026-11-02: A nearby table pauses for anyone away, and the host decides
+A dropped phone's seat waits with no time limit, unlike an online seat, because everyone is in the same room. The host can let a bot play for that seat, and the player takes it back when their phone returns. A move made against an older board is refused, as in a room. The screen stays on during a nearby game, because a locked phone drops its link. Chat, reactions, checkpoints, spectators, Speed and best-of-three are left out: the players can talk.
+

@@ -1,4 +1,5 @@
 import DealEngine
+import DealNearby
 import DealOnline
 import DealStats
 import Foundation
@@ -41,7 +42,7 @@ struct GameSetup {
 }
 
 enum AppRoute: Hashable {
-    case setup, saved, stats, settings, online
+    case setup, saved, stats, settings, online, nearby
 }
 
 /// App-wide state: navigation, stored data, and the game in progress.
@@ -66,6 +67,14 @@ final class AppModel {
     var storedRoom: RoomSession?
     var onlineError: String?
     var onlineBusy = false
+    /// Hosting a nearby table on this phone.
+    var nearbyHost: NearbyHostMatch?
+    /// A seat at another phone's nearby table, while it's on screen.
+    var nearbyGuest: NearbyGuestMatch?
+    /// Lists the tables close by. It keeps this phone's seat while the table is off screen.
+    var nearbyBrowser: NearbyGuest?
+    /// A table this phone was hosting, to continue.
+    var savedNearbyTable: NearbyTable?
     /// A finished game opened from a save, shown straight on the results screen.
     var viewedSummary: ViewedSummary?
     /// A saved game opened from the Stats screen, to watch it back.
@@ -90,6 +99,7 @@ final class AppModel {
             turnBaseURL: LaunchOptions().serverURL ?? RoomClient.productionTurnURL
         )
         storedRoom = SessionVault.load()
+        savedNearbyTable = NearbyVault.loadTable()
         reloadStoredData()
         if launch.resumeOnLaunch { resumeActive() }
         if let route = launch.route { path = [route] }
@@ -103,6 +113,7 @@ final class AppModel {
             preferences.onlineName = "iPhone Auto"
             Task { await joinRoom(code: room) }
         }
+        if let role = UserDefaults.standard.string(forKey: "autoplayNearby") { startNearbyAutoplay(role) }
         #endif
     }
 
@@ -400,14 +411,130 @@ final class AppModel {
         switch phase {
         case .active:
             if let match = onlineMatch { Task { await match.connection.connect() } }
+            nearbyHost?.start()
+            if nearbyGuest != nil {
+                nearbyBrowser?.start()
+            } else if path.last == .nearby {
+                nearbyBrowser?.browse()
+            }
             dailyChallenge = store.dailyChallenge()
         case .background:
             onlineMatch?.connection.stop()
             localMatch?.saveNow()
+            // The phone stops listening in the background anyway. The others wait, and rejoin when it's back.
+            nearbyHost?.suspend()
+            nearbyBrowser?.stop()
         default:
             break
         }
     }
+
+    // MARK: Nearby
+
+    private func nearbyName() -> String {
+        let trimmed = preferences.onlineName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Player" : String(trimmed.prefix(Nearby.maxNameLength))
+    }
+
+    /// The Nearby screen is showing: list the tables close by.
+    func openNearbyScreen() {
+        if nearbyBrowser == nil {
+            let browser = NearbyGuest(transport: MultipeerGuestTransport(displayName: nearbyName()), name: nearbyName(), session: NearbyVault.loadGuestSession())
+            browser.onSessionChange = { NearbyVault.saveGuestSession($0) }
+            nearbyBrowser = browser
+        }
+        nearbyBrowser?.name = nearbyName()
+        guard nearbyHost == nil else { return }
+        if nearbyGuest == nil { nearbyBrowser?.browse() }
+    }
+
+    func closeNearbyScreen() {
+        if nearbyGuest == nil { nearbyBrowser?.stop() }
+    }
+
+    /// Hosts a new table, or continues the saved one.
+    func hostNearby(continuing: Bool) {
+        nearbyBrowser?.stop()
+        let table = continuing ? savedNearbyTable ?? NearbyTable(hostName: nearbyName()) : NearbyTable(hostName: nearbyName())
+        NearbyVault.saveTable(table)
+        savedNearbyTable = table
+        let match = NearbyHostMatch(
+            table: table,
+            store: store,
+            preferences: { [weak self] in self?.preferences ?? Preferences() },
+            onFeedback: { [weak self] tone in self?.feedback(tone) }
+        )
+        if let delay = launch.botDelay { match.host.botDelay = delay }
+        nearbyHost = match
+        match.start()
+    }
+
+    /// Leaves the table screen. The others wait, and the table can be continued from the Nearby screen.
+    func exitNearbyHost() {
+        guard let match = nearbyHost else { return }
+        match.suspend()
+        savedNearbyTable = match.host.table
+        nearbyHost = nil
+        reloadStoredData()
+        if path.last == .nearby { openNearbyScreen() }
+    }
+
+    /// Ends the table for everyone.
+    func closeNearbyTable() {
+        nearbyHost?.host.close()
+        nearbyHost = nil
+        discardNearbyTable()
+        reloadStoredData()
+        if path.last == .nearby { openNearbyScreen() }
+    }
+
+    func discardNearbyTable() {
+        NearbyVault.clearTable()
+        savedNearbyTable = nil
+    }
+
+    func joinNearby(_ table: NearbyTableAd) {
+        guard let browser = nearbyBrowser else { return }
+        browser.name = nearbyName()
+        nearbyGuest = NearbyGuestMatch(
+            guest: browser,
+            store: store,
+            preferences: { [weak self] in self?.preferences ?? Preferences() },
+            onFeedback: { [weak self] tone in self?.feedback(tone) }
+        )
+        browser.join(table)
+    }
+
+    /// Leaves the table screen but keeps the seat, to rejoin from the Nearby screen.
+    func exitNearbyGuest() {
+        nearbyBrowser?.stepAway()
+        nearbyGuest = nil
+        reloadStoredData()
+    }
+
+    /// Gives the seat up for good. A bot plays it from here.
+    func leaveNearbyTable() {
+        nearbyBrowser?.leave()
+        nearbyGuest = nil
+        reloadStoredData()
+    }
+
+    #if DEBUG
+    /// Device tests: `-autoplayNearby host` hosts a table and starts once someone joins,
+    /// `-autoplayNearby join` joins the first table found. Each phone plays its own seat.
+    private func startNearbyAutoplay(_ role: String) {
+        preferences.onlineName = role == "host" ? "Auto Host" : "Auto Guest"
+        NearbyVault.saveGuestSession(nil)
+        if role == "host" {
+            discardNearbyTable()
+            hostNearby(continuing: false)
+            NearbyAutoplay.watchHost(self)
+        } else {
+            openNearbyScreen()
+            NearbyAutoplay.watchGuest(self)
+        }
+    }
+    #endif
 
     // MARK: Links
 
@@ -449,6 +576,7 @@ struct LaunchOptions {
         case "stats": .stats
         case "settings": .settings
         case "online": .online
+        case "nearby": .nearby
         default: nil
         }
     }

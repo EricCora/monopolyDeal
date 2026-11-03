@@ -22,6 +22,15 @@
 		<key>UIColorName</key>
 		<string>LaunchBackground</string>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Monopoly Deal finds phones close by so you can play at one table without the internet.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_mdeal-nearby._tcp</string>
+		<string>_mdeal-nearby._udp</string>
+	</array>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Monopoly Deal uses Bluetooth to connect to phones close by when there's no Wi-Fi.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

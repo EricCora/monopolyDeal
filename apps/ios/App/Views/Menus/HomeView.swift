@@ -114,55 +114,81 @@ struct HomeView: View {
     private var modeTiles: some View {
         let row = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
         let daily = app.dailyChallenge
-        return row {
-            Button {
-                practiceOptions = true
-            } label: {
-                HomeModeTile(title: "Practice", detail: "Learn & refine", icon: "person.3.fill", colors: HomePalette.practice) { EmptyView() }
+        return VStack(spacing: 10) {
+            row {
+                practiceTile
+                onlineTile
             }
-            .buttonStyle(HomePressStyle())
-            .accessibilityIdentifier("home.practice")
-            .confirmationDialog("Practice Against a Bot", isPresented: $practiceOptions, titleVisibility: .visible) {
-                Button("Classic, Easy") { app.startPractice() }
-                    .accessibilityIdentifier("practice.classicEasy")
-                Button("Classic, Hard") { app.startPractice(hard: true) }
-                Button("No Mercy, Easy") { app.startPractice(variant: .no_mercy) }
-                    .accessibilityIdentifier("practice.noMercyEasy")
-                Button("No Mercy, Hard") { app.startPractice(variant: .no_mercy, hard: true) }
-                Button("Cancel", role: .cancel) {}
+            row {
+                nearbyTile
+                dailyTile(daily)
             }
-
-            Button {
-                app.path.append(.online)
-            } label: {
-                HomeModeTile(title: "Online", detail: "Play with friends", icon: "globe", colors: HomePalette.online, showsLiveDot: true) { EmptyView() }
-            }
-            .buttonStyle(HomePressStyle())
-            .accessibilityIdentifier("home.online")
-
-            Button {
-                app.startDailyChallenge()
-            } label: {
-                HomeModeTile(
-                    title: "Daily Challenge",
-                    detail: daily.completed ? "Beaten in \(daily.bestTurnCount ?? 0) turns" : "Win within \(daily.targetTurns) turns",
-                    icon: daily.completed ? "checkmark.seal.fill" : "calendar",
-                    colors: HomePalette.daily
-                ) {
-                    Image(systemName: daily.completed ? "checkmark" : "sparkle")
-                        .font(.system(size: 15, weight: .black))
-                        .foregroundStyle(HomePalette.buttonInk)
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(HomePalette.buttonGold))
-                        .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1))
-                }
-            }
-            .buttonStyle(HomePressStyle())
-            .accessibilityLabel("Daily Challenge")
-            .accessibilityValue(dailyDetail)
-            .accessibilityIdentifier("home.daily")
         }
         .fixedSize(horizontal: false, vertical: !typeSize.isAccessibilitySize)
+    }
+
+    private var practiceTile: some View {
+        Button {
+            practiceOptions = true
+        } label: {
+            HomeModeTile(title: "Practice", detail: "Learn & refine", icon: "person.3.fill", colors: HomePalette.practice) { EmptyView() }
+        }
+        .buttonStyle(HomePressStyle())
+        .accessibilityIdentifier("home.practice")
+        .confirmationDialog("Practice Against a Bot", isPresented: $practiceOptions, titleVisibility: .visible) {
+            Button("Classic, Easy") { app.startPractice() }
+                .accessibilityIdentifier("practice.classicEasy")
+            Button("Classic, Hard") { app.startPractice(hard: true) }
+            Button("No Mercy, Easy") { app.startPractice(variant: .no_mercy) }
+                .accessibilityIdentifier("practice.noMercyEasy")
+            Button("No Mercy, Hard") { app.startPractice(variant: .no_mercy, hard: true) }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private var onlineTile: some View {
+        Button {
+            app.path.append(.online)
+        } label: {
+            HomeModeTile(title: "Online", detail: "Play with friends", icon: "globe", colors: HomePalette.online, showsLiveDot: true) { EmptyView() }
+        }
+        .buttonStyle(HomePressStyle())
+        .accessibilityIdentifier("home.online")
+    }
+
+    /// Phones close together, with no internet. iOS only.
+    private var nearbyTile: some View {
+        Button {
+            app.path.append(.nearby)
+        } label: {
+            HomeModeTile(title: "Nearby", detail: "No internet needed", icon: "antenna.radiowaves.left.and.right", colors: HomePalette.nearby) { EmptyView() }
+        }
+        .buttonStyle(HomePressStyle())
+        .accessibilityIdentifier("home.nearby")
+    }
+
+    private func dailyTile(_ daily: DailyChallenge) -> some View {
+        Button {
+            app.startDailyChallenge()
+        } label: {
+            HomeModeTile(
+                title: "Daily Challenge",
+                detail: daily.completed ? "Beaten in \(daily.bestTurnCount ?? 0) turns" : "Win within \(daily.targetTurns) turns",
+                icon: daily.completed ? "checkmark.seal.fill" : "calendar",
+                colors: HomePalette.daily
+            ) {
+                Image(systemName: daily.completed ? "checkmark" : "sparkle")
+                    .font(.system(size: 15, weight: .black))
+                    .foregroundStyle(HomePalette.buttonInk)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(HomePalette.buttonGold))
+                    .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1))
+            }
+        }
+        .buttonStyle(HomePressStyle())
+        .accessibilityLabel("Daily Challenge")
+        .accessibilityValue(dailyDetail)
+        .accessibilityIdentifier("home.daily")
     }
 
     private var dailyDetail: String {

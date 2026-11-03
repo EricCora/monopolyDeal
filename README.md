@@ -109,6 +109,8 @@ open apps/ios/MonopolyDeal.xcodeproj
 
 To run it on an iPhone, select your phone in Xcode and press Run. iOS and browser players can share a room. See `apps/ios/README.md` for a device checklist.
 
+- Nearby play: iPhones close together can play at one table with no internet, over Bluetooth and peer-to-peer Wi-Fi. One phone hosts and runs the rules. This is iOS only, because a browser can't make those connections.
+
 - Rules: `apps/ios/DealKit/Sources/DealEngine` mirrors `src/engine`. `npm run traces:record` records games from the TypeScript engine, and the Swift tests must reproduce them exactly.
 - Verification: `npm run ios:verify` runs the Swift tests, including full matches against a local room server, then builds the app and runs its UI tests.
 - Links: `monopolydeal://join/CODE` opens the app on a room code.
@@ -261,7 +263,7 @@ Game state and stats are stored in browser `localStorage` under versioned keys:
 
 - Local pass-and-play, and practice against bots
 - Live rooms and turn-by-turn rooms, with bots beside people
-- Native iOS app with the same features (`apps/ios/`)
+- Native iOS app with the same features (`apps/ios/`), plus nearby play between iPhones with no internet
 - Private invite-link multiplayer (`/join/:roomCode`)
 - Installable PWA for iPhone and other modern mobile browsers
 - Legacy LAN scaffold is retained in the repo for development fallback but is not the primary user flow

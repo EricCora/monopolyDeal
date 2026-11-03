@@ -4,6 +4,8 @@ import Foundation
 /// Mirrors `src/stats/` and the save schema in `src/persistence/storage.ts`.
 public enum MatchMode: String, Codable, Hashable, Sendable {
     case hot_seat, practice, daily_challenge, live_online
+    /// Phones at one table with no internet. iOS only, so the web's stats never see it.
+    case nearby
 
     public var label: String {
         switch self {
@@ -11,6 +13,7 @@ public enum MatchMode: String, Codable, Hashable, Sendable {
         case .practice: "Practice"
         case .daily_challenge: "Daily Challenge"
         case .live_online: "Online"
+        case .nearby: "Nearby"
         }
     }
 }

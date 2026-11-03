@@ -575,7 +575,7 @@ struct OpponentColumn: View {
             isCurrent: session.game.map { $0.players[$0.currentPlayerIndex].id == player.id } ?? false,
             needed: session.game.map { Engine.ruleset($0).winCompleteSets } ?? 3,
             connection: (session as? OnlineMatch)?.view?.players.first { $0.id == player.id },
-            botPlaying: (session as? OnlineMatch)?.botSeatIds.contains(player.id) == true
+            botPlaying: session.botSeatIds.contains(player.id)
         ) {
             ui.inspectedOpponent = player.id
         }

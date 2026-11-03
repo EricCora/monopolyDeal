@@ -30,6 +30,7 @@ struct RootView: View {
                     case .stats: StatsView()
                     case .settings: SettingsView()
                     case .online: OnlineHomeView()
+                    case .nearby: NearbyHomeView()
                     }
                 }
         }
@@ -55,6 +56,22 @@ struct RootView: View {
                 .environment(app)
                 .environment(\.cardBackStyle, app.preferences.cardBack)
         }
+        .fullScreenCover(item: Binding(
+            get: { app.nearbyHost.map(NearbyHostBox.init) },
+            set: { if $0 == nil { app.exitNearbyHost() } }
+        )) { box in
+            NearbyHostGameView(match: box.match)
+                .environment(app)
+                .environment(\.cardBackStyle, app.preferences.cardBack)
+        }
+        .fullScreenCover(item: Binding(
+            get: { app.nearbyGuest.map(NearbyGuestBox.init) },
+            set: { if $0 == nil { app.exitNearbyGuest() } }
+        )) { box in
+            NearbyGuestGameView(match: box.match)
+                .environment(app)
+                .environment(\.cardBackStyle, app.preferences.cardBack)
+        }
         .sheet(item: $app.viewedSummary) { viewed in
             PostGameView(summary: viewed.summary, game: viewed.game, unlocked: [], primaryTitle: nil, onPrimary: {}, onClose: { app.viewedSummary = nil })
                 .environment(app)
@@ -69,5 +86,15 @@ private struct LocalMatchBox: Identifiable {
 
 private struct OnlineMatchBox: Identifiable {
     let match: OnlineMatch
+    var id: ObjectIdentifier { ObjectIdentifier(match) }
+}
+
+private struct NearbyHostBox: Identifiable {
+    let match: NearbyHostMatch
+    var id: ObjectIdentifier { ObjectIdentifier(match) }
+}
+
+private struct NearbyGuestBox: Identifiable {
+    let match: NearbyGuestMatch
     var id: ObjectIdentifier { ObjectIdentifier(match) }
 }

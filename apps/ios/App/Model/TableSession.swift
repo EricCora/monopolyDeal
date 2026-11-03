@@ -11,6 +11,12 @@ struct TurnClockInfo: Equatable {
     var deadline: Date?
 }
 
+struct PauseAction {
+    var title: String
+    var systemImage: String
+    var run: () -> Void
+}
+
 /// What the table screen needs from a game, local or online.
 @MainActor
 protocol TableSession: AnyObject {
@@ -37,6 +43,10 @@ protocol TableSession: AnyObject {
     var isSpectating: Bool { get }
     /// A finished game playing back. Nothing can be played.
     var isReplay: Bool { get }
+    /// Seats a bot is playing for someone who dropped out.
+    var botSeatIds: [PlayerId] { get }
+    /// Something the pause screen offers besides leaving, such as letting a bot play for someone away.
+    var pauseAction: PauseAction? { get }
 
     func perform(_ action: Action)
     func undo()
@@ -49,6 +59,8 @@ extension TableSession {
     var series: MatchSeries? { nil }
     var isSpectating: Bool { false }
     var isReplay: Bool { false }
+    var botSeatIds: [PlayerId] { [] }
+    var pauseAction: PauseAction? { nil }
 
     var variant: GameVariant { game?.resolvedVariant ?? .classic }
 
@@ -229,21 +241,9 @@ final class LocalMatch: TableSession {
 
     // MARK: Actions
 
-    private static let reversible: Set<ActionType> = [.draw_cards, .play_to_bank, .play_property, .play_action, .move_wild, .repay_debt]
-
-    private func shouldRetainSnapshots(_ state: GameState, promptPlayerId: PlayerId) -> Bool {
-        if Engine.isGameOver(state).done { return false }
-        guard state.turn.phase == .action || (state.variant == .no_mercy && state.turn.phase == .debt) else { return false }
-        guard state.players[state.currentPlayerIndex].id == promptPlayerId else { return false }
-        switch state.pending {
-        case nil, .rent, .slyDeal, .forcedDeal, .dealBreaker, .debtCard, .noMercy: return true
-        case .counter, .payment: return false
-        }
-    }
-
     func perform(_ action: Action) {
         guard let game, !isPaused else { return }
-        let takeSnapshot = Self.reversible.contains(action.type) && prompt?.playerId == action.playerId
+        let takeSnapshot = Engine.reversibleActionTypes.contains(action.type) && prompt?.playerId == action.playerId
         let result = Engine.applyAction(game, action)
         if let error = result.error {
             errorMessage = error.message
@@ -260,7 +260,7 @@ final class LocalMatch: TableSession {
             logMarks.append(log?.actions.count ?? 0)
         }
         log?.actions.append(action)
-        if !shouldRetainSnapshots(result.state, promptPlayerId: nextPrompt)
+        if !Engine.shouldRetainTurnSnapshots(result.state, promptPlayerId: nextPrompt)
             || Engine.actionRevealedDeckCards(before: game, after: result.state, actionType: action.type) {
             turnSnapshots = []
             logMarks = []

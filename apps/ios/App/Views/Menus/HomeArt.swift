@@ -17,6 +17,7 @@ enum HomePalette {
     static let practice = (Color(hex: 0x3557A8), Color(hex: 0x223C7E))
     static let online = (Color(hex: 0x7140AE), Color(hex: 0x4B2382))
     static let daily = (Color(hex: 0x16807E), Color(hex: 0x0D5556))
+    static let nearby = (Color(hex: 0xA8482A), Color(hex: 0x74291A))
     static let resume = (Color(hex: 0x9A4637), Color(hex: 0x6E2A2B))
     static let panel = Color(hex: 0x4A1830, opacity: 0.72)
     static let tile = Color(hex: 0x4E1C37)

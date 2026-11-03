@@ -616,6 +616,12 @@ struct TableView: View {
                             .padding(.horizontal, 28)
                             .accessibilityIdentifier("pause.message")
                     }
+                    if let action = session.pauseAction {
+                        Button(action.title, systemImage: action.systemImage, action: action.run)
+                            .buttonStyle(PrimaryButtonStyle())
+                            .frame(maxWidth: 280)
+                            .accessibilityIdentifier("pause.action")
+                    }
                     if let deadline = session.pauseDeadline {
                         HStack(spacing: 6) {
                             Text("Seat held for")

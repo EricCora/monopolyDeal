@@ -10,7 +10,7 @@ Web and iOS apps with Classic and No Mercy variants: local pass-and-play, practi
 - `src/app/useMultiplayerRoom.ts`, `src/network/`: online client, reconnect and transport.
 - `apps/server/src/`: authoritative room server. `gameService.ts` holds room rules, `index.ts` the live server on Render, `turnRooms.ts` the same rules for turn-by-turn rooms on Vercel.
 - `api/`: the Vercel Function for those rooms. `turn-rooms.js` is generated: run `npm run build:turn-api`.
-- `apps/ios/`: the SwiftUI app. `DealKit/` holds the Swift engine, bots, stats and room client; `App/` holds the screens.
+- `apps/ios/`: the SwiftUI app. `DealKit/` holds the Swift engine, bots, stats, room client and nearby play (`DealNearby`, iOS only); `App/` holds the screens.
 
 ## Working here
 - **The repo lives at `~/Developer/monopolyDeal`.** Don't clone it onto the Desktop: iCloud offloads files there and stalls every tool.

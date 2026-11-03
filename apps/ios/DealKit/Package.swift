@@ -9,15 +9,17 @@ let package = Package(
         .library(name: "DealAI", targets: ["DealAI"]),
         .library(name: "DealStats", targets: ["DealStats"]),
         .library(name: "DealOnline", targets: ["DealOnline"]),
+        .library(name: "DealNearby", targets: ["DealNearby"]),
     ],
     targets: [
         .target(name: "DealEngine"),
         .target(name: "DealAI", dependencies: ["DealEngine"]),
         .target(name: "DealStats", dependencies: ["DealEngine"]),
         .target(name: "DealOnline", dependencies: ["DealEngine"]),
+        .target(name: "DealNearby", dependencies: ["DealEngine"]),
         .testTarget(
             name: "DealKitTests",
-            dependencies: ["DealEngine", "DealAI", "DealStats", "DealOnline"],
+            dependencies: ["DealEngine", "DealAI", "DealStats", "DealOnline", "DealNearby"],
             resources: [.copy("Fixtures")]
         ),
     ]

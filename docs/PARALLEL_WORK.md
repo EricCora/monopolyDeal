@@ -26,7 +26,7 @@ Keep worktrees outside `~/Desktop` and `~/Documents`. iCloud offloads files ther
 | `npm run quality` and tests | Safe in parallel | Nothing needed |
 | `npm run ios:verify --skip-ui` | Port and build folder are per checkout | `DEAL_VERIFY_PORT` overrides the port |
 | iOS UI tests and simulators | **One agent at a time** | They use named simulators, and the Mac has 8 GB of memory |
-| Installing on Eric's iPhone | **One agent at a time** | Only from a commit that's on `master` |
+| Installing on Eric's or Anna's iPhone | **One agent at a time** | Only from a commit that's on `master` |
 | Live site, Blob store | Shared | Don't run `npm run verify:turn-live` repeatedly: see Limits |
 
 Only run `npm run ios:verify` in full (with UI tests) if your agent is the only one using simulators.
@@ -41,6 +41,7 @@ These change together, so check `git log origin/master -- <path>` before startin
 | Local game flow | `src/App.tsx`, `apps/ios/App/Model/TableSession.swift` | High |
 | Table screen | `src/ui/screens/GameTableScreen.tsx`, `apps/ios/App/Views/Table/TablePieces.swift`, `TableView.swift` | High |
 | Rooms | `apps/server/src/gameService.ts`, `packages/shared/multiplayer.ts`, `src/app/useMultiplayerRoom.ts`, `apps/ios/DealKit/Sources/DealOnline/` | Medium |
+| Nearby play (iOS only) | `apps/ios/DealKit/Sources/DealNearby/`, `apps/ios/App/Model/NearbyMatch.swift`, `apps/ios/App/Views/Nearby/` | Low |
 | Stats and saves | `src/stats/`, `src/persistence/`, `apps/ios/DealKit/Sources/DealStats/` | Low |
 | Styles | `src/ui/theme/` | Low: add new rules at the end of a file |
 
