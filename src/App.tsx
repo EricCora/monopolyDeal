@@ -78,6 +78,7 @@ import {
   type MatchMode,
 } from './ui/experience';
 import { GameTableScreen } from './ui/screens/GameTableScreen';
+import { collapseShackPlacements } from './ui/shackOptions';
 import { shouldAskFirst, type CardInput } from './ui/tapPolicy';
 import { ReplayScreen } from './ui/screens/ReplayScreen';
 import { newlyUnlocked } from './ui/unlockables';
@@ -623,7 +624,7 @@ function App() {
 
   const cardActionVariants = useMemo(() => {
     const variants = new Map<string, CardActionVariant[]>();
-    legalActions.forEach((item, index) => {
+    collapseShackPlacements(legalActions).forEach((item, index) => {
       const cardId = actionToCardId(item.action);
       if (!cardId) return;
       const option: CardActionVariant = {
@@ -721,7 +722,7 @@ function App() {
   );
   const multiplayerCardActionVariants = useMemo(() => {
     const variants = new Map<string, CardActionVariant[]>();
-    multiplayerLegalActions.forEach((item, index) => {
+    collapseShackPlacements(multiplayerLegalActions).forEach((item, index) => {
       const cardId = actionToCardId(item.action);
       if (!cardId) return;
       const option: CardActionVariant = {

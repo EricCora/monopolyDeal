@@ -83,8 +83,14 @@ struct TableActions {
 
     /// Everything the hand card can do right now, in the order the rules list it.
     func options(forHandCard cardId: String) -> [CardOption] {
+        var shackSets = Set<String>()
         let options: [CardOption] = session.legalActions.enumerated().compactMap { index, legal in
             guard Self.handCardId(legal.action) == cardId else { return nil }
+            // A Shack is offered once per property it could attach to, but the player is
+            // choosing a set, so only the first placement in each set is shown.
+            let action = legal.action
+            if action.type == .play_property, action.attachedToCardId != nil,
+               !shackSets.insert("\(action.color?.rawValue ?? "")|\(action.setId ?? "")").inserted { return nil }
             return CardOption(id: index, label: describe(legal), detail: legal.previewText, legal: legal)
         }
         return orderingRent(options)
