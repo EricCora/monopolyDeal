@@ -547,7 +547,7 @@ extension Engine {
         let variant = gameVariant(state)
 
         if requiresEndTurnDiscard(state, player) {
-            return player.hand.map { cardId in
+            return discardableCards(state, player).map { cardId in
                 LegalAction(
                     label: "Discard \(cardLabel(cardId, variant))",
                     action: Action(.discard_card, playerId: playerId).with { $0.cardId = cardId }
