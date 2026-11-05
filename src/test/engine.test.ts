@@ -837,6 +837,53 @@ describe('engine basics', () => {
     expect(afterDiscard.currentPlayerIndex).toBe(1);
   });
 
+  it('does not allow discarding property cards while other cards are in hand', () => {
+    const state = mkState();
+    state.turn.playsUsed = 3;
+    state.players[0].hand = [
+      'money_1#x1',
+      'money_2#x2',
+      'pink_1#x3',
+      'orange_1#x4',
+      'wild_red_yellow#x5',
+      'wild_all#x6',
+      'green_1#x7',
+      'dark_blue_1#x8',
+    ];
+
+    const legal = getLegalActions(state, 'p1');
+    expect(legal.map((item) => item.action.type === 'discard_card' && item.action.cardId).sort())
+      .toEqual(['money_1#x1', 'money_2#x2']);
+
+    const rejected = applyAction(state, { type: 'discard_card', playerId: 'p1', cardId: 'wild_red_yellow#x5' });
+    expect(rejected.error?.code).toBe('invalid_action');
+    expect(rejected.state.discardPile).not.toContain('wild_red_yellow#x5');
+
+    const accepted = applyAction(state, { type: 'discard_card', playerId: 'p1', cardId: 'money_1#x1' });
+    expect(accepted.error).toBeUndefined();
+    expect(accepted.state.discardPile).toContain('money_1#x1');
+  });
+
+  it('allows discarding property cards when the hand holds nothing else', () => {
+    const state = mkState();
+    state.turn.playsUsed = 3;
+    state.players[0].hand = [
+      'pink_1#x1',
+      'pink_1#x2',
+      'orange_1#x3',
+      'orange_1#x4',
+      'red_1#x5',
+      'yellow_1#x6',
+      'green_1#x7',
+      'wild_all#x8',
+    ];
+
+    expect(getLegalActions(state, 'p1')).toHaveLength(8);
+    const result = applyAction(state, { type: 'discard_card', playerId: 'p1', cardId: 'pink_1#x1' });
+    expect(result.error).toBeUndefined();
+    expect(result.state.discardPile).toContain('pink_1#x1');
+  });
+
   it('applies custom hand-limit ruleset on end turn', () => {
     const state = createGame({
       seed: 60,
