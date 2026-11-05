@@ -28,12 +28,19 @@ struct GameSetup {
         )
     }
 
+    /// Gives a seat its bot name when it becomes a bot, and its "Player N" back when it stops.
+    mutating func setController(_ controller: PlayerController, at index: Int) {
+        controllers[index] = controller
+        names[index] = BotNames.seatName(names[index], at: index, for: controller)
+    }
+
     var players: [PlayerConfig] {
         (0..<playerCount).map { index in
-            let trimmed = names[index].trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = controllers[index] == .bot ? BotNames.seatName(names[index], at: index, for: .bot) : names[index]
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
             return PlayerConfig(
                 id: "p\(index + 1)",
-                name: trimmed.isEmpty ? "Player \(index + 1)" : trimmed,
+                name: trimmed.isEmpty ? BotNames.defaultSeatName(index) : trimmed,
                 controller: controllers[index],
                 botDifficulty: difficulties[index]
             )

@@ -44,6 +44,15 @@ describe('bots in a room', () => {
     expect(view.players[1]).toMatchObject({ isBot: true, botDifficulty: 'hard', ready: true, connected: true });
   });
 
+  it('gives each bot a name nobody at the table has', () => {
+    const { room: target, host } = room();
+    joinRoom(target, 'Ada');
+    addRoomBot(target, host.playerId, host.sessionToken);
+    addRoomBot(target, host.playerId, host.sessionToken);
+    const names = roomView(target, host.playerId, host.sessionToken).players.map((player) => player.name);
+    expect(names).toEqual(['Eric', 'Ada', 'Milo', 'Rosa']);
+  });
+
   it('lets one person and a bot play a whole game', () => {
     const { room: target, host } = room();
     addRoomBot(target, host.playerId, host.sessionToken);

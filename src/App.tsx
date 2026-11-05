@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatPropertyColor, getCardDefinition, isEveryColorWild, type GameVariant, type PropertyColor } from './cards/catalog';
 import { propertySets, isCompletePropertySet } from './engine/core';
 import { buildCoachHint, chooseHeuristicAction, chooseMonteCarloAction } from './ai';
+import { defaultSeatName, seatNameForController } from './ai/botNames';
 import {
   applyAction,
   createGame,
@@ -1268,7 +1269,7 @@ function App() {
   const startNewGame = () => {
     const players: PlayerConfig[] = setup.playerNames.slice(0, setup.playerCount).map((name, index) => ({
       id: `p${index + 1}`,
-      name: name.trim() || `Player ${index + 1}`,
+      name: (setup.playerControllers[index] === 'bot' ? seatNameForController(name, index, 'bot') : name).trim() || defaultSeatName(index),
       controller: setup.playerControllers[index] ?? 'human',
       botDifficulty: setup.botDifficulties[index] ?? 'easy',
     }));
@@ -2132,7 +2133,9 @@ function App() {
             setSetup((prev) => {
               const nextControllers = [...prev.playerControllers];
               nextControllers[index] = controller;
-              return { ...prev, playerControllers: nextControllers };
+              const nextNames = [...prev.playerNames];
+              nextNames[index] = seatNameForController(nextNames[index] ?? '', index, controller);
+              return { ...prev, playerControllers: nextControllers, playerNames: nextNames };
             });
           }}
           onPlayerDifficultyChange={(index, difficulty) => {

@@ -408,7 +408,10 @@ struct SetupView: View {
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.white)
                     .accessibilityIdentifier("setup.name.\(index)")
-                Picker("Controlled by", selection: $app.setup.controllers[index]) {
+                Picker("Controlled by", selection: Binding(
+                    get: { app.setup.controllers[index] },
+                    set: { app.setup.setController($0, at: index) }
+                )) {
                     Text("Human").tag(PlayerController.human)
                     Text("Bot").tag(PlayerController.bot)
                 }
