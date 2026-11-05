@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatPropertyColor, getCardDefinition, isEveryColorWild, type GameVariant, type PropertyColor } from './cards/catalog';
 import { propertySets, isCompletePropertySet } from './engine/core';
 import { buildCoachHint, chooseHeuristicAction, chooseMonteCarloAction } from './ai';
-import { defaultSeatName, seatNameForController } from './ai/botNames';
+import { seatNameForController, startingSeatNames } from './ai/botNames';
 import {
   applyAction,
   createGame,
@@ -1267,9 +1267,13 @@ function App() {
   }, [openGame, recordGrowthMetric]);
 
   const startNewGame = () => {
-    const players: PlayerConfig[] = setup.playerNames.slice(0, setup.playerCount).map((name, index) => ({
+    const names = startingSeatNames(setup.playerNames.slice(0, setup.playerCount).map((name, index) => ({
+      name,
+      controller: setup.playerControllers[index] ?? 'human',
+    })));
+    const players: PlayerConfig[] = names.map((name, index) => ({
       id: `p${index + 1}`,
-      name: (setup.playerControllers[index] === 'bot' ? seatNameForController(name, index, 'bot') : name).trim() || defaultSeatName(index),
+      name,
       controller: setup.playerControllers[index] ?? 'human',
       botDifficulty: setup.botDifficulties[index] ?? 'easy',
     }));

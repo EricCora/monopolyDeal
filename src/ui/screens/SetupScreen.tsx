@@ -156,7 +156,7 @@ export function SetupScreen({
                 <PlayerAvatar name={name || `P${index + 1}`} isBot={controller === 'bot'} />
                 <label className="setup-player-name">
                   <span className="sr-only">Player {index + 1} Name</span>
-                  <input value={name} placeholder={`Player ${index + 1}`} onChange={(event) => onPlayerNameChange(index, event.target.value)} />
+                  <input value={name} placeholder={controller === 'bot' ? 'Random bot name' : `Player ${index + 1}`} onChange={(event) => onPlayerNameChange(index, event.target.value)} />
                 </label>
                 {allowAiOpponents ? (
                   <label className="setup-player-controller">

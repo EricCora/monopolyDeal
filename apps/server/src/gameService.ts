@@ -1,6 +1,6 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { chooseHeuristicAction } from '../../../src/ai/heuristic.ts';
-import { nextBotName } from '../../../src/ai/botNames.ts';
+import { randomBotName } from '../../../src/ai/botNames.ts';
 import { chooseMonteCarloAction } from '../../../src/ai/rollout.ts';
 import { actionRevealedDeckCards, appendTurnSnapshot } from '../../../src/engine/undoPolicy.ts';
 import {
@@ -1225,7 +1225,7 @@ export function addRoomBot(
   if (room.players.length >= 5) throw new Error('room_full');
   const id = nextAvailableLobbyPlayerId(room);
   const now = nowMs();
-  const name = uniqueSeatName(room, nextBotName(room.players.map((entry) => entry.name)));
+  const name = uniqueSeatName(room, randomBotName(room.players.map((entry) => entry.name)));
   room.players.push({
     id,
     name,

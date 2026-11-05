@@ -130,7 +130,7 @@ public struct NearbyTable: Codable, Hashable, Sendable {
     public mutating func addBot(_ difficulty: BotDifficulty) -> Bool {
         guard game == nil, !isFull else { return false }
         let id = nextSeatId()
-        seats.append(Seat(id: id, name: BotNames.next(taken: seats.map(\.name)), token: nil, isHost: false, isBot: true, botDifficulty: difficulty, connected: true, botCovering: false))
+        seats.append(Seat(id: id, name: BotNames.random(taken: seats.map(\.name)), token: nil, isHost: false, isBot: true, botDifficulty: difficulty, connected: true, botCovering: false))
         changed()
         return true
     }

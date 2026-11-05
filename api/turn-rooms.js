@@ -2707,10 +2707,29 @@ function chooseHeuristicAction(state, actorId, legalActions) {
 }
 
 // src/ai/botNames.ts
-var BOT_NAMES = ["Ada", "Milo", "Rosa", "Otis", "Ivy", "Hugo", "Mabel", "Felix"];
-function nextBotName(taken) {
+var BOT_NAMES = [
+  "Ada",
+  "Milo",
+  "Rosa",
+  "Otis",
+  "Ivy",
+  "Hugo",
+  "Mabel",
+  "Felix",
+  "Nora",
+  "Theo",
+  "Pearl",
+  "Gus",
+  "Clara",
+  "Jasper",
+  "Wren",
+  "Bruno"
+];
+function randomBotName(taken, random = Math.random) {
   const used = new Set(taken.map((name) => name.trim().toLowerCase()));
-  return BOT_NAMES.find((name) => !used.has(name.toLowerCase())) ?? BOT_NAMES[0];
+  const free = BOT_NAMES.filter((name) => !used.has(name.toLowerCase()));
+  const pool = free.length > 0 ? free : BOT_NAMES;
+  return pool[Math.floor(random() * pool.length) % pool.length];
 }
 
 // src/ai/rollout.ts
@@ -3655,7 +3674,7 @@ function addRoomBot(room, playerId, sessionToken, difficulty = "easy") {
   if (room.players.length >= 5) throw new Error("room_full");
   const id = nextAvailableLobbyPlayerId(room);
   const now2 = nowMs();
-  const name = uniqueSeatName(room, nextBotName(room.players.map((entry) => entry.name)));
+  const name = uniqueSeatName(room, randomBotName(room.players.map((entry) => entry.name)));
   room.players.push({
     id,
     name,

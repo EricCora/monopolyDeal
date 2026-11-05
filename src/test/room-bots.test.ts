@@ -20,6 +20,7 @@ import {
 } from '../../apps/server/src/gameService';
 import { createMemoryTurnStore, handleTurnRoomRequest } from '../../apps/server/src/turnRooms';
 import { getNextPrompt, isGameOver } from '../engine';
+import { BOT_NAMES } from '../ai/botNames';
 
 function room() {
   const rooms = new Map<string, MultiplayerRoom>();
@@ -50,7 +51,10 @@ describe('bots in a room', () => {
     addRoomBot(target, host.playerId, host.sessionToken);
     addRoomBot(target, host.playerId, host.sessionToken);
     const names = roomView(target, host.playerId, host.sessionToken).players.map((player) => player.name);
-    expect(names).toEqual(['Eric', 'Ada', 'Milo', 'Rosa']);
+    expect(names.slice(0, 2)).toEqual(['Eric', 'Ada']);
+    expect(BOT_NAMES).toContain(names[2]);
+    expect(BOT_NAMES).toContain(names[3]);
+    expect(new Set(names).size).toBe(4);
   });
 
   it('lets one person and a bot play a whole game', () => {
