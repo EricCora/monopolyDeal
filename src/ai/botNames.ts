@@ -12,13 +12,27 @@ export function defaultSeatName(index: number): string {
 }
 
 /**
- * A bot seat with no name of its own is left blank in setup, and draws a name
- * when the game starts. A name someone typed is always kept.
+ * The name a seat shows after it switches between human and bot. A seat that becomes
+ * a bot gets a random name you can then change; one that goes back to human gets
+ * "Player N" again if it still had a bot name. A name someone typed is otherwise kept.
  */
-export function seatNameForController(name: string, index: number, controller: 'human' | 'bot'): string {
+export function seatNameForController(
+  name: string,
+  index: number,
+  controller: 'human' | 'bot',
+  taken: readonly string[] = [],
+  random: () => number = Math.random,
+): string {
   const trimmed = name.trim();
-  if (controller === 'bot') return trimmed === defaultSeatName(index) ? '' : name;
-  return trimmed ? name : defaultSeatName(index);
+  if (controller === 'bot') {
+    return !trimmed || trimmed === defaultSeatName(index) ? randomBotName(taken, random) : name;
+  }
+  return !trimmed || isBotName(trimmed) ? defaultSeatName(index) : name;
+}
+
+export function isBotName(name: string): boolean {
+  const lowered = name.trim().toLowerCase();
+  return BOT_NAMES.some((botName) => botName.toLowerCase() === lowered);
 }
 
 /** A random bot name nobody at the table has. */

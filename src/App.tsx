@@ -2138,7 +2138,12 @@ function App() {
               const nextControllers = [...prev.playerControllers];
               nextControllers[index] = controller;
               const nextNames = [...prev.playerNames];
-              nextNames[index] = seatNameForController(nextNames[index] ?? '', index, controller);
+              nextNames[index] = seatNameForController(
+                nextNames[index] ?? '',
+                index,
+                controller,
+                nextNames.filter((_, other) => other !== index),
+              );
               return { ...prev, playerControllers: nextControllers, playerNames: nextNames };
             });
           }}

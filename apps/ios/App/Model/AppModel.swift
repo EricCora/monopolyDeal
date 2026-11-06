@@ -28,10 +28,11 @@ struct GameSetup {
         )
     }
 
-    /// Clears a default name when a seat becomes a bot, so it draws one at the start, and gives "Player N" back when it stops.
+    /// Gives a seat that becomes a bot a random name, and "Player N" back when it stops being one.
     mutating func setController(_ controller: PlayerController, at index: Int) {
         controllers[index] = controller
-        names[index] = BotNames.seatName(names[index], at: index, for: controller)
+        let others = names.indices.filter { $0 != index }.map { names[$0] }
+        names[index] = BotNames.seatName(names[index], at: index, for: controller, taken: others)
     }
 
     var players: [PlayerConfig] {

@@ -17,8 +17,13 @@ describe('bot names', () => {
     for (const value of [0, 0.3, 0.7, 0.99]) expect(randomBotName(taken, () => value)).toBe(BOT_NAMES[BOT_NAMES.length - 1]);
   });
 
-  it('clears a default name when a seat becomes a bot, and gives it back', () => {
-    expect(seatNameForController('Player 2', 1, 'bot')).toBe('');
+  it('gives a seat a random name nobody has when it becomes a bot', () => {
+    expect(seatNameForController('Player 2', 1, 'bot', ['Eric'], () => 0)).toBe(BOT_NAMES[0]);
+    expect(seatNameForController('', 1, 'bot', [BOT_NAMES[0]], () => 0)).toBe(BOT_NAMES[1]);
+  });
+
+  it('gives a bot name back as "Player N" when the seat becomes human again', () => {
+    expect(seatNameForController(BOT_NAMES[3], 1, 'human')).toBe('Player 2');
     expect(seatNameForController('', 1, 'human')).toBe('Player 2');
   });
 

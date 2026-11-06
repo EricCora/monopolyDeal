@@ -209,3 +209,6 @@ Eric asked for bots with names instead of "Player 2" or "Bot 1". Lifetime stats 
 
 ## 2026-11-04: Bots draw a random name each game
 Supersedes the entry above: Eric doesn't want a bot's name to be the same every time. A bot seat without a name of its own is blank in setup ("Random bot name") and draws a name nobody at the table has when the game starts; online rooms and nearby tables draw one when the bot is added. A name someone typed is kept. Lifetime stats are keyed by player name, so each bot name gets its own row.
+
+## 2026-11-05: A bot seat shows its random name as soon as it's made a bot
+Refines the entry above: Eric wants the name filled in, not blank. Switching a seat to Bot fills in a random name nobody at the table has, which you can then change. Switching back to Human gives "Player N" back if the seat still has a name from the bot list, so a typed "Ada" goes too (accepted, as the simplest rule that doesn't remember who typed what). A bot seat that's cleared still draws a name when the game starts.
