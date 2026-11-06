@@ -632,6 +632,17 @@ public enum Engine {
             && mustResolveEndTurn
     }
 
+    /// Property cards, wilds included, may be discarded only when the hand holds
+    /// nothing else, so a hand of properties alone can still get under the limit.
+    public static func discardableCards(_ state: GameState, _ player: PlayerState) -> [String] {
+        let variant = gameVariant(state)
+        let others = player.hand.filter { cardId in
+            let kind = Catalog.card(cardId, variant).kind
+            return kind != .property && kind != .wild
+        }
+        return others.isEmpty ? player.hand : others
+    }
+
     static func finishTurn(_ state: inout GameState, _ events: inout [GameEvent]) -> RuleError? {
         let current = currentPlayer(state)
         let limit = ruleset(state).maxHandAtEndTurn

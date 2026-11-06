@@ -754,6 +754,15 @@ function canPlayDoubleRent(state, player, excludedCardId, variant = gameVariant(
 function discard(state, cardId) {
   state.discardPile.push(cardId);
 }
+function discardableCards(state, player) {
+  const variant = gameVariant(state);
+  const isProperty = (cardId) => {
+    const kind = getCardDefinition(cardId, variant).kind;
+    return kind === "property" || kind === "wild";
+  };
+  const others = player.hand.filter((cardId) => !isProperty(cardId));
+  return others.length > 0 ? others : [...player.hand];
+}
 function nextPlayerIndex(state, fromIndex = state.currentPlayerIndex) {
   return (fromIndex + 1) % state.players.length;
 }
@@ -1554,7 +1563,7 @@ function getLegalActions(state, playerId) {
   if (!player) return [];
   if (state.winnerId) return [];
   if (requiresEndTurnDiscard(state, player)) {
-    return player.hand.map((cardId) => ({
+    return discardableCards(state, player).map((cardId) => ({
       label: `Discard ${cardLabel(cardId, gameVariant(state))}`,
       action: { type: "discard_card", playerId, cardId }
     }));
@@ -1621,7 +1630,9 @@ function applyAction(currentState, action) {
   }
   if (action.type === "discard_card") {
     if (!requiresEndTurnDiscard(state, player)) return setErr(error("invalid_action", "Discard is only allowed when over the hand limit at end of turn."));
-    if (!removeFromHand(player, action.cardId)) return setErr(error("insufficient_cards", "Card not in hand."));
+    if (!player.hand.includes(action.cardId)) return setErr(error("insufficient_cards", "Card not in hand."));
+    if (!discardableCards(state, player).includes(action.cardId)) return setErr(error("invalid_action", "Property cards can only be discarded when you hold no other cards."));
+    removeFromHand(player, action.cardId);
     discard(state, action.cardId);
     pushEvent(events, "discard", `${player.name} discarded ${cardLabel(action.cardId, gameVariant(state))}.`);
     if (state.turn.endingTurn && player.hand.length <= ruleset(state).maxHandAtEndTurn) {

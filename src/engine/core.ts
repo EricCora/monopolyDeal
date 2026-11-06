@@ -726,6 +726,20 @@ export function discard(state: GameState, cardId: string): void {
   state.discardPile.push(cardId);
 }
 
+/**
+ * Property cards, wilds included, may be discarded only when the hand holds
+ * nothing else, so a hand of properties alone can still get under the limit.
+ */
+export function discardableCards(state: GameState, player: PlayerState): string[] {
+  const variant = gameVariant(state);
+  const isProperty = (cardId: string) => {
+    const kind = getCardDefinition(cardId, variant).kind;
+    return kind === 'property' || kind === 'wild';
+  };
+  const others = player.hand.filter((cardId) => !isProperty(cardId));
+  return others.length > 0 ? others : [...player.hand];
+}
+
 export function nextPlayerIndex(state: GameState, fromIndex = state.currentPlayerIndex): number {
   return (fromIndex + 1) % state.players.length;
 }

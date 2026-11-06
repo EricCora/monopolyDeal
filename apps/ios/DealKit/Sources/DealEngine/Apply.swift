@@ -303,7 +303,11 @@ extension Engine {
             guard let cardId = action.cardId, requiresEndTurnDiscard(state, state.players[pi]) else {
                 return fail(.invalid_action, "Discard is only allowed when over the hand limit at end of turn.")
             }
-            if !removeFromHand(&state.players[pi], cardId) { return fail(.insufficient_cards, "Card not in hand.") }
+            guard state.players[pi].hand.contains(cardId) else { return fail(.insufficient_cards, "Card not in hand.") }
+            guard discardableCards(state, state.players[pi]).contains(cardId) else {
+                return fail(.invalid_action, "Property cards can only be discarded when you hold no other cards.")
+            }
+            _ = removeFromHand(&state.players[pi], cardId)
             state.discardPile.append(cardId)
             pushEvent(&events, "discard", "\(playerName) discarded \(cardLabel(cardId, variant)).")
             if state.turn.endingTurn == true && state.players[pi].hand.count <= rules.maxHandAtEndTurn {

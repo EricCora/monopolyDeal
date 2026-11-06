@@ -34,6 +34,7 @@ import {
   consumePlay,
   countCompleteSets,
   discard,
+  discardableCards,
   drawCards,
   error,
   findPropertyColorByCard,
@@ -659,7 +660,7 @@ export function getLegalActions(state: GameState, playerId: PlayerId): LegalActi
   if (state.winnerId) return [];
 
   if (requiresEndTurnDiscard(state, player)) {
-    return player.hand.map((cardId) => ({
+    return discardableCards(state, player).map((cardId) => ({
       label: `Discard ${cardLabel(cardId, gameVariant(state))}`,
       action: { type: 'discard_card', playerId, cardId },
     }));
@@ -739,7 +740,9 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
 
   if (action.type === 'discard_card') {
     if (!requiresEndTurnDiscard(state, player)) return setErr(error('invalid_action', 'Discard is only allowed when over the hand limit at end of turn.'));
-    if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
+    if (!player.hand.includes(action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
+    if (!discardableCards(state, player).includes(action.cardId)) return setErr(error('invalid_action', 'Property cards can only be discarded when you hold no other cards.'));
+    removeFromHand(player, action.cardId);
     discard(state, action.cardId);
     pushEvent(events, 'discard', `${player.name} discarded ${cardLabel(action.cardId, gameVariant(state))}.`);
     if (state.turn.endingTurn && player.hand.length <= ruleset(state).maxHandAtEndTurn) {
