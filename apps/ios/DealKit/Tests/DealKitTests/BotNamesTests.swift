@@ -4,9 +4,10 @@ import XCTest
 
 /// Mirrors `src/test/bot-names.test.ts`.
 final class BotNamesTests: XCTestCase {
-    /// Always picks the first element, so draws are repeatable.
+    /// Always picks the first element, so draws are repeatable. Returns 1, not 0:
+    /// `randomElement` rejects 0 for most list sizes and would ask again forever.
     private struct FirstPick: RandomNumberGenerator {
-        mutating func next() -> UInt64 { 0 }
+        mutating func next() -> UInt64 { 1 }
     }
 
     func testNeverDrawsANameSomebodyAtTheTableHas() {
