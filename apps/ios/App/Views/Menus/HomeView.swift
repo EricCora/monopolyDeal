@@ -402,13 +402,16 @@ struct SetupView: View {
         return VStack(spacing: 8) {
             line {
                 PlayerAvatar(name: app.setup.names[index], isBot: app.setup.controllers[index] == .bot)
-                TextField("Player \(index + 1)", text: $app.setup.names[index])
+                TextField(app.setup.controllers[index] == .bot ? "Random bot name" : "Player \(index + 1)", text: $app.setup.names[index])
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.white)
                     .accessibilityIdentifier("setup.name.\(index)")
-                Picker("Controlled by", selection: $app.setup.controllers[index]) {
+                Picker("Controlled by", selection: Binding(
+                    get: { app.setup.controllers[index] },
+                    set: { app.setup.setController($0, at: index) }
+                )) {
                     Text("Human").tag(PlayerController.human)
                     Text("Bot").tag(PlayerController.bot)
                 }

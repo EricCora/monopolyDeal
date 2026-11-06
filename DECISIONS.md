@@ -204,3 +204,8 @@ Eric asked for the table to look like playing around a real one. Opponents sit o
 
 ## 2026-11-04: Property cards can't be discarded at the hand limit, unless the hand holds nothing else
 Eric's call: properties, wilds included, aren't thrown away. The printed rules allow any discard. When every card in hand is a property, any of them may go, because a hand of properties alone would otherwise never get under the limit and the turn would freeze. Bots follow the same rule, as they choose from the legal moves.
+## 2026-11-04: Bots are named by seat, not at random (superseded below)
+Eric asked for bots with names instead of "Player 2" or "Bot 1". Lifetime stats are keyed by player name, so a local bot seat always gets the same name: a random one each game would scatter one seat's record across many names. Online rooms and nearby tables give an added bot the first name on the list that nobody at the table has. A name someone typed is never replaced. "House Bot" and "Daily Rival" keep their names. Spec: `docs/specs/2026-11-04-bot-names.md`.
+
+## 2026-11-04: Bots draw a random name each game
+Supersedes the entry above: Eric doesn't want a bot's name to be the same every time. A bot seat without a name of its own is blank in setup ("Random bot name") and draws a name nobody at the table has when the game starts; online rooms and nearby tables draw one when the bot is added. A name someone typed is kept. Lifetime stats are keyed by player name, so each bot name gets its own row.
