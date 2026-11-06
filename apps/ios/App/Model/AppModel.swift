@@ -113,6 +113,7 @@ final class AppModel {
         // For reviewing themes: `-tableStyle neon_arcade -reducedEffects YES`.
         if let raw = UserDefaults.standard.string(forKey: "tableStyle"), let style = TableTheme(rawValue: raw) { preferences.tableStyle = style }
         if UserDefaults.standard.object(forKey: "reducedEffects") != nil { preferences.reducedEffects = UserDefaults.standard.bool(forKey: "reducedEffects") }
+        if UserDefaults.standard.object(forKey: "landscapeTable") != nil { preferences.landscapeTable = UserDefaults.standard.bool(forKey: "landscapeTable") }
         autoplayRemaining = launch.autoplayGames
         if autoplayRemaining > 0 { startFromSetupForAutoplay() }
         if let room = UserDefaults.standard.string(forKey: "autoplayOnlineRoom") {

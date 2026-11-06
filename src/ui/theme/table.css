@@ -2567,3 +2567,219 @@
   font: inherit;
 }
 
+
+/* A phone on its side: opponents in a strip along the top, then the piles, your table and
+   the turn buttons, with a large hand fanned along the bottom edge and hanging off it.
+   Mirrors LandscapeTable.swift. The class comes from useLandscapePhone. */
+.game-table-screen.is-landscape {
+  gap: 6px;
+  padding: max(var(--safe-top), 6px) max(var(--safe-right), 10px) 0 max(var(--safe-left), 10px);
+}
+
+/* Only the menu stays in the top bar; the turn and plays move into the status cell. */
+.is-landscape .table-topbar {
+  position: absolute;
+  top: max(var(--safe-top), 6px);
+  left: max(var(--safe-left), 10px);
+}
+
+.is-landscape .table-topbar > :not(.table-menu-wrap) {
+  display: none;
+}
+
+.is-landscape .room-bar {
+  margin-left: 52px;
+}
+
+.is-landscape .table-main {
+  grid-template-columns: auto minmax(0, 1fr) 40px 148px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'strip strip status status'
+    'piles board board actions'
+    'hand hand hand hand';
+  gap: 6px 10px;
+}
+
+.is-landscape .poker-table {
+  display: contents;
+}
+
+.landscape-strip {
+  grid-area: strip;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  /* Clear of the menu button in the top bar. */
+  padding-left: 50px;
+}
+
+.is-landscape .poker-table .seat-pill {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  align-items: flex-start;
+  max-width: 230px;
+  min-width: 0;
+  height: 100%;
+  /* Room underneath for the bank and set progress. */
+  padding: 8px 9px 30px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.45);
+  transform: none;
+  white-space: nowrap;
+}
+
+.is-landscape .table-seat.is-strip-seat {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 230px;
+}
+
+.is-landscape .seat-pill-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+}
+
+.seat-pill-extra {
+  display: none;
+}
+
+.is-landscape .seat-pill-extra {
+  position: absolute;
+  right: 9px;
+  bottom: 8px;
+  left: 37px;
+  display: grid;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.opponent-bank {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--soft-85);
+}
+
+.is-landscape .table-status {
+  grid-area: status;
+  display: grid;
+  align-content: start;
+  min-height: 0;
+  padding: 8px 10px;
+}
+
+.is-landscape .table-status-icon {
+  display: none;
+}
+
+.table-status-turn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-status-turn strong {
+  flex: 1;
+  overflow: hidden;
+  font-size: 0.88rem;
+  font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.is-landscape .table-status-copy strong {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.is-landscape .table-status-copy small {
+  display: none;
+}
+
+.is-landscape .table-status-copy small.is-against-you {
+  display: block;
+}
+
+.is-landscape .table-centre {
+  grid-area: piles;
+  position: static;
+  align-self: end;
+  transform: none;
+}
+
+.is-landscape .player-board.viewer-board {
+  grid-area: board;
+  position: static;
+  min-height: 0;
+  padding: 8px;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.is-landscape .player-board.viewer-board.active {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.is-landscape .viewer-board .player-board-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.is-landscape .viewer-board .player-board-lanes {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+}
+
+/* Draw or End Turn as a big button at the right edge, within thumb reach. */
+.is-landscape .action-bar {
+  grid-area: actions;
+  flex-wrap: wrap;
+  align-self: end;
+  align-content: flex-end;
+  gap: 6px;
+}
+
+.is-landscape .action-bar .secondary-button.is-icon {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+}
+
+.is-landscape .action-bar .primary-button {
+  flex: 1 0 100%;
+  min-height: 58px;
+}
+
+.is-landscape .action-bar-spacer {
+  flex: 1 0 100%;
+  min-height: 58px;
+}
+
+.is-landscape .coach-bubble {
+  left: auto;
+  width: 300px;
+}
+
+.is-landscape .hand-zone {
+  grid-area: hand;
+  /* The cards hang off the bottom edge. */
+  margin-bottom: calc(var(--hand-overhang, 48px) * -1);
+}
+
+.landscape-board-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.landscape-board-head h3 {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.85);
+}

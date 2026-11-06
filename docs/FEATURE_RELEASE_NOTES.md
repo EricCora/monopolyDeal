@@ -1,5 +1,9 @@
 # Release Notes
 
+## 2026-11-05: Landscape table on iPhone
+
+Games on iPhone turn sideways: opponents along the top, your table in the middle with Draw and End Turn at the right edge, and a large hand fanned along the bottom. Settings has a Landscape Table switch for the portrait table. The web uses the same layout on a phone held sideways. See `docs/specs/2026-11-05-landscape-table.md` and `DECISIONS.md`.
+
 ## 2026-11-02: New home screen
 
 A dusk-sky home with a wordmark, a large New Game button, colored tiles for Practice, Online and the Daily Challenge, a Continue Playing panel and a row for Saved Games, Stats, Rules and Settings. Web and iOS match. See `DECISIONS.md`.

@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct MonopolyDealApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var app = AppModel()
     @Environment(\.scenePhase) private var scenePhase
 

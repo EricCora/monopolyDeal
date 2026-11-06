@@ -30,36 +30,15 @@ struct TableView: View {
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width > 700
-            let phoneHand = min(118, geometry.size.width * 0.27)
+            let landscape = isLandscape(geometry.size)
             ZStack(alignment: .bottom) {
                 TableBackground(style: app.preferences.tableStyle)
 
-                VStack(spacing: 8) {
-                    topBar
-                    if let extras { extras }
-                    statusRow
-                    PokerTable(session: session, actions: actions, ui: ui, space: cardSpace, accent: app.preferences.tableStyle.accent)
-                        .frame(maxWidth: wide ? 760 : .infinity, maxHeight: .infinity)
-                    if (session.isViewersPrompt || session.viewerId != nil) && !session.isReplay {
-                        actionBar
-                    }
-                    if handShown {
-                        HandFan(
-                            session: session,
-                            actions: actions,
-                            ui: ui,
-                            cardWidth: wide ? 170 : phoneHand,
-                            space: cardSpace,
-                            animatesDeal: cardsAnimate
-                        )
-                        .allowsHitTesting(!session.isReplay)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    } else if let viewer = session.viewer {
-                        handBar(viewer)
-                    }
+                if landscape {
+                    landscapeTable
+                } else {
+                    portraitTable(wide: wide, handWidth: min(118, geometry.size.width * 0.27))
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 4)
 
                 if !session.isReplay {
                     PromptPanel(session: session, actions: actions, ui: ui)
@@ -69,8 +48,13 @@ struct TableView: View {
 
                 tableMoments(wide: wide, height: geometry.size.height)
             }
+            // Cards hang off the bottom edge, so a drag there plays a card, not a swipe home.
+            .defersSystemGestures(on: landscape ? .bottom : [])
         }
         .overlay { pauseOverlay }
+        .onAppear { OrientationLock.tableAppeared(landscape: app.preferences.landscapeTable) }
+        .onDisappear { OrientationLock.tableDisappeared() }
+        .onChange(of: app.preferences.landscapeTable) { _, landscape in OrientationLock.setLandscapeTable(landscape) }
         // Every state change animates here, so a bot's or another player's move glides too.
         .animation(cardsAnimate ? .snappy(duration: 0.42) : nil, value: session.game?.updatedAt)
         .sheet(item: Binding(get: { ui.chooser }, set: { ui.chooser = $0 })) { chooser in
@@ -156,32 +140,231 @@ struct TableView: View {
         }
     }
 
+    // MARK: Layouts
+
+    /// A phone on its side, unless the Landscape Table setting is off. An iPad in landscape
+    /// is tall enough for the oval.
+    private func isLandscape(_ size: CGSize) -> Bool {
+        app.preferences.landscapeTable && size.width > size.height && size.height < 520
+    }
+
+    private func portraitTable(wide: Bool, handWidth: CGFloat) -> some View {
+        VStack(spacing: 8) {
+            topBar
+            if let extras { extras }
+            statusRow
+            PokerTable(session: session, actions: actions, ui: ui, space: cardSpace, accent: app.preferences.tableStyle.accent)
+                .frame(maxWidth: wide ? 760 : .infinity, maxHeight: .infinity)
+            if showsTurnButtons {
+                actionBar
+            }
+            if handShown {
+                hand(cardWidth: wide ? 170 : handWidth)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let viewer = session.viewer {
+                handBar(viewer)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 4)
+    }
+
+    /// Opponents are in the strip, not around the table, so the hand never folds away.
+    private var landscapeTable: some View {
+        LandscapeTable(
+            session: session,
+            actions: actions,
+            ui: ui,
+            space: cardSpace,
+            accent: app.preferences.tableStyle.accent,
+            extras: extras,
+            showsTurnButtons: showsTurnButtons
+        ) {
+            menuButton
+        } status: {
+            landscapeStatus
+        } turnButtons: {
+            landscapeTurnButtons
+        } hand: { cardWidth in
+            hand(cardWidth: cardWidth, arc: 1.6)
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 6)
+    }
+
+    private var showsTurnButtons: Bool {
+        (session.isViewersPrompt || session.viewerId != nil) && !session.isReplay
+    }
+
+    private func hand(cardWidth: CGFloat, arc: CGFloat = 0.7) -> some View {
+        HandFan(
+            session: session,
+            actions: actions,
+            ui: ui,
+            cardWidth: cardWidth,
+            space: cardSpace,
+            animatesDeal: cardsAnimate,
+            arc: arc
+        )
+        .allowsHitTesting(!session.isReplay)
+    }
+
+    /// Whose turn it is, the plays left and what to do next, in the strip's top-right
+    /// corner. It's for reading: the buttons are lower down, within reach.
+    private var landscapeStatus: some View {
+        Button {
+            ui.showLog = true
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(turnTitle)
+                        .font(.subheadline.weight(.heavy))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Spacer(minLength: 2)
+                    PlaysPips(used: session.game?.turn.playsUsed ?? 0, total: session.game.map { Engine.ruleset($0).maxPlaysPerTurn } ?? 3)
+                }
+                HStack(alignment: .top, spacing: 6) {
+                    if let clock = session.turnClock { TurnClockPill(clock: clock) }
+                    landscapeStatusLine
+                }
+            }
+            .multilineTextAlignment(.leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .dealGlass(tint: Color.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(session.isViewersPrompt ? app.preferences.tableStyle.accent.opacity(0.8) : .clear, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("table.status")
+    }
+
+    /// What to do next, or what was just done to you.
+    @ViewBuilder
+    private var landscapeStatusLine: some View {
+        if let latest = latestEventText, latest.againstYou {
+            Text(latest.text)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(Color(hex: 0xFF9A9E))
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+        } else {
+            Text(statusText)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.8))
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .contentTransition(.opacity)
+        }
+    }
+
+    /// Draw or End Turn as a big button at the right edge, with Undo, Reset and the hint
+    /// above it.
+    private var landscapeTurnButtons: some View {
+        VStack(spacing: 8) {
+            if session.canUndo || (session.showsCoach && session.isViewersPrompt) {
+                HStack(spacing: 6) {
+                    if session.canUndo {
+                        Button { session.undo() } label: {
+                            Image(systemName: "arrow.uturn.backward")
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .accessibilityLabel("Undo")
+                        .accessibilityIdentifier("action.undo")
+
+                        Button { session.resetTurn() } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .accessibilityLabel("Reset Turn")
+                        .accessibilityIdentifier("action.reset")
+                    }
+                    if session.showsCoach && session.isViewersPrompt {
+                        Button { showCoach() } label: {
+                            Image(systemName: "lightbulb.fill")
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .accessibilityLabel("Coach hint")
+                        .accessibilityIdentifier("action.coach")
+                    }
+                }
+            }
+            primaryTurnButton
+                .frame(minHeight: 58)
+        }
+        .overlay(alignment: .topTrailing) {
+            if let coach = ui.coach {
+                CoachBubble(hint: coach) { ui.coach = nil }
+                    .frame(width: 300)
+                    // Sits above the buttons, not over them.
+                    .alignmentGuide(.top) { $0[.bottom] + 8 }
+                    .transition(.scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var primaryTurnButton: some View {
+        if let drawAction {
+            Button {
+                actions.perform(drawAction.action)
+            } label: {
+                Label("Draw", systemImage: "arrow.down.to.line.compact")
+                    .frame(minHeight: 58)
+            }
+            .buttonStyle(PrimaryButtonStyle(tint: app.preferences.tableStyle.accent))
+            .accessibilityIdentifier("action.draw")
+        } else if let passAction {
+            Button {
+                actions.perform(passAction.action)
+            } label: {
+                Label(endTurnLabel, systemImage: "checkmark")
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                    .frame(minHeight: 58)
+            }
+            .buttonStyle(PrimaryButtonStyle(tint: playsExhausted ? app.preferences.tableStyle.accent : Color(hex: 0xC8D3DF)))
+            .accessibilityIdentifier("action.pass")
+        } else {
+            Color.clear.frame(height: 58)
+        }
+    }
+
     // MARK: Top
+
+    private var menuButton: some View {
+        Menu {
+            if session.canPause {
+                Button(session.isPaused ? "Resume" : "Pause", systemImage: session.isPaused ? "play.fill" : "pause.fill") {
+                    session.togglePause()
+                }
+            }
+            Button("Rules", systemImage: "book") { ui.showRules = true }
+            Button("Game Log", systemImage: "list.bullet") { ui.showLog = true }
+            if session is LocalMatch {
+                Button("Save Game", systemImage: "square.and.arrow.down") { ui.showSaves = true }
+            }
+            Divider()
+            Button(leaveLabel, systemImage: "chevron.backward", action: onLeave)
+        } label: {
+            Image(systemName: "line.3.horizontal")
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .dealGlass(interactive: true, in: Circle())
+        }
+        .accessibilityLabel("Game menu")
+        .accessibilityIdentifier("table.menu")
+    }
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            Menu {
-                if session.canPause {
-                    Button(session.isPaused ? "Resume" : "Pause", systemImage: session.isPaused ? "play.fill" : "pause.fill") {
-                        session.togglePause()
-                    }
-                }
-                Button("Rules", systemImage: "book") { ui.showRules = true }
-                Button("Game Log", systemImage: "list.bullet") { ui.showLog = true }
-                if session is LocalMatch {
-                    Button("Save Game", systemImage: "square.and.arrow.down") { ui.showSaves = true }
-                }
-                Divider()
-                Button(leaveLabel, systemImage: "chevron.backward", action: onLeave)
-            } label: {
-                Image(systemName: "line.3.horizontal")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .dealGlass(interactive: true, in: Circle())
-            }
-            .accessibilityLabel("Game menu")
-            .accessibilityIdentifier("table.menu")
+            menuButton
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(turnTitle)

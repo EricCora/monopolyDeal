@@ -57,7 +57,7 @@ The server decides legality by comparing `JSON.stringify` of the action, so key 
 ## 2026-11-01: One tap plays money and properties; anything else asks first
 On a phone a mis-tap is easy. Unlike the web app, an action card whose only option is the Bank, a discard or a debt repayment opens the chooser even with a single option.
 
-## 2026-11-01: iPhone is portrait only
+## 2026-11-01: iPhone is portrait only (superseded 2026-11-05)
 A hand, a board and opponents don't fit a phone's landscape height at a readable card size. iPad supports every orientation.
 
 ## 2026-11-01: iOS build output stays out of the repo
@@ -209,3 +209,6 @@ Eric asked for bots with names instead of "Player 2" or "Bot 1". Lifetime stats 
 
 ## 2026-11-04: Bots draw a random name each game
 Supersedes the entry above: Eric doesn't want a bot's name to be the same every time. A bot seat without a name of its own is blank in setup ("Random bot name") and draws a name nobody at the table has when the game starts; online rooms and nearby tables draw one when the bot is added. A name someone typed is kept. Lifetime stats are keyed by player name, so each bot name gets its own row.
+
+## 2026-11-05: On iPhone the game table is landscape
+Supersedes "iPhone is portrait only". Eric plays card games sideways and wanted bigger, less crowded cards, so he picked screens A3 and A5 from the landscape design canvas. Opponents sit in a strip along the top, since the oval's seats need height that landscape doesn't have. Your sets and Bank, the piles and the turn button share the middle row, and the hand is about 128 pt wide, fanned along the bottom edge and hanging off it. Draw and End Turn sit at the right edge of that row, where a thumb rests, because the top of a sideways phone is the hardest place to reach. Only the table turns: menus, setup and sheets were designed upright and stay that way, so the app turns the screen when a table opens and back when it closes. A Landscape Table setting brings back the portrait poker table. On the web, a short landscape window (a phone on its side) gets the same layout, as a browser can't lock orientation. Spec: `docs/specs/2026-11-05-landscape-table.md`.

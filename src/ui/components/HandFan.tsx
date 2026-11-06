@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerE
 import { CardView } from './CardView';
 import type { GameVariant } from '../../cards/catalog';
 import type { CardInput } from '../tapPolicy';
+import { landscapeHandWidth } from '../table/useLandscapePhone';
 
 interface HandFanProps {
   cards: string[];
@@ -17,6 +18,8 @@ interface HandFanProps {
   /** Deals the first cards one at a time, for a brand new game. */
   dealOpening?: boolean;
   reducedMotion?: boolean;
+  /** A phone on its side: bigger cards on a deeper arc, hanging off the bottom edge. */
+  landscape?: boolean;
 }
 
 const CARD_ASPECT_RATIO = 1.4;
@@ -56,6 +59,7 @@ export function HandFan({
   gameVariant = 'classic',
   dealOpening = false,
   reducedMotion = false,
+  landscape = false,
 }: HandFanProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -98,7 +102,9 @@ export function HandFan({
     const count = Math.max(cards.length, 1);
     // A short window, such as a phone on its side, still has to fit the board above the hand.
     const heightLimit = (window.innerHeight * 0.3) / CARD_ASPECT_RATIO;
-    const cardWidth = Math.round(Math.min(containerWidth > 700 ? 170 : Math.min(118, (containerWidth || 400) * 0.27), heightLimit));
+    const cardWidth = landscape
+      ? landscapeHandWidth(window.innerHeight)
+      : Math.round(Math.min(containerWidth > 700 ? 170 : Math.min(118, (containerWidth || 400) * 0.27), heightLimit));
     const width = containerWidth || 400;
     // The outer cards tilt, so they need some margin to stay on screen.
     const available = width - cardWidth - (isFanned ? 12 : 34);
@@ -107,7 +113,7 @@ export function HandFan({
     const centers = cards.map((_, index) => (width - total) / 2 + index * spacing);
     const tight = fitMode === 'rail' || (fitMode === 'auto' && (count > 7 || spacing < cardWidth * 0.25));
     return { width, cardWidth, centers, tight };
-  }, [cards, containerWidth, fitMode, isFanned]);
+  }, [cards, containerWidth, fitMode, isFanned, landscape]);
   const { width, cardWidth, centers } = layout;
 
   const localPoint = (event: ReactPointerEvent) => {
@@ -270,7 +276,7 @@ export function HandFan({
             ? -14
             : isFanned
               ? -6
-              : offset * offset * 0.7;
+              : offset * offset * (landscape ? 1.6 : 0.7);
         const y = lift + (selected && !isFanned ? -24 : 0) + (isDragging ? drag.y : 0);
         const tilt = isDragging || isFocused || isHovered ? 0 : offset * maxTilt;
         const scale = isFocused ? FOCUS_SCALE : isHovered ? HOVER_SCALE : 1;
