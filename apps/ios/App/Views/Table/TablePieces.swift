@@ -631,9 +631,12 @@ struct OpponentSummary: View {
                     if variant == .no_mercy { DebtBadge(player: player) }
                     Spacer(minLength: 0)
                     if compact {
-                        let complete = Engine.countCompleteSets(player, variant)
-                        Label("\(complete)/\(needed)", systemImage: complete > 0 ? "star.fill" : "star")
-                            .foregroundStyle(complete > 0 ? Palette.gold : SoftWhite(0.8))
+                        let complete: Int = Engine.countCompleteSets(player, variant)
+                        let setsText: String = "\(complete)/\(needed)"
+                        let star: String = complete > 0 ? "star.fill" : "star"
+                        let tint: AnyShapeStyle = complete > 0 ? AnyShapeStyle(Palette.gold) : AnyShapeStyle(SoftWhite(0.8))
+                        Label(setsText, systemImage: star)
+                            .foregroundStyle(tint)
                             .accessibilityHidden(true)
                     }
                 }
