@@ -44,8 +44,10 @@ import {
   PlayerAvatar,
   SetCountBadge,
   SetLane,
+  SetProgressBar,
   type TableCardBehavior,
 } from '../table/tablePieces';
+import { LANDSCAPE_HAND_OVERHANG, landscapeHandWidth, useLandscapePhone } from '../table/useLandscapePhone';
 import type { CardInput } from '../tapPolicy';
 import type {
   MultiplayerActivityFeedItem,
@@ -538,6 +540,7 @@ export function GameTableScreen({
   const deckRef = useRef<HTMLDivElement | null>(null);
   const discardPileRef = useRef<HTMLElement | null>(null);
   const pokerTableRef = useRef<HTMLDivElement | null>(null);
+  const landscape = useLandscapePhone();
   const [pokerTableSize, setPokerTableSize] = useState({ width: 0, height: 0 });
   // The hand, opened by hand on another player's turn.
   const [handOpen, setHandOpen] = useState(false);
@@ -1102,7 +1105,8 @@ export function GameTableScreen({
   }, [game.currentPlayerIndex]);
 
   /** On other players' turns the hand folds away, so the table has the room. */
-  const handShown = !viewer || Boolean(replayBar) || handOpen || isViewersPrompt || currentPlayer.id === viewer.id;
+  // In landscape the opponents are in the strip, not around the table, so the hand never folds.
+  const handShown = !viewer || landscape || Boolean(replayBar) || handOpen || isViewersPrompt || currentPlayer.id === viewer.id;
 
   /** An opponent's pile label: progress, with the rent when the cards are too small to show it. */
   const seatPileLabel = (owner: PlayerState, small: boolean) => (lane: BoardLane) => {
@@ -1115,7 +1119,143 @@ export function GameTableScreen({
     return small ? `${count}/${setSize} · $${getRentAmount(owner, lane.color, variant)}` : `${count}/${setSize}`;
   };
 
+  const renderCentrePiles = (pileWidth: number) => (
+    <div className="pile-stack" aria-label="Card piles">
+        <article className="draw-pile-card" aria-label={`${game.drawPile.length} cards in the deck`}>
+          <div ref={deckRef} className="table-draw-deck">
+            {Array.from({ length: Math.min(3, game.drawPile.length) }, (_, index) => (
+              <span key={index} style={{ ['--i' as string]: index }}><CardView cardId="money_1#0" faceUp={false} width={pileWidth} decorative /></span>
+            ))}
+          </div>
+          <span className="pile-count">Draw {game.drawPile.length}</span>
+        </article>
+        <article
+          ref={discardPileRef}
+          className={`discard-pile-card ${transitionTargetKey === 'discard' ? `is-transition-target transition-tone-${transitionTargetTone ?? 'discard'}` : ''}`}
+        >
+          <button
+            type="button"
+            className="discard-pile-button"
+            aria-label={`Discard pile, ${game.discardPile.length} cards`}
+            onClick={() => setDiscardsOpen(true)}
+          >
+            {discardTop ? (
+              <span data-flip-id={discardTop}><CardView cardId={discardTop} width={pileWidth} gameVariant={variant} decorative /></span>
+            ) : (
+              <span className="discard-empty" />
+            )}
+            <span className="pile-count">Discard</span>
+          </button>
+        </article>
+    </div>
+  );
+
+  const renderSeatPill = (player: PlayerState, style?: CSSProperties, extra?: ReactNode) => {
+    const isPrompted = prompt.playerId === player.id;
+    const isCurrent = currentPlayer.id === player.id;
+    const connected = playerConnectionById[player.id]?.connected ?? true;
+    const tags = seatStatus(player);
+    return (
+        <div
+          className={`player opponent-summary seat-pill ${isPrompted ? 'is-prompted' : ''} ${isCurrent ? 'active' : ''} ${stealAlert?.sourcePlayerId === player.id ? 'is-steal-source' : ''} ${stealAlert?.targetPlayerId === player.id ? 'is-steal-target' : ''} ${isMultiplayer && !connected ? 'is-offline-seat' : ''}`}
+          data-flip-origin={player.id}
+          style={style}
+        >
+          <button type="button" className="opponent-open" aria-label={`Show ${player.name}'s whole board`} onClick={() => setInspectedOpponentId(player.id)} />
+          <PlayerAvatar name={player.name} isBot={player.controller === 'bot' || botSeatIds.includes(player.id)} />
+          <div className="seat-pill-copy">
+            <header className="opponent-head">
+              <h3>{player.name}</h3>
+              {isMultiplayer && !connected && !isTurnBased ? (
+                <span className="opponent-offline" title="Disconnected" role="img" aria-label="Disconnected"><Icon name="wifiOff" /></span>
+              ) : null}
+              {recentReactionsByPlayerId.get(player.id) ? (
+                <span className="player-reaction-burst" aria-label={`${player.name} sent a reaction`}>
+                  {recentReactionsByPlayerId.get(player.id)}
+                </span>
+              ) : null}
+            </header>
+            <p className="opponent-stats">
+              {botSeatIds.includes(player.id)
+                ? <span className="opponent-bot-tag">Bot playing</span>
+                : <span aria-label={`${player.hand.length} cards in hand`}>{player.hand.length} in hand</span>}
+              <span className="sr-only">{`Bank ${bankTotal(player, variant)} dollars`}</span>
+              <SetCountBadge count={getSetCompletionCount(player, variant)} needed={winCompleteSets} />
+              {variant === 'no_mercy' ? <DebtBadge player={player} /> : null}
+            </p>
+            <span className="sr-only">{tags.join(', ')}</span>
+          </div>
+          {extra}
+        </div>
+    );
+  };
+
+  const renderViewerBoard = (style: CSSProperties, head?: ReactNode) => (
+    <div
+      className={`player-board viewer-board ${viewer && currentPlayer.id === viewer.id ? 'active' : ''} ${pendingPayment?.targetPlayerId === bottomPlayer.id ? 'is-payment-requested' : ''}`}
+      style={style}
+    >
+      {isMultiplayer && viewer ? <span className="sr-only">Your Seat</span> : null}
+      <span className="sr-only">{seatStatus(bottomPlayer).join(', ')}</span>
+      {head}
+      <div className="player-board-scroll">
+        <div className="player-board-lanes">
+          <BankStack
+            player={bottomPlayer}
+            variant={variant}
+            extraClassName={transitionTargetKey === `bank:${bottomPlayer.id}` ? `is-transition-target transition-tone-${transitionTargetTone ?? 'bank'}` : ''}
+            bankRef={(node) => { visibleBankZoneByPlayerIdRef.current[bottomPlayer.id] = node; }}
+            behavior={bankBehavior(bottomPlayer)}
+            onInspect={() => (viewer ? setBankOpen(true) : setInspectedOpponentId(bottomPlayer.id))}
+          />
+          {renderLanes(bottomPlayer, false)}
+        </div>
+      </div>
+    </div>
+  );
+
+  /**
+   * A phone on its side: opponents in a strip along the top, then the piles, your table and
+   * the turn buttons, with a large hand along the bottom edge. Mirrors `LandscapeTable.swift`.
+   */
+  const renderLandscapeTable = () => {
+    const height = typeof window === 'undefined' ? 430 : window.innerHeight;
+    const handWidth = landscapeHandWidth(height);
+    const lanes = boardLanes(bottomPlayer, variant);
+    // Cards stay one size until a set grows past two, so the table doesn't jump much.
+    const tallest = Math.max(2, ...lanes.map((lane) => lane.entries.length));
+    const middle = height - 84 - handWidth * 1.4 * (1 - LANDSCAPE_HAND_OVERHANG) - 30;
+    const boardCardWidth = Math.round(Math.min(70, Math.max(36, (middle - 54) / (1.4 + 0.46 * (tallest - 1)))));
+    return (
+      <>
+        <div className="landscape-strip" aria-label="Opponents">
+          {seatedOpponents.map((player) => (
+            <article key={player.id} className="table-seat is-strip-seat">
+              {renderSeatPill(player, undefined, (
+                <span className="seat-pill-extra">
+                  <span className="opponent-bank" aria-hidden="true">${bankTotal(player, variant)}</span>
+                  <SetProgressBar player={player} variant={variant} />
+                </span>
+              ))}
+            </article>
+          ))}
+        </div>
+        <div className="table-centre" style={{ ['--pile-w' as string]: `${Math.round(handWidth * 0.48)}px` }}>
+          {renderCentrePiles(Math.round(handWidth * 0.48))}
+        </div>
+        {renderViewerBoard({ ['--board-card-w' as string]: `${boardCardWidth}px` }, (
+          <header className="landscape-board-head">
+            <h3>{viewer ? 'Your table' : bottomPlayer.name}</h3>
+            <SetCountBadge count={getSetCompletionCount(bottomPlayer, variant)} needed={winCompleteSets} />
+            {variant === 'no_mercy' ? <DebtBadge player={bottomPlayer} /> : null}
+          </header>
+        ))}
+      </>
+    );
+  };
+
   const renderPokerTable = () => {
+    if (landscape) return renderLandscapeTable();
     // jsdom measures nothing, so tests lay the table out at a phone's size.
     const frame = tableFrame(pokerTableSize.width || 416, pokerTableSize.height || 560);
     const seats = tableSeats(seatedOpponents.length);
@@ -1137,44 +1277,13 @@ export function GameTableScreen({
         <div className="poker-felt" aria-hidden="true" style={{ left: frame.felt.x, top: frame.felt.y, width: frame.felt.width, height: frame.felt.height }} />
 
         <div className="table-centre" style={{ ...place({ x: CENTRE.x + CENTRE.width / 2, y: CENTRE.y + CENTRE.height / 2 }), ['--pile-w' as string]: `${pileWidth}px` }}>
-            <div className="pile-stack" aria-label="Card piles">
-              <article className="draw-pile-card" aria-label={`${game.drawPile.length} cards in the deck`}>
-                <div ref={deckRef} className="table-draw-deck">
-                  {Array.from({ length: Math.min(3, game.drawPile.length) }, (_, index) => (
-                    <span key={index} style={{ ['--i' as string]: index }}><CardView cardId="money_1#0" faceUp={false} width={pileWidth} decorative /></span>
-                  ))}
-                </div>
-                <span className="pile-count">Draw {game.drawPile.length}</span>
-              </article>
-              <article
-                ref={discardPileRef}
-                className={`discard-pile-card ${transitionTargetKey === 'discard' ? `is-transition-target transition-tone-${transitionTargetTone ?? 'discard'}` : ''}`}
-              >
-                <button
-                  type="button"
-                  className="discard-pile-button"
-                  aria-label={`Discard pile, ${game.discardPile.length} cards`}
-                  onClick={() => setDiscardsOpen(true)}
-                >
-                  {discardTop ? (
-                    <span data-flip-id={discardTop}><CardView cardId={discardTop} width={pileWidth} gameVariant={variant} decorative /></span>
-                  ) : (
-                    <span className="discard-empty" />
-                  )}
-                  <span className="pile-count">Discard</span>
-                </button>
-              </article>
-            </div>
+          {renderCentrePiles(pileWidth)}
         </div>
 
         <div className={`opponents-area count-${seatedOpponents.length}`}>
           {seatedOpponents.map((player, index) => {
             const seat = seats[index];
             if (!seat) return null;
-            const isPrompted = prompt.playerId === player.id;
-            const isCurrent = currentPlayer.id === player.id;
-            const connected = playerConnectionById[player.id]?.connected ?? true;
-            const tags = seatStatus(player);
             const lanes = boardLanes(player, variant);
             const piles = lanes.length + (player.bank.length > 0 ? 1 : 0);
             const tallest = Math.min(4, Math.max(1, ...lanes.map((lane) => lane.entries.length), Math.min(player.bank.length, 4)));
@@ -1184,36 +1293,7 @@ export function GameTableScreen({
             const small = grid.cardWidth < 40 && grid.cardWidth >= 28;
             return (
               <article key={player.id} className="table-seat">
-                <div
-                  className={`player opponent-summary seat-pill ${isPrompted ? 'is-prompted' : ''} ${isCurrent ? 'active' : ''} ${stealAlert?.sourcePlayerId === player.id ? 'is-steal-source' : ''} ${stealAlert?.targetPlayerId === player.id ? 'is-steal-target' : ''} ${isMultiplayer && !connected ? 'is-offline-seat' : ''}`}
-                  data-flip-origin={player.id}
-                  style={place(seat.pill)}
-                >
-                  <button type="button" className="opponent-open" aria-label={`Show ${player.name}'s whole board`} onClick={() => setInspectedOpponentId(player.id)} />
-                  <PlayerAvatar name={player.name} isBot={player.controller === 'bot' || botSeatIds.includes(player.id)} />
-                  <div className="seat-pill-copy">
-                    <header className="opponent-head">
-                      <h3>{player.name}</h3>
-                      {isMultiplayer && !connected && !isTurnBased ? (
-                        <span className="opponent-offline" title="Disconnected" role="img" aria-label="Disconnected"><Icon name="wifiOff" /></span>
-                      ) : null}
-                      {recentReactionsByPlayerId.get(player.id) ? (
-                        <span className="player-reaction-burst" aria-label={`${player.name} sent a reaction`}>
-                          {recentReactionsByPlayerId.get(player.id)}
-                        </span>
-                      ) : null}
-                    </header>
-                    <p className="opponent-stats">
-                      {botSeatIds.includes(player.id)
-                        ? <span className="opponent-bot-tag">Bot playing</span>
-                        : <span aria-label={`${player.hand.length} cards in hand`}>{player.hand.length} in hand</span>}
-                      <span className="sr-only">{`Bank ${bankTotal(player, variant)} dollars`}</span>
-                      <SetCountBadge count={getSetCompletionCount(player, variant)} needed={winCompleteSets} />
-                      {variant === 'no_mercy' ? <DebtBadge player={player} /> : null}
-                    </p>
-                    <span className="sr-only">{tags.join(', ')}</span>
-                  </div>
-                </div>
+                {renderSeatPill(player, place(seat.pill))}
                 <div
                   className="seat-piles"
                   style={{
@@ -1245,32 +1325,13 @@ export function GameTableScreen({
         </div>
 
         <article className="table-seat is-bottom-seat">
-        <div
-          className={`player-board viewer-board ${viewer && currentPlayer.id === viewer.id ? 'active' : ''} ${pendingPayment?.targetPlayerId === bottomPlayer.id ? 'is-payment-requested' : ''}`}
-          style={{
-            left: viewerTopLeft.x,
-            top: viewerTopLeft.y,
-            width: VIEWER_AREA.width * frame.sx,
-            height: VIEWER_AREA.height * frame.sy,
-            ['--board-card-w' as string]: `${viewerCardWidth}px`,
-          }}
-        >
-          {isMultiplayer && viewer ? <span className="sr-only">Your Seat</span> : null}
-          <span className="sr-only">{seatStatus(bottomPlayer).join(', ')}</span>
-          <div className="player-board-scroll">
-            <div className="player-board-lanes">
-              <BankStack
-                player={bottomPlayer}
-                variant={variant}
-                extraClassName={transitionTargetKey === `bank:${bottomPlayer.id}` ? `is-transition-target transition-tone-${transitionTargetTone ?? 'bank'}` : ''}
-                bankRef={(node) => { visibleBankZoneByPlayerIdRef.current[bottomPlayer.id] = node; }}
-                behavior={bankBehavior(bottomPlayer)}
-                onInspect={() => (viewer ? setBankOpen(true) : setInspectedOpponentId(bottomPlayer.id))}
-              />
-              {renderLanes(bottomPlayer, false)}
-            </div>
-          </div>
-        </div>
+        {renderViewerBoard({
+          left: viewerTopLeft.x,
+          top: viewerTopLeft.y,
+          width: VIEWER_AREA.width * frame.sx,
+          height: VIEWER_AREA.height * frame.sy,
+          ['--board-card-w' as string]: `${viewerCardWidth}px`,
+        })}
 
         <header className={`player-board-head viewer-pill ${currentPlayer.id === bottomPlayer.id ? 'is-current' : ''}`} style={place(VIEWER_PILL)}>
           <h3>{bottomPlayer.name}</h3>
@@ -1309,7 +1370,8 @@ export function GameTableScreen({
   return (
     <section
       ref={screenRef}
-      className={`game-table-screen state-${prompt.kind} ${isPaused ? 'is-paused' : ''} ${isMultiplayer ? 'is-live-room' : 'is-local-table'} ${isViewersPrompt ? 'is-your-move' : ''}`}
+      className={`game-table-screen state-${prompt.kind} ${isPaused ? 'is-paused' : ''} ${isMultiplayer ? 'is-live-room' : 'is-local-table'} ${isViewersPrompt ? 'is-your-move' : ''} ${landscape ? 'is-landscape' : ''}`}
+      style={landscape ? { ['--hand-overhang' as string]: `${Math.round(landscapeHandWidth(window.innerHeight) * 1.4 * LANDSCAPE_HAND_OVERHANG)}px` } : undefined}
     >
       <h2 className="sr-only">{isMultiplayer ? 'Multiplayer Table' : 'Game Table'}</h2>
       <p className="sr-only">{matchModeLabel}</p>
@@ -1405,6 +1467,13 @@ export function GameTableScreen({
           aria-label={`${statusText} Open game log`}
         >
           <span className="table-status-icon"><Icon name={statusIcon(prompt.kind, isViewersPrompt)} /></span>
+          {landscape ? (
+            <span className="table-status-turn">
+              <strong>{turnTitle}</strong>
+              {turnClock && !over.done ? <TurnClockPill clock={turnClock} now={clockNow} paused={isPaused} /> : null}
+              <PlaysPips used={game.turn.playsUsed} total={maxPlaysPerTurn} />
+            </span>
+          ) : null}
           <span className="table-status-copy">
             <strong>{statusText}</strong>
             {latestEventLine ? <small className={latestEventLine.againstYou ? 'is-against-you' : ''}>{latestEventLine.text}</small> : null}
@@ -1477,6 +1546,7 @@ export function GameTableScreen({
                 gameVariant={variant}
                 dealOpening={game.history.length === 0}
                 reducedMotion={reducedMotion}
+                landscape={landscape}
               /> : (
                 <button type="button" className="hand-bar glass-panel" onClick={() => setHandOpen(true)}>
                   {`Your hand · ${viewer.hand.length} card${viewer.hand.length === 1 ? '' : 's'}`}

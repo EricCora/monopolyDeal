@@ -224,7 +224,7 @@ private struct FeltOval: View {
 }
 
 /// The draw pile and the discard, in the middle of the table.
-private struct CentrePiles: View {
+struct CentrePiles: View {
     var session: any TableSession
     var ui: TableUI
     var scale: CGFloat

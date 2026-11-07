@@ -61,6 +61,8 @@ struct HandFan: View {
     var space: Namespace.ID
 
     var animatesDeal = true
+    /// How far the outer cards drop, for the arc.
+    var arc: CGFloat = 0.7
 
     @State private var dragging: String?
     @State private var dragOffset: CGSize = .zero
@@ -260,7 +262,7 @@ struct HandFan: View {
                 x: isDragging ? dragOffset.width : 0,
                 y: (isDragging ? dragOffset.height : 0)
                     + (selected && !isFanned ? -24 : 0)
-                    + (isFocused ? -18 : (isFanned ? -6 : abs(offsetFromMiddle) * abs(offsetFromMiddle) * 0.7))
+                    + (isFocused ? -18 : (isFanned ? -6 : abs(offsetFromMiddle) * abs(offsetFromMiddle) * arc))
             )
             .modifier(ShakeEffect(animatableData: ui.shakeCardId == cardId ? ui.shakeToken : 0))
             .zIndex(isFocused ? 200 : (isDragging || selected ? 100 : Double(index)))
@@ -591,6 +593,9 @@ struct OpponentSummary: View {
     var needed: Int
     var connection: RoomPlayer?
     var botPlaying = false
+    /// In the landscape strip the seats are narrow, so the stars move down a line and
+    /// leave the name the whole width.
+    var compact = false
     var onTap: () -> Void
 
     var body: some View {
@@ -615,15 +620,24 @@ struct OpponentSummary: View {
                             .accessibilityLabel("Disconnected")
                     }
                     Spacer(minLength: 0)
-                    SetCountBadge(count: Engine.countCompleteSets(player, variant), needed: needed)
-                        .accessibilityHidden(true)
+                    if !compact {
+                        SetCountBadge(count: Engine.countCompleteSets(player, variant), needed: needed)
+                            .accessibilityHidden(true)
+                    }
                 }
-                HStack(spacing: 10) {
+                HStack(spacing: compact ? 7 : 10) {
                     Label("\(player.hand.count)", systemImage: "rectangle.portrait.on.rectangle.portrait.fill")
                     Label("$\(Engine.totalBankValue(player, variant))", systemImage: "banknote.fill")
                     if variant == .no_mercy { DebtBadge(player: player) }
                     Spacer(minLength: 0)
+                    if compact {
+                        let complete = Engine.countCompleteSets(player, variant)
+                        Label("\(complete)/\(needed)", systemImage: complete > 0 ? "star.fill" : "star")
+                            .foregroundStyle(complete > 0 ? Palette.gold : SoftWhite(0.8))
+                            .accessibilityHidden(true)
+                    }
                 }
+                .labelStyle(TightLabelStyle(compact: compact))
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(SoftWhite(0.8))
                 if showBoard && hasCardsOnTable {
@@ -1108,5 +1122,17 @@ struct BankSheet: View {
         BankFan(cards: player.bank, variant: variant, startsOpen: true)
             .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+/// An icon and its text, closer together when space is short.
+private struct TightLabelStyle: LabelStyle {
+    var compact: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: compact ? 2 : 4) {
+            configuration.icon
+            configuration.title
+        }
     }
 }

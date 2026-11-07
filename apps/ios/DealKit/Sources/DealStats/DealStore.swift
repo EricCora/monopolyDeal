@@ -45,12 +45,14 @@ public struct Preferences: Codable, Hashable, Sendable {
     public var onlineName = ""
     public var gamePaused = false
     public var pausedGameId: String?
+    /// On a phone, the game table turns sideways. Off keeps it upright.
+    public var landscapeTable = true
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
         case tableStyle, cardBack, reducedEffects, confirmRiskyActions, soundEnabled, hapticsEnabled, coachEnabled
-        case hardCoach, customRulesEnabled, onlineName, gamePaused, pausedGameId
+        case hardCoach, customRulesEnabled, onlineName, gamePaused, pausedGameId, landscapeTable
     }
 
     /// Every field falls back to its default, so a newer build can add settings freely.
@@ -68,6 +70,7 @@ public struct Preferences: Codable, Hashable, Sendable {
         onlineName = (try? c.decodeIfPresent(String.self, forKey: .onlineName)) ?? ""
         gamePaused = (try? c.decodeIfPresent(Bool.self, forKey: .gamePaused)) ?? false
         pausedGameId = try? c.decodeIfPresent(String.self, forKey: .pausedGameId)
+        landscapeTable = (try? c.decodeIfPresent(Bool.self, forKey: .landscapeTable)) ?? true
     }
 }
 

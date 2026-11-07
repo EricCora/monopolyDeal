@@ -1,6 +1,7 @@
 import DealEngine
 import DealStats
 import SwiftUI
+import UIKit
 
 struct HomeView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -610,6 +611,10 @@ struct SettingsView: View {
             }
             Section("Table") {
                 Toggle("Reduce Effects", isOn: $app.preferences.reducedEffects)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    Toggle("Landscape Table", isOn: $app.preferences.landscapeTable)
+                        .accessibilityIdentifier("settings.landscape")
+                }
             }
             Section("Feedback") {
                 Toggle("Sound", isOn: $app.preferences.soundEnabled)
