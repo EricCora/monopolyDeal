@@ -12,12 +12,27 @@ public enum BotNames {
         "Player \(index + 1)"
     }
 
-    /// A bot seat with no name of its own is left blank in setup, and draws a name
-    /// when the game starts. A name someone typed is always kept.
-    public static func seatName(_ name: String, at index: Int, for controller: PlayerController) -> String {
+    /// The name a seat shows after it switches between human and bot. A seat that becomes
+    /// a bot gets a random name you can then change; one that goes back to human gets
+    /// "Player N" again if it still had a bot name. A name someone typed is otherwise kept.
+    public static func seatName<G: RandomNumberGenerator>(
+        _ name: String, at index: Int, for controller: PlayerController, taken: [String], using generator: inout G
+    ) -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if controller == .bot { return trimmed == defaultSeatName(index) ? "" : name }
-        return trimmed.isEmpty ? defaultSeatName(index) : name
+        if controller == .bot {
+            return trimmed.isEmpty || trimmed == defaultSeatName(index) ? random(taken: taken, using: &generator) : name
+        }
+        return trimmed.isEmpty || isBotName(trimmed) ? defaultSeatName(index) : name
+    }
+
+    public static func seatName(_ name: String, at index: Int, for controller: PlayerController, taken: [String] = []) -> String {
+        var generator = SystemRandomNumberGenerator()
+        return seatName(name, at: index, for: controller, taken: taken, using: &generator)
+    }
+
+    public static func isBotName(_ name: String) -> Bool {
+        let lowered = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return all.contains { $0.lowercased() == lowered }
     }
 
     /// A random bot name nobody at the table has.

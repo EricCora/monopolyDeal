@@ -20,8 +20,14 @@ final class BotNamesTests: XCTestCase {
         XCTAssertGreaterThan(drawn.count, 1)
     }
 
-    func testADefaultNameIsClearedWhenASeatBecomesABotAndGivenBack() {
-        XCTAssertEqual(BotNames.seatName("Player 2", at: 1, for: .bot), "")
+    func testASeatGetsARandomNameNobodyHasWhenItBecomesABot() {
+        var generator = FirstPick()
+        XCTAssertEqual(BotNames.seatName("Player 2", at: 1, for: .bot, taken: ["Eric"], using: &generator), BotNames.all[0])
+        XCTAssertEqual(BotNames.seatName("", at: 1, for: .bot, taken: [BotNames.all[0]], using: &generator), BotNames.all[1])
+    }
+
+    func testABotNameGoesBackToPlayerNWhenTheSeatBecomesHuman() {
+        XCTAssertEqual(BotNames.seatName(BotNames.all[3], at: 1, for: .human), "Player 2")
         XCTAssertEqual(BotNames.seatName("", at: 1, for: .human), "Player 2")
     }
 
