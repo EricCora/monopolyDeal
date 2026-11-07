@@ -64,8 +64,12 @@ struct HomeView: View {
                     .scaleEffect(scale, anchor: .topLeading)
                     .frame(width: 250 * scale, height: 220 * scale, alignment: .topLeading)
                     .accessibilityRepresentation {
+                        // Never drawn: the logo is artwork. It shrinks to the logo's frame
+                        // rather than reading as clipped at large text sizes.
                         Text("Monopoly Deal")
                             .font(.largeTitle)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.3)
                             .accessibilityAddTraits(.isHeader)
                     }
                 // A soft dark scrim keeps the tagline readable over the skyline's lit windows.

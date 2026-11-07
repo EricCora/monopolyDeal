@@ -169,10 +169,11 @@ struct ReplayView: View {
         let shown = players.first { $0.id == match.revealedPlayerId }?.name ?? "Follow Play"
         return Menu {
             Button("Follow Play", systemImage: "arrow.triangle.turn.up.right.circle") { match.revealedPlayerId = nil }
-            ForEach(players, id: \.id) { player in
+            ForEach(Array(players.enumerated()), id: \.element.id) { index, player in
                 Button(player.name, systemImage: match.revealedPlayerId == player.id ? "checkmark" : "eye") {
                     match.revealedPlayerId = player.id
                 }
+                .accessibilityIdentifier("replay.hand.\(index)")
             }
         } label: {
             Label(shown, systemImage: "eye.fill")

@@ -2694,7 +2694,7 @@
 .is-landscape .table-status-copy strong {
   font-size: 0.75rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .is-landscape .table-status-copy small {
@@ -2781,5 +2781,10 @@
 .landscape-board-head h3 {
   font-size: 0.75rem;
   font-weight: 800;
-  color: rgba(255, 255, 255, 0.85);
+  color: #fff;
+}
+
+/* Matches iOS: the strip's glass is lighter than the oval's, so its counts go full white. */
+.is-landscape .opponent-bank {
+  color: #fff;
 }

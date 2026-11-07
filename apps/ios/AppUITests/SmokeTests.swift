@@ -70,6 +70,7 @@ final class GameplayUITests: XCTestCase {
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         button.tap()
         XCTAssertTrue(app.buttons["action.draw"].waitForExistence(timeout: 10))
+        waitForPhoneTableToTurn(app)
     }
 
     func testClassicGamePlaysToAWinner() throws {
@@ -255,4 +256,15 @@ final class GameplayUITests: XCTestCase {
         app.buttons["room.forget"].tap()
         app.buttons["Forget Room"].firstMatch.tap()
     }
+}
+
+/// On iPhone the table turns sideways just after it opens. A tap sent while it turns lands
+/// where the button was, so wait for the landscape table before touching anything.
+func waitForPhoneTableToTurn(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+    guard UIDevice.current.userInterfaceIdiom == .phone else { return }
+    let opponents = app.descendants(matching: .any)["table.opponents"]
+    XCTAssertTrue(opponents.waitForExistence(timeout: 10), "The iPhone table should turn sideways", file: file, line: line)
+    let draw = app.buttons["action.draw"]
+    let deadline = Date.now.addingTimeInterval(5)
+    while draw.exists && !draw.isHittable && Date.now < deadline { _ = draw.waitForExistence(timeout: 0.2) }
 }

@@ -109,7 +109,7 @@ struct LandscapeTable<MenuButton: View, Status: View, TurnButtons: View, Hand: V
             HStack(spacing: 8) {
                 Text(isViewer ? "Your table" : player.name)
                     .font(.caption.weight(.heavy))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(.white)
                     .lineLimit(1)
                 SetCountBadge(count: Engine.countCompleteSets(player, session.variant), needed: needed)
                 if session.variant == .no_mercy { DebtBadge(player: player) }
@@ -136,7 +136,11 @@ struct LandscapeTable<MenuButton: View, Status: View, TurnButtons: View, Hand: V
                     if lanes.isEmpty && player.bank.isEmpty {
                         Text("Your Bank and properties go here.")
                             .font(.footnote.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.white)
+                            // The glass lightens what's behind it, so a dark pill keeps the hint readable.
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(.black.opacity(0.45)))
                             .allowsHitTesting(false)
                     }
                 }

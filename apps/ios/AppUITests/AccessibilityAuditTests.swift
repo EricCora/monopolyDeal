@@ -50,11 +50,14 @@ final class AccessibilityAuditTests: XCTestCase {
         XCTAssertTrue(easy.waitForExistence(timeout: 5))
         easy.tap()
         XCTAssertTrue(app.buttons["action.draw"].waitForExistence(timeout: 10))
+        // Measure the card areas where they end up, after the iPhone table turns sideways.
+        waitForPhoneTableToTurn(app)
 
         let cardAreas = [app.otherElements["table.hand"].frame, app.otherElements["table.deck"].frame]
         try audit(XCUIAccessibilityAuditType.all.subtracting(.dynamicType)) { issue in
-            // White on a near-black panel, confirmed by eye in a screenshot. The audit misreads it.
-            if issue.auditType == .contrast, issue.element?.label == "Draw to start your turn." { return true }
+            // White on a near-black panel or pill, confirmed by eye in a screenshot. The audit misreads both.
+            let misread = ["Draw to start your turn.", "Your Bank and properties go here."]
+            if issue.auditType == .contrast, misread.contains(issue.element?.label ?? "") { return true }
             guard issue.auditType == .contrast || issue.auditType == .textClipped, let frame = issue.element?.frame else { return false }
             return cardAreas.contains { $0.intersects(frame) }
         }

@@ -642,7 +642,8 @@ struct OpponentSummary: View {
                 }
                 .labelStyle(TightLabelStyle(compact: compact))
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(SoftWhite(0.8))
+                // The landscape strip's glass is lighter than the oval's, so its counts go full white.
+                .foregroundStyle(compact ? AnyShapeStyle(Color.white) : AnyShapeStyle(SoftWhite(0.8)))
                 if showBoard && hasCardsOnTable {
                     MiniBoard(player: player, variant: variant)
                 } else {

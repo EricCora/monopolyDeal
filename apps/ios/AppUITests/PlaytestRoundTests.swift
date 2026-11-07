@@ -120,7 +120,13 @@ final class PlaytestRoundTests: XCTestCase {
         app.buttons["replay.play"].tap()
         let hand = app.buttons["replay.hand"]
         hand.tap()
-        app.buttons["Player 2"].firstMatch.tap()
+        // The second seat is a bot, which draws a random name, so pick it by position.
+        let secondPlayer = app.buttons["replay.hand.1"].firstMatch
+        XCTAssertTrue(secondPlayer.waitForExistence(timeout: 5))
+        let secondName = secondPlayer.label
+        secondPlayer.tap()
+        let showing = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'replay.hand' AND label == %@", "Whose hand to show: \(secondName)")).firstMatch
+        XCTAssertTrue(showing.waitForExistence(timeout: 5), "The replay should show \(secondName)'s hand")
         sleep(1)
         shot("replay-player-2")
         app.buttons["replay.log"].tap()

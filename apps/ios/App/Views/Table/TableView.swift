@@ -254,11 +254,12 @@ struct TableView: View {
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
         } else {
+            // The cell is narrow, so let the line wrap rather than cut off at larger text.
             Text(statusText)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.8))
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
+                .foregroundStyle(.white.opacity(0.9))
+                .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
                 .contentTransition(.opacity)
         }
     }
