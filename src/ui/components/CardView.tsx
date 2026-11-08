@@ -189,9 +189,17 @@ function Emblem({ card }: { card: CardDefinition }) {
   );
 }
 
+/** The small "ACTION" word needs 4.5:1 on the paper. Pink falls short, so it takes a deeper shade. */
+function actionWordColor(kind: ActionKind | undefined): string {
+  return kind === 'its_my_birthday' ? '#be185d' : actionAccent(kind);
+}
+
 function ActionFace({ card, rentLines }: { card: CardDefinition; rentLines?: string[] }) {
   return (
-    <span className="card-face face-action" style={{ ['--action-accent' as string]: actionAccent(card.actionKind) }}>
+    <span
+      className="card-face face-action"
+      style={{ ['--action-accent' as string]: actionAccent(card.actionKind), ['--action-word' as string]: actionWordColor(card.actionKind) }}
+    >
       <span className="card-head">
         <ValueBadge value={card.moneyValue ?? card.value} />
         <span className="card-kind-word">{card.kind === 'building' ? 'BUILD' : 'ACTION'}</span>

@@ -340,6 +340,11 @@ private struct ActionFace: View {
         }
     }
 
+    /// The small "ACTION" word needs 4.5:1 on the paper. Pink falls short, so it takes a deeper shade.
+    private var wordColor: Color {
+        card.actionKind == .its_my_birthday ? Color(hex: 0xBE185D) : accent
+    }
+
     var body: some View {
         let s = Scale(width: width)
         ZStack {
@@ -351,7 +356,7 @@ private struct ActionFace: View {
                     Text(card.kind == .building ? "BUILD" : "ACTION")
                         .font(.system(size: s(6.5), weight: .heavy, design: .rounded))
                         .tracking(0.4)
-                        .foregroundStyle(accent)
+                        .foregroundStyle(wordColor)
                 }
 
                 emblem(s)

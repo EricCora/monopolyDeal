@@ -289,9 +289,12 @@ func waitForPhoneTableToTurn(_ app: XCUIApplication, file: StaticString = #fileP
 }
 
 /// `isHittable` fails the test outright when a control is mid-animation and its frame is briefly
-/// invalid, as a sheet closing after a tap can be. A snapshot throws instead, so check that first.
+/// invalid, as a sheet closing after a tap can be, even right after a good snapshot. So decide from
+/// one snapshot alone: an enabled control with a real frame on screen.
 func isSafelyHittable(_ element: XCUIElement) -> Bool {
-    guard let frame = try? element.snapshot().frame,
-          frame.width.isFinite, frame.height.isFinite, frame.width > 0, frame.height > 0 else { return false }
-    return element.isHittable
+    guard let snapshot = try? element.snapshot(), snapshot.isEnabled else { return false }
+    let frame = snapshot.frame
+    guard frame.width.isFinite, frame.height.isFinite, frame.width > 0, frame.height > 0,
+          let screen = try? XCUIApplication().windows.firstMatch.snapshot().frame else { return false }
+    return screen.intersects(frame)
 }

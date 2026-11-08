@@ -361,7 +361,7 @@ button.card-view:disabled {
 }
 
 .card-view .card-kind-word {
-  color: var(--action-accent);
+  color: var(--action-word, var(--action-accent));
 }
 
 .card-emblem {
