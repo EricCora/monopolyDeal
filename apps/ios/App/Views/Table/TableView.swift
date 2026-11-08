@@ -217,6 +217,7 @@ struct TableView: View {
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
+                    if let game = session.game { TurnBadge(turn: game.turnCount, compact: true) }
                     Text(turnTitle)
                         .font(.subheadline.weight(.heavy))
                         .foregroundStyle(.white)
@@ -367,6 +368,8 @@ struct TableView: View {
         HStack(spacing: 10) {
             menuButton
 
+            if let game = session.game { TurnBadge(turn: game.turnCount) }
+
             VStack(alignment: .leading, spacing: 1) {
                 Text(turnTitle)
                     .font(.headline.weight(.bold))
@@ -409,16 +412,16 @@ struct TableView: View {
 
     private var shortSubtitle: String {
         guard let game = session.game else { return session.title }
-        return "Turn \(game.turnCount)"
+        return game.resolvedVariant.label
     }
 
     private var subtitle: String {
         guard let game = session.game else { return session.title }
         if let series = session.series, series.bestOf > 1 {
             let score = game.players.map { String(series.wins[$0.id] ?? 0) }.joined(separator: "–")
-            return "Turn \(game.turnCount) · \(game.resolvedVariant.label) · Game \(series.gameNumber) · \(score)"
+            return "\(game.resolvedVariant.label) · Game \(series.gameNumber) · \(score)"
         }
-        return "Turn \(game.turnCount) · \(game.resolvedVariant.label) · \(Engine.ruleset(game).winCompleteSets) \(Engine.ruleset(game).winCompleteSets == 1 ? "set" : "sets") to win"
+        return "\(game.resolvedVariant.label) · \(Engine.ruleset(game).winCompleteSets) \(Engine.ruleset(game).winCompleteSets == 1 ? "set" : "sets") to win"
     }
 
     // MARK: Status
@@ -825,6 +828,37 @@ struct TableView: View {
             }
             .transition(.opacity)
         }
+    }
+}
+
+/// The turn number, big enough to read at a glance on anyone's turn.
+private struct TurnBadge: View {
+    var turn: Int
+    var compact = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text("TURN")
+                .font(.system(size: compact ? 9 : 10, weight: .bold))
+                .tracking(0.6)
+                .foregroundStyle(Palette.gold)
+            Text("\(turn)")
+                .font(.system(size: compact ? 14 : 16, weight: .heavy))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .contentTransition(.numericText())
+        }
+        .lineLimit(1)
+        .fixedSize()
+        .padding(.horizontal, compact ? 7 : 9)
+        .padding(.vertical, compact ? 1 : 3)
+        .background(Capsule().fill(Color.black.opacity(0.4)))
+        .overlay(Capsule().strokeBorder(Palette.gold, lineWidth: 1.5))
+        .animation(.snappy, value: turn)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Turn \(turn)")
+        .accessibilityAddTraits(.isStaticText)
+        .accessibilityIdentifier("table.turnBadge")
     }
 }
 

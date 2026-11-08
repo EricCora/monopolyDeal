@@ -2788,3 +2788,62 @@
 .is-landscape .opponent-bank {
   color: #fff;
 }
+
+/* Turn number badge: in the header and the sideways status strip. */
+.turn-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1.5px solid var(--gold);
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.turn-badge small {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.turn-badge strong {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.table-status-turn .turn-badge {
+  padding: 1px 7px;
+}
+
+.table-status-turn .turn-badge strong {
+  flex: none;
+  font-size: 0.88rem;
+}
+
+/* Portrait: the wrapper adds nothing to the layout. Sideways: the clock sits before the message, as on iOS. */
+.table-status-copy-wrap {
+  display: contents;
+}
+
+.table-status-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.table-status-line .turn-clock {
+  margin-top: 1px;
+}
+
+/* A long name gives way with an ellipsis rather than pushing the plays dots out of the strip. */
+.table-status-turn,
+.table-status-turn > strong {
+  min-width: 0;
+}

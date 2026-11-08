@@ -378,6 +378,16 @@ export function Sheet({ label, title, tall = false, onClose, children }: SheetPr
   );
 }
 
+/** The turn number, big enough to read at a glance on anyone's turn. */
+function TurnBadge({ turn }: { turn: number }) {
+  return (
+    <span className="turn-badge" role="img" aria-label={`Turn ${turn}`}>
+      <small aria-hidden="true">Turn</small>
+      <strong aria-hidden="true">{turn}</strong>
+    </span>
+  );
+}
+
 function PlaysPips({ used, total }: { used: number; total: number }) {
   return (
     <span className="plays-pips" role="img" aria-label={`${used} of ${total} plays used`}>
@@ -971,7 +981,7 @@ export function GameTableScreen({
   const seriesScore = series
     ? ` · Game ${series.gameNumber} · ${game.players.map((player) => series.wins[player.id] ?? 0).join('–')}`
     : '';
-  const turnSubtitle = `Turn ${game.turnCount} · ${variantLabel}${seriesScore || ` · ${winCompleteSets} sets to win`}`;
+  const turnSubtitle = `${variantLabel}${seriesScore || ` · ${winCompleteSets} sets to win`}`;
 
   const statusText = (() => {
     if (over.done) return winnerName ? `${winnerName} won the match.` : 'Match complete.';
@@ -1426,6 +1436,8 @@ export function GameTableScreen({
           </div>
         </div>
 
+        <TurnBadge turn={game.turnCount} />
+
         <div className="table-title">
           <strong>{turnTitle}</strong>
           <span>{turnSubtitle}</span>
@@ -1469,14 +1481,18 @@ export function GameTableScreen({
           <span className="table-status-icon"><Icon name={statusIcon(prompt.kind, isViewersPrompt)} /></span>
           {landscape ? (
             <span className="table-status-turn">
+              <TurnBadge turn={game.turnCount} />
               <strong>{turnTitle}</strong>
-              {turnClock && !over.done ? <TurnClockPill clock={turnClock} now={clockNow} paused={isPaused} /> : null}
               <PlaysPips used={game.turn.playsUsed} total={maxPlaysPerTurn} />
             </span>
           ) : null}
-          <span className="table-status-copy">
-            <strong>{statusText}</strong>
-            {latestEventLine ? <small className={latestEventLine.againstYou ? 'is-against-you' : ''}>{latestEventLine.text}</small> : null}
+          {/* Sideways, the clock moves to the second line, as on iOS, to leave the name room next to the turn number. */}
+          <span className={landscape ? 'table-status-line' : 'table-status-copy-wrap'}>
+            {landscape && turnClock && !over.done ? <TurnClockPill clock={turnClock} now={clockNow} paused={isPaused} /> : null}
+            <span className="table-status-copy">
+              <strong>{statusText}</strong>
+              {latestEventLine ? <small className={latestEventLine.againstYou ? 'is-against-you' : ''}>{latestEventLine.text}</small> : null}
+            </span>
           </span>
         </button>
 
