@@ -27,7 +27,9 @@ final class PlaytestRoundTests: XCTestCase {
     /// Taps where the control is right now. The turn clock can clear a prompt at any moment,
     /// and tapping the element itself would fail the test if it had just gone.
     private func tapWhereItIs(_ element: XCUIElement) {
-        let frame = element.frame
+        // Reading `frame` fails the test if the control has just gone; a snapshot throws instead,
+        // and the next step looks again.
+        guard let frame = try? element.snapshot().frame else { return }
         app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
     }
 
