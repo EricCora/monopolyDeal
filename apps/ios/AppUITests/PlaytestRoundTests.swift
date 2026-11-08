@@ -19,7 +19,7 @@ final class PlaytestRoundTests: XCTestCase {
     private func firstExisting(_ identifiers: [String]) -> XCUIElement? {
         for identifier in identifiers {
             let element = app.buttons[identifier]
-            if element.exists && element.isHittable { return element }
+            if isSafelyHittable(element) { return element }
         }
         return nil
     }
@@ -40,7 +40,7 @@ final class PlaytestRoundTests: XCTestCase {
             return
         }
         let playable = app.descendants(matching: .any).matching(NSPredicate(format: "identifier MATCHES 'hand\\\\.[0-9]+' AND value == 'playable'")).firstMatch
-        if playable.exists && playable.isHittable {
+        if isSafelyHittable(playable) {
             tapWhereItIs(playable)
             return
         }

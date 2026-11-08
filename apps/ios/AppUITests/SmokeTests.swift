@@ -21,7 +21,7 @@ final class GameplayUITests: XCTestCase {
     private func firstExisting(_ identifiers: [String]) -> XCUIElement? {
         for identifier in identifiers {
             let element = app.buttons[identifier]
-            if element.exists && element.isHittable { return element }
+            if isSafelyHittable(element) { return element }
         }
         return nil
     }
@@ -267,4 +267,12 @@ func waitForPhoneTableToTurn(_ app: XCUIApplication, file: StaticString = #fileP
     let draw = app.buttons["action.draw"]
     let deadline = Date.now.addingTimeInterval(5)
     while draw.exists && !draw.isHittable && Date.now < deadline { _ = draw.waitForExistence(timeout: 0.2) }
+}
+
+/// `isHittable` fails the test outright when a control is mid-animation and its frame is briefly
+/// invalid, as a sheet closing after a tap can be. A snapshot throws instead, so check that first.
+func isSafelyHittable(_ element: XCUIElement) -> Bool {
+    guard let frame = try? element.snapshot().frame,
+          frame.width.isFinite, frame.height.isFinite, frame.width > 0, frame.height > 0 else { return false }
+    return element.isHittable
 }
