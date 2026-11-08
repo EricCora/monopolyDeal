@@ -379,9 +379,9 @@ export function Sheet({ label, title, tall = false, onClose, children }: SheetPr
 }
 
 /** The turn number, big enough to read at a glance on anyone's turn. */
-function TurnBadge({ turn }: { turn: number }) {
+function TurnBadge({ turn, stacked = false }: { turn: number; stacked?: boolean }) {
   return (
-    <span className="turn-badge" role="img" aria-label={`Turn ${turn}`}>
+    <span className={stacked ? 'turn-badge is-stacked' : 'turn-badge'} role="img" aria-label={`Turn ${turn}`}>
       <small aria-hidden="true">Turn</small>
       <strong aria-hidden="true">{turn}</strong>
     </span>
@@ -1436,7 +1436,7 @@ export function GameTableScreen({
           </div>
         </div>
 
-        <TurnBadge turn={game.turnCount} />
+        <TurnBadge turn={game.turnCount} stacked />
 
         <div className="table-title">
           <strong>{turnTitle}</strong>

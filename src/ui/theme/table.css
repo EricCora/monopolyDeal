@@ -2682,7 +2682,7 @@
   gap: 6px;
 }
 
-.table-status-turn strong {
+.table-status-turn > strong {
   flex: 1;
   overflow: hidden;
   font-size: 0.88rem;
@@ -2789,23 +2789,25 @@
   color: #fff;
 }
 
-/* Turn number badge: in the header and the sideways status strip. */
+/* Turn number badge. Stacked in the top bar, so it takes little width from the name;
+   one line and smaller in the sideways status strip. */
 .turn-badge {
   display: inline-flex;
   flex: none;
   align-items: baseline;
-  gap: 4px;
-  padding: 3px 9px;
+  gap: 3px;
+  padding: 0 6px;
   border: 1.5px solid var(--gold);
   border-radius: 99px;
   background: rgba(0, 0, 0, 0.4);
   color: #fff;
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .turn-badge small {
-  font-size: 0.62rem;
+  font-size: 0.5rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2813,33 +2815,66 @@
 }
 
 .turn-badge strong {
-  font-size: 1rem;
+  font-size: 0.82rem;
   font-weight: 800;
 }
 
-.table-status-turn .turn-badge {
-  padding: 1px 7px;
+.turn-badge.is-stacked {
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  min-width: 38px;
+  /* The header's gap is wide; the badge sits a little closer to the menu button. */
+  margin-left: -4px;
+  padding: 3px 6px 2px;
+  border-radius: 10px;
+  line-height: 1;
 }
 
-.table-status-turn .turn-badge strong {
-  flex: none;
-  font-size: 0.88rem;
+.turn-badge.is-stacked small {
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
 }
 
-/* Portrait: the wrapper adds nothing to the layout. Sideways: the clock sits before the message, as on iOS. */
+.turn-badge.is-stacked strong {
+  font-size: 1.05rem;
+}
+
+/* Portrait: the wrapper adds nothing to the layout. */
 .table-status-copy-wrap {
   display: contents;
 }
 
+/* Sideways: the clock sits before the message, as on iOS. The against-you line runs the
+   full width underneath, and the message keeps to one line above it, so the box doesn't
+   grow and shove the board. */
 .table-status-line {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 6px;
+  row-gap: 0;
+  align-items: start;
   min-width: 0;
 }
 
+.table-status-line .table-status-copy {
+  display: contents;
+}
+
 .table-status-line .turn-clock {
-  margin-top: 1px;
+  margin-top: -3px;
+}
+
+.table-status-line .table-status-copy strong {
+  grid-column: -2;
+}
+
+.table-status-line .table-status-copy small {
+  grid-column: 1 / -1;
+}
+
+.table-status-line:has(small.is-against-you) .table-status-copy strong {
+  -webkit-line-clamp: 1;
 }
 
 /* A long name gives way with an ellipsis rather than pushing the plays dots out of the strip. */

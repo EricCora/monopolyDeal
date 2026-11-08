@@ -217,7 +217,7 @@ struct TableView: View {
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    if let game = session.game { TurnBadge(turn: game.turnCount, compact: true) }
+                    if let game = session.game { TurnBadge(turn: game.turnCount) }
                     Text(turnTitle)
                         .font(.subheadline.weight(.heavy))
                         .foregroundStyle(.white)
@@ -368,7 +368,8 @@ struct TableView: View {
         HStack(spacing: 10) {
             menuButton
 
-            if let game = session.game { TurnBadge(turn: game.turnCount) }
+            // A little closer to the menu than the bar's spacing, to leave the name more room.
+            if let game = session.game { TurnBadge(turn: game.turnCount, stacked: true).padding(.leading, -4) }
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(turnTitle)
@@ -831,34 +832,57 @@ struct TableView: View {
     }
 }
 
-/// The turn number, big enough to read at a glance on anyone's turn.
+/// The turn number, big enough to read at a glance on anyone's turn. Stacked in the top
+/// bar, so it takes little width from the name; one line and smaller in the sideways strip.
 private struct TurnBadge: View {
     var turn: Int
-    var compact = false
+    var stacked = false
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text("TURN")
-                .font(.system(size: compact ? 9 : 10, weight: .bold))
-                .tracking(0.6)
-                .foregroundStyle(Palette.gold)
-            Text("\(turn)")
-                .font(.system(size: compact ? 14 : 16, weight: .heavy))
-                .monospacedDigit()
-                .foregroundStyle(.white)
-                .contentTransition(.numericText())
+        Group {
+            if stacked {
+                VStack(spacing: 0) {
+                    label(size: 8)
+                    number(size: 17)
+                }
+                .frame(minWidth: 26)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.black.opacity(0.4)))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Palette.gold, lineWidth: 1.5))
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    label(size: 8)
+                    number(size: 13)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 1)
+                .background(Capsule().fill(Color.black.opacity(0.4)))
+                .overlay(Capsule().strokeBorder(Palette.gold, lineWidth: 1.5))
+            }
         }
         .lineLimit(1)
         .fixedSize()
-        .padding(.horizontal, compact ? 7 : 9)
-        .padding(.vertical, compact ? 1 : 3)
-        .background(Capsule().fill(Color.black.opacity(0.4)))
-        .overlay(Capsule().strokeBorder(Palette.gold, lineWidth: 1.5))
         .animation(.snappy, value: turn)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Turn \(turn)")
         .accessibilityAddTraits(.isStaticText)
         .accessibilityIdentifier("table.turnBadge")
+    }
+
+    private func label(size: CGFloat) -> some View {
+        Text("TURN")
+            .font(.system(size: size, weight: .bold))
+            .tracking(0.6)
+            .foregroundStyle(Palette.gold)
+    }
+
+    private func number(size: CGFloat) -> some View {
+        Text("\(turn)")
+            .font(.system(size: size, weight: .heavy))
+            .monospacedDigit()
+            .foregroundStyle(.white)
+            .contentTransition(.numericText())
     }
 }
 
