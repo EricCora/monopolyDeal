@@ -19,8 +19,12 @@ export function useLandscapePhone(): boolean {
   return matches;
 }
 
-/** How much of each hand card hangs below the screen in landscape. */
-export const LANDSCAPE_HAND_OVERHANG = 0.27;
+/**
+ * How much of each hand card hangs below the screen in landscape: the rules line, not the
+ * card's name. iOS sets 0.2 but counts the home indicator's strip toward it, so about the
+ * same part of the card is hidden there.
+ */
+export const LANDSCAPE_HAND_OVERHANG = 0.09;
 
 /** The hand's card width in landscape: 128 px on a large phone, less on a smaller one. */
 export function landscapeHandWidth(height: number): number {

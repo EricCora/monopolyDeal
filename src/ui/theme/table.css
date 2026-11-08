@@ -2769,7 +2769,7 @@
 .is-landscape .hand-zone {
   grid-area: hand;
   /* The cards hang off the bottom edge. */
-  margin-bottom: calc(var(--hand-overhang, 48px) * -1);
+  margin-bottom: calc(var(--hand-overhang, 16px) * -1);
 }
 
 .landscape-board-head {

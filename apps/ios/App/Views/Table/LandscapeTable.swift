@@ -20,8 +20,8 @@ struct LandscapeTable<MenuButton: View, Status: View, TurnButtons: View, Hand: V
     @ViewBuilder var turnButtons: () -> TurnButtons
     @ViewBuilder var hand: (_ cardWidth: CGFloat) -> Hand
 
-    /// How much of each hand card hangs below the screen.
-    static var handOverhang: CGFloat { 0.27 }
+    /// How much of each hand card hangs below the screen: the rules line, not the card's name.
+    static var handOverhang: CGFloat { 0.2 }
     /// Room for "Your turn", the plays left and the status line.
     private static var statusWidth: CGFloat { 220 }
     private static var turnButtonsWidth: CGFloat { 148 }
