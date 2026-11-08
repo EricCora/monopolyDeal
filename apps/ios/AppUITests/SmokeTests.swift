@@ -73,6 +73,25 @@ final class GameplayUITests: XCTestCase {
         waitForPhoneTableToTurn(app)
     }
 
+    /// On the sideways iPhone table the hand runs off the bottom edge, but only the rules
+    /// line under each card's name may go, so the names stay readable.
+    func testHandCardNamesStayOnScreen() throws {
+        guard UIDevice.current.userInterfaceIdiom == .phone else { throw XCTSkip("Only the iPhone table turns sideways") }
+        launch(seed: 11)
+        startPractice("Classic, Easy")
+        // Wait for the opening hand to be dealt; the middle card neither tilts nor drops.
+        XCTAssertTrue(app.descendants(matching: .any)["hand.4"].waitForExistence(timeout: 10))
+        sleep(1)
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "landscape-hand"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        let card = app.descendants(matching: .any)["hand.2"].frame
+        let screen = app.windows.firstMatch.frame
+        let hidden = card.maxY - screen.maxY
+        XCTAssertLessThanOrEqual(hidden, card.height * 0.13, "\(Int(hidden)) of the card's \(Int(card.height)) points are below the screen, which hides its name")
+    }
+
     func testClassicGamePlaysToAWinner() throws {
         launch(seed: 11, winSets: 2)
         startPractice("Classic, Easy")
