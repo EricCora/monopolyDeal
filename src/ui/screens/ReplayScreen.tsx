@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getNextPrompt, type TurnPrompt } from '../../engine';
-import { replayPositions } from '../../replay/positions';
+import { getNextPrompt, type GameState, type TurnPrompt } from '../../engine';
+import { replayPositions, retryTurnStart } from '../../replay/positions';
 import { Icon } from '../components/icons';
 import type { GameReplayLog } from '../../persistence/replays';
 import { GameTableScreen } from './GameTableScreen';
@@ -12,15 +12,17 @@ interface ReplayScreenProps {
   log: GameReplayLog;
   reducedMotion: boolean;
   onClose: () => void;
+  resumeIndex?: number;
+  onRetry?: (game: GameState, index: number) => void;
 }
 
 const noop = () => undefined;
 
 /** Plays a finished game back on the real table, following whoever is deciding at each step. */
-export function ReplayScreen({ log, reducedMotion, onClose }: ReplayScreenProps) {
+export function ReplayScreen({ log, reducedMotion, onClose, resumeIndex, onRetry }: ReplayScreenProps) {
   const positions = useMemo(() => replayPositions(log), [log]);
-  const [index, setIndex] = useState(0);
-  const [playing, setPlaying] = useState(true);
+  const [index, setIndex] = useState(resumeIndex ?? 0);
+  const [playing, setPlaying] = useState(resumeIndex == null);
   const [speed, setSpeed] = useState(1);
   const last = positions.length - 1;
   const game = positions[Math.min(index, last)];
@@ -35,6 +37,7 @@ export function ReplayScreen({ log, reducedMotion, onClose }: ReplayScreenProps)
   }, [index, last, playing, speed]);
 
   const isPlaying = playing && index < last;
+  const retryStart = onRetry && !isPlaying ? retryTurnStart(positions, log.actions.length, index) : null;
 
   return (
     <GameTableScreen
@@ -73,6 +76,11 @@ export function ReplayScreen({ log, reducedMotion, onClose }: ReplayScreenProps)
             <input type="range" min={0} max={last} value={Math.min(index, last)} onChange={(event) => { setPlaying(false); setIndex(Number(event.target.value)); }} />
             <small>Move {Math.min(index, last)} of {last}</small>
           </label>
+          {retryStart && onRetry ? (
+            <button type="button" className="secondary-button replay-retry" onClick={() => onRetry(retryStart, index)}>
+              Retry This Turn
+            </button>
+          ) : null}
         </div>
       )}
       isPaused={false}

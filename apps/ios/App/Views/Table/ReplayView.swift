@@ -13,6 +13,7 @@ final class ReplayMatch: TableSession {
     static let speeds = [1, 2, 4]
 
     private let positions: [GameState]
+    private let actionCount: Int
     private(set) var index = 0
     private(set) var playing = true
     private(set) var speed = 1
@@ -22,6 +23,7 @@ final class ReplayMatch: TableSession {
 
     init(log: GameLog) {
         positions = log.positions()
+        actionCount = log.actions.count
     }
 
     var last: Int { positions.count - 1 }
@@ -43,6 +45,10 @@ final class ReplayMatch: TableSession {
     var title: String { "Replay" }
     var isReplay: Bool { true }
     var isPlaying: Bool { playing && index < last }
+    var retryStart: GameState? {
+        guard !isPlaying else { return nil }
+        return GameLog.retryTurnStart(in: positions, actionCount: actionCount, at: index)
+    }
 
     func perform(_ action: Action) {}
     func undo() {}
@@ -96,6 +102,7 @@ final class ReplayMatch: TableSession {
 struct ReplayRequest: Identifiable {
     let id = UUID()
     var log: GameLog
+    var isLocal = false
 }
 
 struct ReplayView: View {
@@ -103,21 +110,73 @@ struct ReplayView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var match: ReplayMatch
     @State private var showLog = false
+    @State private var retry: LocalMatch?
+    private let isLocal: Bool
 
-    init(log: GameLog) {
+    private var session: any TableSession {
+        if let retry { return retry }
+        return match
+    }
+
+    init(log: GameLog, isLocal: Bool = false) {
+        self.isLocal = isLocal
         _match = State(initialValue: ReplayMatch(log: log))
     }
 
     var body: some View {
-        TableView(session: match, extras: AnyView(bar)) { dismiss() }
+        TableView(session: session, extras: retry == nil ? AnyView(bar) : nil) {
+            if retry == nil { dismiss() } else { closeRetry() }
+        }
+            .overlay {
+                if let retry, retry.isGameOver, let game = retry.game {
+                    retryResult(game)
+                }
+            }
             .environment(\.cardBackStyle, app.preferences.cardBack)
             .onAppear { match.begin() }
-            .onDisappear { match.end() }
+            .onDisappear {
+                match.end()
+                retry?.stop()
+            }
             .sheet(isPresented: $showLog) {
                 EventLogSheet(events: match.game?.history ?? [], playerNames: match.game?.players.map(\.name) ?? [])
                     .presentationDetents([.medium, .large])
                     .presentationBackground(.ultraThinMaterial)
             }
+    }
+
+    private func startRetry(_ state: GameState) {
+        match.seek(match.index)
+        let practice = LocalMatch(
+            game: state, mode: .practice, isRetry: true, store: app.store,
+            preferences: { [app] in app.preferences }, updatePreferences: { _ in },
+            onFeedback: { [app] in app.feedback($0) }
+        )
+        retry = practice
+        practice.start()
+    }
+
+    private func closeRetry() {
+        retry?.stop()
+        retry = nil
+    }
+
+    private func retryResult(_ game: GameState) -> some View {
+        let winner = game.players.first { $0.id == game.winnerId }?.name ?? "Nobody"
+        return ZStack {
+            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
+            VStack(spacing: 16) {
+                Text(winner == "You" ? "You win!" : "\(winner) wins!")
+                    .font(.title.bold())
+                Text("Retry complete")
+                Button("Back to Replay", action: closeRetry)
+                    .buttonStyle(PrimaryButtonStyle())
+                    .frame(maxWidth: 240)
+                    .accessibilityIdentifier("retry.return")
+            }
+            .foregroundStyle(.white)
+        }
+        .accessibilityAddTraits(.isModal)
     }
 
     private var bar: some View {
@@ -156,10 +215,21 @@ struct ReplayView: View {
                     step: 1
                 )
                 .accessibilityLabel("Replay position")
+                .accessibilityIdentifier("replay.slider")
                 Text("Move \(match.index) of \(match.last)")
                     .font(.caption2.weight(.semibold).monospacedDigit())
                     .foregroundStyle(SoftWhite(0.8))
                     .accessibilityIdentifier("replay.position")
+            }
+            if isLocal, let state = match.retryStart {
+                Button("Retry This Turn", systemImage: "arrow.counterclockwise") { startRetry(state) }
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 36)
+                    .dealGlass(interactive: true, in: Capsule())
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("replay.retry")
             }
         }
     }

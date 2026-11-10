@@ -117,6 +117,8 @@ final class LocalMatch: TableSession {
     private let onFeedback: (Feedback.Tone) -> Void
     private var botTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
+    let isRetry: Bool
+    private var retryPaused = false
     private var finalized = false
     /// UI tests shorten the bot's pause so a whole game fits in a test run.
     var botDelay: Duration = .milliseconds(650)
@@ -127,11 +129,12 @@ final class LocalMatch: TableSession {
     var onFinished: (() -> Void)?
     #endif
 
-    init(game: GameState, mode: MatchMode, options: MatchOptions = MatchOptions(), log: GameLog? = nil, store: DealStore, preferences: @escaping () -> Preferences, updatePreferences: @escaping ((inout Preferences) -> Void) -> Void, onFeedback: @escaping (Feedback.Tone) -> Void) {
+    init(game: GameState, mode: MatchMode, options: MatchOptions = MatchOptions(), log: GameLog? = nil, isRetry: Bool = false, store: DealStore, preferences: @escaping () -> Preferences, updatePreferences: @escaping ((inout Preferences) -> Void) -> Void, onFeedback: @escaping (Feedback.Tone) -> Void) {
         self.game = game
         self.mode = mode
         self.options = options
         self.log = log
+        self.isRetry = isRetry
         self.store = store
         self.preferences = preferences
         self.updatePreferences = updatePreferences
@@ -139,7 +142,7 @@ final class LocalMatch: TableSession {
         refreshDerived()
     }
 
-    var title: String { mode.label }
+    var title: String { isRetry ? "Retry Practice" : mode.label }
     var series: MatchSeries? { options.series }
     var canPause: Bool { true }
     var pauseMessage: String? { nil }
@@ -153,6 +156,7 @@ final class LocalMatch: TableSession {
     var gameId: String { game.map { "\(Int($0.createdAt))" } ?? "" }
 
     var isPaused: Bool {
+        if isRetry { return retryPaused }
         let prefs = preferences()
         return prefs.gamePaused && prefs.pausedGameId == gameId
     }
@@ -216,7 +220,7 @@ final class LocalMatch: TableSession {
     }
 
     private func scheduleSave() {
-        guard let game, !Engine.isGameOver(game).done else { return }
+        guard !isRetry, let game, !Engine.isGameOver(game).done else { return }
         let store = self.store
         let mode = self.mode
         let log = self.log
@@ -233,7 +237,7 @@ final class LocalMatch: TableSession {
 
     func saveNow() {
         saveTask?.cancel()
-        guard let game, !Engine.isGameOver(game).done else { return }
+        guard !isRetry, let game, !Engine.isGameOver(game).done else { return }
         store.saveActiveGame(game, mode: mode)
         store.saveActiveReplay(log)
         store.saveMatchOptions(options, for: game)
@@ -297,9 +301,13 @@ final class LocalMatch: TableSession {
     func togglePause() {
         let id = gameId
         let pausing = !isPaused
-        updatePreferences {
-            $0.gamePaused = pausing
-            $0.pausedGameId = pausing ? id : nil
+        if isRetry {
+            retryPaused = pausing
+        } else {
+            updatePreferences {
+                $0.gamePaused = pausing
+                $0.pausedGameId = pausing ? id : nil
+            }
         }
         if pausing {
             botTask?.cancel()
@@ -385,6 +393,11 @@ final class LocalMatch: TableSession {
     private func finalizeIfGameOver(_ state: GameState) {
         guard !finalized, Engine.isGameOver(state).done else { return }
         finalized = true
+        if isRetry {
+            turnSnapshots = []
+            onFeedback(.win)
+            return
+        }
         let before = store.achievements().counters
         let record = store.record(StatsBuilder.matchRecord(state, mode: mode, surface: .local))
         summary = PostGame.summary(state, lifetime: record.lifetime)

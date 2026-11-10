@@ -15,6 +15,8 @@ struct TableView: View {
     @State private var ui = TableUI()
     @Namespace private var cardSpace
 
+    private var isRetry: Bool { (session as? LocalMatch)?.isRetry == true }
+
     private var cardsAnimate: Bool { !reduceMotion && !app.preferences.reducedEffects }
 
     private var actions: TableActions {
@@ -256,7 +258,7 @@ struct TableView: View {
                 .minimumScaleFactor(0.8)
         } else {
             // The cell is narrow, so let the line wrap rather than cut off at larger text.
-            Text(statusText)
+            Text(isRetry ? "Retry Practice · \(statusText)" : statusText)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.9))
                 .lineLimit(4)
@@ -348,7 +350,7 @@ struct TableView: View {
             }
             Button("Rules", systemImage: "book") { ui.showRules = true }
             Button("Game Log", systemImage: "list.bullet") { ui.showLog = true }
-            if session is LocalMatch {
+            if session is LocalMatch, !isRetry {
                 Button("Save Game", systemImage: "square.and.arrow.down") { ui.showSaves = true }
             }
             Divider()
@@ -361,7 +363,7 @@ struct TableView: View {
                 .dealGlass(interactive: true, in: Circle())
         }
         .accessibilityLabel("Game menu")
-        .accessibilityIdentifier("table.menu")
+        .accessibilityIdentifier(isRetry ? "retry.menu" : "table.menu")
     }
 
     private var topBar: some View {
@@ -392,6 +394,7 @@ struct TableView: View {
     }
 
     private var leaveLabel: String {
+        if isRetry { return "Back to Replay" }
         if session.isReplay { return "Close Replay" }
         if session.isSpectating { return "Stop Watching" }
         return session is LocalMatch ? "Back to Menu" : "Exit Match"
@@ -412,11 +415,13 @@ struct TableView: View {
     }
 
     private var shortSubtitle: String {
+        if isRetry { return session.title }
         guard let game = session.game else { return session.title }
         return game.resolvedVariant.label
     }
 
     private var subtitle: String {
+        if isRetry { return session.title }
         guard let game = session.game else { return session.title }
         if let series = session.series, series.bestOf > 1 {
             let score = game.players.map { String(series.wins[$0.id] ?? 0) }.joined(separator: "–")

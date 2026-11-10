@@ -300,7 +300,12 @@ function App() {
   const [screen, setScreen] = useState<Screen>(() => (findAutoResumeEntry(loadRecoveryEntries()) ? 'multiplayer' : 'home'));
   const [settingsBackScreen, setSettingsBackScreen] = useState<SettingsBackScreen>('home');
   const [savedGamesBackScreen, setSavedGamesBackScreen] = useState<SavedGamesBackScreen>('home');
-  const [game, setGame] = useState<GameState | null>(null);
+  const [localGame, setLocalGame] = useState<GameState | null>(null);
+  const [retryGame, setRetryGame] = useState<GameState | null>(null);
+  const [retryPaused, setRetryPaused] = useState(false);
+  const isRetry = retryGame != null;
+  const game = retryGame ?? localGame;
+  const setGame = isRetry ? setRetryGame : setLocalGame;
   const [postGameSummary, setPostGameSummary] = useState<PostGameSummary | null>(null);
   const [setup, setSetup] = useState<SetupViewModel>(initialSetup);
   const [localMatchMode, setLocalMatchMode] = useState<MatchMode>('hot_seat');
@@ -317,7 +322,7 @@ function App() {
   const [localMatch, setLocalMatch] = useState<LocalMatchOptions>(NO_MATCH_OPTIONS);
   const [localClock, setLocalClock] = useState<{ playerId: string; startedAt: number; deadlineMs: number | null } | null>(null);
   const [newUnlocks, setNewUnlocks] = useState<string[]>([]);
-  const [replayView, setReplayView] = useState<{ log: GameReplayLog; returnTo: Screen } | null>(null);
+  const [replayView, setReplayView] = useState<{ log: GameReplayLog; returnTo: Screen; local?: boolean; resumeIndex?: number } | null>(null);
   const replayLogRef = useRef<GameReplayLog | null>(null);
   /** Log length when each undo snapshot was taken, so undo can rewind the log too. */
   const replayMarksRef = useRef<number[]>([]);
@@ -350,12 +355,12 @@ function App() {
   const deepLinkHandledRef = useRef(false);
 
   useEffect(() => {
-    if (!game || isGameOver(game).done) return;
+    if (!localGame || isGameOver(localGame).done) return;
     const handle = window.setTimeout(() => {
-      saveActiveGame(game, localMatchMode);
+      saveActiveGame(localGame, localMatchMode);
     }, 220);
     return () => window.clearTimeout(handle);
-  }, [game, localMatchMode]);
+  }, [localGame, localMatchMode]);
 
   useEffect(() => {
     saveUiPreferences(uiPreferences);
@@ -445,7 +450,7 @@ function App() {
     return saved ? { players: saved.gameState.players.map((player) => player.name), turn: saved.gameState.turnCount, variant: saved.gameState.variant } : null;
   }, [screen]);
   const currentGameId = game ? gameIdentity(game) : null;
-  const isPaused = Boolean(game && uiPreferences.gamePaused && uiPreferences.pausedGameId === currentGameId);
+  const isPaused = isRetry ? retryPaused : Boolean(game && uiPreferences.gamePaused && uiPreferences.pausedGameId === currentGameId);
   const reduceCelebrationEffects = uiPreferences.reducedEffects;
   const celebrationEnabled = Boolean(postGameSummary && !prefersReducedMotion && !reduceCelebrationEffects);
   const { emitFeedback } = useFeedback({
@@ -580,12 +585,12 @@ function App() {
   const unlockedAchievements = useMemo(() => getUnlockedAchievementIds(achievementState), [achievementState]);
 
   useEffect(() => {
-    if (!coachHint || !game || !prompt) return;
+    if (isRetry || !coachHint || !game || !prompt) return;
     const signature = `${game.updatedAt}:${prompt.playerId}`;
     if (coachHintMetricRef.current === signature) return;
     coachHintMetricRef.current = signature;
     recordGrowthMetric('coach_hint_viewed');
-  }, [coachHint, game, prompt, recordGrowthMetric]);
+  }, [coachHint, game, isRetry, prompt, recordGrowthMetric]);
 
   const playerNameById = useCallback((playerId: string): string => {
     if (!game) return playerId;
@@ -1123,7 +1128,7 @@ function App() {
   }, [game?.pending?.kind, multiplayerGame?.pending?.kind, screen]);
 
   const pendingPayment = game?.pending?.kind === 'payment' ? game.pending.payload : null;
-  const canSaveCurrentGame = Boolean(game && !isGameOver(game).done);
+  const canSaveCurrentGame = !isRetry && Boolean(game && !isGameOver(game).done);
   const pendingPaymentPlayer = useMemo(() => {
     if (!game || !pendingPayment) return null;
     return game.players.find((player) => player.id === pendingPayment.targetPlayerId) ?? null;
@@ -1192,7 +1197,8 @@ function App() {
 
   const togglePause = useCallback(() => {
     if (!currentGameId) return;
-    setUiPreferences((prev) => {
+    if (isRetry) setRetryPaused((paused) => !paused);
+    else setUiPreferences((prev) => {
       if (prev.gamePaused && prev.pausedGameId === currentGameId) {
         return { ...prev, gamePaused: false, pausedGameId: null };
       }
@@ -1202,7 +1208,7 @@ function App() {
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
     setError(null);
-  }, [currentGameId]);
+  }, [currentGameId, isRetry]);
 
   const onToggleDevMode = useCallback((enabled: boolean) => {
     setUiPreferences((prev) => ({ ...prev, devModeEnabled: enabled }));
@@ -1240,7 +1246,7 @@ function App() {
     replayMarksRef.current = [];
     saveActiveReplay(replayLogRef.current);
     if (!isFreshGame) setLocalMatch(loadLocalMatch(nextGame.createdAt));
-    setGame(nextGame);
+    setLocalGame(nextGame);
     setPostGameSummary(null);
     setRevealedPlayerId(null);
     setScreen('game');
@@ -1347,7 +1353,7 @@ function App() {
     if (isGameOver(saved.gameState).done) {
       const loadedLifetime = loadLifetimeStats();
       setLifetime(loadedLifetime);
-      setGame(saved.gameState);
+      setLocalGame(saved.gameState);
       setPostGameSummary(buildPostGameSummary(saved.gameState, loadedLifetime));
       setScreen('game_over');
       setError(null);
@@ -1367,7 +1373,7 @@ function App() {
     if (isGameOver(slot.gameState).done) {
       const loadedLifetime = loadLifetimeStats();
       setLifetime(loadedLifetime);
-      setGame(slot.gameState);
+      setLocalGame(slot.gameState);
       setPostGameSummary(buildPostGameSummary(slot.gameState, loadedLifetime));
       setScreen('game_over');
       setError(null);
@@ -1500,15 +1506,15 @@ function App() {
     }
     if (snapshotBeforeAction) {
       setTurnSnapshots((prev) => appendTurnSnapshot(prev, snapshotBeforeAction));
-      replayMarksRef.current.push(replayLogRef.current?.actions.length ?? 0);
+      if (!isRetry) replayMarksRef.current.push(replayLogRef.current?.actions.length ?? 0);
     }
-    replayLogRef.current?.actions.push(action);
+    if (!isRetry) replayLogRef.current?.actions.push(action);
     if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId)
       || (game && actionRevealedDeckCards(game, result.state, action.type))) {
       setTurnSnapshots([]);
-      replayMarksRef.current = [];
+      if (!isRetry) replayMarksRef.current = [];
     }
-    saveActiveReplay(replayLogRef.current);
+    if (!isRetry) saveActiveReplay(replayLogRef.current);
     setChooser(null);
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
@@ -1526,8 +1532,8 @@ function App() {
       });
     }
     setGame(result.state);
-    finalizeIfGameOver(result.state);
-  }, [emitFeedback, finalizeIfGameOver, game, isPaused, prompt]);
+    if (!isRetry) finalizeIfGameOver(result.state);
+  }, [emitFeedback, finalizeIfGameOver, game, isPaused, isRetry, prompt, setGame]);
 
   const queueRiskyAction = (
     action: Action,
@@ -1662,7 +1668,7 @@ function App() {
   ]);
 
   // Speed and series survive a reload, tied to the game they were chosen for.
-  const localGameCreatedAt = game?.createdAt;
+  const localGameCreatedAt = localGame?.createdAt;
   useEffect(() => {
     if (localGameCreatedAt == null) return;
     try {
@@ -1674,7 +1680,7 @@ function App() {
 
   // Every local game shows a turn clock. Speed games also run out, and then a bot moves.
   const clockOwnerId = game && prompt && !isGameOver(game).done ? prompt.playerId : null;
-  const clockRuns = localMatch.speed && !isBotPromptPlayer && !shouldShowShield && !isPaused;
+  const clockRuns = !isRetry && localMatch.speed && !isBotPromptPlayer && !shouldShowShield && !isPaused;
   useEffect(() => {
     if (!clockOwnerId) {
       setLocalClock(null);
@@ -1686,7 +1692,7 @@ function App() {
 
   const deadlineMs = localClock?.deadlineMs ?? null;
   useEffect(() => {
-    if (deadlineMs == null || !game || !prompt || screen !== 'game' || legalActions.length === 0) return undefined;
+    if (isRetry || deadlineMs == null || !game || !prompt || screen !== 'game' || legalActions.length === 0) return undefined;
     const handle = window.setTimeout(() => {
       const choice = chooseHeuristicAction(game, prompt.playerId, legalActions);
       const action = choice?.action && legalActions.some((item) => actionsEqualForLegality(item.action, choice.action))
@@ -1697,7 +1703,7 @@ function App() {
       setLocalClock((current) => (current ? { ...current, deadlineMs: Date.now() + TIMED_OUT_STEP_MS } : current));
     }, Math.max(0, deadlineMs - Date.now()));
     return () => window.clearTimeout(handle);
-  }, [deadlineMs, game, legalActions, prompt, runAction, screen]);
+  }, [deadlineMs, game, isRetry, legalActions, prompt, runAction, screen]);
 
   const undoLastPlay = () => {
     if (isPaused) return;
@@ -1705,9 +1711,11 @@ function App() {
     const previousState = turnSnapshots[turnSnapshots.length - 1];
     setGame(previousState);
     setTurnSnapshots((prev) => prev.slice(0, -1));
-    const mark = replayMarksRef.current.pop();
-    if (replayLogRef.current && mark != null) replayLogRef.current.actions = replayLogRef.current.actions.slice(0, mark);
-    saveActiveReplay(replayLogRef.current);
+    if (!isRetry) {
+      const mark = replayMarksRef.current.pop();
+      if (replayLogRef.current && mark != null) replayLogRef.current.actions = replayLogRef.current.actions.slice(0, mark);
+      saveActiveReplay(replayLogRef.current);
+    }
     setChooser(null);
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
@@ -1720,10 +1728,12 @@ function App() {
     const firstState = turnSnapshots[0];
     setGame(firstState);
     setTurnSnapshots([]);
-    const mark = replayMarksRef.current[0];
-    if (replayLogRef.current && mark != null) replayLogRef.current.actions = replayLogRef.current.actions.slice(0, mark);
-    replayMarksRef.current = [];
-    saveActiveReplay(replayLogRef.current);
+    if (!isRetry) {
+      const mark = replayMarksRef.current[0];
+      if (replayLogRef.current && mark != null) replayLogRef.current.actions = replayLogRef.current.actions.slice(0, mark);
+      replayMarksRef.current = [];
+      saveActiveReplay(replayLogRef.current);
+    }
     setChooser(null);
     setSelectedCardId(null);
     setSelectedPaymentCards([]);
@@ -1908,7 +1918,7 @@ function App() {
     if (!game || !pendingPayment) return;
     const suggested = getSuggestedPaymentCards(game, pendingPayment.targetPlayerId, pendingPayment.amount);
     setSelectedPaymentCards(suggested);
-    recordGrowthMetric('payment_auto_selected');
+    if (!isRetry) recordGrowthMetric('payment_auto_selected');
   };
 
   const clearStatsData = () => {
@@ -1985,7 +1995,7 @@ function App() {
   const goHome = useCallback(() => {
     clearActiveGame();
     setUiPreferences((prev) => ({ ...prev, gamePaused: false, pausedGameId: null }));
-    setGame(null);
+    setLocalGame(null);
     setPostGameSummary(null);
     setScreen('home');
     setError(null);
@@ -2078,6 +2088,34 @@ function App() {
     } finally {
       setIsSharing(false);
     }
+  };
+
+  const resetRetryTable = () => {
+    setRetryPaused(false);
+    setTurnSnapshots([]);
+    setRevealedPlayerId(null);
+    setChooser(null);
+    setSelectedCardId(null);
+    setSelectedPaymentCards([]);
+    setForcedDealSelection(null);
+    setRiskyActionConfirmation(null);
+    setShowRulesDrawer(false);
+    setTableActionHint(null);
+    setLocalClock(null);
+    setError(null);
+  };
+
+  const startRetry = (state: GameState, index: number) => {
+    resetRetryTable();
+    setReplayView((view) => view && { ...view, resumeIndex: index });
+    setRetryGame(structuredClone(state));
+    setScreen('game');
+  };
+
+  const closeRetry = () => {
+    resetRetryTable();
+    setRetryGame(null);
+    setScreen('replay');
   };
 
   return (
@@ -2173,11 +2211,12 @@ function App() {
 
       {screen === 'game' && game && prompt ? (
         <GameTableScreen
-          matchMode={localMatchMode}
+          matchMode={isRetry ? 'practice' : localMatchMode}
+          isRetry={isRetry}
           game={game}
           prompt={prompt}
           turnClock={localClock}
-          series={localMatch.series}
+          series={isRetry ? undefined : localMatch.series}
           tableActionHint={tableActionHint}
           isPaused={isPaused}
           reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
@@ -2208,10 +2247,10 @@ function App() {
           onPauseToggle={togglePause}
           onOpenRules={() => {
             setShowRulesDrawer(true);
-            recordGrowthMetric('rules_drawer_opened');
+            if (!isRetry) recordGrowthMetric('rules_drawer_opened');
           }}
-          onOpenSavedGames={() => openSavedGames('game')}
-          onOpenSettings={() => openSettings('game')}
+          onOpenSavedGames={isRetry ? undefined : () => openSavedGames('game')}
+          onOpenSettings={isRetry ? undefined : () => openSettings('game')}
           onToggleDebugActions={() => {
             if (isPaused) return;
             setShowDebugActions((prev) => !prev);
@@ -2235,7 +2274,7 @@ function App() {
             if (isPaused) return;
             setRevealedPlayerId(prompt.playerId);
           }}
-          onNavigateHome={() => setScreen('home')}
+          onNavigateHome={isRetry ? closeRetry : () => setScreen('home')}
         />
       ) : null}
 
@@ -2477,6 +2516,8 @@ function App() {
       {screen === 'replay' && replayView ? (
         <ReplayScreen
           log={replayView.log}
+          resumeIndex={replayView.resumeIndex}
+          onRetry={replayView.local ? startRetry : undefined}
           reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
           onClose={() => {
             setScreen(replayView.returnTo);
@@ -2494,7 +2535,7 @@ function App() {
           dailyChallenge={dailyChallenge}
           replays={loadReplays()}
           onWatchReplay={(replay) => {
-            setReplayView({ log: replay, returnTo: 'stats' });
+            setReplayView({ log: replay, returnTo: 'stats', local: history.some((match) => match.id === replay.id && match.surface === 'local') });
             setScreen('replay');
           }}
           onBack={() => setScreen('home')}
@@ -2568,7 +2609,7 @@ function App() {
           series={localMatch.series}
           newUnlocks={newUnlocks}
           onWatchReplay={replayLogRef.current ? () => {
-            setReplayView({ log: replayLogRef.current as GameReplayLog, returnTo: 'game_over' });
+            setReplayView({ log: replayLogRef.current as GameReplayLog, returnTo: 'game_over', local: true });
             setScreen('replay');
           } : undefined}
           onShareImage={() => void sharePostGameImage()}

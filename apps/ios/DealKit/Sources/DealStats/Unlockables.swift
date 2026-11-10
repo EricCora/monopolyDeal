@@ -91,6 +91,19 @@ public struct GameLog: Codable, Hashable, Sendable {
         }
         return result
     }
+
+    /// The recorded draw step for the sole human's turn in a complete local replay.
+    public static func retryTurnStart(in positions: [GameState], actionCount: Int, at index: Int) -> GameState? {
+        guard positions.indices.contains(index), let last = positions.last,
+              positions.count == actionCount + 1, Engine.isGameOver(last).done else { return nil }
+        let current = positions[index]
+        let humans = current.players.filter { $0.controller != .bot }
+        guard !Engine.isGameOver(current).done, humans.count == 1,
+              current.players[current.currentPlayerIndex].id == humans[0].id else { return nil }
+        return positions[...index].reversed()
+            .prefix(while: { $0.turnCount == current.turnCount })
+            .first(where: { $0.turn.phase == .draw && $0.pending == nil })
+    }
 }
 
 public struct StoredReplay: Codable, Hashable, Sendable, Identifiable {

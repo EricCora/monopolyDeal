@@ -84,6 +84,7 @@ interface TableActionHint {
 interface GameTableScreenProps {
   mode?: 'local' | 'multiplayer';
   matchMode?: MatchMode;
+  isRetry?: boolean;
   game: GameState;
   prompt: TurnPrompt;
   tableActionHint?: TableActionHint | null;
@@ -177,8 +178,8 @@ interface GameTableScreenProps {
   onLoadCheckpoint?: (checkpointId: string) => void;
   onDeleteCheckpoint?: (checkpointId: string) => void;
   onOpenRules: () => void;
-  onOpenSavedGames: () => void;
-  onOpenSettings: () => void;
+  onOpenSavedGames?: () => void;
+  onOpenSettings?: () => void;
   onToggleDebugActions: () => void;
   onRunAction: (action: Action, source?: LegalAction) => void;
   onCardClick: (cardId: string, input?: CardInput) => void;
@@ -445,6 +446,7 @@ function BankFan({ player, variant, startOpen = false }: { player: PlayerState; 
 export function GameTableScreen({
   mode = 'local',
   matchMode = mode === 'multiplayer' ? 'live_online' : 'hot_seat',
+  isRetry = false,
   game,
   prompt,
   tableActionHint = null,
@@ -709,7 +711,8 @@ export function GameTableScreen({
     }
     return { title: 'Main Step Active', detail: `${activePlayerName} can make ${playsRemaining} more ${playsRemaining === 1 ? 'play' : 'plays'} this turn.`, tone: 'info' };
   }, [disconnectCountdownText, activePlayerName, discardOverLimitCount, game.players, isPaused, mainPhaseExhausted, maxPlaysPerTurn, over.done, pauseReasonText, pendingPayment, playsRemaining, prompt.kind, winnerName]);
-  const matchModeLabel = getMatchModeDefinition(matchMode).tableKicker;
+  const matchModeLabel = isRetry ? 'Retry Practice' : getMatchModeDefinition(matchMode).tableKicker;
+  const leaveLabel = isRetry ? 'Back to Replay' : 'Back to Menu';
   const shieldPlayerName = game.players.find((player) => player.id === prompt.playerId)?.name ?? prompt.playerId;
 
   // Coming from a long lobby or setup page shouldn't open the table scrolled.
@@ -981,7 +984,7 @@ export function GameTableScreen({
   const seriesScore = series
     ? ` · Game ${series.gameNumber} · ${game.players.map((player) => series.wins[player.id] ?? 0).join('–')}`
     : '';
-  const turnSubtitle = `${variantLabel}${seriesScore || ` · ${winCompleteSets} sets to win`}`;
+  const turnSubtitle = `${isRetry ? 'Retry Practice · ' : ''}${variantLabel}${seriesScore || ` · ${winCompleteSets} sets to win`}`;
 
   const statusText = (() => {
     if (over.done) return winnerName ? `${winnerName} won the match.` : 'Match complete.';
@@ -1250,7 +1253,7 @@ export function GameTableScreen({
             </article>
           ))}
         </div>
-        <div className="table-centre" style={{ ['--pile-w' as string]: `${Math.round(handWidth * 0.48)}px` }}>
+        <div className="table-centre" style={{ ['--pile-w' as string]: `${Math.round(handWidth * (replayBar ? 0.40 : 0.48))}px` }}>
           {renderCentrePiles(Math.round(handWidth * 0.48))}
         </div>
         {renderViewerBoard({ ['--board-card-w' as string]: `${boardCardWidth}px` }, (
@@ -1380,7 +1383,7 @@ export function GameTableScreen({
   return (
     <section
       ref={screenRef}
-      className={`game-table-screen state-${prompt.kind} ${isPaused ? 'is-paused' : ''} ${isMultiplayer ? 'is-live-room' : 'is-local-table'} ${isViewersPrompt ? 'is-your-move' : ''} ${landscape ? 'is-landscape' : ''}`}
+      className={`game-table-screen state-${prompt.kind} ${isPaused ? 'is-paused' : ''} ${isMultiplayer ? 'is-live-room' : 'is-local-table'} ${isViewersPrompt ? 'is-your-move' : ''} ${landscape ? 'is-landscape' : ''} ${replayBar ? 'is-replay' : ''}`}
       style={landscape ? { ['--hand-overhang' as string]: `${Math.round(landscapeHandWidth(window.innerHeight) * 1.4 * LANDSCAPE_HAND_OVERHANG)}px` } : undefined}
     >
       <h2 className="sr-only">{isMultiplayer ? 'Multiplayer Table' : 'Game Table'}</h2>
@@ -1404,8 +1407,8 @@ export function GameTableScreen({
             ) : null}
             <button type="button" onClick={onOpenRules}><Icon name="book" />Rules Reference</button>
             <button type="button" onClick={() => setLogOpen(true)}><Icon name="list" />Game Log</button>
-            {!isMultiplayer ? <button type="button" onClick={onOpenSavedGames}><Icon name="save" />Save Game</button> : null}
-            <button type="button" onClick={onOpenSettings}><Icon name="gear" />Settings</button>
+            {!isMultiplayer && onOpenSavedGames ? <button type="button" onClick={onOpenSavedGames}><Icon name="save" />Save Game</button> : null}
+            {onOpenSettings ? <button type="button" onClick={onOpenSettings}><Icon name="gear" />Settings</button> : null}
             {isMultiplayer ? (
               <>
                 <hr />
@@ -1432,7 +1435,7 @@ export function GameTableScreen({
               </>
             ) : null}
             <hr />
-            <button type="button" onClick={onNavigateHome}><Icon name="back" />Home</button>
+            <button type="button" onClick={onNavigateHome}><Icon name="back" />{isRetry ? leaveLabel : 'Home'}</button>
           </div>
         </div>
 
@@ -1448,6 +1451,8 @@ export function GameTableScreen({
         <PlaysPips used={game.turn.playsUsed} total={maxPlaysPerTurn} />
 
       </header>
+
+      {landscape && replayBar ? replayBar(() => setLogOpen(true)) : null}
 
       {isMultiplayer ? (
         <div className="room-bar" aria-label="Room">
@@ -1490,7 +1495,7 @@ export function GameTableScreen({
           <span className={landscape ? 'table-status-line' : 'table-status-copy-wrap'}>
             {landscape && turnClock && !over.done ? <TurnClockPill clock={turnClock} now={clockNow} paused={isPaused} /> : null}
             <span className="table-status-copy">
-              <strong>{statusText}</strong>
+              <strong>{isRetry && landscape ? `Retry Practice · ${statusText}` : statusText}</strong>
               {latestEventLine ? <small className={latestEventLine.againstYou ? 'is-against-you' : ''}>{latestEventLine.text}</small> : null}
             </span>
           </span>
@@ -1503,7 +1508,7 @@ export function GameTableScreen({
         {viewer ? (
           <article className={`player viewer-seat ${currentPlayer.id === viewer.id ? 'active' : ''} is-self-seat`}>
             <div className="action-bar">
-              {replayBar ? replayBar(() => setLogOpen(true)) : (<>
+              {replayBar ? (landscape ? null : replayBar(() => setLogOpen(true))) : (<>
               {showUndo ? (
                 <>
                   <button type="button" className="secondary-button is-icon" aria-label="Undo Last Play" onClick={onUndoLastPlay} disabled={inputBlocked}><Icon name="undo" /></button>
@@ -1976,9 +1981,19 @@ export function GameTableScreen({
             {!isMultiplayer || isMultiplayerHost ? (
               <button type="button" className="primary-button" aria-label="Resume game" onClick={onPauseToggle}>Resume</button>
             ) : null}
-            <button type="button" className="secondary-button" aria-label={isMultiplayer ? 'Leave the match' : 'Back to menu'} onClick={isMultiplayer ? onExitMultiplayer : onNavigateHome}>
-              {isMultiplayer ? 'Exit Match' : 'Back to Menu'}
+            <button type="button" className="secondary-button" aria-label={isMultiplayer ? 'Leave the match' : leaveLabel} onClick={isMultiplayer ? onExitMultiplayer : onNavigateHome}>
+              {isMultiplayer ? 'Exit Match' : leaveLabel}
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {isRetry && over.done ? (
+        <div className="winner-overlay full-overlay" role="dialog" aria-modal="true" aria-label="Retry complete">
+          <div className="overlay-card card-enter">
+            <h3>{winnerName === 'You' ? 'You win!' : `${winnerName} wins!`}</h3>
+            <p>Retry complete</p>
+            <button type="button" className="primary-button" onClick={onNavigateHome}>{leaveLabel}</button>
           </div>
         </div>
       ) : null}

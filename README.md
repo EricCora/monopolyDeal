@@ -74,6 +74,7 @@ Live at https://monopoly-deal-smoky.vercel.app. Working on the code? Start with 
 - **Turn clock in every mode.** It counts up normally, and Speed gives 30, 45 or 60 seconds a turn before a bot moves for you.
 - **Best of three**, locally and in rooms.
 - **Match history you can open.** Any recent game has its full log and a replay, with the option to reveal any player's hand. The last 50 are kept on iOS, and the last 20 on the web.
+- **Retry This Turn.** Pause a finished local bot match replay on your turn to try a different play from its original draw step. The retry is untimed and separate from your saves and stats.
 - **Unlockable table styles and card backs**, earned from your stats and chosen in Settings.
 - **Bots fill dropped seats** so a live room keeps playing.
 - **Bots beside people.** A room's host can add bots and pick each one's difficulty.

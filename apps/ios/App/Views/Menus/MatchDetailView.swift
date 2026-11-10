@@ -30,7 +30,7 @@ struct MatchDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if let replay {
                         Button {
-                            app.replayToWatch = ReplayRequest(log: replay.log)
+                            app.replayToWatch = ReplayRequest(log: replay.log, isLocal: match.surface == .local)
                         } label: {
                             Label("Watch Replay", systemImage: "play.rectangle.fill")
                         }

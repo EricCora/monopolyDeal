@@ -38,7 +38,7 @@ struct RootView: View {
         .tint(Palette.gold)
         .environment(\.cardBackStyle, app.preferences.cardBack)
         .fullScreenCover(item: $app.replayToWatch) { request in
-            ReplayView(log: request.log)
+            ReplayView(log: request.log, isLocal: request.isLocal)
                 .environment(app)
         }
         .fullScreenCover(item: Binding(

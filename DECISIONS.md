@@ -220,3 +220,6 @@ After the landscape merge, seven iOS UI tests failed. None were gameplay bugs. T
 
 ## 2026-11-07: The history test picks the replay's second player by position
 It looked for "Player 2", which no longer exists, because bots draw random names (2026-11-04). The replay's player menu now gives each entry an id, and the test checks that the menu switches to that player's hand.
+
+## 2026-11-10: A replay retry starts at the draw step and stays separate from saved games
+Retry This Turn is available on a human turn in a complete, local replay with exactly one human seat. Starting before the draw lets you revisit the full turn with the original cards, deck order, rules and bots. The retry uses its own in-memory game and pause state so it can be played to completion without replacing an active save, updating stats or advancing a series. Speed is off so the player can think through a different line. Returning to the paused replay preserves the selected move.

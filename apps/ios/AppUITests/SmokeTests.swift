@@ -239,6 +239,59 @@ final class GameplayUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["postgame.winner"].waitForExistence(timeout: 5))
     }
 
+    func testRetryPlaysFromTheRecordedTurnAndReturnsToThePausedReplay() {
+        // This deal wins on the first turn with two Brown properties. The retry can bank first.
+        app.launchArguments = [
+            "-seed", "815", "-botDelayMs", "60", "-winSets", "1", "-autoplayGames", "1", "-autoplayBots", "YES",
+            "-storeDirectory", "uitest-\(UUID().uuidString)"
+        ]
+        app.launch()
+        XCTAssertTrue(app.buttons["postgame.replay"].waitForExistence(timeout: 30))
+        app.buttons["postgame.replay"].tap()
+        let slider = app.sliders["replay.slider"]
+        XCTAssertTrue(slider.waitForExistence(timeout: 8))
+        let playback = app.buttons["replay.play"]
+        if playback.label == "Pause" { playback.tap() }
+        if app.staticTexts["replay.position"].label != "Move 0 of 3" {
+            slider.adjust(toNormalizedSliderPosition: 0)
+        }
+        let retry = app.buttons["replay.retry"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 5))
+        let position = app.staticTexts["replay.position"].label
+        retry.tap()
+        let draw = app.buttons["action.draw"]
+        XCTAssertTrue(draw.waitForExistence(timeout: 5))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Retry Practice"
+        shot.lifetime = .keepAlways
+        add(shot)
+        app.buttons["retry.menu"].tap()
+        XCTAssertFalse(app.buttons["Save Game"].exists)
+        app.buttons["Back to Replay"].tap()
+        XCTAssertTrue(retry.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["replay.position"].label, position)
+
+        retry.tap()
+        XCTAssertTrue(draw.waitForExistence(timeout: 5))
+        draw.tap()
+        // After banking, the two Brown cards shift to the first and then third hand slots.
+        for index in [0, 0, 2] {
+            let card = app.descendants(matching: .any).matching(
+                NSPredicate(format: "identifier == %@ AND value == 'playable'", "hand.\(index)")
+            ).firstMatch
+            XCTAssertTrue(card.waitForExistence(timeout: 5))
+            card.tap()
+        }
+        let back = app.buttons["retry.return"]
+        XCTAssertTrue(back.waitForExistence(timeout: 5))
+        back.tap()
+        XCTAssertTrue(retry.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["replay.position"].label, position)
+        XCTAssertEqual(app.buttons["replay.play"].label, "Play")
+        app.buttons["replay.close"].tap()
+        XCTAssertTrue(app.staticTexts["postgame.winner"].waitForExistence(timeout: 5))
+    }
+
     func testRentAndTimerControlsAppear() throws {
         launch(seed: 5)
         app.buttons["home.newGame"].firstMatch.tap()

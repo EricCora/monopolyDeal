@@ -30,7 +30,7 @@ struct LocalGameView: View {
                     primaryTitle: primaryTitle,
                     newUnlocks: match.newUnlocks,
                     series: match.options.series,
-                    onWatchReplay: match.log.map { log in { replay = ReplayRequest(log: log) } },
+                    onWatchReplay: match.log.map { log in { replay = ReplayRequest(log: log, isLocal: true) } },
                     onPrimary: { app.rematch() },
                     onClose: { app.closeLocalMatch() }
                 )
@@ -41,7 +41,7 @@ struct LocalGameView: View {
         .animation(.easeInOut(duration: 0.25), value: match.shouldShowShield)
         .animation(.easeInOut(duration: 0.3), value: match.summary)
         .fullScreenCover(item: $replay) { request in
-            ReplayView(log: request.log)
+            ReplayView(log: request.log, isLocal: request.isLocal)
                 .environment(app)
         }
     }

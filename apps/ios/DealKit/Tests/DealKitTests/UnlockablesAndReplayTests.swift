@@ -25,8 +25,8 @@ final class UnlockablesAndReplayTests: XCTestCase {
         return counters
     }
 
-    private func playedGame(seed: Int = 21) -> (log: GameLog, final: GameState) {
-        let initial = Engine.createGame(GameConfig(players: [PlayerConfig(id: "a", name: "Ann"), PlayerConfig(id: "b", name: "Bo")], seed: seed))
+    private func playedGame(seed: Int = 21, againstBot: Bool = false) -> (log: GameLog, final: GameState) {
+        let initial = Engine.createGame(GameConfig(players: [PlayerConfig(id: "a", name: "Ann"), PlayerConfig(id: "b", name: "Bo", controller: againstBot ? .bot : .human)], seed: seed))
         var log = GameLog(initial: initial)
         var state = initial
         while !Engine.isGameOver(state).done {
@@ -78,6 +78,26 @@ final class UnlockablesAndReplayTests: XCTestCase {
         XCTAssertEqual(last.discardPile, played.final.discardPile)
         XCTAssertEqual(last.winnerId, played.final.winnerId)
         XCTAssertEqual(last.turnCount, played.final.turnCount)
+    }
+
+    func testRetryReturnsToDrawForTheHumansLaterTurn() throws {
+        let log = playedGame(againstBot: true).log
+        let positions = log.positions()
+        let drawIndex = try XCTUnwrap(positions.firstIndex {
+            $0.turnCount > 1 && $0.turn.phase == .draw && $0.players[$0.currentPlayerIndex].id == "a"
+        })
+        let retry = try XCTUnwrap(GameLog.retryTurnStart(in: positions, actionCount: log.actions.count, at: drawIndex + 1))
+        XCTAssertEqual(retry, positions[drawIndex])
+        XCTAssertEqual(retry.drawPile, positions[drawIndex].drawPile)
+        XCTAssertEqual(retry.players, positions[drawIndex].players)
+
+        let botTurn = try XCTUnwrap(positions.firstIndex { $0.players[$0.currentPlayerIndex].id == "b" })
+        XCTAssertNil(GameLog.retryTurnStart(in: positions, actionCount: log.actions.count, at: botTurn))
+        XCTAssertNil(GameLog.retryTurnStart(in: positions, actionCount: log.actions.count, at: positions.count - 1))
+        XCTAssertNil(GameLog.retryTurnStart(in: Array(positions.dropLast()), actionCount: log.actions.count, at: 0))
+        XCTAssertNil(GameLog.retryTurnStart(in: Array(positions.prefix(2)), actionCount: 1, at: 0))
+        let twoHumans = playedGame().log
+        XCTAssertNil(GameLog.retryTurnStart(in: twoHumans.positions(), actionCount: twoHumans.actions.count, at: 0))
     }
 
     func testAMoveThatWontApplyEndsTheReplayThere() {

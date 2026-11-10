@@ -2882,3 +2882,108 @@
 .table-status-turn > strong {
   min-width: 0;
 }
+
+.replay-retry {
+  justify-self: start;
+  width: auto;
+  min-height: 36px;
+  padding-block: 4px;
+}
+
+/* Replay controls need the table width on a sideways phone. */
+.is-landscape.is-replay .table-main {
+  grid-template-areas:
+    'strip strip status status'
+    'piles board board board'
+    'hand hand hand hand';
+}
+
+.is-landscape.is-replay .landscape-strip {
+  padding-left: 0;
+}
+
+.is-landscape.is-replay .table-topbar,
+.is-landscape.is-replay .action-bar {
+  display: none;
+}
+
+.is-landscape .replay-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  width: auto;
+}
+
+.is-landscape .replay-buttons,
+.is-landscape .replay-hand,
+.is-landscape .replay-retry {
+  flex: none;
+}
+
+.is-landscape .replay-buttons {
+  gap: 4px;
+}
+
+.is-landscape .replay-buttons .icon-button {
+  width: 34px;
+  height: 34px;
+}
+
+.is-landscape .replay-buttons .replay-play {
+  width: auto;
+  min-height: 36px;
+  padding-inline: 8px;
+}
+
+.is-landscape .replay-scrub {
+  flex: 1 1 90px;
+}
+
+.is-landscape .replay-scrub input {
+  min-width: 0;
+}
+
+.is-landscape.is-replay .table-centre {
+  align-self: start;
+}
+
+@media (min-width: 650px) {
+  .is-landscape .replay-bar {
+    flex-wrap: nowrap;
+  }
+
+  .is-landscape .replay-hand select {
+    max-width: 104px;
+  }
+
+  .is-landscape .replay-scrub {
+    min-width: 0;
+  }
+}
+
+@media (min-width: 650px) and (max-width: 760px) {
+  .is-landscape .replay-hand svg {
+    display: none;
+  }
+
+  .is-landscape .replay-hand select {
+    max-width: 116px;
+  }
+
+  .is-landscape .replay-scrub {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .is-landscape .replay-scrub small {
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .is-landscape .replay-scrub input {
+    width: 100%;
+    margin: 0;
+  }
+}
