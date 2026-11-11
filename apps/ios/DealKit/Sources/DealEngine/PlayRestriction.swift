@@ -13,7 +13,12 @@ extension Engine {
         if prompt.playerId != playerId {
             return "It's \(self.player(state, prompt.playerId)?.name ?? "another player")'s turn."
         }
-        if prompt.kind == .discard || prompt.kind == .debt { return nil }
+        if prompt.kind == .discard {
+            return discardableCards(state, player).contains(cardId) || !player.hand.contains(cardId)
+                ? nil
+                : "Discard your other cards first. Properties go only when nothing else is left."
+        }
+        if prompt.kind == .debt { return nil }
         if state.pending != nil { return "Finish the choice in front of you first." }
         if state.turn.phase == .draw { return "Draw your cards first." }
         let limit = ruleset(state).maxPlaysPerTurn

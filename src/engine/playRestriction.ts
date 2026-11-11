@@ -1,5 +1,5 @@
 import { getCardDefinition, type ActionKind, type GameVariant, type PropertyColor } from '../cards/catalog';
-import { isCompletePropertySet, propertySets, type PropertySetView } from './core';
+import { discardableCards, isCompletePropertySet, propertySets, type PropertySetView } from './core';
 import { getLegalActions, getNextPrompt, isGameOver } from './game';
 import type { GameState, PlayerId, PlayerState } from './types';
 
@@ -41,7 +41,12 @@ export function playRestriction(state: GameState, playerId: PlayerId, cardId: st
     const name = state.players.find((entry) => entry.id === prompt.playerId)?.name ?? 'another player';
     return `It's ${name}'s turn.`;
   }
-  if (prompt.kind === 'discard' || prompt.kind === 'debt') return null;
+  if (prompt.kind === 'discard') {
+    return discardableCards(state, player).includes(cardId) || !player.hand.includes(cardId)
+      ? null
+      : 'Discard your other cards first. Properties go only when nothing else is left.';
+  }
+  if (prompt.kind === 'debt') return null;
   if (state.pending) return 'Finish the choice in front of you first.';
   if (state.turn.phase === 'draw') return 'Draw your cards first.';
   const limit = state.ruleset?.maxPlaysPerTurn ?? 3;
