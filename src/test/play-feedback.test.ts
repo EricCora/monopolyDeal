@@ -20,6 +20,20 @@ function mainPhaseGame(hand: string[], variant: 'classic' | 'no_mercy' = 'classi
 }
 
 describe('playRestriction', () => {
+  it('explains why a property can\'t be discarded while other cards are in hand', () => {
+    const game = mainPhaseGame(['money_1#d1', 'pink_1#d2', 'pink_1#d3', 'orange_1#d4', 'red_1#d5', 'yellow_1#d6', 'green_1#d7', 'wild_all#d8']);
+    game.turn.playsUsed = 3;
+    expect(getNextPrompt(game).kind).toBe('discard');
+    expect(playRestriction(game, 'p1', 'pink_1#d2')).toBe('Discard your other cards first. Properties go only when nothing else is left.');
+    expect(playRestriction(game, 'p1', 'money_1#d1')).toBeNull();
+  });
+
+  it('has nothing to say about a property once the hand holds only properties', () => {
+    const game = mainPhaseGame(['pink_1#d1', 'pink_1#d2', 'orange_1#d3', 'orange_1#d4', 'red_1#d5', 'yellow_1#d6', 'green_1#d7', 'wild_all#d8']);
+    game.turn.playsUsed = 3;
+    expect(playRestriction(game, 'p1', 'pink_1#d1')).toBeNull();
+  });
+
   it('names whose turn it is when it is not yours', () => {
     const game = mainPhaseGame(['money_1#x']);
     expect(playRestriction(game, 'p2', 'money_1#x')).toBe("It's Ann's turn.");

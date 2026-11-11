@@ -19,6 +19,20 @@ final class PlayRestrictionTests: XCTestCase {
         Engine.playRestriction(state, playerId: "a", cardId: cardId)
     }
 
+    func testPropertyDiscardWhileOtherCardsAreInHandIsExplained() {
+        var state = game(hand: ["money_1#d1", "pink_1#d2", "pink_1#d3", "orange_1#d4", "red_1#d5", "yellow_1#d6", "green_1#d7", "wild_all#d8"])
+        state.turn.playsUsed = 3
+        XCTAssertEqual(Engine.nextPrompt(state).kind, .discard)
+        XCTAssertEqual(reason(state, "pink_1#d2"), "Discard your other cards first. Properties go only when nothing else is left.")
+        XCTAssertNil(reason(state, "money_1#d1"))
+    }
+
+    func testPropertyDiscardWithOnlyPropertiesInHandHasNothingToExplain() {
+        var state = game(hand: ["pink_1#d1", "pink_1#d2", "orange_1#d3", "orange_1#d4", "red_1#d5", "yellow_1#d6", "green_1#d7", "wild_all#d8"])
+        state.turn.playsUsed = 3
+        XCTAssertNil(reason(state, "pink_1#d1"))
+    }
+
     func testHouseOnAWildAndUtilitySetIsExplained() {
         let state = game(hand: ["house#1"], table: [(.utility, ["wild_all#1", "utility_1#1"])])
         XCTAssertEqual(reason(state, "house#1"), "Houses and Hotels can't go on Railroads or Utilities.")
