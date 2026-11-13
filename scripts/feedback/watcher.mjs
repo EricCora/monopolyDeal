@@ -241,6 +241,7 @@ function driveFix(id, { path, branch, reportDir }, firstPrompt, sessionId) {
     sessionId = session.sessionId;
     setStatus(id, { state: 'fixing', sessionId, branch });
     const result = takeResult(reportDir);
+    log(id, 'session result:', result.outcome, '-', result.summary.slice(0, 200));
     if (result.outcome === 'needs_you') {
       const seen = listDir(join(config.inbox, 'reports', id, 'replies'));
       setStatus(id, { state: 'needs_you', question: result.question, summary: result.summary, sessionId, repliesSeen: seen });
@@ -262,6 +263,7 @@ function driveFix(id, { path, branch, reportDir }, firstPrompt, sessionId) {
         const pending = index.build && index.install?.commit !== index.build.commit ? index.build.reports : [];
         index.build = { commit, at: new Date().toISOString(), reports: [...pending, id] };
       }, `${id}: fixed in ${commit.slice(0, 8)}`);
+      log(id, 'fixed and', config.push ? `pushed ${commit.slice(0, 8)}` : 'verified (not pushed)');
       notify('Monopoly Deal: fixed', result.summary);
       if (config.push) cleanUp(id);
       return;
