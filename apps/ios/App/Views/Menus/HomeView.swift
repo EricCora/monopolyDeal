@@ -648,6 +648,7 @@ struct SettingsView: View {
             } footer: {
                 Text("Opens your email app with the message ready to send.")
             }
+            ReportSettingsSection()
             Section("Data") {
                 Button("Clear Stats and History", role: .destructive) { confirmClear = true }
             }

@@ -37,3 +37,6 @@ xcuserdata/
 * 2
 * 2.*
 *.nosync
+
+# In-app problem reports copied in by the report watcher
+.feedback/

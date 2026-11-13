@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { UiPreferencesV1 } from '../../persistence/storage';
 import { Icon } from '../components/icons';
 import { feedbackMailtoUrl } from '../feedbackMail';
+import { ReportSettingsSection } from '../report/ReportButton';
 import { cardBackOptions, tableStyleOptions } from '../unlockables';
 
 type DevSeedStatus = 'seeded' | 'already-populated' | 'reseeded' | null;
@@ -178,6 +179,8 @@ export function SettingsScreen({
         </div>
         <p className="settings-subtitle settings-footnote">Opens your email app with the message ready to send.</p>
       </section>
+
+      <ReportSettingsSection />
 
       <section className="settings-section settings-danger-zone" aria-label="Data controls">
         <h3>Data</h3>

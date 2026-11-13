@@ -13,6 +13,12 @@ struct MonopolyDealApp: App {
                 .preferredColorScheme(.dark)
                 .onOpenURL { app.open(url: $0) }
                 .onChange(of: scenePhase) { _, phase in app.scenePhaseChanged(phase) }
+                .onAppear {
+                    ReportCenter.shared.app = app
+                    if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
+                        ReportOverlay.shared.install(in: scene)
+                    }
+                }
         }
     }
 }

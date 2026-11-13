@@ -98,6 +98,7 @@ final class OnlineMatch: TableSession {
     func perform(_ action: Action) {
         Task {
             let succeeded = await connection.perform(action)
+            DevLog.add("online \(action.playerId) \(action.type)\(succeeded ? "" : " failed")")
             onFeedback(succeeded ? .success : .error)
         }
     }

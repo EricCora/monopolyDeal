@@ -109,6 +109,11 @@ final class AppModel {
         savedNearbyTable = NearbyVault.loadTable()
         reloadStoredData()
         if launch.resumeOnLaunch { resumeActive() }
+        // A build installed from the report banner reopens the game that was saved for it.
+        if UserDefaults.standard.bool(forKey: "report.resumeAfterInstall") {
+            UserDefaults.standard.removeObject(forKey: "report.resumeAfterInstall")
+            if !launch.resumeOnLaunch { resumeActive() }
+        }
         if let route = launch.route { path = [route] }
         #if DEBUG
         // For reviewing themes: `-tableStyle neon_arcade -reducedEffects YES`.
@@ -250,6 +255,22 @@ final class AppModel {
         let ruleset = game.variant == .classic ? game.ruleset : nil
         let options = MatchOptions(speed: match.options.speed, speedSeconds: match.options.speedSeconds, series: match.options.series?.next)
         newGame(players: players, variant: game.resolvedVariant, ruleset: ruleset, mode: match.mode == .daily_challenge ? .practice : match.mode, options: options)
+    }
+
+    /// Saves the game in progress before a new build replaces the app, so it can reopen there.
+    func prepareForInstall() {
+        localMatch?.saveNow()
+        if localMatch != nil { UserDefaults.standard.set(true, forKey: "report.resumeAfterInstall") }
+    }
+
+    /// Where the player is, for problem reports.
+    var currentScreenName: String {
+        if localMatch != nil { return "local game (\(localMatch?.mode.rawValue ?? ""))" }
+        if onlineMatch != nil { return "online game" }
+        if nearbyHost != nil || nearbyGuest != nil { return "nearby game" }
+        if replayToWatch != nil { return "replay" }
+        if viewedSummary != nil { return "results" }
+        return path.last.map { "\($0)" } ?? "home"
     }
 
     func closeLocalMatch() {
@@ -420,6 +441,7 @@ final class AppModel {
     }
 
     func scenePhaseChanged(_ phase: ScenePhase) {
+        DevLog.add("scene \(phase)")
         switch phase {
         case .active:
             if let match = onlineMatch { Task { await match.connection.connect() } }

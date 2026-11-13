@@ -249,6 +249,7 @@ final class LocalMatch: TableSession {
         guard let game, !isPaused else { return }
         let takeSnapshot = Engine.reversibleActionTypes.contains(action.type) && prompt?.playerId == action.playerId
         let result = Engine.applyAction(game, action)
+        DevLog.add("local \(action.playerId) \(action.type)\(result.error.map { " rejected: \($0.message)" } ?? "")")
         if let error = result.error {
             errorMessage = error.message
             onFeedback(.error)

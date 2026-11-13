@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    // The deployed commit, so the bug button can tell when a newer version has fixes.
+    'import.meta.env.VITE_BUILD_COMMIT': JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.VITE_BUILD_COMMIT ?? ''),
+  },
   server: {
     proxy: {
       '/socket.io': {

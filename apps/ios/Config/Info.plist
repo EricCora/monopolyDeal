@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>DealBuildCommit</key>
+	<string>$(DEAL_BUILD_COMMIT)</string>
+	<key>DealReportKey</key>
+	<string>$(DEAL_REPORT_KEY)</string>
+	<key>DealReportAPI</key>
+	<string>$(DEAL_REPORT_API)</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleURLTypes</key>

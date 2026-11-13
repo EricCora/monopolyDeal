@@ -98,6 +98,7 @@ import { useFeedback } from './app/useFeedback';
 import { useMultiplayerRoom } from './app/useMultiplayerRoom';
 import { resolveMultiplayerFeatureFlags } from './network/multiplayerClient';
 import type { RiskyActionConfirmation, SetupViewModel, ShareStatus } from './ui/types';
+import { ReportButton } from './ui/report/ReportButton';
 import './App.css';
 
 type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over' | 'multiplayer' | 'replay';
@@ -2682,6 +2683,15 @@ function App() {
 
       {(screen === 'home' || screen === 'game' || screen === 'multiplayer') && showRulesDrawer ? <RulesDrawer onClose={() => setShowRulesDrawer(false)} /> : null}
 
+      <ReportButton getSnapshot={() => ({
+        screen,
+        game: screen === 'multiplayer' && multiplayerRoomView
+          ? { kind: 'online', roomCode: multiplayerRoomView.roomCode, state: multiplayerRoomView.gameState ?? null }
+          : game
+            ? { kind: isRetry ? 'retry' : 'local', state: game, log: replayLogRef.current }
+            : null,
+        meta: { tableStyle: uiPreferences.tableStyle, textScale: uiPreferences.textScale, tableDensity: uiPreferences.tableDensity },
+      })} />
     </GameShell>
   );
 }
