@@ -28,6 +28,15 @@ final class ReportUITests: XCTestCase {
         let bug = app.buttons["report.button"]
         XCTAssertTrue(bug.waitForExistence(timeout: 5), "The bug button should float over the game table")
         sleep(2) // Let the deal settle, so the two screenshots can be compared.
+        // It sits clear of the controls a player needs on the sideways table.
+        let window = app.windows.firstMatch.frame
+        XCTAssertTrue(window.contains(bug.frame), "The bug button should be on screen: \(bug.frame) in \(window)")
+        XCTAssertFalse(bug.frame.intersects(app.buttons["action.draw"].frame), "The bug button covers Draw: \(bug.frame)")
+        let hand = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'hand.'"))
+        for index in 0..<hand.count {
+            let card = hand.element(boundBy: index)
+            XCTAssertFalse(bug.frame.intersects(card.frame), "The bug button covers \(card.identifier): \(bug.frame) vs \(card.frame)")
+        }
         let before = XCTAttachment(screenshot: app.screenshot())
         before.name = "table-before-report"
         before.lifetime = .keepAlways

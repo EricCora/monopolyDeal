@@ -1,44 +1,162 @@
 import SwiftUI
 import UIKit
 
-/// A window above the app that holds the bug button and the "new build" banner. Touches
-/// anywhere else fall through to the game.
+/// The bug button and the "new build" banner, each in its own small window above the app.
+/// Small on purpose: a full-screen window over the app takes part in deciding which way the
+/// app turns, and stopped the table turning sideways.
 @MainActor
 final class ReportOverlay {
     static let shared = ReportOverlay()
-    private var window: PassthroughWindow?
-    private var controller: ReportOverlayController?
+    private weak var scene: UIWindowScene?
+    private var buttonWindow: UIWindow?
+    private var bannerWindow: UIWindow?
+    private let buttonController = ReportButtonController()
+    private let bannerController = ReportBannerController()
+    private var geometryObservation: NSKeyValueObservation?
     private var pollTask: Task<Void, Never>?
+    private static let buttonSize: CGFloat = 38
 
     func install(in scene: UIWindowScene) {
-        guard window == nil else { return }
-        let controller = ReportOverlayController()
-        let window = PassthroughWindow(windowScene: scene)
-        window.windowLevel = .normal + 10
-        window.rootViewController = controller
-        window.backgroundColor = .clear
-        window.isHidden = false
-        self.window = window
-        self.controller = controller
+        guard buttonWindow == nil else { return }
+        self.scene = scene
+        buttonWindow = makeWindow(scene, root: buttonController)
+        bannerWindow = makeWindow(scene, root: bannerController)
+        geometryObservation = scene.observe(\.effectiveGeometry, options: [.new]) { _, _ in
+            Task { @MainActor in ReportOverlay.shared.update() }
+        }
+        update()
         startPolling()
     }
 
-    var overlayWindow: UIWindow? { window }
+    private func makeWindow(_ scene: UIWindowScene, root: UIViewController) -> UIWindow {
+        let window = UIWindow(windowScene: scene)
+        window.windowLevel = .normal + 10
+        window.rootViewController = root
+        window.backgroundColor = .clear
+        window.isHidden = true
+        return window
+    }
+
+    var overlayWindows: [UIWindow] { [buttonWindow, bannerWindow].compactMap { $0 } }
+
+    /// The app's own window and the screen showing on top of it.
+    private var appWindow: UIWindow? {
+        scene?.windows.first { window in !overlayWindows.contains { $0 === window } }
+    }
+
+    private var topController: UIViewController? {
+        var controller = appWindow?.rootViewController
+        while let presented = controller?.presentedViewController, !presented.isBeingDismissed { controller = presented }
+        return controller
+    }
 
     func refreshVisibility() {
-        controller?.update()
+        update()
+    }
+
+    /// Places both windows for the current screen size and shows or hides them.
+    func update() {
+        guard let appWindow, let buttonWindow, let bannerWindow else { return }
+        let center = ReportCenter.shared
+        let area = appWindow.bounds.inset(by: appWindow.safeAreaInsets).insetBy(dx: 4, dy: 4)
+
+        buttonController.showsDot = center.needsAnswer
+        buttonWindow.isHidden = !center.enabled || area.width < 60
+        if !buttonWindow.isHidden, !buttonController.isDragging {
+            buttonWindow.frame = buttonFrame(in: area, landscape: appWindow.bounds.width > appWindow.bounds.height)
+        }
+
+        let text = bannerText(center)
+        bannerController.text = text
+        bannerWindow.isHidden = text == nil
+        if text != nil {
+            let size = bannerController.fittingSize(maxWidth: area.width - 24)
+            bannerWindow.frame = CGRect(x: appWindow.bounds.midX - size.width / 2, y: appWindow.safeAreaInsets.top + 6, width: size.width, height: size.height)
+        }
+    }
+
+    private func bannerText(_ center: ReportCenter) -> String? {
+        if let progress = center.installProgress {
+            return switch progress.state {
+            case "installing": "Installing the new build..."
+            case "waiting": "Waiting for your phone near the Mac"
+            case "failed": "Install failed. Tap for details"
+            default: "Install requested..."
+            }
+        }
+        if let build = center.buildReady, center.isActive, build.commit != center.dismissedBuild {
+            let count = build.reports.count
+            return count > 0 ? "New build ready (\(count) fix\(count == 1 ? "" : "es")). Install" : "New build ready. Install"
+        }
+        return nil
+    }
+
+    // MARK: Button position
+
+    private func positionKey(landscape: Bool) -> String {
+        landscape ? "report.buttonPosition.landscape" : "report.buttonPosition.portrait"
+    }
+
+    private func buttonFrame(in area: CGRect, landscape: Bool) -> CGRect {
+        // Defaults: the left edge of the upright table; on the sideways table, the right edge between
+        // the turn card and the Draw button, clear of the draw pile and the hand.
+        let saved = UserDefaults.standard.array(forKey: positionKey(landscape: landscape)) as? [Double]
+        let fx = saved?.first ?? (landscape ? 1 : 0)
+        let fy = saved?.last ?? (landscape ? 0.3 : 0.42)
+        let size = Self.buttonSize
+        return CGRect(
+            x: area.minX + CGFloat(fx) * (area.width - size),
+            y: area.minY + CGFloat(fy) * (area.height - size),
+            width: size, height: size
+        )
+    }
+
+    func moveButton(by translation: CGPoint, from start: CGRect) {
+        guard let appWindow, let buttonWindow else { return }
+        let area = appWindow.bounds.inset(by: appWindow.safeAreaInsets).insetBy(dx: 4, dy: 4)
+        buttonWindow.frame.origin = CGPoint(
+            x: min(max(start.minX + translation.x, area.minX), area.maxX - Self.buttonSize),
+            y: min(max(start.minY + translation.y, area.minY), area.maxY - Self.buttonSize)
+        )
+    }
+
+    /// Snaps to the nearer side, out of the way of the cards, and remembers the spot.
+    func finishMove() {
+        guard let appWindow, let buttonWindow else { return }
+        let area = appWindow.bounds.inset(by: appWindow.safeAreaInsets).insetBy(dx: 4, dy: 4)
+        let fx: Double = buttonWindow.frame.midX < area.midX ? 0 : 1
+        let fy = Double((buttonWindow.frame.minY - area.minY) / max(1, area.height - Self.buttonSize))
+        UserDefaults.standard.set([fx, min(max(fy, 0), 1)], forKey: positionKey(landscape: appWindow.bounds.width > appWindow.bounds.height))
+        UIView.animate(withDuration: 0.2) { self.update() }
+    }
+
+    var currentButtonFrame: CGRect { buttonWindow?.frame ?? .zero }
+
+    // MARK: Sheets
+
+    func openReport() {
+        guard let top = topController, !(top is ReportSheetHost) else { return }
+        // Taken before anything of the report appears, so it shows what Eric was looking at.
+        let screenshot = ReportCenter.captureScreen(excluding: overlayWindows)
+        DevLog.add("report opened")
+        top.present(ReportSheetHost(rootView: AnyView(ReportSheet(screenshot: screenshot))), animated: true)
+    }
+
+    func openInstall() {
+        guard let top = topController, !(top is ReportSheetHost) else { return }
+        top.present(ReportSheetHost(rootView: AnyView(InstallSheet())), animated: true)
     }
 
     /// Checks the inbox every minute, or every 10 seconds while an install is under way.
     private func startPolling() {
         pollTask?.cancel()
-        pollTask = Task { @MainActor [weak self] in
+        pollTask = Task { @MainActor in
             while !Task.isCancelled {
                 let center = ReportCenter.shared
                 if center.isActive, UIApplication.shared.applicationState == .active {
                     await center.refresh()
                 }
-                self?.controller?.update()
+                ReportOverlay.shared.update()
                 let seconds: UInt64 = center.installProgress != nil ? 10 : 60
                 try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
             }
@@ -46,32 +164,39 @@ final class ReportOverlay {
     }
 }
 
-final class PassthroughWindow: UIWindow {
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        guard let root = rootViewController else { return nil }
-        // While the report sheet is up, this window takes every touch.
-        if root.presentedViewController != nil { return super.hitTest(point, with: event) }
-        let hit = super.hitTest(point, with: event)
-        return hit === root.view ? nil : hit
+/// The report and install sheets, presented over whatever the app is showing.
+final class ReportSheetHost: UIHostingController<AnyView>, UIAdaptivePresentationControllerDelegate {
+    override init(rootView: AnyView) {
+        super.init(rootView: AnyView(rootView.preferredColorScheme(.dark)))
+        modalPresentationStyle = .pageSheet
+        sheetPresentationController?.detents = [.large()]
+        presentationController?.delegate = self
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        ReportOverlay.shared.update()
     }
 }
 
 @MainActor
-final class ReportOverlayController: UIViewController {
+final class ReportButtonController: UIViewController {
     private let button = UIButton(type: .custom)
     private let dot = UIView()
-    private let banner = UIButton(type: .system)
-    private var dragStart: CGPoint = .zero
-    /// Remembered apart for the upright and sideways table, which have different free spots.
-    private var positionKey: String { view.bounds.width > view.bounds.height ? "report.buttonPosition.landscape" : "report.buttonPosition.portrait" }
+    private var dragStart: CGRect = .zero
+    private(set) var isDragging = false
+
+    var showsDot = false {
+        didSet { dot.isHidden = !showsDot }
+    }
 
     override func loadView() {
         view = UIView()
         view.backgroundColor = .clear
     }
-
-    // Follows the table's lock, so this window never holds the app upright or sideways.
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { OrientationLock.mask }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -81,132 +206,85 @@ final class ReportOverlayController: UIViewController {
         config.baseForegroundColor = UIColor.white.withAlphaComponent(0.9)
         config.cornerStyle = .capsule
         button.configuration = config
-        button.frame = CGRect(x: 0, y: 0, width: 38, height: 38)
         button.alpha = 0.7
         button.accessibilityLabel = "Report a problem"
         button.accessibilityIdentifier = "report.button"
-        button.addTarget(self, action: #selector(openReport), for: .touchUpInside)
+        button.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        button.frame = view.bounds
+        button.addTarget(self, action: #selector(tapped), for: .touchUpInside)
         button.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(drag(_:))))
+        view.addSubview(button)
         dot.backgroundColor = .systemRed
         dot.layer.cornerRadius = 5
         dot.frame = CGRect(x: 28, y: 0, width: 10, height: 10)
         dot.isUserInteractionEnabled = false
-        button.addSubview(dot)
-        view.addSubview(button)
-
-        var bannerConfig = UIButton.Configuration.filled()
-        bannerConfig.cornerStyle = .capsule
-        bannerConfig.baseBackgroundColor = UIColor(red: 0.93, green: 0.75, blue: 0.27, alpha: 0.96)
-        bannerConfig.baseForegroundColor = .black
-        bannerConfig.contentInsets = NSDirectionalEdgeInsets(top: 7, leading: 14, bottom: 7, trailing: 14)
-        banner.configuration = bannerConfig
-        banner.accessibilityIdentifier = "report.buildBanner"
-        banner.addTarget(self, action: #selector(bannerTapped), for: .touchUpInside)
-        view.addSubview(banner)
-        update()
+        dot.isHidden = true
+        view.addSubview(dot)
     }
 
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        placeButton()
-        layoutBanner()
-    }
-
-    func update() {
-        let center = ReportCenter.shared
-        button.isHidden = !center.enabled
-        dot.isHidden = !center.needsAnswer
-        let text: String?
-        if let progress = center.installProgress {
-            text = switch progress.state {
-            case "installing": "Installing the new build..."
-            case "waiting": "Waiting for your phone near the Mac"
-            case "failed": "Install failed. Tap for details"
-            default: "Install requested..."
-            }
-        } else if let build = center.buildReady, center.isActive, build.commit != center.dismissedBuild {
-            let count = build.reports.count
-            text = count > 0 ? "New build ready (\(count) fix\(count == 1 ? "" : "es")). Install" : "New build ready. Install"
-        } else {
-            text = nil
-        }
-        banner.isHidden = text == nil
-        if let text {
-            var attributed = AttributedString(text)
-            attributed.font = .systemFont(ofSize: 13, weight: .semibold)
-            banner.configuration?.attributedTitle = attributed
-        }
-        layoutBanner()
-    }
-
-    private func layoutBanner() {
-        let size = banner.sizeThatFits(CGSize(width: view.bounds.width - 32, height: 40))
-        let top = view.safeAreaInsets.top + 6
-        banner.frame = CGRect(x: (view.bounds.width - size.width) / 2, y: top, width: size.width, height: size.height)
-    }
-
-    private func placeButton() {
-        let bounds = view.bounds.inset(by: view.safeAreaInsets).insetBy(dx: 4, dy: 4)
-        guard bounds.width > 40, bounds.height > 40 else { return }
-        let saved = UserDefaults.standard.array(forKey: positionKey) as? [Double]
-        // Defaults: the left edge of the upright table; on the sideways table, the right edge between
-        // the turn card and the Draw button, clear of the draw pile and the hand.
-        let landscape = view.bounds.width > view.bounds.height
-        let fx = saved?.first ?? (landscape ? 1 : 0)
-        let fy = saved?.last ?? (landscape ? 0.3 : 0.42)
-        button.center = CGPoint(
-            x: bounds.minX + 19 + CGFloat(fx) * (bounds.width - 38),
-            y: bounds.minY + 19 + CGFloat(fy) * (bounds.height - 38)
-        )
+    @objc private func tapped() {
+        ReportOverlay.shared.openReport()
     }
 
     @objc private func drag(_ gesture: UIPanGestureRecognizer) {
-        let bounds = view.bounds.inset(by: view.safeAreaInsets).insetBy(dx: 4, dy: 4)
         switch gesture.state {
         case .began:
-            dragStart = button.center
+            isDragging = true
+            dragStart = ReportOverlay.shared.currentButtonFrame
         case .changed:
-            let move = gesture.translation(in: view)
-            button.center = CGPoint(
-                x: min(max(dragStart.x + move.x, bounds.minX + 19), bounds.maxX - 19),
-                y: min(max(dragStart.y + move.y, bounds.minY + 19), bounds.maxY - 19)
-            )
-        case .ended, .cancelled:
-            // Snap to the nearer side, out of the way of the cards.
-            let fx: Double = button.center.x < bounds.midX ? 0 : 1
-            let fy = Double((button.center.y - bounds.minY - 19) / max(1, bounds.height - 38))
-            UserDefaults.standard.set([fx, min(max(fy, 0), 1)], forKey: positionKey)
-            UIView.animate(withDuration: 0.2) { self.placeButton() }
+            // In screen points, because the window itself moves under the finger.
+            ReportOverlay.shared.moveButton(by: gesture.translation(in: nil), from: dragStart)
+        case .ended, .cancelled, .failed:
+            isDragging = false
+            ReportOverlay.shared.finishMove()
         default:
             break
         }
     }
-
-    @objc private func openReport() {
-        guard presentedViewController == nil else { return }
-        // Taken before anything of the report appears, so it shows what Eric was looking at.
-        let screenshot = ReportCenter.captureScreen(excluding: view.window)
-        DevLog.add("report opened")
-        present(sheet(ReportSheet(screenshot: screenshot)), animated: true)
-    }
-
-    @objc private func bannerTapped() {
-        guard presentedViewController == nil else { return }
-        present(sheet(InstallSheet()), animated: true)
-    }
-
-    private func sheet<Content: View>(_ content: Content) -> UIViewController {
-        let host = UIHostingController(rootView: content.preferredColorScheme(.dark))
-        host.modalPresentationStyle = .pageSheet
-        host.sheetPresentationController?.detents = [.large()]
-        host.presentationController?.delegate = self
-        return host
-    }
 }
 
-extension ReportOverlayController: UIAdaptivePresentationControllerDelegate {
-    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-        update()
+@MainActor
+final class ReportBannerController: UIViewController {
+    private let banner = UIButton(type: .system)
+
+    var text: String? {
+        didSet {
+            guard let text else { return }
+            loadViewIfNeeded()
+            var attributed = AttributedString(text)
+            attributed.font = .systemFont(ofSize: 13, weight: .semibold)
+            banner.configuration?.attributedTitle = attributed
+        }
+    }
+
+    override func loadView() {
+        view = UIView()
+        view.backgroundColor = .clear
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        var config = UIButton.Configuration.filled()
+        config.cornerStyle = .capsule
+        config.baseBackgroundColor = UIColor(red: 0.93, green: 0.75, blue: 0.27, alpha: 0.96)
+        config.baseForegroundColor = .black
+        config.contentInsets = NSDirectionalEdgeInsets(top: 7, leading: 14, bottom: 7, trailing: 14)
+        banner.configuration = config
+        banner.accessibilityIdentifier = "report.buildBanner"
+        banner.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        banner.frame = view.bounds
+        banner.addTarget(self, action: #selector(tapped), for: .touchUpInside)
+        view.addSubview(banner)
+    }
+
+    func fittingSize(maxWidth: CGFloat) -> CGSize {
+        loadViewIfNeeded()
+        let size = banner.sizeThatFits(CGSize(width: maxWidth, height: 44))
+        return CGSize(width: min(size.width, maxWidth), height: size.height)
+    }
+
+    @objc private func tapped() {
+        ReportOverlay.shared.openInstall()
     }
 }
 

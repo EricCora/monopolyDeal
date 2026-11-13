@@ -293,10 +293,10 @@ final class ReportCenter {
     }
 
     /// Draws every app window except the report overlay, so sheets and covers are included.
-    static func captureScreen(excluding overlay: UIWindow?) -> UIImage? {
+    static func captureScreen(excluding overlays: [UIWindow]) -> UIImage? {
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first(where: { $0.activationState == .foregroundActive })
             ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return nil }
-        let windows = scene.windows.filter { $0 !== overlay && !$0.isHidden }.sorted { $0.windowLevel < $1.windowLevel }
+        let windows = scene.windows.filter { window in !window.isHidden && !overlays.contains { $0 === window } }.sorted { $0.windowLevel < $1.windowLevel }
         guard let bounds = windows.first?.bounds else { return nil }
         let format = UIGraphicsImageRendererFormat()
         format.scale = min(2, scene.traitCollection.displayScale)
