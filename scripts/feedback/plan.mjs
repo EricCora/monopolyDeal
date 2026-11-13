@@ -46,3 +46,34 @@ export function readResult(json) {
     question: outcome === 'needs_you' && typeof json.question === 'string' ? json.question.slice(0, 1000) : undefined,
   };
 }
+
+/** The failures `ios:verify` names on its last line, or null when it failed before the UI tests. */
+export function parseIosFailures(output) {
+  const line = output.split('\n').reverse().find((row) => row.startsWith('IOS_VERIFY_UI_FAILURES '));
+  if (!line) return null;
+  try {
+    return JSON.parse(line.slice('IOS_VERIFY_UI_FAILURES '.length));
+  } catch {
+    return null;
+  }
+}
+
+/** Failures that aren't also failing on master. "*" (a run that named no tests) always counts. */
+export function newFailures(branch, base) {
+  const result = {};
+  for (const [device, tests] of Object.entries(branch ?? {})) {
+    const known = new Set(base?.[device] ?? []);
+    const fresh = tests.filter((test) => test === '*' || !known.has(test));
+    if (fresh.length) result[device] = fresh;
+  }
+  return result;
+}
+
+export function failedTestNames(failures) {
+  return [...new Set(Object.values(failures ?? {}).flat())];
+}
+
+/** Paths a fix must never commit: copied-in reports hold screenshots, and the repo is public. */
+export function forbiddenPaths(changedFiles) {
+  return changedFiles.filter((file) => file === '.feedback' || file.startsWith('.feedback/'));
+}

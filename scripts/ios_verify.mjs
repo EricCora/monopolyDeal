@@ -6,8 +6,11 @@
  *  2. The app builds for the simulator.
  *  3. UI tests play games through the screen on iPhone and iPad.
  *
- * `--skip-ui` leaves out step 3. Build output stays out of the repo, because this folder
- * may sync to iCloud.
+ * `--skip-ui` leaves out step 3. `--only Class/method,Class/method` runs just those UI tests
+ * (and skips step 1), to recheck failures. UI tests run on every device even after one fails,
+ * and the last line names the failures: `IOS_VERIFY_UI_FAILURES {"<device>": ["Class/method"]}`,
+ * with "*" when a run failed without naming tests. Build output stays out of the repo, because
+ * this folder may sync to iCloud.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -22,6 +25,8 @@ const cache = join(homedir(), 'Library/Caches/MonopolyDealBuild', checkoutId.toS
 const port = Number(process.env.DEAL_VERIFY_PORT ?? 8700 + (checkoutId[0] % 200));
 const serverUrl = `http://localhost:${port}`;
 const skipUi = process.argv.includes('--skip-ui');
+const onlyIndex = process.argv.indexOf('--only');
+const onlyTests = onlyIndex >= 0 ? (process.argv[onlyIndex + 1] ?? '').split(',').filter(Boolean) : [];
 const developerDir = '/Applications/Xcode.app/Contents/Developer';
 const directSimctl = '/Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/bin/simctl';
 
@@ -98,8 +103,16 @@ process.on('exit', stopServer);
 step('Starting a room server');
 await startServer();
 
-step('Swift package tests');
-run('swift', ['test', '-c', 'release', '-Xswiftc', '-enable-testing', '--scratch-path', join(cache, 'dealkit-release')], {
+/** "Failing tests:" lists entries like "\tPlaytestRoundTests.testX()". */
+function failingTests(output) {
+  const block = output.split('Failing tests:')[1];
+  if (!block) return [];
+  return block.split('\n').map((line) => line.trim()).filter((line) => /^\w+\.\w+\(\)$/.test(line))
+    .map((line) => line.replace('()', '').replace('.', '/'));
+}
+
+if (onlyTests.length === 0) step('Swift package tests');
+if (onlyTests.length === 0) run('swift', ['test', '-c', 'release', '-Xswiftc', '-enable-testing', '--scratch-path', join(cache, 'dealkit-release')], {
   cwd: join(ios, 'DealKit'),
   env: { ...process.env, DEAL_TEST_SERVER_URL: serverUrl, DEAL_REPO_ROOT: root },
 });
@@ -112,12 +125,28 @@ if (skipUi) {
 } else {
   step('UI tests');
   checkSimulatorSetup();
+  const failures = {};
   for (const device of ['iPhone 18 Pro Max', 'iPad Pro 13-inch (M5)']) {
     console.log(`\n--- ${device}`);
-    run('xcodebuild', ['-project', 'MonopolyDeal.xcodeproj', '-scheme', 'MonopolyDeal', '-destination', `id=${simulatorId(device)}`, '-derivedDataPath', join(cache, 'dd'), 'test', '-quiet'], {
+    const only = onlyTests.map((test) => `-only-testing:MonopolyDealUITests/${test}`);
+    const result = spawnSync('xcodebuild', ['-project', 'MonopolyDeal.xcodeproj', '-scheme', 'MonopolyDeal', '-destination', `id=${simulatorId(device)}`, '-derivedDataPath', join(cache, 'dd'), 'test', '-quiet', ...only], {
       cwd: ios,
+      encoding: 'utf8',
+      maxBuffer: 256 * 1024 * 1024,
       env: { ...process.env, TEST_RUNNER_DEAL_TEST_SERVER_URL: serverUrl },
     });
+    process.stdout.write(result.stdout ?? '');
+    process.stderr.write(result.stderr ?? '');
+    if (result.status !== 0) {
+      const names = failingTests(`${result.stdout}${result.stderr}`);
+      failures[device] = names.length ? names : ['*'];
+      console.error(`\nFAILED on ${device}: ${failures[device].join(', ')}`);
+    }
+  }
+  if (Object.keys(failures).length) {
+    stopServer();
+    console.log(`\nIOS_VERIFY_UI_FAILURES ${JSON.stringify(failures)}`);
+    process.exit(1);
   }
 }
 

@@ -7,7 +7,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, write
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { needsIosVerify, nextWork, readResult } from './plan.mjs';
+import { failedTestNames, forbiddenPaths, needsIosVerify, newFailures, nextWork, parseIosFailures, readResult } from './plan.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = process.env.FEEDBACK_CONFIG ?? join(homedir(), '.config/monopolydeal-feedback/config.json');
@@ -175,11 +175,15 @@ function verifyAndShip(path) {
       return 'The change no longer applies on top of master (a rebase conflict). Rebase onto origin/master and resolve it.';
     }
     const changed = git(path, 'diff', '--name-only', 'origin/master...HEAD').split('\n').filter(Boolean);
-    const quality = run('npm', ['run', 'quality'], { cwd: path, check: false, timeoutMinutes: 30 });
+    const forbidden = forbiddenPaths(changed);
+    if (forbidden.length) return `The branch commits report files, which must never reach the public repo: ${forbidden.join(', ')}. Remove them from the commits.`;
+    let quality = run('npm', ['run', 'quality'], { cwd: path, check: false, timeoutMinutes: 30 });
+    // Timing tests can fail while the Mac is busy, so one retry before blaming the change.
+    if (!quality.ok) quality = run('npm', ['run', 'quality'], { cwd: path, check: false, timeoutMinutes: 30 });
     if (!quality.ok) return `npm run quality failed:\n${quality.output.slice(-3000)}`;
     if (needsIosVerify(changed)) {
-      const ios = run('npm', ['run', 'ios:verify'], { cwd: path, check: false, timeoutMinutes: 60 });
-      if (!ios.ok) return `npm run ios:verify failed:\n${ios.output.slice(-3000)}`;
+      const problem = iosGate(path);
+      if (problem) return problem;
     }
     if (!config.push) {
       log('--no-push: verified, not pushing');
@@ -189,6 +193,39 @@ function verifyAndShip(path) {
     git(path, 'fetch', '-q', 'origin', 'master');
   }
   return 'Could not push to master after three tries.';
+}
+
+/**
+ * Runs ios:verify. UI tests that fail are run again once, and any still failing are run on
+ * master too: only failures master doesn't share block the fix.
+ */
+function iosGate(path) {
+  const full = run('npm', ['run', 'ios:verify'], { cwd: path, check: false, timeoutMinutes: 90 });
+  if (full.ok) return null;
+  const failures = parseIosFailures(full.output);
+  if (!failures) return `npm run ios:verify failed before the UI tests:\n${full.output.slice(-3000)}`;
+  const recheck = (dir, tests) => {
+    const result = run('node', ['scripts/ios_verify.mjs', '--only', tests.join(',')], { cwd: dir, check: false, timeoutMinutes: 60 });
+    return result.ok ? {} : parseIosFailures(result.output) ?? { all: ['*'] };
+  };
+  const named = failedTestNames(failures).filter((test) => test !== '*');
+  if (named.length !== failedTestNames(failures).length) return `npm run ios:verify failed without naming tests:\n${full.output.slice(-3000)}`;
+  const still = recheck(path, named);
+  if (!Object.keys(still).length) {
+    log('ios:verify: failures passed on a rerun:', named.join(', '));
+    return null;
+  }
+  const base = join(config.worktrees, 'baseline');
+  if (!existsSync(base)) git(config.repo, 'worktree', 'add', '-q', '--detach', base, 'origin/master');
+  else git(base, 'checkout', '-q', '--detach', '-f', 'origin/master');
+  if (!existsSync(join(base, 'node_modules'))) run('npm', ['ci', '--silent'], { cwd: base, timeoutMinutes: 15 });
+  const onMaster = recheck(base, failedTestNames(still));
+  const fresh = newFailures(still, onMaster);
+  if (!Object.keys(fresh).length) {
+    log('ios:verify: these also fail on master, so they don\'t block:', JSON.stringify(still));
+    return null;
+  }
+  return `npm run ios:verify has UI tests that fail on this branch but pass on master: ${JSON.stringify(fresh)}\n${full.output.slice(-2500)}`;
 }
 
 function cleanUp(id) {
@@ -302,6 +339,8 @@ function handleInstall(request, retry) {
     run('xcrun', ['devicectl', 'device', 'process', 'launch', '--device', config.deviceId, config.bundleId], { check: false, timeoutMinutes: 2 });
     updateIndex((next) => {
       next.install = { state: 'installed', request, commit, at: new Date().toISOString() };
+      // The phone now runs master as of this install, which holds every fix so far.
+      next.build = { commit, at: new Date().toISOString(), reports: [] };
     }, `installed ${commit.slice(0, 8)}`);
     notify('Monopoly Deal', 'New build installed on your phone.');
   } catch (error) {

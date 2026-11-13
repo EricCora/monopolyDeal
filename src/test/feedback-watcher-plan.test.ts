@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module without types
-import { needsIosVerify, nextWork, readResult } from '../../scripts/feedback/plan.mjs';
+import { failedTestNames, forbiddenPaths, needsIosVerify, newFailures, nextWork, parseIosFailures, readResult } from '../../scripts/feedback/plan.mjs';
 
 const empty = { reportIds: [], installRequests: [], replies: {}, platforms: {} };
 
@@ -53,5 +53,21 @@ describe('report watcher planning', () => {
     expect(readResult(null).outcome).toBe('failed');
     expect(readResult({ outcome: 'merged' }).outcome).toBe('failed');
     expect(readResult({ outcome: 'needs_you', question: 'Blue or green?' })).toEqual({ outcome: 'needs_you', summary: '', question: 'Blue or green?' });
+  });
+});
+
+describe('report watcher iOS gate', () => {
+  it('reads the failures ios:verify names', () => {
+    {
+      const out = 'noise\nIOS_VERIFY_UI_FAILURES {"iPhone 18 Pro Max":["PlaytestRoundTests/testA","SmokeTests/testB"]}\n';
+      const branch = parseIosFailures(out);
+      expect(branch).toEqual({ 'iPhone 18 Pro Max': ['PlaytestRoundTests/testA', 'SmokeTests/testB'] });
+      expect(parseIosFailures('swift test failed')).toBeNull();
+      expect(newFailures(branch, { 'iPhone 18 Pro Max': ['PlaytestRoundTests/testA'] })).toEqual({ 'iPhone 18 Pro Max': ['SmokeTests/testB'] });
+      expect(newFailures({ iPad: ['*'] }, { iPad: ['*'] })).toEqual({ iPad: ['*'] });
+      expect(newFailures(branch, branch)).toEqual({});
+      expect(failedTestNames({ a: ['x', 'y'], b: ['x'] })).toEqual(['x', 'y']);
+      expect(forbiddenPaths(['src/a.ts', '.feedback/1/screenshot.jpg'])).toEqual(['.feedback/1/screenshot.jpg']);
+    }
   });
 });

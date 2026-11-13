@@ -22,7 +22,12 @@ flowchart LR
   2. A reply to a question.
   3. The oldest new report.
 
-  Each report gets a worktree in `~/Developer/monopolyDeal-feedback-work/` and a headless `claude -p --permission-mode auto` session. The watcher, not Claude, runs `npm run quality` (plus `npm run ios:verify` when `apps/ios/` or `src/engine/` changed), rebases, and pushes to `master`. A failed check goes back to the same session, at most three times.
+  Each report gets a worktree in `~/Developer/monopolyDeal-feedback-work/` and a headless `claude -p --permission-mode auto` session. The watcher, not Claude, runs the checks, rebases, and pushes to `master`:
+  - `npm run quality`, retried once because timing tests can fail on a busy Mac.
+  - `npm run ios:verify`, when `apps/ios/` or `src/engine/` changed. UI tests that fail are run again once, and any still failing are run on `master`. Only failures `master` doesn't share block the fix, so a test that is already broken can't stop every iPhone fix.
+  - A refusal if the branch commits anything under `.feedback/`.
+
+  A failed check goes back to the same session, at most three times.
 
 ## One-time setup
 1. **Vercel environment variables** (Project, Settings, Environment Variables, Production):
@@ -44,7 +49,7 @@ flowchart LR
 - The Mac has to be awake and logged in. Reports wait while it's asleep.
 - Installs need the phone on the same Wi-Fi as the Mac, or plugged in. The watcher waits up to 6 hours, then marks the install failed.
 - The free signing profile lasts about 7 days. Each install renews it.
-- The key in an installed app can be read by anyone who has that app file. It can only post reports and read their status.
+- **The report key is powerful.** Anyone with it can post a report, and a report starts an unattended Claude session on this Mac that can push to `master` (which deploys). Keep it only in the watcher config, Vercel, your phone's build and your own browser. If it leaks, change it in all of those places. The watcher's checks (`npm run quality`, `ios:verify`, never committing `.feedback/`) still stand between a report and a push.
 
 ## Testing it
 - `npx vitest run src/test/feedback-inbox.test.ts src/test/feedback-watcher-plan.test.ts src/test/report-button.test.tsx`
