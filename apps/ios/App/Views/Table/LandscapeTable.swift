@@ -186,10 +186,13 @@ enum OrientationLock {
         guard next != mask else { return }
         mask = next
         for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
-            var controller = scene.keyWindow?.rootViewController
-            while let current = controller {
-                current.setNeedsUpdateOfSupportedInterfaceOrientations()
-                controller = current.presentedViewController
+            // Every window, not just the key one: the report overlay sits above the app.
+            for window in scene.windows {
+                var controller = window.rootViewController
+                while let current = controller {
+                    current.setNeedsUpdateOfSupportedInterfaceOrientations()
+                    controller = current.presentedViewController
+                }
             }
             scene.requestGeometryUpdate(.iOS(interfaceOrientations: next))
         }

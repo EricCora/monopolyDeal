@@ -62,14 +62,16 @@ final class ReportOverlayController: UIViewController {
     private let dot = UIView()
     private let banner = UIButton(type: .system)
     private var dragStart: CGPoint = .zero
-    private let positionKey = "report.buttonPosition"
+    /// Remembered apart for the upright and sideways table, which have different free spots.
+    private var positionKey: String { view.bounds.width > view.bounds.height ? "report.buttonPosition.landscape" : "report.buttonPosition.portrait" }
 
     override func loadView() {
         view = UIView()
         view.backgroundColor = .clear
     }
 
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .all }
+    // Follows the table's lock, so this window never holds the app upright or sideways.
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { OrientationLock.mask }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -147,8 +149,11 @@ final class ReportOverlayController: UIViewController {
         let bounds = view.bounds.inset(by: view.safeAreaInsets).insetBy(dx: 4, dy: 4)
         guard bounds.width > 40, bounds.height > 40 else { return }
         let saved = UserDefaults.standard.array(forKey: positionKey) as? [Double]
-        let fx = saved?.first ?? 0
-        let fy = saved?.last ?? 0.42
+        // Defaults: the left edge of the upright table; on the sideways table, the right edge between
+        // the turn card and the Draw button, clear of the draw pile and the hand.
+        let landscape = view.bounds.width > view.bounds.height
+        let fx = saved?.first ?? (landscape ? 1 : 0)
+        let fy = saved?.last ?? (landscape ? 0.3 : 0.42)
         button.center = CGPoint(
             x: bounds.minX + 19 + CGFloat(fx) * (bounds.width - 38),
             y: bounds.minY + 19 + CGFloat(fy) * (bounds.height - 38)

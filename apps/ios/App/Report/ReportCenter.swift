@@ -301,7 +301,7 @@ final class ReportCenter {
         let format = UIGraphicsImageRendererFormat()
         format.scale = min(2, scene.traitCollection.displayScale)
         return UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in
-            for window in windows { window.drawHierarchy(in: window.bounds, afterScreenUpdates: false) }
+            for window in windows { window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
         }
     }
 }
