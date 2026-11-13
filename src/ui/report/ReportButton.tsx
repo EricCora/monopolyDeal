@@ -79,9 +79,14 @@ export function ReportButton({ getSnapshot }: { getSnapshot: () => ReportSnapsho
     };
   }, [active, refresh]);
 
+  const [capturing, setCapturing] = useState(false);
   const open = async () => {
-    // Taken before the sheet appears, so it shows what was on screen.
+    if (capturing) return;
+    // Taken before the sheet appears, so it shows what was on screen. It can take a couple of
+    // seconds on a busy table, so the button shows it's working.
+    setCapturing(true);
     const screenshot = await captureScreenshot();
+    setCapturing(false);
     setSheet({ screenshot });
   };
 
@@ -130,7 +135,8 @@ export function ReportButton({ getSnapshot }: { getSnapshot: () => ReportSnapsho
       ) : null}
       <button
         type="button"
-        className={`report-fab report-fab-${position.side}`}
+        className={`report-fab report-fab-${position.side}${capturing ? ' report-fab-busy' : ''}`}
+        aria-busy={capturing}
         style={{ top: `${(dragY ?? position.y) * 100}%` }}
         aria-label="Report a problem"
         data-testid="report-button"

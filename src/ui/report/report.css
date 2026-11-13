@@ -18,6 +18,9 @@
 }
 .report-fab:hover,
 .report-fab:focus-visible { opacity: 1; }
+.report-fab-busy { opacity: 1; animation: report-pulse 0.8s ease-in-out infinite alternate; }
+@keyframes report-pulse { from { transform: scale(1); } to { transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) { .report-fab-busy { animation: none; } }
 .report-fab-left { left: max(4px, env(safe-area-inset-left)); }
 .report-fab-right { right: max(4px, env(safe-area-inset-right)); }
 .report-fab-dot {
