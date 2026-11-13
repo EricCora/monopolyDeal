@@ -220,6 +220,8 @@ function driveFix(id, { path, branch, reportDir }, firstPrompt, sessionId) {
       const commit = git(path, 'rev-parse', 'HEAD');
       updateIndex((index) => {
         index.reports[id] = { ...index.reports[id], state: 'fixed', summary: result.summary, commit, question: undefined, updatedAt: new Date().toISOString() };
+        // A dry run's commit was never pushed, so there's no build to offer.
+        if (!config.push) return;
         const pending = index.build && index.install?.commit !== index.build.commit ? index.build.reports : [];
         index.build = { commit, at: new Date().toISOString(), reports: [...pending, id] };
       }, `${id}: fixed in ${commit.slice(0, 8)}`);
