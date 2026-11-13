@@ -1,6 +1,8 @@
 // Pure decisions for the report watcher, kept apart so they can be tested.
 
 export const REPORT_ID = /^\d{8}-\d{6}-[a-z0-9]{4}$/;
+/** A report whose handling throws this many times is marked failed instead of tried again. */
+export const MAX_ERRORS = 2;
 
 /**
  * What the watcher should do next, in priority order: an install Eric is waiting on, a reply
@@ -24,7 +26,7 @@ export function nextWork(index, inbox) {
   if (fresh.length) return { kind: 'report', id: fresh[0] };
 
   // A fix the watcher was part-way through when it stopped.
-  const stuck = Object.entries(index.reports).find(([, status]) => status.state === 'fixing');
+  const stuck = Object.entries(index.reports).find(([, status]) => status.state === 'fixing' && (status.errors ?? 0) < MAX_ERRORS);
   if (stuck) return { kind: 'report', id: stuck[0], resume: true };
   // An install waiting for the phone to come in range, tried again once the rest is done.
   if (index.install?.state === 'waiting') return { kind: 'install', request: index.install.request, retry: true };

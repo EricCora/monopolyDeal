@@ -7,7 +7,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, write
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { failedTestNames, forbiddenPaths, needsIosVerify, newFailures, nextWork, parseIosFailures, readResult } from './plan.mjs';
+import { MAX_ERRORS, failedTestNames, forbiddenPaths, needsIosVerify, newFailures, nextWork, parseIosFailures, readResult } from './plan.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = process.env.FEEDBACK_CONFIG ?? join(homedir(), '.config/monopolydeal-feedback/config.json');
@@ -361,10 +361,25 @@ function step() {
   const work = nextWork(readIndex(), scanInbox());
   if (!work) return false;
   log('work:', JSON.stringify(work));
-  if (work.kind === 'install') handleInstall(work.request, work.retry);
-  else if (work.kind === 'reply') handleReply(work.id, work.replies);
-  else handleReport(work.id, work.resume);
-  return work.kind !== 'install' || !work.retry;
+  if (work.kind === 'install') {
+    handleInstall(work.request, work.retry);
+    return !work.retry;
+  }
+  try {
+    if (work.kind === 'reply') handleReply(work.id, work.replies);
+    else handleReport(work.id, work.resume);
+  } catch (error) {
+    // Without this, a fix that hits the same error would be resumed every 30 seconds forever.
+    const errors = (readIndex().reports[work.id]?.errors ?? 0) + 1;
+    log(work.id, `error ${errors} of ${MAX_ERRORS}:`, error.message);
+    if (errors >= MAX_ERRORS) {
+      setStatus(work.id, { state: 'failed', errors, summary: `The watcher hit an error and stopped: ${error.message.slice(0, 300)}` });
+      notify('Monopoly Deal: fix stopped', error.message.slice(0, 160));
+    } else {
+      setStatus(work.id, { state: 'fixing', errors });
+    }
+  }
+  return true;
 }
 
 const lock = join(dirname(config.inbox), 'watcher.pid');

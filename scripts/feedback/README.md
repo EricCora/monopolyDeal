@@ -42,7 +42,7 @@ flowchart LR
    ```
    Optional keys override the defaults at the top of `watcher.mjs`: `repo`, `apiBase`, `pollSeconds`, `push`.
 3. **Start it:** `scripts/feedback/install-agent.sh`. The log is in `~/Library/Logs/MonopolyDealFeedback/watcher.log`.
-4. **First install:** tap Install in the app once, or run `node scripts/feedback/watcher.mjs --once` after making an install request. The app on the phone then has the key built in.
+4. **First install:** the app on the phone has no bug button until a watcher build is installed, so the first request can't come from the app. With the phone on the Mac's Wi-Fi, create an install request by hand: add an empty `{}` file named like `2026-11-13T18-00-00-000Z.json` under `control/install-requests/` in the inbox repo, then push. From then on, the app has the key built in and offers Install itself.
 5. **Web:** open Settings, turn on Report Button and paste the key. It's stored only in that browser.
 
 ## Limits

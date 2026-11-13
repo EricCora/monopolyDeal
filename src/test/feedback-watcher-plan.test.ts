@@ -38,6 +38,12 @@ describe('report watcher planning', () => {
     expect(nextWork(index, inbox)).toEqual({ kind: 'reply', id: '20261112-090000-aaaa', replies: ['b.json'] });
   });
 
+  it('stops resuming a fix that keeps hitting errors', () => {
+    expect(nextWork({ reports: { '20261112-090000-aaaa': { state: 'fixing', errors: 1 } }, install: null }, empty))
+      .toEqual({ kind: 'report', id: '20261112-090000-aaaa', resume: true });
+    expect(nextWork({ reports: { '20261112-090000-aaaa': { state: 'fixing', errors: 2 } }, install: null }, empty)).toBeNull();
+  });
+
   it('picks a half-finished fix back up', () => {
     expect(nextWork({ reports: { '20261112-090000-aaaa': { state: 'fixing' } }, install: null }, empty))
       .toEqual({ kind: 'report', id: '20261112-090000-aaaa', resume: true });
