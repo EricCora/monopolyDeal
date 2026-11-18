@@ -225,12 +225,12 @@ export interface RuleError {
 }
 
 export type Action =
-  | { type: 'draw_cards'; playerId: PlayerId }
+  | { type: 'draw_cards'; playerId: PlayerId; pick?: string[] }
   | { type: 'pass_turn'; playerId: PlayerId }
   | { type: 'play_to_bank'; playerId: PlayerId; cardId: string }
   | { type: 'play_property'; playerId: PlayerId; cardId: string; color: PropertyColor; setId?: string; attachedToCardId?: string }
   | { type: 'move_wild'; playerId: PlayerId; cardId: string; fromColor: PropertyColor; toColor: PropertyColor; fromSetId?: string; setId?: string }
-  | { type: 'play_action'; playerId: PlayerId; cardId: string; targetPlayerId?: PlayerId; color?: PropertyColor }
+  | { type: 'play_action'; playerId: PlayerId; cardId: string; targetPlayerId?: PlayerId; color?: PropertyColor; pick?: string[] }
   | { type: 'discard_card'; playerId: PlayerId; cardId: string }
   | { type: 'counter_response'; playerId: PlayerId; useJustSayNo: boolean; cardId?: string }
   | { type: 'pay_request'; playerId: PlayerId; cards: string[] }

@@ -12,6 +12,7 @@ import {
   leaveMultiplayerRoom,
   listMultiplayerCheckpoints,
   loadMultiplayerRoomState,
+  loadMultiplayerRoomDeck,
   multiplayerErrorMessage,
   pauseMultiplayerRoom,
   reconnectMultiplayerRoom,
@@ -66,7 +67,7 @@ import { isTurnRoomCode } from '../network/roomRouting';
 import { forgetTurnRoom, rememberTurnRoom } from '../persistence/turnRooms';
 import type { GrowthMetricEvent } from '../stats';
 import { normalizeMultiplayerSessionPreset, type MultiplayerSessionPresetId } from '../ui/experience';
-import type { GameVariant } from '../engine';
+import type { Action, GameVariant } from '../engine';
 
 const TURN_ROOM_POLL_MS = 30_000;
 
@@ -1091,11 +1092,26 @@ export function useMultiplayerRoom({
     }
   }, [apiBase, clearError, expectedRevision, refreshOnRevisionConflict, refreshRoom, session, setErrorFromCode]);
 
-  const runAction = useCallback(async (index: number) => {
+  /** God mode: the draw pile in draw order, or null when the room won't show it. */
+  const peekDrawPile = useCallback(async (): Promise<string[] | null> => {
+    if (!session) return null;
+    try {
+      const view = await loadMultiplayerRoomDeck(session, apiBase);
+      const pile = view.gameState?.drawPile;
+      if (!pile || pile.some((cardId) => cardId === '__hidden__')) return null;
+      return [...pile].reverse();
+    } catch {
+      return null;
+    }
+  }, [apiBase, session]);
+
+  /** `chosen` replaces the legal action at `index` with the same move carrying a god mode pick. */
+  const runAction = useCallback(async (index: number, chosen?: Action) => {
     const current = session;
     if (!current || !roomView) return;
-    const selected = roomView.legalActions[index];
-    if (!selected) return;
+    const legal = roomView.legalActions[index];
+    if (!legal) return;
+    const selected = chosen ? { ...legal, action: chosen } : legal;
     setLoading(true);
     clearError();
     try {
@@ -1728,6 +1744,7 @@ export function useMultiplayerRoom({
     joinRoom,
     startMatch,
     runAction,
+    peekDrawPile,
     setReady,
     setRoomPreset,
     setRoomVariant,

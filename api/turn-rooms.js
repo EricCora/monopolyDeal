@@ -315,8 +315,21 @@ function getPlayer(state, playerId) {
 function getCurrentPlayer(state) {
   return state.players[state.currentPlayerIndex];
 }
-function drawCards(state, player, amount) {
+function isValidDrawPick(state, amount, pick) {
+  if (pick === void 0) return true;
+  if (pick.length > amount || new Set(pick).size !== pick.length) return false;
+  return pick.every((cardId) => state.drawPile.includes(cardId));
+}
+function drawCards(state, player, amount, pick = []) {
   const drawn = [];
+  for (const cardId of pick.slice(0, amount)) {
+    const index = state.drawPile.indexOf(cardId);
+    if (index === -1) continue;
+    state.drawPile.splice(index, 1);
+    player.hand.push(cardId);
+    drawn.push(cardId);
+  }
+  amount -= drawn.length;
   for (let i = 0; i < amount; i += 1) {
     if (state.drawPile.length === 0) {
       if (state.discardPile.length === 0) break;
@@ -1608,7 +1621,8 @@ function applyAction(currentState, action) {
     if (getCurrentPlayer(state).id !== player.id) return setErr(error("invalid_turn", "Not your turn."));
     if (state.turn.phase !== "draw") return setErr(error("invalid_phase", "Can only draw during draw phase."));
     const drawAmount = player.hand.length === 0 ? 5 : 2;
-    const drawn = drawCards(state, player, drawAmount);
+    if (!isValidDrawPick(state, drawAmount, action.pick)) return setErr(error("invalid_target", "Chosen cards must be in the draw pile, with no more than the draw amount."));
+    const drawn = drawCards(state, player, drawAmount, action.pick);
     state.turn.phase = gameVariant(state) === "no_mercy" && debtsFor(player).length > 0 ? "debt" : "action";
     state.turn.endingTurn = false;
     pushEvent(events, "draw", `${player.name} drew ${drawn.length} cards.`, {
@@ -1984,11 +1998,13 @@ function applyAction(currentState, action) {
         }));
         if (!hasMatch) return setErr(error("invalid_action", "No opponent has a property matching that color."));
       }
+      if (action.pick !== void 0 && actionKind !== "pass_go") return setErr(error("invalid_action", "Only a draw can choose cards."));
       if (!removeFromHand(player, action.cardId)) return setErr(error("insufficient_cards", "Card not in hand."));
       discard(state, action.cardId);
       if (actionKind === "pass_go") {
         const drawCount = gameVariant(state) === "no_mercy" && card.id === "pass_go_go_go" ? Math.max(0, 7 - player.hand.length) : 2;
-        const drawn = drawCards(state, player, drawCount);
+        if (!isValidDrawPick(state, drawCount, action.pick)) return setErr(error("invalid_target", "Chosen cards must be in the draw pile, with no more than the draw amount."));
+        const drawn = drawCards(state, player, drawCount, action.pick);
         pushEvent(events, "action", `${player.name} played Pass Go and drew ${drawn.length}.`, {
           kind: "draw",
           playerId: player.id,
@@ -3395,13 +3411,18 @@ function canonicalizeCardIds(cardIds) {
   return [...cardIds].sort((left, right) => left.localeCompare(right));
 }
 function normalizeActionForComparison(action) {
+  if ((action.type === "draw_cards" || action.type === "play_action") && action.pick !== void 0) {
+    const { pick: _pick, ...rest } = action;
+    void _pick;
+    return rest;
+  }
   if (action.type !== "pay_request") return action;
   return {
     ...action,
     cards: canonicalizeCardIds(action.cards)
   };
 }
-function maskForViewer(state, viewerId) {
+function maskForViewer(state, viewerId, revealDrawPile = false) {
   const clone = structuredClone(state);
   for (const player of clone.players) {
     if (player.id === viewerId) continue;
@@ -3413,6 +3434,7 @@ function maskForViewer(state, viewerId) {
       clone.pending.payload.cardId = "__hidden__";
     }
   }
+  if (revealDrawPile && !state.winnerId && state.players[state.currentPlayerIndex]?.id === viewerId) return clone;
   clone.drawPile = Array.from({ length: clone.drawPile.length }, () => "__hidden__");
   return clone;
 }
@@ -4320,7 +4342,7 @@ function sendRoomChat(room, playerId, sessionToken, text, expectedRevision) {
   bumpUpdatedAt(room);
   return room;
 }
-function roomView(room, viewerId, sessionToken) {
+function roomView(room, viewerId, sessionToken, options = {}) {
   const spectator = findSpectator(room, viewerId);
   if (spectator && spectator.sessionToken === sessionToken) {
     spectator.lastSeenAt = nowMs();
@@ -4354,7 +4376,7 @@ function roomView(room, viewerId, sessionToken) {
     players: roomPlayerSummary(room),
     promptPlayerId: promptPlayerId2,
     legalActions,
-    gameState: room.game ? maskForViewer(room.game, viewerId) : void 0,
+    gameState: room.game ? maskForViewer(room.game, viewerId, options.revealDrawPile) : void 0,
     paused: room.paused,
     pausedByPlayerId: room.pausedByPlayerId,
     roomRuntimeState: room.roomRuntimeState,
@@ -4633,7 +4655,7 @@ async function handleTurnRoomRequest(request, store, notifier2) {
       if (!identity2) return fail(400, "invalid_payload");
       const stored = await loadLiveRoom(store, code, query.fresh === "1" ? "fresh" : "cached");
       if (!stored) return fail(404, "room_not_found");
-      return ok(operation === "state" ? roomView(stored.room, identity2.playerId, identity2.sessionToken) : roomReplay(stored.room, identity2.playerId, identity2.sessionToken));
+      return ok(operation === "state" ? roomView(stored.room, identity2.playerId, identity2.sessionToken, { revealDrawPile: query.revealDeck === "1" }) : roomReplay(stored.room, identity2.playerId, identity2.sessionToken));
     }
     if (method !== "POST") return fail(405, "method_not_allowed");
     if (operation === "join") {

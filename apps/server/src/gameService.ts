@@ -786,6 +786,12 @@ function canonicalizeCardIds(cardIds: string[]): string[] {
 }
 
 function normalizeActionForComparison(action: Action): Action {
+  // A chosen draw (god mode) is checked by the engine, so legality ignores which cards it names.
+  if ((action.type === 'draw_cards' || action.type === 'play_action') && action.pick !== undefined) {
+    const { pick: _pick, ...rest } = action;
+    void _pick;
+    return rest;
+  }
   if (action.type !== 'pay_request') return action;
   return {
     ...action,
@@ -793,7 +799,7 @@ function normalizeActionForComparison(action: Action): Action {
   };
 }
 
-function maskForViewer(state: GameState, viewerId: PlayerId): GameState {
+function maskForViewer(state: GameState, viewerId: PlayerId, revealDrawPile = false): GameState {
   const clone = structuredClone(state);
   for (const player of clone.players) {
     if (player.id === viewerId) continue;
@@ -810,6 +816,9 @@ function maskForViewer(state: GameState, viewerId: PlayerId): GameState {
   }
   // The draw pile is ordered hidden information too. Preserve its length for
   // deck-count UI while never exposing card identities or order to clients.
+  // God mode asks for the pile on its own turn, so it can choose what it draws. The
+  // request is opt-in and never stored, and other seats' views stay masked.
+  if (revealDrawPile && !state.winnerId && state.players[state.currentPlayerIndex]?.id === viewerId) return clone;
   clone.drawPile = Array.from({ length: clone.drawPile.length }, () => '__hidden__');
   return clone;
 }
@@ -2051,7 +2060,7 @@ export function setRoomTyping(
   return room;
 }
 
-export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken: string): MultiplayerRoomView {
+export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken: string, options: { revealDrawPile?: boolean } = {}): MultiplayerRoomView {
   const spectator = findSpectator(room, viewerId);
   if (spectator && spectator.sessionToken === sessionToken) {
     spectator.lastSeenAt = nowMs();
@@ -2091,7 +2100,7 @@ export function roomView(room: MultiplayerRoom, viewerId: PlayerId, sessionToken
     players: roomPlayerSummary(room),
     promptPlayerId,
     legalActions,
-    gameState: room.game ? maskForViewer(room.game, viewerId) : undefined,
+    gameState: room.game ? maskForViewer(room.game, viewerId, options.revealDrawPile) : undefined,
     paused: room.paused,
     pausedByPlayerId: room.pausedByPlayerId,
     roomRuntimeState: room.roomRuntimeState,

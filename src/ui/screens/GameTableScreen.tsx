@@ -49,6 +49,7 @@ import {
 } from '../table/tablePieces';
 import { LANDSCAPE_HAND_OVERHANG, landscapeHandWidth, useLandscapePhone } from '../table/useLandscapePhone';
 import type { CardInput } from '../tapPolicy';
+import { useTableHold } from '../godMode/godMode';
 import type {
   MultiplayerActivityFeedItem,
   MultiplayerConnectionState,
@@ -148,6 +149,8 @@ interface GameTableScreenProps {
   showDebugActions: boolean;
   actionDetailText: (item: LegalAction) => string | null;
   onFeedback?: (tone: FeedbackTone) => void;
+  /** A long, still hold on the table's background. */
+  onTableHold?: () => void;
   multiplayerSummary?: PostGameSummary | null;
   isSharingResult?: boolean;
   shareResultStatus?: string | null;
@@ -497,6 +500,7 @@ export function GameTableScreen({
   showDebugActions,
   actionDetailText,
   onFeedback,
+  onTableHold,
   multiplayerSummary = null,
   isSharingResult = false,
   shareResultStatus = null,
@@ -1380,9 +1384,12 @@ export function GameTableScreen({
     }
   })();
 
+  const tableHold = useTableHold(() => onTableHold?.());
+
   return (
     <section
       ref={screenRef}
+      {...tableHold}
       className={`game-table-screen state-${prompt.kind} ${isPaused ? 'is-paused' : ''} ${isMultiplayer ? 'is-live-room' : 'is-local-table'} ${isViewersPrompt ? 'is-your-move' : ''} ${landscape ? 'is-landscape' : ''} ${replayBar ? 'is-replay' : ''}`}
       style={landscape ? { ['--hand-overhang' as string]: `${Math.round(landscapeHandWidth(window.innerHeight) * 1.4 * LANDSCAPE_HAND_OVERHANG)}px` } : undefined}
     >

@@ -1135,7 +1135,7 @@ const httpServer = createServer(async (req, res) => {
         writeJson(res, 400, { error: 'invalid_payload' });
         return;
       }
-      const view = roomView(room, identity.playerId, identity.sessionToken);
+      const view = roomView(room, identity.playerId, identity.sessionToken, { revealDrawPile: parsed.query.revealDeck === '1' });
       snapshotAll();
       writeJson(res, 200, view);
       return;

@@ -99,6 +99,9 @@ import { useMultiplayerRoom } from './app/useMultiplayerRoom';
 import { resolveMultiplayerFeatureFlags } from './network/multiplayerClient';
 import type { RiskyActionConfirmation, SetupViewModel, ShareStatus } from './ui/types';
 import { ReportButton } from './ui/report/ReportButton';
+import { DeckPicker } from './ui/godMode/DeckPicker';
+import { godModeHaptic, useGodMode } from './ui/godMode/godMode';
+import { drawCountForAction, drawPileInDrawOrder } from './engine/drawPick';
 import './App.css';
 
 type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over' | 'multiplayer' | 'replay';
@@ -221,6 +224,12 @@ function canonicalizePaymentCards(cardIds: string[], variant: GameVariant = 'cla
 }
 
 function normalizeActionForComparison(action: Action): Action {
+  // A god mode pick names cards for the engine to check; it isn't part of which move this is.
+  if ((action.type === 'draw_cards' || action.type === 'play_action') && action.pick !== undefined) {
+    const { pick: _pick, ...rest } = action;
+    void _pick;
+    return rest;
+  }
   if (action.type !== 'pay_request') return action;
   return {
     ...action,
@@ -336,6 +345,9 @@ function App() {
   const [isSharing, setIsSharing] = useState(false);
   const [shareStatus, setShareStatus] = useState<ShareStatus>(null);
   const [riskyActionConfirmation, setRiskyActionConfirmation] = useState<RiskyActionConfirmation | null>(null);
+  const godMode = useGodMode();
+  const [deckPick, setDeckPick] = useState<{ action: Action; mode: 'local' | 'multiplayer'; count: number; pile: string[]; variant: GameVariant } | null>(null);
+  const [godModeCue, setGodModeCue] = useState<{ on: boolean; token: number } | null>(null);
   const [showRulesDrawer, setShowRulesDrawer] = useState(false);
   const [tableActionHint, setTableActionHint] = useState<TableActionHint>(null);
   const [multiplayerChatOpen, setMultiplayerChatOpen] = useState(false);
@@ -495,6 +507,7 @@ function App() {
     joinRoom: joinMultiplayerRoom,
     startMatch: startMultiplayerMatch,
     runAction: runMultiplayerAction,
+    peekDrawPile: peekMultiplayerDrawPile,
     setReady: setMultiplayerReadyState,
     setRoomPreset: setMultiplayerRoomPreset,
     setRoomVariant: setMultiplayerRoomVariant,
@@ -1573,6 +1586,7 @@ function App() {
 
   const runActionWithConfirmation = (action: Action, source?: LegalAction) => {
     if (isPaused) return;
+    if (openDeckPicker(action, 'local')) return;
     if (
       queueRiskyAction(
         action,
@@ -1613,11 +1627,44 @@ function App() {
         source: 'multiplayer',
       });
     }
-    await runMultiplayerAction(index);
+    await runMultiplayerAction(index, 'pick' in action && action.pick !== undefined ? action : undefined);
   }, [multiplayerRoomView, refreshMultiplayerRoom, runMultiplayerAction, setMultiplayerError]);
+
+  const toggleGodMode = () => {
+    const next = !godMode.on;
+    godMode.toggle();
+    godModeHaptic(next);
+    setGodModeCue({ on: next, token: Date.now() });
+  };
+
+  /** God mode: a draw or Pass Go first shows the deck. True when the picker took the action. */
+  const openDeckPicker = (action: Action, mode: 'local' | 'multiplayer'): boolean => {
+    if (!godMode.on) return false;
+    if (action.type !== 'draw_cards' && action.type !== 'play_action') return false;
+    if (action.pick !== undefined) return false;
+    const activeGame = mode === 'multiplayer' ? multiplayerGame : game;
+    if (!activeGame) return false;
+    const count = drawCountForAction(activeGame, action);
+    if (!count) return false;
+    const variant = activeGame.variant ?? 'classic';
+    if (mode === 'local') {
+      const pile = drawPileInDrawOrder(activeGame);
+      if (pile.length === 0) return false;
+      setChooser(null);
+      setDeckPick({ action, mode, count, pile, variant });
+      return true;
+    }
+    setChooser(null);
+    void peekMultiplayerDrawPile().then((pile) => {
+      if (pile && pile.length > 0) setDeckPick({ action, mode, count, pile, variant });
+      else void runMultiplayerActionByPayload(action);
+    });
+    return true;
+  };
 
   const runMultiplayerActionWithConfirmation = (action: Action, source?: LegalAction) => {
     if (multiplayerRoomView?.paused) return;
+    if (openDeckPicker(action, 'multiplayer')) return;
     if (
       queueRiskyAction(
         action,
@@ -2222,6 +2269,7 @@ function App() {
           isPaused={isPaused}
           reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
           onFeedback={emitFeedback}
+          onTableHold={toggleGodMode}
           legalActions={legalActions}
           contextualActions={contextualActions}
           revealedPlayerId={activeRevealedPlayerId}
@@ -2290,6 +2338,7 @@ function App() {
           isPaused={multiplayerRoomView.paused}
           reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
           onFeedback={emitFeedback}
+          onTableHold={toggleGodMode}
           pauseReasonText={
             multiplayerRoomView.roomRuntimeState === 'ended_timeout'
               ? (multiplayerRoomView.endedReason === 'host_timeout'
@@ -2629,6 +2678,30 @@ function App() {
           onGoHome={goHome}
         />
       ) : null}
+
+      {deckPick ? (
+        <DeckPicker
+          pile={deckPick.pile}
+          count={deckPick.count}
+          variant={deckPick.variant}
+          onCancel={() => {
+            setDeckPick(null);
+            setSelectedCardId(null);
+          }}
+          onConfirm={(pick) => {
+            const chosen = { ...deckPick.action, pick } as Action;
+            setDeckPick(null);
+            if (deckPick.mode === 'multiplayer') {
+              setSelectedCardId(null);
+              void runMultiplayerActionByPayload(chosen);
+            } else {
+              runAction(chosen);
+            }
+          }}
+        />
+      ) : null}
+
+      {godModeCue ? <span key={godModeCue.token} className={`table-hold-cue ${godModeCue.on ? 'is-on' : 'is-off'}`} aria-hidden="true" onAnimationEnd={() => setGodModeCue(null)} /> : null}
 
       {riskyActionConfirmation ? (
         <ActionConfirmDialog

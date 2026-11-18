@@ -2987,3 +2987,58 @@
     margin: 0;
   }
 }
+
+/* God mode deck picker */
+.deck-picker-overlay { z-index: 95; }
+.deck-picker-hint { margin: 0 0 10px; font-size: 0.85rem; opacity: 0.8; }
+.deck-picker-grid {
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+  flex: 1;
+  padding-bottom: 8px;
+}
+.deck-picker-card {
+  position: relative;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: none;
+  cursor: pointer;
+}
+.deck-picker-card .card-view { width: 100%; pointer-events: none; }
+.deck-picker-card.is-picked { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(242, 197, 79, 0.35); }
+.deck-picker-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: #1b1b1b;
+  font-weight: 800;
+  font-size: 0.8rem;
+  line-height: 22px;
+  text-align: center;
+}
+.deck-picker-actions { display: flex; gap: 10px; justify-content: flex-end; padding-top: 10px; }
+
+/* A one-second glint in the corner when the table hold switches god mode. No lasting badge. */
+.table-hold-cue {
+  position: fixed;
+  top: max(var(--safe-top, 0px), 10px);
+  right: 12px;
+  z-index: 120;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: table-hold-cue 1100ms ease-out forwards;
+}
+.table-hold-cue.is-on { background: var(--gold); box-shadow: 0 0 12px var(--gold); }
+.table-hold-cue.is-off { background: rgba(255, 255, 255, 0.55); }
+@keyframes table-hold-cue {
+  0% { opacity: 0; transform: scale(0.4); }
+  25% { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 0; transform: scale(1); }
+}

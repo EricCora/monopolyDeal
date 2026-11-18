@@ -663,6 +663,25 @@ export async function loadMultiplayerRoomState(
   );
 }
 
+/**
+ * God mode: this seat's view with the draw pile shown, on its own turn only. A fresh read,
+ * because a cached view could name cards already drawn. Goes over HTTP on every room kind.
+ */
+export async function loadMultiplayerRoomDeck(
+  session: MultiplayerSession,
+  apiBase = getMultiplayerApiBase(),
+): Promise<MultiplayerRoomView> {
+  const params = new URLSearchParams({
+    playerId: session.playerId,
+    sessionToken: session.sessionToken,
+    revealDeck: '1',
+    fresh: '1',
+  });
+  return request<MultiplayerRoomView>(
+    `${apiBase}/api/multiplayer/rooms/${encodeURIComponent(session.roomCode)}/state?${params.toString()}`,
+  );
+}
+
 export async function applyMultiplayerAction(
   session: MultiplayerSession,
   action: Action,

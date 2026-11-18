@@ -116,8 +116,27 @@ export function getCurrentPlayer(state: GameState): PlayerState {
   return state.players[state.currentPlayerIndex];
 }
 
-export function drawCards(state: GameState, player: PlayerState, amount: number): string[] {
+/**
+ * Whether `pick` names cards that can be drawn first from the pile: each card is in the
+ * draw pile once, and there are no more of them than `amount`.
+ */
+export function isValidDrawPick(state: GameState, amount: number, pick: string[] | undefined): boolean {
+  if (pick === undefined) return true;
+  if (pick.length > amount || new Set(pick).size !== pick.length) return false;
+  return pick.every((cardId) => state.drawPile.includes(cardId));
+}
+
+/** Draws `amount` cards, taking the named `pick` cards from the pile first. Validate `pick` with `isValidDrawPick`. */
+export function drawCards(state: GameState, player: PlayerState, amount: number, pick: string[] = []): string[] {
   const drawn: string[] = [];
+  for (const cardId of pick.slice(0, amount)) {
+    const index = state.drawPile.indexOf(cardId);
+    if (index === -1) continue;
+    state.drawPile.splice(index, 1);
+    player.hand.push(cardId);
+    drawn.push(cardId);
+  }
+  amount -= drawn.length;
   for (let i = 0; i < amount; i += 1) {
     if (state.drawPile.length === 0) {
       if (state.discardPile.length === 0) break;

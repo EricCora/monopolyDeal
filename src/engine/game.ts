@@ -36,6 +36,7 @@ import {
   discard,
   discardableCards,
   drawCards,
+  isValidDrawPick,
   error,
   findPropertyColorByCard,
   findPropertySetIdByCard,
@@ -716,7 +717,8 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
     if (getCurrentPlayer(state).id !== player.id) return setErr(error('invalid_turn', 'Not your turn.') as RuleError);
     if (state.turn.phase !== 'draw') return setErr(error('invalid_phase', 'Can only draw during draw phase.'));
     const drawAmount = player.hand.length === 0 ? 5 : 2;
-    const drawn = drawCards(state, player, drawAmount);
+    if (!isValidDrawPick(state, drawAmount, action.pick)) return setErr(error('invalid_target', 'Chosen cards must be in the draw pile, with no more than the draw amount.'));
+    const drawn = drawCards(state, player, drawAmount, action.pick);
     state.turn.phase = gameVariant(state) === 'no_mercy' && debtsFor(player).length > 0 ? 'debt' : 'action';
     state.turn.endingTurn = false;
     pushEvent(events, 'draw', `${player.name} drew ${drawn.length} cards.`, {
@@ -1134,13 +1136,15 @@ export function applyAction(currentState: GameState, action: Action): ApplyResul
         if (!hasMatch) return setErr(error('invalid_action', 'No opponent has a property matching that color.'));
       }
 
+      if (action.pick !== undefined && actionKind !== 'pass_go') return setErr(error('invalid_action', 'Only a draw can choose cards.'));
       if (!removeFromHand(player, action.cardId)) return setErr(error('insufficient_cards', 'Card not in hand.'));
       discard(state, action.cardId);
 
       if (actionKind === 'pass_go') {
         const drawCount = gameVariant(state) === 'no_mercy' && card.id === 'pass_go_go_go'
           ? Math.max(0, 7 - player.hand.length) : 2;
-        const drawn = drawCards(state, player, drawCount);
+        if (!isValidDrawPick(state, drawCount, action.pick)) return setErr(error('invalid_target', 'Chosen cards must be in the draw pile, with no more than the draw amount.'));
+        const drawn = drawCards(state, player, drawCount, action.pick);
         pushEvent(events, 'action', `${player.name} played Pass Go and drew ${drawn.length}.`, {
           kind: 'draw',
           playerId: player.id,

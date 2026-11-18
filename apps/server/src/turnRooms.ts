@@ -243,7 +243,7 @@ export async function handleTurnRoomRequest(
       const stored = await loadLiveRoom(store, code, query.fresh === '1' ? 'fresh' : 'cached');
       if (!stored) return fail(404, 'room_not_found');
       return ok(operation === 'state'
-        ? roomView(stored.room, identity.playerId, identity.sessionToken)
+        ? roomView(stored.room, identity.playerId, identity.sessionToken, { revealDrawPile: query.revealDeck === '1' })
         : roomReplay(stored.room, identity.playerId, identity.sessionToken));
     }
     if (method !== 'POST') return fail(405, 'method_not_allowed');
