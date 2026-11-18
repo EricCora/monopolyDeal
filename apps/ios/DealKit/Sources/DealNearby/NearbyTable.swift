@@ -272,6 +272,12 @@ public struct NearbyTable: Codable, Hashable, Sendable {
         )
     }
 
+    /// God mode: the pile, next card first, for the seat whose turn it is. Nil for anyone else.
+    public func drawPile(for seatId: PlayerId) -> [String]? {
+        guard let game, !isFinished, !isPaused, Engine.currentPlayer(game).id == seatId else { return nil }
+        return Engine.drawPileInDrawOrder(game)
+    }
+
     /// Mirrors `maskForViewer` in `apps/server/src/gameService.ts`.
     public static func mask(_ state: GameState, for viewerId: PlayerId) -> GameState {
         var masked = state

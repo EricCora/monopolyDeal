@@ -299,6 +299,11 @@ public final class RoomConnection {
         }
     }
 
+    /// God mode: the deck, next card first, on this seat's turn. Nil if the room won't show it.
+    public func deck() async -> [String]? {
+        try? await client.deck(session)
+    }
+
     public func replay() async throws -> RoomReplayLog {
         try await client.replay(session)
     }

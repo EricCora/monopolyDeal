@@ -164,6 +164,20 @@ public struct RoomClient: Sendable {
         return try await send(RoomView.self, URLRequest(url: components.url!))
     }
 
+    /// God mode: this seat's view with the draw pile shown, on its own turn only. Always a fresh read.
+    public func deck(_ session: RoomSession) async throws -> [String]? {
+        var components = URLComponents(url: roomURL(session.roomCode, "state"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "playerId", value: session.playerId),
+            URLQueryItem(name: "sessionToken", value: session.sessionToken),
+            URLQueryItem(name: "revealDeck", value: "1"),
+            URLQueryItem(name: "fresh", value: "1"),
+        ]
+        let view = try await send(RoomView.self, URLRequest(url: components.url!))
+        guard let pile = view.gameState?.drawPile, !pile.contains(Catalog.hiddenCardId) else { return nil }
+        return Array(pile.reversed())
+    }
+
     /// A finished game's opening state and moves.
     public func replay(_ session: RoomSession) async throws -> RoomReplayLog {
         var components = URLComponents(url: roomURL(session.roomCode, "replay"), resolvingAgainstBaseURL: false)!

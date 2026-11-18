@@ -49,6 +49,8 @@ protocol TableSession: AnyObject {
     var pauseAction: PauseAction? { get }
 
     func perform(_ action: Action)
+    /// God mode: the deck, next card first, when the viewer is about to draw. Nil when it can't be seen.
+    func peekDeck() async -> [String]?
     func undo()
     func resetTurn()
     func togglePause()
@@ -61,6 +63,7 @@ extension TableSession {
     var isReplay: Bool { false }
     var botSeatIds: [PlayerId] { [] }
     var pauseAction: PauseAction? { nil }
+    func peekDeck() async -> [String]? { nil }
 
     var variant: GameVariant { game?.resolvedVariant ?? .classic }
 
@@ -244,6 +247,11 @@ final class LocalMatch: TableSession {
     }
 
     // MARK: Actions
+
+    func peekDeck() async -> [String]? {
+        guard let game, !isPaused, Engine.currentPlayer(game).controller != .bot else { return nil }
+        return Engine.drawPileInDrawOrder(game)
+    }
 
     func perform(_ action: Action) {
         guard let game, !isPaused else { return }

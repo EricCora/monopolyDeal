@@ -65,6 +65,9 @@ final class TableUI {
     var coach: CoachHint?
     var shakeToken: CGFloat = 0
     var shakeCardId: String?
+    /// God mode's deck choice for a draw or Pass Go.
+    var deckPick: DeckPickRequest?
+    var godModeCue: (on: Bool, token: Int)?
 
     func clearSelection() {
         selectedCardId = nil
@@ -80,6 +83,8 @@ struct TableActions {
     let session: any TableSession
     let ui: TableUI
     let confirmRisky: Bool
+    /// God mode: draws and Pass Go first show the deck. See `GodMode`.
+    var godMode = false
     let tapFeedback: () -> Void
     let errorFeedback: () -> Void
 
@@ -222,6 +227,38 @@ struct TableActions {
     func perform(_ action: Action) {
         ui.clearSelection()
         ui.confirmation = nil
+        if godMode, action.pick == nil, let game = session.game,
+           let count = Engine.drawCount(for: action, in: game), count > 0 {
+            pickFromDeck(action, count: count)
+            return
+        }
         session.perform(action)
+    }
+
+    /// Fetches the deck, then lets the player choose. Without a deck to show, the draw goes ahead as usual.
+    private func pickFromDeck(_ action: Action, count: Int) {
+        let request = DeckPickRequest(action: action, count: count)
+        ui.deckPick = request
+        let session = session
+        let ui = ui
+        Task { @MainActor in
+            let pile = await session.peekDeck()
+            guard ui.deckPick?.id == request.id else { return }
+            if let pile, !pile.isEmpty {
+                ui.deckPick?.pile = pile
+            } else {
+                ui.deckPick = nil
+                session.perform(action)
+            }
+        }
+    }
+
+    /// Draws the cards chosen in the deck picker.
+    func drawPicked(_ pick: [String]) {
+        guard let request = ui.deckPick else { return }
+        ui.deckPick = nil
+        var chosen = request.action
+        chosen.pick = pick
+        session.perform(chosen)
     }
 }

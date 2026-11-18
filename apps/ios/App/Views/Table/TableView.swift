@@ -13,6 +13,7 @@ struct TableView: View {
     var onLeave: () -> Void
 
     @State private var ui = TableUI()
+    @AppStorage(GodMode.storageKey) private var godMode = false
     @Namespace private var cardSpace
 
     private var isRetry: Bool { (session as? LocalMatch)?.isRetry == true }
@@ -24,6 +25,7 @@ struct TableView: View {
             session: session,
             ui: ui,
             confirmRisky: app.preferences.confirmRiskyActions,
+            godMode: godMode && !session.isReplay && !session.isSpectating,
             tapFeedback: { app.feedback(.tap) },
             errorFeedback: { app.feedback(.error) }
         )
@@ -49,6 +51,16 @@ struct TableView: View {
                 toast
 
                 tableMoments(wide: wide, height: geometry.size.height)
+            }
+            // Holding the table still for ten seconds switches god mode. See `TableHoldDetector`.
+            .background { TableHoldDetector { toggleGodMode() } }
+            .overlay(alignment: .topTrailing) {
+                if let cue = ui.godModeCue {
+                    GodModeCue(on: cue.on)
+                        .id(cue.token)
+                        .padding(.top, 6)
+                        .padding(.trailing, 12)
+                }
             }
             // Cards hang off the bottom edge, so a drag there plays a card, not a swipe home.
             .defersSystemGestures(on: landscape ? .bottom : [])
@@ -96,6 +108,11 @@ struct TableView: View {
         .sheet(isPresented: $ui.showLog) {
             EventLogSheet(events: session.game?.history ?? [], playerNames: session.game?.players.map(\.name) ?? [])
                 .presentationDetents([.medium, .large])
+                .presentationBackground(.ultraThinMaterial)
+        }
+        .sheet(item: Binding(get: { ui.deckPick }, set: { if $0 == nil { ui.deckPick = nil } })) { request in
+            DeckPickerSheet(request: ui.deckPick ?? request, variant: session.variant, onDraw: { actions.drawPicked($0) }, onCancel: { ui.deckPick = nil })
+                .presentationDetents([.large])
                 .presentationBackground(.ultraThinMaterial)
         }
         .sheet(isPresented: $ui.showRules) {
@@ -938,5 +955,13 @@ private struct CoachBubble: View {
         .padding(12)
         .glassPanel(cornerRadius: 16)
         .accessibilityIdentifier("coach.hint")
+    }
+}
+
+extension TableView {
+    fileprivate func toggleGodMode() {
+        godMode.toggle()
+        GodMode.toggled(godMode)
+        ui.godModeCue = (godMode, (ui.godModeCue?.token ?? 0) + 1)
     }
 }

@@ -285,7 +285,10 @@ extension Engine {
             if currentPlayer(state).id != playerId { return fail(.invalid_turn, "Not your turn.") }
             if state.turn.phase != .draw { return fail(.invalid_phase, "Can only draw during draw phase.") }
             let amount = state.players[pi].hand.isEmpty ? 5 : 2
-            let drawn = drawCards(&state, playerAt: pi, amount: amount)
+            if !isValidDrawPick(state, amount: amount, pick: action.pick) {
+                return fail(.invalid_target, "Chosen cards must be in the draw pile, with no more than the draw amount.")
+            }
+            let drawn = drawCards(&state, playerAt: pi, amount: amount, pick: action.pick ?? [])
             state.turn.phase = variant == .no_mercy && !debts(state.players[pi]).isEmpty ? .debt : .action
             state.turn.endingTurn = false
             pushEvent(&events, "draw", "\(playerName) drew \(drawn.count) cards.", details: GameEventDetails(kind: "draw", playerId: playerId, count: drawn.count, reason: "turn_draw"))
@@ -792,6 +795,7 @@ extension Engine {
             if !hasMatch { return RuleError(.invalid_action, "No opponent has a property matching that color.") }
         }
 
+        if action.pick != nil && actionKind != .pass_go { return RuleError(.invalid_action, "Only a draw can choose cards.") }
         if !removeFromHand(&state.players[pi], cardId) { return RuleError(.insufficient_cards, "Card not in hand.") }
         state.discardPile.append(cardId)
         let others = state.players.filter { $0.id != playerId }.map(\.id)
@@ -808,7 +812,10 @@ extension Engine {
         switch actionKind {
         case .pass_go:
             let count = variant == .no_mercy && card.id == "pass_go_go_go" ? max(0, 7 - state.players[pi].hand.count) : 2
-            let drawn = drawCards(&state, playerAt: pi, amount: count)
+            if !isValidDrawPick(state, amount: count, pick: action.pick) {
+                return RuleError(.invalid_target, "Chosen cards must be in the draw pile, with no more than the draw amount.")
+            }
+            let drawn = drawCards(&state, playerAt: pi, amount: count, pick: action.pick ?? [])
             pushEvent(&events, "action", "\(playerName) played Pass Go and drew \(drawn.count).", details: GameEventDetails(kind: "draw", playerId: playerId, count: drawn.count, reason: "pass_go"))
 
         case .double_rent:

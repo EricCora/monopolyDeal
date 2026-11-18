@@ -100,6 +100,11 @@ final class NearbyHostMatch: TableSession {
         return PauseAction(title: "Let a Bot Play for \(seat.name)", systemImage: "cpu.fill") { host.coverWithBot(seat.id) }
     }
 
+    func peekDeck() async -> [String]? {
+        guard let viewerId else { return nil }
+        return host.table.drawPile(for: viewerId)
+    }
+
     func perform(_ action: Action) {
         host.perform(action)
         onFeedback(host.lastRejection == nil ? .success : .error)
@@ -202,6 +207,10 @@ final class NearbyGuestMatch: TableSession {
     var errorMessage: String? {
         get { guest.lastRejection }
         set { if newValue == nil { guest.lastRejection = nil } }
+    }
+
+    func peekDeck() async -> [String]? {
+        await guest.peekDeck()
     }
 
     func perform(_ action: Action) {

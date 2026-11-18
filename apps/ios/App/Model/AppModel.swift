@@ -97,6 +97,8 @@ final class AppModel {
     private let launch = LaunchOptions()
 
     init() {
+        // A throwaway save folder means a test run, which starts with god mode off.
+        if LaunchOptions().storeDirectory != nil { UserDefaults.standard.removeObject(forKey: GodMode.storageKey) }
         let store = DealStore(directory: LaunchOptions().storeDirectory ?? DealStore.defaultDirectory())
         self.store = store
         preferences = store.preferences()

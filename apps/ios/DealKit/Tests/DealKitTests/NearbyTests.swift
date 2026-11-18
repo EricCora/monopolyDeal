@@ -387,6 +387,33 @@ final class NearbySessionTests: XCTestCase {
         XCTAssertTrue(host.table.isFinished)
     }
 
+    func testGodModeSeesTheDeckOnlyOnItsOwnTurnAndDrawsWhatItPicks() async throws {
+        let hub = LoopbackHub()
+        let host = makeHost(hub)
+        host.start()
+        let anna = NearbyGuest(transport: hub.makeGuest(), name: "Anna")
+        anna.start()
+        try await waitFor("the table") { !anna.tables.isEmpty }
+        anna.join(anna.tables[0])
+        try await waitFor("Anna to sit down") { anna.view?.yourSeatId == "p2" }
+        host.startGame(seed: 21)
+        try await waitFor("the game") { anna.view?.game != nil }
+
+        XCTAssertNil(host.table.drawPile(for: "p2"), "only the seat whose turn it is")
+        let notYet = await anna.peekDeck()
+        XCTAssertNil(notYet)
+
+        host.perform(Action(.draw_cards, playerId: "p1"))
+        host.perform(Action(.pass_turn, playerId: "p1"))
+        try await waitFor("Anna's turn") { anna.view?.legalActions.contains { $0.action.type == .draw_cards } == true }
+        let peeked = await anna.peekDeck()
+        let pile = try XCTUnwrap(peeked)
+        XCTAssertEqual(pile, Engine.drawPileInDrawOrder(host.table.game!))
+        let pick = [pile[4], pile[9]]
+        anna.perform(Action(.draw_cards, playerId: "p2").with { $0.pick = pick })
+        try await waitFor("the chosen draw") { anna.view?.game?.players[1].hand.suffix(2).elementsEqual(pick) == true }
+    }
+
     func testTheHostCanCloseAndReopenWithASavedTable() async throws {
         let hub = LoopbackHub()
         var savedTable: NearbyTable?

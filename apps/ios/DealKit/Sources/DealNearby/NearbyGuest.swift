@@ -39,6 +39,7 @@ public final class NearbyGuest {
     /// Looking for tables. Off in the background, so a drop then doesn't start a reconnect.
     private var active = false
     private var retryTask: Task<Void, Never>?
+    private var deckWaiter: CheckedContinuation<[String]?, Never>?
 
     public static let retryInterval: Duration = .seconds(3)
 
@@ -143,6 +144,26 @@ public final class NearbyGuest {
         send(.resetTurn(revision: view.revision))
     }
 
+    /// God mode: the deck, next card first, on this seat's turn. Nil if the host won't show it.
+    public func peekDeck() async -> [String]? {
+        guard let view, link == .connected else { return nil }
+        finishDeckWait(nil)
+        return await withCheckedContinuation { continuation in
+            deckWaiter = continuation
+            send(.peekDeck(revision: view.revision))
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(4))
+                self?.finishDeckWait(nil)
+            }
+        }
+    }
+
+    private func finishDeckWait(_ pile: [String]?) {
+        let waiter = deckWaiter
+        deckWaiter = nil
+        waiter?.resume(returning: pile)
+    }
+
     private func send(_ message: NearbyGuestMessage) {
         guard link == .connected, let data = try? NearbyCoding.encode(message) else { return }
         transport.send(data)
@@ -197,6 +218,8 @@ public final class NearbyGuest {
             }
         case .rejected(let message):
             lastRejection = message
+        case .deck(let pile, _):
+            finishDeckWait(pile.isEmpty ? nil : pile)
         }
     }
 }

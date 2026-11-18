@@ -73,9 +73,24 @@ public enum Engine {
         state.players[state.currentPlayerIndex]
     }
 
+    /// Whether `pick` names cards that can be drawn first: each in the pile once, no more than `amount`.
+    static func isValidDrawPick(_ state: GameState, amount: Int, pick: [String]?) -> Bool {
+        guard let pick else { return true }
+        if pick.count > amount || Set(pick).count != pick.count { return false }
+        return pick.allSatisfy { state.drawPile.contains($0) }
+    }
+
+    /// Draws `amount` cards, taking the named `pick` cards from the pile first. Validate with `isValidDrawPick`.
     @discardableResult
-    static func drawCards(_ state: inout GameState, playerAt index: Int, amount: Int) -> [String] {
+    static func drawCards(_ state: inout GameState, playerAt index: Int, amount: Int, pick: [String] = []) -> [String] {
         var drawn: [String] = []
+        for cardId in pick.prefix(max(0, amount)) {
+            guard let at = state.drawPile.firstIndex(of: cardId) else { continue }
+            state.drawPile.remove(at: at)
+            state.players[index].hand.append(cardId)
+            drawn.append(cardId)
+        }
+        let amount = amount - drawn.count
         for _ in 0..<max(0, amount) {
             if state.drawPile.isEmpty {
                 if state.discardPile.isEmpty { break }

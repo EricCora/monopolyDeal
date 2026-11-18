@@ -144,6 +144,12 @@ public final class NearbyHost {
         case .resetTurn(let revision):
             guard let seatId = peerSeats[peer] else { return }
             answer(peer, seatId, table.resetTurn(by: seatId, revision: revision))
+        case .peekDeck(let revision):
+            guard let seatId = peerSeats[peer], revision == table.revision, let pile = table.drawPile(for: seatId) else {
+                send(.deck([], revision: table.revision), to: peer)
+                return
+            }
+            send(.deck(pile, revision: revision), to: peer)
         case .leave:
             guard let seatId = peerSeats.removeValue(forKey: peer) else { return }
             table.leave(seatId)

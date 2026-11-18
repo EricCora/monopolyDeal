@@ -95,6 +95,11 @@ final class OnlineMatch: TableSession {
         return log
     }
 
+    func peekDeck() async -> [String]? {
+        guard !isSpectating else { return nil }
+        return await connection.deck()
+    }
+
     func perform(_ action: Action) {
         Task {
             let succeeded = await connection.perform(action)

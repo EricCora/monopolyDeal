@@ -106,6 +106,8 @@ public enum NearbyGuestMessage: Codable, Hashable, Sendable {
     case perform(Action, revision: Int)
     case undo(revision: Int)
     case resetTurn(revision: Int)
+    /// God mode: asks for the deck on this seat's own turn. Nothing about it is stored.
+    case peekDeck(revision: Int)
     /// Gives the seat up for good. A bot plays it from here.
     case leave
 }
@@ -117,6 +119,8 @@ public enum NearbyHostMessage: Codable, Hashable, Sendable {
     case view(NearbyView)
     /// A move that wasn't applied. The view that follows shows the board as it is.
     case rejected(message: String)
+    /// The answer to `peekDeck`: the pile, next card first.
+    case deck([String], revision: Int)
 }
 
 enum NearbyCoding {

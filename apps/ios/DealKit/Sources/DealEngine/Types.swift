@@ -513,6 +513,8 @@ public struct Action: Codable, Hashable, Sendable {
     public var takeColor: PropertyColor?
     public var giveSetId: String?
     public var takeSetId: String?
+    /// God mode: the cards a draw or Pass Go takes from the pile first. Absent otherwise.
+    public var pick: [String]?
 
     public init(_ type: ActionType, playerId: PlayerId) {
         self.type = type
@@ -529,8 +531,13 @@ extension Action {
         func add(_ key: String, _ value: String?) {
             if let value { parts.append("\"\(key)\":\(Self.quoted(value))") }
         }
+        func addPick() {
+            if let pick { parts.append("\"pick\":[\(pick.map(Self.quoted).joined(separator: ","))]") }
+        }
         switch type {
-        case .draw_cards, .pass_turn:
+        case .draw_cards:
+            addPick()
+        case .pass_turn:
             break
         case .play_to_bank, .discard_card:
             add("cardId", cardId)
@@ -549,6 +556,7 @@ extension Action {
             add("cardId", cardId)
             add("targetPlayerId", targetPlayerId)
             add("color", color?.rawValue)
+            addPick()
         case .counter_response:
             if let useJustSayNo { parts.append("\"useJustSayNo\":\(useJustSayNo)") }
             add("cardId", cardId)
@@ -593,6 +601,13 @@ extension Action {
             add("setId", setId)
         }
         return "{\(parts.joined(separator: ","))}"
+    }
+
+    /// The same move without a god mode pick, for matching against legal actions.
+    public var withoutPick: Action {
+        var copy = self
+        copy.pick = nil
+        return copy
     }
 
     private static func quoted(_ text: String) -> String {
