@@ -598,7 +598,6 @@ struct RoomLobbyView: View {
                         pendingOrder = nil
                     }
                 }
-                .accessibilityIdentifier("room.turnOrder")
                 .onChange(of: view.players.map(\.id)) { pendingOrder = nil }
                 if view.players.count > 1 { TurnOrderHint() }
             } else {
@@ -644,6 +643,7 @@ struct RoomLobbyView: View {
             }
         }
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("room.player")
     }
 
     private func hostControls(_ view: RoomView) -> some View {

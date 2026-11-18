@@ -348,7 +348,6 @@ private struct NearbyLobbyView: View {
                     app.feedback(.tap)
                     host.reorder(difference.reordered(view.seats.map(\.id)))
                 }
-                .accessibilityIdentifier("nearby.turnOrder")
                 if view.seats.count > 1 { TurnOrderHint() }
             } else {
                 ForEach(view.seats) { seat in seatRow(seat) }
@@ -390,6 +389,7 @@ private struct NearbyLobbyView: View {
             }
         }
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("nearby.seat")
     }
 
     private func hostControls(_ host: NearbyHost) -> some View {
