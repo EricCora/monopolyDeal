@@ -203,7 +203,8 @@ public struct NearbyTable: Codable, Hashable, Sendable {
             snapshots = Engine.appendTurnSnapshot(snapshots, game)
             logMarks.append(log?.actions.count ?? 0)
         }
-        log?.actions.append(action)
+        // Every draw is logged with the cards it took, so a chosen draw looks like any other in the replay.
+        log?.actions.append(Engine.actionAsRecorded(before: game, after: result.state, action: action))
         let nextPrompt = Engine.nextPrompt(result.state).playerId
         if !Engine.shouldRetainTurnSnapshots(result.state, promptPlayerId: nextPrompt)
             || Engine.actionRevealedDeckCards(before: game, after: result.state, actionType: action.type) {

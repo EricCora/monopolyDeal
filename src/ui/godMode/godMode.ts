@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 /** How long the table must be held, still, to switch god mode on or off. */
-export const GOD_MODE_HOLD_MS = 10_000;
+export const GOD_MODE_HOLD_MS = 5_000;
 /** Moving further than this cancels the hold, so drags and scrolls never count. */
 const HOLD_SLOP_PX = 14;
 const STORAGE_KEY = 'monopolyDeal.tableHold';
@@ -9,17 +9,37 @@ const STORAGE_KEY = 'monopolyDeal.tableHold';
 /** Taps on these keep working as usual and never start a hold. */
 const INTERACTIVE = 'button, a, input, select, textarea, [role="button"], [role="dialog"], .card-view, .hand-fan, [data-card-id]';
 
-function readStored(): boolean {
+/**
+ * What this device remembers: whose god mode it is. `owner` is the normalized name of the
+ * seat that switched it on, so on a shared device only that player ever sees the picker.
+ * `null` means it was switched on before owners were kept: it then works only in games
+ * with a single human seat.
+ */
+export interface GodModeState {
+  on: boolean;
+  owner: string | null;
+}
+
+export function normalizeOwner(name: string | undefined | null): string | null {
+  const trimmed = name?.trim().toLowerCase();
+  return trimmed ? trimmed : null;
+}
+
+function readStored(): GodModeState {
   try {
-    return window.localStorage.getItem(STORAGE_KEY) === '1';
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { on: false, owner: null };
+    if (raw === '1') return { on: true, owner: null };
+    const parsed = JSON.parse(raw) as { owner?: unknown };
+    return { on: true, owner: typeof parsed.owner === 'string' ? normalizeOwner(parsed.owner) : null };
   } catch {
-    return false;
+    return { on: false, owner: null };
   }
 }
 
-function writeStored(on: boolean): void {
+function writeStored(state: GodModeState): void {
   try {
-    if (on) window.localStorage.setItem(STORAGE_KEY, '1');
+    if (state.on) window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ owner: state.owner }));
     else window.localStorage.removeItem(STORAGE_KEY);
   } catch {
     // Private windows can refuse storage; the mode still works until the page reloads.
@@ -27,15 +47,39 @@ function writeStored(on: boolean): void {
 }
 
 /** God mode is a setting on this device only. Nothing about it is sent to a room. */
-export function useGodMode(): { on: boolean; toggle: () => void } {
-  const [on, setOn] = useState(readStored);
-  const toggle = useCallback(() => {
-    setOn((current) => {
-      writeStored(!current);
-      return !current;
-    });
-  }, []);
-  return { on, toggle };
+export function useGodMode(): GodModeState & { toggle: (owner: string | null) => boolean } {
+  const [state, setState] = useState(readStored);
+  const toggle = useCallback((owner: string | null) => {
+    const next: GodModeState = state.on ? { on: false, owner: null } : { on: true, owner: normalizeOwner(owner) };
+    writeStored(next);
+    setState(next);
+    return next.on;
+  }, [state.on]);
+  return { ...state, toggle };
+}
+
+interface SeatLike {
+  id: string;
+  name: string;
+  controller?: 'human' | 'bot';
+}
+
+/**
+ * The seat a hold switches god mode on for, in a game played on this device: the player
+ * whose turn it is, or, while a bot is moving, the first human seat.
+ */
+export function godModeOwnerForLocalGame(players: SeatLike[], currentPlayerIndex: number): string | null {
+  const current = players[currentPlayerIndex];
+  if (current && current.controller !== 'bot') return normalizeOwner(current.name);
+  return normalizeOwner(players.find((player) => player.controller !== 'bot')?.name);
+}
+
+/** Whether a draw by `playerId`, in a game played on this device, may show the deck. */
+export function godModeAppliesToLocalSeat(owner: string | null, players: SeatLike[], playerId: string): boolean {
+  const drawer = players.find((player) => player.id === playerId);
+  if (!drawer || drawer.controller === 'bot') return false;
+  if (owner) return normalizeOwner(drawer.name) === owner;
+  return players.filter((player) => player.controller !== 'bot').length === 1;
 }
 
 /**

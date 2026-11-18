@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { applyAction } from '../engine';
 import { applyRoomAction, createRoom, joinRoom, roomView, setRoomReady, startRoom, type MultiplayerRoom } from '../../apps/server/src/gameService.ts';
 
 function startedRoom() {
@@ -29,6 +30,23 @@ describe('god mode in rooms', () => {
       .toThrow();
     applyRoomAction(room, mover.playerId, mover.sessionToken, { type: 'draw_cards', playerId: mover.playerId, pick });
     expect(room.game!.players.find((p) => p.id === mover.playerId)!.hand.slice(-2)).toEqual(pick);
+  });
+});
+
+describe('god mode in a room replay', () => {
+  it('logs an ordinary draw and a chosen draw the same way, and both replay exactly', () => {
+    for (const choose of [false, true]) {
+      const { room, mover } = startedRoom();
+      const pile = room.game!.drawPile;
+      const pick = choose ? [pile[3], pile[7]] : undefined;
+      applyRoomAction(room, mover.playerId, mover.sessionToken, { type: 'draw_cards', playerId: mover.playerId, ...(pick ? { pick } : {}) });
+      const logged = room.replayLog!.actions[0];
+      expect(Object.keys(logged).sort()).toEqual(['pick', 'playerId', 'type']);
+      expect(logged.type === 'draw_cards' ? logged.pick : null).toEqual(room.game!.players.find((p) => p.id === mover.playerId)!.hand.slice(-2));
+      const replayed = room.replayLog!.actions.reduce((state, action) => applyAction(state, action).state, room.replayLog!.initial);
+      expect(replayed.players).toEqual(room.game!.players);
+      expect(replayed.drawPile).toEqual(room.game!.drawPile);
+    }
   });
 });
 

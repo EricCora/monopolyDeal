@@ -2,12 +2,15 @@ import DealEngine
 import SwiftUI
 import UIKit
 
-/// God mode: a hidden, on-device setting. Holding the table still for ten seconds turns it on
+/// God mode: a hidden, on-device setting. Holding the table still for five seconds turns it on
 /// or off. While it's on, each draw and Pass Go first shows the deck so the player picks the
 /// cards. Nothing about it is sent to a room or another phone; only the chosen draw is.
 enum GodMode {
     static let storageKey = "monopolyDeal.tableHold"
-    static let holdSeconds: Double = 10
+    /// The normalized name of the seat that switched it on. On a shared device only that
+    /// player's draws open the deck. See `GodModeSeats`.
+    static let ownerKey = "monopolyDeal.tableHoldOwner"
+    static let holdSeconds: Double = 5
     /// Moving further than this cancels the hold, so drags and scrolls never count.
     static let holdSlop: CGFloat = 14
 
@@ -25,7 +28,7 @@ struct DeckPickRequest: Identifiable {
     var pile: [String]?
 }
 
-/// The deck, next card first. Pick the cards this draw takes, in any order.
+/// The deck, grouped by kind. Pick the cards this draw takes, in any order.
 struct DeckPickerSheet: View {
     var request: DeckPickRequest
     var variant: GameVariant
@@ -42,13 +45,41 @@ struct DeckPickerSheet: View {
                 .padding(.top, 18)
                 .accessibilityIdentifier("deckPicker")
             if let pile = request.pile {
-                Text("\(pile.count) in the deck, next card first. \(picked.count) of \(needed) chosen.")
+                Text("\(pile.count) in the deck. \(picked.count) of \(needed) chosen.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 74), spacing: 10)], spacing: 10) {
-                        ForEach(Array(pile.enumerated()), id: \.element) { index, cardId in
-                            card(cardId, index: index)
+                    LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
+                        ForEach(DeckGroups.sections(pile, variant: variant)) { section in
+                            Section {
+                                ForEach(section.groups) { group in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(group.label)
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.secondary)
+                                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 74), spacing: 10)], alignment: .leading, spacing: 10) {
+                                            ForEach(group.cards, id: \.cardId) { entry in
+                                                card(entry.cardId)
+                                            }
+                                        }
+                                    }
+                                }
+                            } header: {
+                                HStack(spacing: 6) {
+                                    Text(section.title.uppercased())
+                                        .font(.caption.weight(.heavy))
+                                        .tracking(0.8)
+                                        .foregroundStyle(Palette.gold)
+                                    Text("\(section.count)")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                }
+                                .padding(.vertical, 4)
+                                .background(.regularMaterial)
+                                .accessibilityAddTraits(.isHeader)
+                                .accessibilityIdentifier("deckPicker.section")
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -71,7 +102,7 @@ struct DeckPickerSheet: View {
         }
     }
 
-    private func card(_ cardId: String, index: Int) -> some View {
+    private func card(_ cardId: String) -> some View {
         let order = picked.firstIndex(of: cardId)
         return Button {
             toggle(cardId)
@@ -93,7 +124,8 @@ struct DeckPickerSheet: View {
                 }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Deck card \(index + 1), \(Catalog.lookup(cardId, variant).map(CardText.spokenName) ?? "card")")
+        .accessibilityLabel(Catalog.lookup(cardId, variant).map(CardText.spokenName) ?? "card")
+        .accessibilityIdentifier("deckPicker.card")
         .accessibilityAddTraits(order == nil ? [] : .isSelected)
     }
 
@@ -126,7 +158,7 @@ struct GodModeCue: View {
     }
 }
 
-/// Watches the whole window for the ten-second hold while the table is on screen. A UIKit
+/// Watches the whole window for the five-second hold while the table is on screen. A UIKit
 /// recognizer sees touches over scroll views too, runs alongside every other gesture and
 /// never cancels their touches, so taps, drags and scrolling work exactly as before.
 struct TableHoldDetector: UIViewRepresentable {
@@ -182,9 +214,11 @@ struct TableHoldDetector: UIViewRepresentable {
         }
 
         @objc private func held(_ recognizer: UILongPressGestureRecognizer) {
-            if recognizer.state == .began { onHold() }
+            // Holding the hand to read it never counts, as on the web, where the hand is left out too.
+            if recognizer.state == .began, !HandTouch.Recognizer.isTouching { onHold() }
         }
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
     }
 }

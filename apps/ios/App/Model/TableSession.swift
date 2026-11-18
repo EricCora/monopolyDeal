@@ -272,7 +272,8 @@ final class LocalMatch: TableSession {
             turnSnapshots = Engine.appendTurnSnapshot(turnSnapshots, game)
             logMarks.append(log?.actions.count ?? 0)
         }
-        log?.actions.append(action)
+        // Every draw is logged with the cards it took, so a chosen draw looks like any other in the replay.
+        log?.actions.append(Engine.actionAsRecorded(before: game, after: result.state, action: action))
         if !Engine.shouldRetainTurnSnapshots(result.state, promptPlayerId: nextPrompt)
             || Engine.actionRevealedDeckCards(before: game, after: result.state, actionType: action.type) {
             turnSnapshots = []

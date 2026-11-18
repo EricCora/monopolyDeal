@@ -2882,6 +2882,28 @@ function appendTurnSnapshot(snapshots, snapshot) {
   return next;
 }
 
+// src/engine/drawPick.ts
+function drawCountForAction(state, action) {
+  const player = state.players.find((entry) => entry.id === action.playerId);
+  if (!player) return null;
+  if (action.type === "draw_cards") return player.hand.length === 0 ? 5 : 2;
+  if (action.type !== "play_action") return null;
+  const variant = state.variant === "no_mercy" ? "no_mercy" : "classic";
+  const card = getCardDefinition(action.cardId, variant);
+  if (card.kind !== "action" || card.actionKind !== "pass_go") return null;
+  if (variant === "no_mercy" && card.id === "pass_go_go_go") return Math.max(0, 7 - (player.hand.length - 1));
+  return 2;
+}
+function actionAsRecorded(before, after, action) {
+  if (action.type !== "draw_cards" && action.type !== "play_action") return action;
+  if (action.pick !== void 0 || drawCountForAction(before, action) == null) return action;
+  const had = new Set(before.players.find((player) => player.id === action.playerId)?.hand ?? []);
+  const drawn = (after.players.find((player) => player.id === action.playerId)?.hand ?? []).filter((cardId) => !had.has(cardId));
+  const pile = new Set(before.drawPile);
+  if (drawn.length === 0 || drawn.length > 7 || !drawn.every((cardId) => pile.has(cardId))) return action;
+  return { ...action, pick: drawn };
+}
+
 // src/ui/experience.ts
 var DEFAULT_MULTIPLAYER_SESSION_PRESET = "standard";
 var MULTIPLAYER_SESSION_PRESET_DEFINITIONS = {
@@ -3646,7 +3668,7 @@ function applyGameAction(room, game, action) {
     throw new Error(result.error.code);
   }
   room.game = result.state;
-  room.replayLog?.actions.push(action);
+  room.replayLog?.actions.push(actionAsRecorded(game, result.state, action));
   const nextPromptPlayerId = getNextPrompt(result.state).playerId;
   if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId) || actionRevealedDeckCards(game, result.state, action.type)) {
     room.turnSnapshots = [];

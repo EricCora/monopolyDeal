@@ -1,6 +1,6 @@
 import XCTest
 
-/// The hidden table hold: ten seconds on the table turns god mode on, a draw then shows the
+/// The hidden table hold: five seconds on the table turns god mode on, a draw then shows the
 /// deck to choose from, and the same hold turns it off again.
 final class GodModeUITests: XCTestCase {
     private var app: XCUIApplication!
@@ -35,23 +35,30 @@ final class GodModeUITests: XCTestCase {
 
     func testHoldingTheTableTogglesChoosingTheDraw() throws {
         // A shorter hold does nothing: the draw goes ahead as usual.
-        holdTable(seconds: 4)
+        holdTable(seconds: 2)
         XCTAssertFalse(app.descendants(matching: .any)["deckPicker"].exists)
 
-        holdTable(seconds: 10.5)
+        holdTable(seconds: 5.5)
         app.buttons["action.draw"].tap()
         let picker = app.descendants(matching: .any)["deckPicker"]
         XCTAssertTrue(picker.waitForExistence(timeout: 5), "With god mode on, Draw shows the deck")
         let draw = app.buttons["deckPicker.draw"]
         XCTAssertFalse(draw.isEnabled)
-        let cards = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Deck card'"))
+        let cards = app.buttons.matching(identifier: "deckPicker.card")
         XCTAssertGreaterThan(cards.count, 10)
-        let pass = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Deck card' AND label CONTAINS 'Pass Go'")).firstMatch
-        let money = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Deck card' AND label CONTAINS 'property'")).element(boundBy: 2)
+        // Grouped: actions, then money, then properties.
+        let headers = app.descendants(matching: .any).matching(identifier: "deckPicker.section")
+        XCTAssertGreaterThanOrEqual(headers.count, 1)
+        XCTAssertTrue(headers.element(boundBy: 0).label.localizedCaseInsensitiveContains("Actions"), "Actions come first: \(headers.element(boundBy: 0).label)")
+        let pass = cards.matching(NSPredicate(format: "label CONTAINS 'Pass Go'")).firstMatch
         XCTAssertTrue(pass.exists)
-        let moneyName = money.label.components(separatedBy: ", ").dropFirst().joined(separator: ", ")
         pass.tap()
-        money.tap()
+        // Properties come last, further down the sheet.
+        let property = cards.matching(NSPredicate(format: "label CONTAINS 'property'")).firstMatch
+        for _ in 0..<8 where !property.isHittable { app.swipeUp() }
+        XCTAssertTrue(property.isHittable)
+        let propertyName = property.label
+        property.tap()
         shot("god-mode-picker")
         XCTAssertTrue(draw.isEnabled)
         draw.tap()
@@ -60,10 +67,10 @@ final class GodModeUITests: XCTestCase {
         let hand = app.descendants(matching: .any).matching(NSPredicate(format: "identifier MATCHES 'hand\\\\.[0-9]+'"))
         let labels = (0..<hand.count).map { hand.element(boundBy: $0).label }
         XCTAssertTrue(labels.contains { $0.contains("Pass Go") }, "Drew the chosen Pass Go: \(labels)")
-        XCTAssertTrue(labels.contains { $0.contains(moneyName) }, "Drew the chosen \(moneyName): \(labels)")
+        XCTAssertTrue(labels.contains { $0.contains(propertyName) }, "Drew the chosen \(propertyName): \(labels)")
 
         // Holding again turns it off, and nothing else on the table changed.
-        holdTable(seconds: 10.5)
+        holdTable(seconds: 5.5)
         XCTAssertFalse(picker.exists)
         shot("god-mode-off")
     }

@@ -76,4 +76,16 @@ final class DrawPickTests: XCTestCase {
         XCTAssertEqual(Action(.draw_cards, playerId: "p1").wireJSON, #"{"type":"draw_cards","playerId":"p1"}"#)
         XCTAssertEqual(Action(.draw_cards, playerId: "p1").with { $0.pick = ["a#1", "b#2"] }.wireJSON, #"{"type":"draw_cards","playerId":"p1","pick":["a#1","b#2"]}"#)
     }
+
+    func testLogsAnOrdinaryDrawAndAChosenDrawTheSameWayAndBothReplay() {
+        for chosen in [false, true] {
+            let state = drawState()
+            var action = Action(.draw_cards, playerId: "p1")
+            if chosen { action.pick = [state.drawPile[3], state.drawPile[7]] }
+            let result = Engine.applyAction(state, action)
+            let logged = Engine.actionAsRecorded(before: state, after: result.state, action: action)
+            XCTAssertEqual(logged.pick, Array(result.state.players[0].hand.suffix(2)))
+            XCTAssertEqual(Engine.applyAction(state, logged).state, result.state)
+        }
+    }
 }

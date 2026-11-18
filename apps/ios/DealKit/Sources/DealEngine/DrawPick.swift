@@ -26,3 +26,21 @@ extension Engine {
         Array(state.drawPile.reversed())
     }
 }
+
+extension Engine {
+    /// The action as a match log keeps it. Every draw names the cards it took, so a draw chosen
+    /// in god mode looks the same in a replay as any other draw. Replaying the named cards gives
+    /// the same game, because they are exactly what the draw took from the pile. A draw that
+    /// reshuffled the discards keeps its plain form. Mirrors `actionAsRecorded` in `src/engine/drawPick.ts`.
+    public static func actionAsRecorded(before: GameState, after: GameState, action: Action) -> Action {
+        guard action.type == .draw_cards || action.type == .play_action, action.pick == nil,
+              drawCount(for: action, in: before) != nil else { return action }
+        let had = Set(before.players.first { $0.id == action.playerId }?.hand ?? [])
+        let drawn = (after.players.first { $0.id == action.playerId }?.hand ?? []).filter { !had.contains($0) }
+        let pile = Set(before.drawPile)
+        guard !drawn.isEmpty, drawn.count <= 7, drawn.allSatisfy(pile.contains) else { return action }
+        var recorded = action
+        recorded.pick = drawn
+        return recorded
+    }
+}

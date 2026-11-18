@@ -22,3 +22,19 @@ export function drawCountForAction(state: GameState, action: Action): number | n
 export function drawPileInDrawOrder(state: GameState): string[] {
   return [...state.drawPile].reverse();
 }
+
+/**
+ * The action as a match log keeps it. Every draw names the cards it took, so a draw chosen
+ * in god mode looks the same in a replay as any other draw. Replaying the named cards
+ * gives the same game, because they are exactly what the draw took from the pile. A draw
+ * that reshuffled the discards keeps its plain form, since those cards weren't in the pile yet.
+ */
+export function actionAsRecorded(before: GameState, after: GameState, action: Action): Action {
+  if (action.type !== 'draw_cards' && action.type !== 'play_action') return action;
+  if (action.pick !== undefined || drawCountForAction(before, action) == null) return action;
+  const had = new Set(before.players.find((player) => player.id === action.playerId)?.hand ?? []);
+  const drawn = (after.players.find((player) => player.id === action.playerId)?.hand ?? []).filter((cardId) => !had.has(cardId));
+  const pile = new Set(before.drawPile);
+  if (drawn.length === 0 || drawn.length > 7 || !drawn.every((cardId) => pile.has(cardId))) return action;
+  return { ...action, pick: drawn };
+}

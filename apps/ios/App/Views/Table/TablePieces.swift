@@ -34,12 +34,21 @@ struct HandTouch: UIGestureRecognizerRepresentable {
     }
 
     final class Recognizer: UIGestureRecognizer {
+        /// True while a finger rests on the hand. The god mode table hold ignores those holds.
+        @MainActor static private(set) var isTouching = false
+
         override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-            guard state == .possible, let touch = touches.first else {
+            guard state == .possible, touches.first != nil else {
                 touches.forEach { ignore($0, for: event) }
                 return
             }
+            Self.isTouching = true
             state = .began
+        }
+
+        override func reset() {
+            super.reset()
+            Self.isTouching = false
         }
 
         override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) { state = .changed }

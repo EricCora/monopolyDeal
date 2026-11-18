@@ -100,8 +100,8 @@ import { resolveMultiplayerFeatureFlags } from './network/multiplayerClient';
 import type { RiskyActionConfirmation, SetupViewModel, ShareStatus } from './ui/types';
 import { ReportButton } from './ui/report/ReportButton';
 import { DeckPicker } from './ui/godMode/DeckPicker';
-import { godModeHaptic, useGodMode } from './ui/godMode/godMode';
-import { drawCountForAction, drawPileInDrawOrder } from './engine/drawPick';
+import { godModeAppliesToLocalSeat, godModeHaptic, godModeOwnerForLocalGame, normalizeOwner, useGodMode } from './ui/godMode/godMode';
+import { actionAsRecorded, drawCountForAction, drawPileInDrawOrder } from './engine/drawPick';
 import './App.css';
 
 type Screen = 'home' | 'setup' | 'game' | 'stats' | 'settings' | 'saved_games' | 'game_over' | 'multiplayer' | 'replay';
@@ -1522,7 +1522,8 @@ function App() {
       setTurnSnapshots((prev) => appendTurnSnapshot(prev, snapshotBeforeAction));
       if (!isRetry) replayMarksRef.current.push(replayLogRef.current?.actions.length ?? 0);
     }
-    if (!isRetry) replayLogRef.current?.actions.push(action);
+    // Every draw is logged with the cards it took, so a chosen draw looks like any other in the replay.
+    if (!isRetry) replayLogRef.current?.actions.push(actionAsRecorded(game, result.state, action));
     if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId)
       || (game && actionRevealedDeckCards(game, result.state, action.type))) {
       setTurnSnapshots([]);
@@ -1630,9 +1631,12 @@ function App() {
     await runMultiplayerAction(index, 'pick' in action && action.pick !== undefined ? action : undefined);
   }, [multiplayerRoomView, refreshMultiplayerRoom, runMultiplayerAction, setMultiplayerError]);
 
-  const toggleGodMode = () => {
-    const next = !godMode.on;
-    godMode.toggle();
+  /** The seat that holds the table owns god mode, so on a shared device nobody else sees the picker. */
+  const toggleGodMode = (mode: 'local' | 'multiplayer') => {
+    const owner = mode === 'multiplayer'
+      ? normalizeOwner(multiplayerGame?.players.find((player) => player.id === multiplayerRoomView?.yourPlayerId)?.name)
+      : game ? godModeOwnerForLocalGame(game.players, game.currentPlayerIndex) : null;
+    const next = godMode.toggle(owner);
     godModeHaptic(next);
     setGodModeCue({ on: next, token: Date.now() });
   };
@@ -1647,6 +1651,8 @@ function App() {
     const count = drawCountForAction(activeGame, action);
     if (!count) return false;
     const variant = activeGame.variant ?? 'classic';
+    // Online, this device only ever draws for its own seat. At a shared table, only the owner's draws open the deck.
+    if (mode === 'local' && !godModeAppliesToLocalSeat(godMode.owner, activeGame.players, action.playerId)) return false;
     if (mode === 'local') {
       const pile = drawPileInDrawOrder(activeGame);
       if (pile.length === 0) return false;
@@ -2269,7 +2275,7 @@ function App() {
           isPaused={isPaused}
           reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
           onFeedback={emitFeedback}
-          onTableHold={toggleGodMode}
+          onTableHold={() => toggleGodMode('local')}
           legalActions={legalActions}
           contextualActions={contextualActions}
           revealedPlayerId={activeRevealedPlayerId}
@@ -2338,7 +2344,7 @@ function App() {
           isPaused={multiplayerRoomView.paused}
           reducedMotion={prefersReducedMotion || uiPreferences.reducedEffects}
           onFeedback={emitFeedback}
-          onTableHold={toggleGodMode}
+          onTableHold={() => toggleGodMode('multiplayer')}
           pauseReasonText={
             multiplayerRoomView.roomRuntimeState === 'ended_timeout'
               ? (multiplayerRoomView.endedReason === 'host_timeout'

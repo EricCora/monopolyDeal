@@ -3,6 +3,7 @@ import { chooseHeuristicAction } from '../../../src/ai/heuristic.ts';
 import { randomBotName } from '../../../src/ai/botNames.ts';
 import { chooseMonteCarloAction } from '../../../src/ai/rollout.ts';
 import { actionRevealedDeckCards, appendTurnSnapshot } from '../../../src/engine/undoPolicy.ts';
+import { actionAsRecorded } from '../../../src/engine/drawPick.ts';
 import {
   applyAction,
   createGame,
@@ -1094,7 +1095,8 @@ function applyGameAction(room: MultiplayerRoom, game: GameState, action: Action)
     throw new Error(result.error.code);
   }
   room.game = result.state;
-  room.replayLog?.actions.push(action);
+  // Every draw is logged with the cards it took, so nobody can tell a chosen draw from a replay.
+  room.replayLog?.actions.push(actionAsRecorded(game, result.state, action));
   const nextPromptPlayerId = getNextPrompt(result.state).playerId;
   if (!shouldRetainTurnSnapshots(result.state, nextPromptPlayerId)
     || actionRevealedDeckCards(game, result.state, action.type)) {

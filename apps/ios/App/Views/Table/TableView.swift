@@ -14,6 +14,7 @@ struct TableView: View {
 
     @State private var ui = TableUI()
     @AppStorage(GodMode.storageKey) private var godMode = false
+    @AppStorage(GodMode.ownerKey) private var godModeOwner = ""
     @Namespace private var cardSpace
 
     private var isRetry: Bool { (session as? LocalMatch)?.isRetry == true }
@@ -26,6 +27,7 @@ struct TableView: View {
             ui: ui,
             confirmRisky: app.preferences.confirmRiskyActions,
             godMode: godMode && !session.isReplay && !session.isSpectating,
+            godModeOwner: godModeOwner.isEmpty ? nil : godModeOwner,
             tapFeedback: { app.feedback(.tap) },
             errorFeedback: { app.feedback(.error) }
         )
@@ -52,7 +54,7 @@ struct TableView: View {
 
                 tableMoments(wide: wide, height: geometry.size.height)
             }
-            // Holding the table still for ten seconds switches god mode. See `TableHoldDetector`.
+            // Holding the table still for five seconds switches god mode. See `TableHoldDetector`.
             .background { TableHoldDetector { toggleGodMode() } }
             .overlay(alignment: .topTrailing) {
                 if let cue = ui.godModeCue {
@@ -959,8 +961,17 @@ private struct CoachBubble: View {
 }
 
 extension TableView {
+    /// The seat that holds the table owns god mode, so on a shared device nobody else sees the picker.
     fileprivate func toggleGodMode() {
         godMode.toggle()
+        if godMode, let game = session.game {
+            let owner = session is LocalMatch
+                ? GodModeSeats.owner(players: game.players, currentPlayerIndex: game.currentPlayerIndex)
+                : GodModeSeats.normalize(session.viewer?.name)
+            godModeOwner = owner ?? ""
+        } else {
+            godModeOwner = ""
+        }
         GodMode.toggled(godMode)
         ui.godModeCue = (godMode, (ui.godModeCue?.token ?? 0) + 1)
     }

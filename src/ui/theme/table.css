@@ -2991,12 +2991,29 @@
 /* God mode deck picker */
 .deck-picker-overlay { z-index: 95; }
 .deck-picker-hint { margin: 0 0 10px; font-size: 0.85rem; opacity: 0.8; }
+.deck-picker-body { display: block; flex: 1; padding-bottom: 8px; }
+.deck-picker-section + .deck-picker-section { margin-top: 14px; }
+.deck-picker-section-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 6px;
+  padding: 4px 0;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgb(30, 44, 66);
+}
+.deck-picker-section-title span { margin-left: 4px; opacity: 0.7; font-weight: 600; }
+.deck-picker-group + .deck-picker-group { margin-top: 8px; }
+.deck-picker-group-label { display: block; margin: 0 0 4px; font-size: 0.72rem; font-weight: 600; opacity: 0.75; }
 .deck-picker-grid {
+  display: grid;
   grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
   grid-auto-rows: max-content;
   gap: 8px;
-  flex: 1;
-  padding-bottom: 8px;
 }
 .deck-picker-card {
   position: relative;

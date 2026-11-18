@@ -85,6 +85,8 @@ struct TableActions {
     let confirmRisky: Bool
     /// God mode: draws and Pass Go first show the deck. See `GodMode`.
     var godMode = false
+    /// The seat god mode belongs to. At a table played on this device, only its draws show the deck.
+    var godModeOwner: String?
     let tapFeedback: () -> Void
     let errorFeedback: () -> Void
 
@@ -228,7 +230,10 @@ struct TableActions {
         ui.clearSelection()
         ui.confirmation = nil
         if godMode, action.pick == nil, let game = session.game,
-           let count = Engine.drawCount(for: action, in: game), count > 0 {
+           let count = Engine.drawCount(for: action, in: game), count > 0,
+           // Online and nearby, this phone only draws for its own seat. At a shared table,
+           // nobody but the owner ever sees the picker.
+           !(session is LocalMatch) || GodModeSeats.applies(owner: godModeOwner, players: game.players, playerId: action.playerId) {
             pickFromDeck(action, count: count)
             return
         }
