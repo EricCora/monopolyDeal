@@ -4,10 +4,10 @@
 
 **Outcome.** Before a game, the host holds a player in the lobby and drags them to a new place. The top player goes first. Everyone in the room sees the new order, and the game is dealt in it.
 
-**Where.** Online rooms on web and iOS (live and turn-by-turn), and nearby tables on iOS. Pass-and-play setup already lets you arrange seats.
+**Where.** The lobby before the first deal: online rooms on web and iOS (live and turn-by-turn), and nearby tables on iOS. Pass-and-play setup is out of scope (not checked whether it already allows this).
 
 **How.**
-- Server: `setSeatOrder` in `apps/server/src/gameService.ts`, host only, any time the room isn't mid-match (the lobby, and between matches before a rematch). It goes through the existing `bots` route as `op: 'order'` with `seatOrder`, the list of every seat id. A list that misses, repeats or invents a seat is refused with `seat_order_mismatch`, so a seat that joins or leaves during the drag isn't lost. One request per drop, so a turn-by-turn room spends one Blob write.
+- Server: `setSeatOrder` in `apps/server/src/gameService.ts`, host only, any time the room isn't mid-match. The server also accepts it between matches, but neither app shows the control there yet. It goes through the existing `bots` route as `op: 'order'` with `seatOrder`, the list of every seat id. A list that misses, repeats or invents a seat is refused with `seat_order_mismatch`, so a seat that joins or leaves during the drag isn't lost. One request per drop, so a turn-by-turn room spends one Blob write.
 - Nearby: `NearbyTable.reorder` before the deal. The table update the guests already get carries it.
 - iOS: the host's Players list is reorderable with SwiftUI's `reorderable()` (hold and drag). Guests see a plain list.
 - Web: a Turn Order card for the host. Hold a row (touch) or drag its grip (mouse), with up and down buttons for the keyboard.
