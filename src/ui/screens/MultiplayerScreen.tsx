@@ -1,5 +1,6 @@
 import { TurnTimerSlider } from '../components/TurnTimerSlider';
 import type { BotChange } from '../../network/roomFeatures';
+import { TurnOrderCard } from './TurnOrderCard';
 import { Icon } from '../components/icons';
 import { loadTurnRooms } from '../../persistence/turnRooms';
 import { canUseTurnPush, enableTurnPush, type TurnPushResult } from '../../network/turnPush';
@@ -92,7 +93,7 @@ interface MultiplayerScreenProps {
   onSetRoomOptions?: (changes: Partial<MultiplayerRoomOptions>) => void;
   onJoinRoom: () => void;
   onStartMatch: (checkpointId?: string) => void;
-  onManageBots?: (change: BotChange) => void;
+  onManageBots?: (change: BotChange) => void | Promise<void>;
   onRunAction: (index: number) => void;
   onSetReady: (ready: boolean) => void;
   onSetRoomPreset?: (presetId: MultiplayerSessionPresetId) => void;
@@ -897,6 +898,13 @@ export function MultiplayerScreen({
                     </div>
                     {roomView.players.length >= 5 ? <p className="menu-note">The table is full.</p> : null}
                   </section>
+                ) : null}
+                {!roomView.started && isHost && onManageBots ? (
+                  <TurnOrderCard
+                    seats={roomView.players}
+                    disabled={loading}
+                    onReorder={(seatOrder) => onManageBots({ op: 'order', seatOrder })}
+                  />
                 ) : null}
                 {!roomView.started && roomView.role !== 'spectator' ? (
                   <section className="multiplayer-entry-card room-options-card" aria-label="Room options">

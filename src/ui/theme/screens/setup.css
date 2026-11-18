@@ -333,3 +333,82 @@
   min-width: 70px;
 }
 
+
+/* Turn order: the host holds a row and drags it. */
+.turn-order-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.turn-order-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--hairline);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+  position: relative;
+}
+
+.turn-order-list[data-dragging] .turn-order-row { touch-action: none; }
+
+.turn-order-row.is-dragging {
+  transition: box-shadow 160ms ease;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  cursor: grabbing;
+}
+
+.turn-order-position {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: var(--accent);
+  color: #14202f;
+  font-size: 0.75rem;
+  font-weight: 900;
+  flex: none;
+}
+
+.turn-order-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.turn-order-arrows {
+  display: flex;
+  gap: 4px;
+}
+
+.turn-order-arrows button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+
+.turn-order-grip {
+  width: 32px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  font-size: 1.2rem;
+  opacity: 0.7;
+  cursor: grab;
+  touch-action: none;
+}

@@ -5,6 +5,7 @@ import { Server as SocketIOServer, type Socket } from 'socket.io';
 import {
   addRoomBot,
   removeRoomBot,
+  setSeatOrder,
   setSeatBotDifficulty,
   applyRoomAction,
   createRoom,
@@ -1202,6 +1203,7 @@ const httpServer = createServer(async (req, res) => {
     const payload = JSON.parse(raw || '{}') as {
       op?: unknown;
       targetSeatId?: unknown;
+      seatOrder?: unknown;
       difficulty?: unknown;
       botDifficulty?: unknown;
       playerName?: unknown;
@@ -1325,6 +1327,7 @@ const httpServer = createServer(async (req, res) => {
       const targetSeatId = optionalTrimmedString(payload.targetSeatId) as PlayerId | undefined;
       if (op === 'add') addRoomBot(room, playerId, sessionToken, difficulty);
       else if (op === 'remove' && targetSeatId) removeRoomBot(room, playerId, sessionToken, targetSeatId);
+      else if (op === 'order') setSeatOrder(room, playerId, sessionToken, payload.seatOrder);
       else if (op === 'difficulty' && targetSeatId) setSeatBotDifficulty(room, playerId, sessionToken, targetSeatId, difficulty);
       else throw new Error('invalid_payload');
       snapshotAll();

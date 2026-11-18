@@ -3738,6 +3738,22 @@ function removeRoomBot(room, playerId, sessionToken, botId) {
   commitMutation(room);
   return room;
 }
+function setSeatOrder(room, playerId, sessionToken, order) {
+  requireSession(room, playerId, sessionToken);
+  requireHost(room, playerId);
+  if (room.status === "active") throw new Error("room_started");
+  if (!Array.isArray(order) || !order.every((id) => typeof id === "string")) throw new Error("invalid_payload");
+  const ids = order;
+  const byId = new Map(room.players.map((entry) => [entry.id, entry]));
+  if (ids.length !== room.players.length || new Set(ids).size !== ids.length || !ids.every((id) => byId.has(id))) {
+    throw new Error("seat_order_mismatch");
+  }
+  if (ids.every((id, index) => room.players[index].id === id)) return room;
+  room.players = ids.map((id) => byId.get(id));
+  appendActivity(room, "lobby", `Turn order: ${room.players.map((entry) => entry.name).join(", ")}.`);
+  commitMutation(room);
+  return room;
+}
 function setSeatBotDifficulty(room, playerId, sessionToken, seatId, difficulty) {
   requireSession(room, playerId, sessionToken);
   requireHost(room, playerId);
@@ -4731,6 +4747,7 @@ async function handleTurnRoomRequest(request, store, notifier2) {
           const targetSeatId = optionalTrimmedString(body.targetSeatId);
           if (op === "add") addRoomBot(room, playerId, sessionToken, difficulty);
           else if (op === "remove" && targetSeatId) removeRoomBot(room, playerId, sessionToken, targetSeatId);
+          else if (op === "order") setSeatOrder(room, playerId, sessionToken, body.seatOrder);
           else if (op === "difficulty" && targetSeatId) setSeatBotDifficulty(room, playerId, sessionToken, targetSeatId, difficulty);
           else throw new Error("invalid_payload");
           return null;

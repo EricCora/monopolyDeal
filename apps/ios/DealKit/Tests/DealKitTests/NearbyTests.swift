@@ -141,6 +141,32 @@ final class NearbyTableTests: XCTestCase {
         XCTAssertEqual(table.join(NearbyJoinRequest(name: "Old", seatToken: "y", protocolVersion: 99), now: 0), .failure(.versionMismatch))
     }
 
+    func testTheHostSetsTheTurnOrderBeforeTheDeal() {
+        var table = NearbyTable(hostName: "Eric")
+        XCTAssertTrue(table.addBot(.easy))
+        XCTAssertEqual(join(&table, "Anna"), "p3")
+        // A bot added before Anna joined sits ahead of her until the host moves it.
+        XCTAssertEqual(table.seats.map(\.id), ["p1", "p2", "p3"])
+        XCTAssertTrue(table.reorder(["p3", "p1", "p2"]))
+        XCTAssertEqual(table.seats.map(\.id), ["p3", "p1", "p2"])
+        XCTAssertEqual(table.hostName, "Eric")
+        XCTAssertEqual(table.view(for: "p3", now: 0).seats.map(\.id), ["p3", "p1", "p2"])
+        table.start(seed: 3, now: 0)
+        XCTAssertEqual(table.game?.players.map(\.id), ["p3", "p1", "p2"])
+        XCTAssertEqual(table.game.map { $0.players[$0.currentPlayerIndex].id }, "p3")
+        XCTAssertFalse(table.reorder(["p1", "p2", "p3"]), "the order is fixed once the cards are dealt")
+    }
+
+    func testTheTurnOrderMustNameEverySeatOnce() {
+        var table = NearbyTable(hostName: "Eric")
+        XCTAssertEqual(join(&table, "Anna"), "p2")
+        XCTAssertFalse(table.reorder(["p2"]))
+        XCTAssertFalse(table.reorder(["p2", "p2"]))
+        XCTAssertFalse(table.reorder(["p2", "p9"]))
+        XCTAssertFalse(table.reorder(["p1", "p2"]), "an unchanged order isn't a change")
+        XCTAssertEqual(table.seats.map(\.id), ["p1", "p2"])
+    }
+
     func testAReturningPhoneGetsItsSeatBackAndPlayWaitsForIt() {
         var table = NearbyTable(hostName: "Eric")
         XCTAssertEqual(join(&table, "Anna", token: "anna"), "p2")

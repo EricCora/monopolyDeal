@@ -335,42 +335,61 @@ private struct NearbyLobbyView: View {
     private var roster: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionTitle(text: "Players (\(view.seats.count)/\(Nearby.maxSeats))")
-            ForEach(view.seats) { seat in
-                HStack(spacing: 10) {
-                    PlayerAvatar(name: seat.name, isBot: seat.isBot)
-                    Text(seat.name)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.white)
-                    if seat.isHost {
-                        Image(systemName: "crown.fill")
-                            .font(.caption2)
-                            .foregroundStyle(Palette.gold)
-                            .accessibilityLabel("Host")
+            if let host, !view.started {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(view.seats) { seat in
+                        seatRow(seat)
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
                     }
-                    if seat.id == view.yourSeatId {
-                        Text("You").font(.caption2.weight(.heavy)).foregroundStyle(SoftWhite(0.6))
-                    }
-                    Spacer()
-                    if seat.isBot {
-                        Text(seat.botDifficulty == .hard ? "Hard Bot" : "Easy Bot")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(SoftWhite(0.75))
-                    }
-                    if let host, !seat.isHost {
-                        Button {
-                            host.remove(seat.id)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(SoftWhite(0.6))
-                        }
-                        .accessibilityLabel("Remove \(seat.name)")
-                    }
+                    .reorderable()
                 }
-                .accessibilityElement(children: .combine)
+                .reorderContainer(for: NearbySeat.self) { difference in
+                    app.feedback(.tap)
+                    host.reorder(difference.reordered(view.seats.map(\.id)))
+                }
+                .accessibilityIdentifier("nearby.turnOrder")
+                if view.seats.count > 1 { TurnOrderHint() }
+            } else {
+                ForEach(view.seats) { seat in seatRow(seat) }
             }
         }
         .padding(14)
         .glassPanel(cornerRadius: 18)
+    }
+
+    private func seatRow(_ seat: NearbySeat) -> some View {
+        HStack(spacing: 10) {
+            PlayerAvatar(name: seat.name, isBot: seat.isBot)
+            Text(seat.name)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.white)
+            if seat.isHost {
+                Image(systemName: "crown.fill")
+                    .font(.caption2)
+                    .foregroundStyle(Palette.gold)
+                    .accessibilityLabel("Host")
+            }
+            if seat.id == view.yourSeatId {
+                Text("You").font(.caption2.weight(.heavy)).foregroundStyle(SoftWhite(0.6))
+            }
+            Spacer()
+            if seat.isBot {
+                Text(seat.botDifficulty == .hard ? "Hard Bot" : "Easy Bot")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(SoftWhite(0.75))
+            }
+            if let host, !seat.isHost {
+                Button {
+                    host.remove(seat.id)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(SoftWhite(0.6))
+                }
+                .accessibilityLabel("Remove \(seat.name)")
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func hostControls(_ host: NearbyHost) -> some View {

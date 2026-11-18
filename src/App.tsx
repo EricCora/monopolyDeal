@@ -2538,7 +2538,7 @@ function App() {
           onSetRoomOptions={(changes) => void setMultiplayerRoomOptions(changes)}
           onJoinRoom={onJoinMultiplayerRoom}
           onStartMatch={backInLobby ? () => void rematchMultiplayerMatch() : startMultiplayerMatch}
-          onManageBots={(change) => void manageMultiplayerBots(change)}
+          onManageBots={(change) => manageMultiplayerBots(change)}
           onRunAction={runMultiplayerAction}
           onSetReady={(ready) => {
             void setMultiplayerReadyState(ready);

@@ -232,6 +232,11 @@ public struct RoomClient: Sendable {
         try await command(session, "bots", expectedRevision: nil, extra: ["op": "remove", "targetSeatId": seatId])
     }
 
+    /// The host's turn order, before a match or between matches: every seat id, first to play first.
+    public func setSeatOrder(_ session: RoomSession, order: [PlayerId]) async throws {
+        try await command(session, "bots", expectedRevision: nil, extra: ["op": "order", "seatOrder": order])
+    }
+
     /// Works during a match too, for a bot seat or for a bot covering a dropped player.
     public func setBotDifficulty(_ session: RoomSession, seatId: PlayerId, difficulty: BotDifficulty) async throws {
         try await command(session, "bots", expectedRevision: nil, extra: ["op": "difficulty", "targetSeatId": seatId, "difficulty": difficulty.rawValue])

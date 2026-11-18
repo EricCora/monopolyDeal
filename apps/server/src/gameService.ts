@@ -1267,6 +1267,28 @@ export function removeRoomBot(room: MultiplayerRoom, playerId: PlayerId, session
   return room;
 }
 
+/**
+ * Lets the host set the turn order before a match or between matches. Seat order is turn order:
+ * the first seat plays first. The order must name every seat exactly once, so a seat that joined
+ * or left while the host was dragging makes the request fail rather than drop someone.
+ */
+export function setSeatOrder(room: MultiplayerRoom, playerId: PlayerId, sessionToken: string, order: unknown): MultiplayerRoom {
+  requireSession(room, playerId, sessionToken);
+  requireHost(room, playerId);
+  if (room.status === 'active') throw new Error('room_started');
+  if (!Array.isArray(order) || !order.every((id) => typeof id === 'string')) throw new Error('invalid_payload');
+  const ids = order as PlayerId[];
+  const byId = new Map(room.players.map((entry) => [entry.id, entry]));
+  if (ids.length !== room.players.length || new Set(ids).size !== ids.length || !ids.every((id) => byId.has(id))) {
+    throw new Error('seat_order_mismatch');
+  }
+  if (ids.every((id, index) => room.players[index].id === id)) return room;
+  room.players = ids.map((id) => byId.get(id)!);
+  appendActivity(room, 'lobby', `Turn order: ${room.players.map((entry) => entry.name).join(', ')}.`);
+  commitMutation(room);
+  return room;
+}
+
 /** Works during a match too, for a bot seat or for a bot covering a dropped player. */
 export function setSeatBotDifficulty(
   room: MultiplayerRoom,

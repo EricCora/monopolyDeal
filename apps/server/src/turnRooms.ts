@@ -29,6 +29,7 @@ import {
   addRoomBot,
   playTurnRoomBots,
   removeRoomBot,
+  setSeatOrder,
   setSeatBotDifficulty,
   TURN_ROOM_CODE_LENGTH,
   undoRoomAction,
@@ -320,6 +321,7 @@ export async function handleTurnRoomRequest(
           const targetSeatId = optionalTrimmedString(body.targetSeatId) as PlayerId | undefined;
           if (op === 'add') addRoomBot(room, playerId, sessionToken, difficulty);
           else if (op === 'remove' && targetSeatId) removeRoomBot(room, playerId, sessionToken, targetSeatId);
+          else if (op === 'order') setSeatOrder(room, playerId, sessionToken, body.seatOrder);
           else if (op === 'difficulty' && targetSeatId) setSeatBotDifficulty(room, playerId, sessionToken, targetSeatId, difficulty);
           else throw new Error('invalid_payload');
           return null;

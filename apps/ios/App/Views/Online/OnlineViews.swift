@@ -498,6 +498,8 @@ struct RoomLobbyView: View {
     var onForget: () -> Void
 
     private var view: RoomView? { match.view }
+    /// The order the host just dropped, shown until the room reports it back.
+    @State private var pendingOrder: [PlayerId]?
     private var you: RoomPlayer? { view.flatMap { room in room.players.first { $0.id == room.yourPlayerId } } }
 
     var body: some View {
@@ -576,45 +578,72 @@ struct RoomLobbyView: View {
     private func roster(_ view: RoomView) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionTitle(text: "Players (\(view.players.count)/5)")
-            ForEach(view.players) { player in
-                HStack(spacing: 10) {
-                    PlayerAvatar(name: player.name, isBot: player.isBot == true)
-                    Text(player.name)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.white)
-                    if player.isHost {
-                        Image(systemName: "crown.fill")
-                            .font(.caption2)
-                            .foregroundStyle(Palette.gold)
-                            .accessibilityLabel("Host")
+            if view.isHost && !view.started {
+                let players = turnOrderShown(view.players, pending: pendingOrder)
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(players) { player in
+                        rosterRow(player, view)
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
                     }
-                    if player.id == view.yourPlayerId {
-                        Text("You").font(.caption2.weight(.heavy)).foregroundStyle(SoftWhite(0.6))
-                    }
-                    Spacer()
-                    if player.isBot == true {
-                        Text(player.botDifficulty == .hard ? "Hard Bot" : "Easy Bot")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(SoftWhite(0.75))
-                    } else if !player.connected {
-                        Label("Away", systemImage: "wifi.slash")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(Palette.danger)
-                    } else if player.ready {
-                        Label("Ready", systemImage: "checkmark.circle.fill")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(Palette.success)
-                    } else {
-                        Text("Not ready")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(SoftWhite(0.55))
+                    .reorderable()
+                }
+                .reorderContainer(for: RoomPlayer.self) { difference in
+                    let order = difference.reordered(players.map(\.id))
+                    guard order != view.players.map(\.id) else { return }
+                    pendingOrder = order
+                    app.feedback(.tap)
+                    Task {
+                        await match.connection.run { client, session, _ in try await client.setSeatOrder(session, order: order) }
+                        pendingOrder = nil
                     }
                 }
-                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("room.turnOrder")
+                .onChange(of: view.players.map(\.id)) { pendingOrder = nil }
+                if view.players.count > 1 { TurnOrderHint() }
+            } else {
+                ForEach(view.players) { player in rosterRow(player, view) }
             }
         }
         .padding(14)
         .glassPanel(cornerRadius: 18)
+    }
+
+    private func rosterRow(_ player: RoomPlayer, _ view: RoomView) -> some View {
+        HStack(spacing: 10) {
+            PlayerAvatar(name: player.name, isBot: player.isBot == true)
+            Text(player.name)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.white)
+            if player.isHost {
+                Image(systemName: "crown.fill")
+                    .font(.caption2)
+                    .foregroundStyle(Palette.gold)
+                    .accessibilityLabel("Host")
+            }
+            if player.id == view.yourPlayerId {
+                Text("You").font(.caption2.weight(.heavy)).foregroundStyle(SoftWhite(0.6))
+            }
+            Spacer()
+            if player.isBot == true {
+                Text(player.botDifficulty == .hard ? "Hard Bot" : "Easy Bot")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(SoftWhite(0.75))
+            } else if !player.connected {
+                Label("Away", systemImage: "wifi.slash")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Palette.danger)
+            } else if player.ready {
+                Label("Ready", systemImage: "checkmark.circle.fill")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Palette.success)
+            } else {
+                Text("Not ready")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(SoftWhite(0.55))
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func hostControls(_ view: RoomView) -> some View {

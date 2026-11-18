@@ -56,7 +56,7 @@ public struct NearbyTable: Codable, Hashable, Sendable {
         seats = [Seat(id: Self.hostSeatId, name: hostName.nearbyName(fallback: "Host"), token: nil, isHost: true, isBot: false, botDifficulty: nil, connected: true, botCovering: false)]
     }
 
-    public var hostName: String { seats[0].name }
+    public var hostName: String { seats.first(where: \.isHost)?.name ?? seats[0].name }
     public var isFinished: Bool { game.map { Engine.isGameOver($0).done } ?? false }
     public var canStart: Bool { game == nil && seats.count >= 2 }
     public var isFull: Bool { seats.count >= Nearby.maxSeats }
@@ -131,6 +131,19 @@ public struct NearbyTable: Codable, Hashable, Sendable {
         guard game == nil, !isFull else { return false }
         let id = nextSeatId()
         seats.append(Seat(id: id, name: BotNames.random(taken: seats.map(\.name)), token: nil, isHost: false, isBot: true, botDifficulty: difficulty, connected: true, botCovering: false))
+        changed()
+        return true
+    }
+
+    /// Before the game, the host sets the turn order: the first seat plays first.
+    /// The order must name every seat once, so a phone joining mid-drag can't lose a seat.
+    @discardableResult
+    public mutating func reorder(_ order: [PlayerId]) -> Bool {
+        guard game == nil, order.count == seats.count, Set(order).count == order.count else { return false }
+        let byId = Dictionary(uniqueKeysWithValues: seats.map { ($0.id, $0) })
+        let next = order.compactMap { byId[$0] }
+        guard next.count == seats.count, next.map(\.id) != seats.map(\.id) else { return false }
+        seats = next
         changed()
         return true
     }

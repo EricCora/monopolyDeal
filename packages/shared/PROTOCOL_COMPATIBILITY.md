@@ -40,3 +40,7 @@ Additive. Player summaries gain optional `isBot` and `botDifficulty`, and room o
 ## Chosen draws (2026-11-18)
 
 Additive. `draw_cards`, and `play_action` with a Pass Go, take an optional `pick`: card ids the draw takes from the pile first. The engine checks them, so legality matching ignores `pick`. The `state` route takes an optional `revealDeck=1`, which shows the draw pile only to the seat whose turn it is. Nearby play adds the guest message `peekDeck` and the host reply `deck`. Older clients never send either.
+
+## Turn order (2026-11-18)
+
+Additive. The `bots` route takes `op: 'order'` with `seatOrder`, every seat id in the new turn order. Host only, refused while a match is in progress, and refused with `seat_order_mismatch` unless it names each seat exactly once. Older clients never send it, and the player list they already read simply arrives in the new order.

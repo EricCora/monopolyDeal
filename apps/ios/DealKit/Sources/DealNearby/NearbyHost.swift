@@ -97,6 +97,11 @@ public final class NearbyHost {
         if table.addBot(difficulty) { changed() }
     }
 
+    /// Sets the turn order before the game. Guests see it with the next table update.
+    public func reorder(_ order: [PlayerId]) {
+        if table.reorder(order) { changed() }
+    }
+
     /// Takes a seat off the table before the game, telling its phone why.
     public func remove(_ seatId: PlayerId) {
         guard table.remove(seatId) else { return }

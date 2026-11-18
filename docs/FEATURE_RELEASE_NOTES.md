@@ -1,5 +1,9 @@
 # Release Notes
 
+## 2026-11-18: Host sets the turn order
+
+In an online room or a nearby table, the host can hold a player in the lobby and drag them to change who goes when. The top player goes first. See `docs/specs/2026-11-18-lobby-turn-order.md` and `DECISIONS.md`.
+
 ## 2026-11-05: Landscape table on iPhone
 
 Games on iPhone turn sideways: opponents along the top, your table in the middle with Draw and End Turn at the right edge, and a large hand fanned along the bottom. Settings has a Landscape Table switch for the portrait table. The web uses the same layout on a phone held sideways. See `docs/specs/2026-11-05-landscape-table.md` and `DECISIONS.md`.

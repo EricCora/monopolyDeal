@@ -40,7 +40,9 @@ export async function setMultiplayerRoomOptions(
 export type BotChange =
   | { op: 'add'; difficulty: 'easy' | 'hard' }
   | { op: 'remove'; targetSeatId: string }
-  | { op: 'difficulty'; targetSeatId: string; difficulty: 'easy' | 'hard' };
+  | { op: 'difficulty'; targetSeatId: string; difficulty: 'easy' | 'hard' }
+  /** The host's turn order: every seat id, first to play first. */
+  | { op: 'order'; seatOrder: string[] };
 
 export async function manageMultiplayerBots(session: MultiplayerSession, change: BotChange, apiBase: string): Promise<void> {
   await post(roomUrl(apiBase, session.roomCode, 'bots'), { playerId: session.playerId, sessionToken: session.sessionToken, ...change });

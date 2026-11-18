@@ -390,6 +390,7 @@ export function multiplayerErrorMessage(code: string): string {
   if (code === 'room_not_found') return 'Room code not found. Double-check the code and try again.';
   if (code === 'room_closed') return 'This room is no longer available.';
   if (code === 'room_full') return 'This room is already full.';
+  if (code === 'seat_order_mismatch') return 'Someone joined or left while you were moving seats. Try again.';
   if (code === 'room_started') return 'This match already started. Re-enter from Multiplayer to reconnect, or ask the host for a fresh room.';
   if (code === 'invalid_session') return 'Your multiplayer session expired. Please rejoin the room.';
   if (code === 'invalid_token') return 'Could not verify your reconnect credentials. Please rejoin the room.';

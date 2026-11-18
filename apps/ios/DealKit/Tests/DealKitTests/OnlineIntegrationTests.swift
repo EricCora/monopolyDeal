@@ -476,6 +476,25 @@ final class OnlineIntegrationTests: XCTestCase {
         XCTAssertEqual(host.view?.players.count, 1)
     }
 
+    func testTheHostCanPutABotAfterAFriendWhoJoinedLater() async throws {
+        let session = try await client.createRoom(playerName: "Host")
+        let host = RoomConnection(client: client, session: session)
+        await host.connect()
+        defer { host.stop() }
+        await host.run { client, session, _ in try await client.addBot(session, difficulty: .easy) }
+        let guest = try await client.joinRoom(code: session.roomCode, playerName: "Guest")
+        await host.refresh()
+        let botId = try XCTUnwrap(host.view?.players.first { $0.isBot == true }?.id)
+        XCTAssertEqual(host.view?.players.map(\.id), [session.playerId, botId, guest.playerId])
+        let order = [guest.playerId, session.playerId, botId]
+        let moved = await host.run { client, session, _ in try await client.setSeatOrder(session, order: order) }
+        XCTAssertTrue(moved)
+        XCTAssertEqual(host.view?.players.map(\.id), order)
+        let refused = await host.run(retryIfStale: false) { client, session, _ in try await client.setSeatOrder(session, order: [botId]) }
+        XCTAssertFalse(refused)
+        XCTAssertEqual(host.view?.players.map(\.id), order)
+    }
+
     func testABotPlaysADroppedSeatWhenTheRoomAsks() async throws {
         let hostSession = try await client.createRoom(playerName: "Host")
         let host = RoomConnection(client: client, session: hostSession)
