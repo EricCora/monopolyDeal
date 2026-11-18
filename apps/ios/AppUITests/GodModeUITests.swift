@@ -38,14 +38,18 @@ final class GodModeUITests: XCTestCase {
         holdTable(seconds: 2)
         XCTAssertFalse(app.descendants(matching: .any)["deckPicker"].exists)
 
-        holdTable(seconds: 5.5)
+        holdTable(seconds: 6.5)
         app.buttons["action.draw"].tap()
         let picker = app.descendants(matching: .any)["deckPicker"]
         XCTAssertTrue(picker.waitForExistence(timeout: 5), "With god mode on, Draw shows the deck")
         let draw = app.buttons["deckPicker.draw"]
         XCTAssertFalse(draw.isEnabled)
-        let cards = app.buttons.matching(identifier: "deckPicker.card")
-        XCTAssertGreaterThan(cards.count, 10)
+        let cards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'deckPicker.card.'"))
+        // The list only builds the cards on screen, so check the whole deck through its count.
+        let hint = app.staticTexts.matching(NSPredicate(format: "label CONTAINS ' in the deck.'")).firstMatch
+        XCTAssertTrue(hint.exists)
+        XCTAssertGreaterThan(Int(hint.label.components(separatedBy: " ").first ?? "") ?? 0, 80, hint.label)
+        XCTAssertGreaterThan(cards.count, 0)
         // Grouped: actions, then money, then properties.
         let headers = app.descendants(matching: .any).matching(identifier: "deckPicker.section")
         XCTAssertGreaterThanOrEqual(headers.count, 1)
@@ -53,10 +57,15 @@ final class GodModeUITests: XCTestCase {
         let pass = cards.matching(NSPredicate(format: "label CONTAINS 'Pass Go'")).firstMatch
         XCTAssertTrue(pass.exists)
         pass.tap()
-        // Properties come last, further down the sheet.
-        let property = cards.matching(NSPredicate(format: "label CONTAINS 'property'")).firstMatch
-        for _ in 0..<8 where !property.isHittable { app.swipeUp() }
-        XCTAssertTrue(property.isHittable)
+        // Properties come last: scroll the picker to the end and take one on screen.
+        let list = app.scrollViews.containing(NSPredicate(format: "identifier BEGINSWITH 'deckPicker.card.'")).firstMatch
+        let anyColor = app.staticTexts["Any color"]
+        for _ in 0..<20 where !anyColor.isHittable { list.swipeUp(velocity: .fast) }
+        shot("god-mode-picker-properties")
+        let properties = cards.matching(NSPredicate(format: "label CONTAINS 'property'"))
+        let onScreen = try XCTUnwrap((0..<properties.count).map { properties.element(boundBy: $0) }.first { $0.isHittable }, "Scrolling the picker reaches the properties")
+        // A lazy list can reuse positions, so tap the card by its own identifier.
+        let property = app.buttons[onScreen.identifier]
         let propertyName = property.label
         property.tap()
         shot("god-mode-picker")
@@ -70,7 +79,7 @@ final class GodModeUITests: XCTestCase {
         XCTAssertTrue(labels.contains { $0.contains(propertyName) }, "Drew the chosen \(propertyName): \(labels)")
 
         // Holding again turns it off, and nothing else on the table changed.
-        holdTable(seconds: 5.5)
+        holdTable(seconds: 6.5)
         XCTAssertFalse(picker.exists)
         shot("god-mode-off")
     }

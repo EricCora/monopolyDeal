@@ -125,7 +125,7 @@ struct DeckPickerSheet: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Catalog.lookup(cardId, variant).map(CardText.spokenName) ?? "card")
-        .accessibilityIdentifier("deckPicker.card")
+        .accessibilityIdentifier("deckPicker.card.\(cardId)")
         .accessibilityAddTraits(order == nil ? [] : .isSelected)
     }
 
