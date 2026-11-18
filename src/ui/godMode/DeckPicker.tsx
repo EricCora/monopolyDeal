@@ -51,7 +51,7 @@ export function DeckPicker({ pile, count, variant, onConfirm, onCancel }: DeckPi
                 onClick={() => toggle(cardId)}
                 aria-label={`Deck card ${index + 1}`}
               >
-                <CardView cardId={cardId} size="sm" gameVariant={variant} context="table" />
+                <CardView cardId={cardId} width={68} gameVariant={variant} context="table" />
                 {order >= 0 ? <span className="deck-picker-badge">{order + 1}</span> : null}
               </button>
             );

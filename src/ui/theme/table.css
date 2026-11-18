@@ -2993,19 +2993,28 @@
 .deck-picker-hint { margin: 0 0 10px; font-size: 0.85rem; opacity: 0.8; }
 .deck-picker-grid {
   grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  grid-auto-rows: max-content;
   gap: 8px;
   flex: 1;
   padding-bottom: 8px;
 }
 .deck-picker-card {
   position: relative;
+  display: grid;
+  place-items: center;
+  height: auto;
+  min-height: 0;
+  max-height: none;
   padding: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
   border: 2px solid transparent;
   border-radius: 10px;
   background: none;
   cursor: pointer;
 }
-.deck-picker-card .card-view { width: 100%; pointer-events: none; }
+.deck-picker-card .card-view { pointer-events: none; }
 .deck-picker-card.is-picked { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(242, 197, 79, 0.35); }
 .deck-picker-badge {
   position: absolute;
