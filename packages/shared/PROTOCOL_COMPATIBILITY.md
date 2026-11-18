@@ -36,3 +36,7 @@ Additive only. `MultiplayerRoomView` gains the optional `role`, `options`, `turn
 
 Additive. Player summaries gain optional `isBot` and `botDifficulty`, and room options gain `botDifficulty`. A new `bots` route takes `op` (`add`, `remove` or `difficulty`), `difficulty` and `targetSeatId`. The target can't be called `seatId`, because the server reads that as the caller's identity. `join`, `variant` and options now also work while a room is `finished`. Game state's players carry `controller: 'bot'` for bot seats, which older clients already understand.
 
+
+## Chosen draws (2026-11-18)
+
+Additive. `draw_cards`, and `play_action` with a Pass Go, take an optional `pick`: card ids the draw takes from the pile first. The engine checks them, so legality matching ignores `pick`. The `state` route takes an optional `revealDeck=1`, which shows the draw pile only to the seat whose turn it is. Nearby play adds the guest message `peekDeck` and the host reply `deck`. Older clients never send either.

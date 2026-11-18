@@ -229,3 +229,6 @@ The bug button (iOS and web) posts to `/api/feedback`, which commits each report
 
 ## 2026-11-12: A new build is installed only when Eric taps Install
 Reinstalling closes the app, so a fix never installs mid-game on its own. The banner offers it, the game is saved first, and the new build reopens it.
+
+## 2026-11-18: A chosen draw travels as part of the move, and the deck is shown only to the seat that asks on its turn
+God mode (the table hold) sends the cards it picked inside the draw or Pass Go move, and the engine checks them. Rearranging the deck on the device instead would break undo, replays and every room, where the server deals. The room shows the pile only on request, only to the current seat, and never stores that the request happened, so other phones see nothing different. A finished room's replay log keeps the pick, because the replay needs it.
