@@ -387,6 +387,7 @@ struct ReportSheet: View {
         case "fixing": ("Fixing", .blue)
         case "needs_you": ("Needs you", .yellow)
         case "fixed": ("Fixed", .green)
+        case "no_change": ("No change needed", .gray)
         case "failed": ("Failed", .red)
         default: ("Sent", .gray)
         }

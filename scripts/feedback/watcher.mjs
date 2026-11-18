@@ -241,11 +241,16 @@ function driveFix(id, { path, branch, reportDir }, firstPrompt, sessionId) {
     sessionId = session.sessionId;
     setStatus(id, { state: 'fixing', sessionId, branch });
     const result = takeResult(reportDir);
-    log(id, 'session result:', result.outcome, '-', result.summary.slice(0, 200));
+    log(id, 'session result:', result.outcome, `(resume: mkdir -p ${path} && cd ${path} && claude --resume ${sessionId})`, '-', result.summary.slice(0, 200));
     if (result.outcome === 'needs_you') {
       const seen = listDir(join(config.inbox, 'reports', id, 'replies'));
       setStatus(id, { state: 'needs_you', question: result.question, summary: result.summary, sessionId, repliesSeen: seen });
       notify('Monopoly Deal: question for you', result.question ?? result.summary);
+      return;
+    }
+    if (result.outcome === 'no_change') {
+      setStatus(id, { state: 'no_change', summary: result.summary, sessionId });
+      cleanUp(id);
       return;
     }
     if (result.outcome === 'failed') {

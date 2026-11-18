@@ -12,7 +12,7 @@ export interface FeedbackStore {
   create(files: { path: string; content: string; base64?: boolean }[], message: string): Promise<void>;
 }
 
-export type ReportState = 'received' | 'fixing' | 'needs_you' | 'fixed' | 'failed';
+export type ReportState = 'received' | 'fixing' | 'needs_you' | 'fixed' | 'no_change' | 'failed';
 
 export interface ReportStatus {
   state: ReportState;

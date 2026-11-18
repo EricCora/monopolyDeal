@@ -22,7 +22,7 @@ export interface ReportSnapshot {
 const POSITION_KEY = 'report.buttonPosition';
 const SETTINGS_EVENT = 'report-settings-changed';
 const STATE_LABELS: Record<string, string> = {
-  received: 'Received', fixing: 'Fixing', needs_you: 'Needs you', fixed: 'Fixed', failed: 'Failed',
+  received: 'Received', fixing: 'Fixing', needs_you: 'Needs you', fixed: 'Fixed', no_change: 'No change needed', failed: 'Failed',
 };
 
 function savedPosition(): { side: 'left' | 'right'; y: number } {

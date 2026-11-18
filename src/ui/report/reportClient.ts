@@ -2,7 +2,7 @@
 // (apps/ios/App/Report). Off unless switched on in Settings with the report key.
 
 export interface ReportStatus {
-  state: 'received' | 'fixing' | 'needs_you' | 'fixed' | 'failed';
+  state: 'received' | 'fixing' | 'needs_you' | 'fixed' | 'no_change' | 'failed';
   summary?: string;
   question?: string;
   commit?: string;

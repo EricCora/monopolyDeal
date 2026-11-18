@@ -232,3 +232,6 @@ Reinstalling closes the app, so a fix never installs mid-game on its own. The ba
 
 ## 2026-11-18: A chosen draw travels as part of the move, and the deck is shown only to the seat that asks on its turn
 God mode (the table hold) sends the cards it picked inside the draw or Pass Go move, and the engine checks them. Rearranging the deck on the device instead would break undo, replays and every room, where the server deals. The room shows the pile only on request, only to the current seat, and never stores that the request happened, so other phones see nothing different. A finished room's replay log keeps the pick, because the replay needs it.
+
+## 2026-11-18: A report that needs no change says so, instead of showing as failed
+A fix session can end with `no_change` (a test report, something already working as intended, or already fixed). The app shows "No change needed" in gray, the watcher sends no notification and removes the worktree. Before this, a "Test 2" report showed as Failed, which read as something broken. Fix sessions still run as background `claude -p` sessions: the desktop app doesn't list those, and no supported way was found for the watcher to start a desktop session. Their transcripts stay in `~/.claude/projects/`, and the watcher log gives each one's resume command.

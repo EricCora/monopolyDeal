@@ -60,6 +60,17 @@ describe('report watcher planning', () => {
     expect(readResult({ outcome: 'merged' }).outcome).toBe('failed');
     expect(readResult({ outcome: 'needs_you', question: 'Blue or green?' })).toEqual({ outcome: 'needs_you', summary: '', question: 'Blue or green?' });
   });
+
+  it('keeps a "no change needed" result apart from a failure', () => {
+    expect(readResult({ outcome: 'no_change', summary: 'Looks like a test of the button.' }))
+      .toEqual({ outcome: 'no_change', summary: 'Looks like a test of the button.', question: undefined });
+  });
+
+  it('does not pick a no-change report up again', () => {
+    expect(nextWork({ reports: { '20261118-200336-7561': { state: 'no_change' } }, install: null }, {
+      ...empty, reportIds: ['20261118-200336-7561'],
+    })).toBeNull();
+  });
 });
 
 describe('report watcher iOS gate', () => {

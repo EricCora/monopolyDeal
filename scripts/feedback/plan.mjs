@@ -41,7 +41,7 @@ export function needsIosVerify(changedFiles) {
 /** The result file the fix session writes, checked so a malformed one can't merge anything. */
 export function readResult(json) {
   const outcome = json?.outcome;
-  if (!['fixed', 'needs_you', 'failed'].includes(outcome)) return { outcome: 'failed', summary: 'The fix session ended without a result.' };
+  if (!['fixed', 'no_change', 'needs_you', 'failed'].includes(outcome)) return { outcome: 'failed', summary: 'The fix session ended without a result.' };
   return {
     outcome,
     summary: typeof json.summary === 'string' ? json.summary.slice(0, 600) : '',
