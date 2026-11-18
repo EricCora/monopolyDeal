@@ -603,13 +603,6 @@ extension Action {
         return "{\(parts.joined(separator: ","))}"
     }
 
-    /// The same move without a god mode pick, for matching against legal actions.
-    public var withoutPick: Action {
-        var copy = self
-        copy.pick = nil
-        return copy
-    }
-
     private static func quoted(_ text: String) -> String {
         var output = "\""
         for scalar in text.unicodeScalars {

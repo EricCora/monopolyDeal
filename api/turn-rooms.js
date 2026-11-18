@@ -4481,6 +4481,9 @@ function optionalTrimmedString(value) {
 function isValidGameVariant(value) {
   return value === "classic" || value === "no_mercy";
 }
+function isValidPick(value) {
+  return value === void 0 || Array.isArray(value) && value.length <= 7 && value.every((cardId) => isNonEmptyTrimmedString(cardId));
+}
 function isValidMultiplayerAction(value) {
   if (!isRecord(value)) return false;
   if (typeof value.type !== "string") return false;
@@ -4488,7 +4491,10 @@ function isValidMultiplayerAction(value) {
   for (const field of ["setId", "fromSetId", "sourceSetId", "giveSetId", "takeSetId"]) {
     if (value[field] !== void 0 && !isNonEmptyTrimmedString(value[field])) return false;
   }
-  if (value.type === "draw_cards" || value.type === "pass_turn") {
+  if (value.type === "draw_cards") {
+    return isValidPick(value.pick);
+  }
+  if (value.type === "pass_turn") {
     return true;
   }
   if (value.type === "play_to_bank" || value.type === "discard_card") {
@@ -4504,7 +4510,7 @@ function isValidMultiplayerAction(value) {
     if (!isNonEmptyTrimmedString(value.cardId)) return false;
     if (value.targetPlayerId !== void 0 && !isNonEmptyTrimmedString(value.targetPlayerId)) return false;
     if (value.color !== void 0 && !isPropertyColor(value.color)) return false;
-    return true;
+    return isValidPick(value.pick);
   }
   if (value.type === "counter_response") {
     if (typeof value.useJustSayNo !== "boolean") return false;

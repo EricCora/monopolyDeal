@@ -58,6 +58,12 @@ export function isValidGameVariant(value: unknown): value is GameVariant {
   return value === 'classic' || value === 'no_mercy';
 }
 
+/** A god mode pick: a short list of card ids. The engine checks that they're in the pile. */
+function isValidPick(value: unknown): boolean {
+  return value === undefined
+    || (Array.isArray(value) && value.length <= 7 && value.every((cardId) => isNonEmptyTrimmedString(cardId)));
+}
+
 export function isValidMultiplayerAction(value: unknown): value is Action {
   if (!isRecord(value)) return false;
   if (typeof value.type !== 'string') return false;
@@ -66,7 +72,11 @@ export function isValidMultiplayerAction(value: unknown): value is Action {
     if (value[field] !== undefined && !isNonEmptyTrimmedString(value[field])) return false;
   }
 
-  if (value.type === 'draw_cards' || value.type === 'pass_turn') {
+  if (value.type === 'draw_cards') {
+    return isValidPick(value.pick);
+  }
+
+  if (value.type === 'pass_turn') {
     return true;
   }
 
@@ -88,7 +98,7 @@ export function isValidMultiplayerAction(value: unknown): value is Action {
     if (!isNonEmptyTrimmedString(value.cardId)) return false;
     if (value.targetPlayerId !== undefined && !isNonEmptyTrimmedString(value.targetPlayerId)) return false;
     if (value.color !== undefined && !isPropertyColor(value.color)) return false;
-    return true;
+    return isValidPick(value.pick);
   }
 
   if (value.type === 'counter_response') {

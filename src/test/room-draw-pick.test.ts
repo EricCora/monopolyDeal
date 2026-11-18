@@ -31,3 +31,15 @@ describe('god mode in rooms', () => {
     expect(room.game!.players.find((p) => p.id === mover.playerId)!.hand.slice(-2)).toEqual(pick);
   });
 });
+
+describe('god mode request validation', () => {
+  it('keeps a well-formed pick and refuses a malformed one', async () => {
+    const { isValidMultiplayerAction } = await import('../../apps/server/src/validation.ts');
+    const action = { type: 'draw_cards', playerId: 'p1', pick: ['money_1#a', 'pass_go#b'] };
+    expect(isValidMultiplayerAction(action)).toBe(true);
+    expect(isValidMultiplayerAction({ type: 'play_action', playerId: 'p1', cardId: 'pass_go#c', pick: ['money_1#a'] })).toBe(true);
+    for (const pick of ['money_1#a', [''], [3], Array.from({ length: 8 }, (_, i) => `money_1#${i}`)]) {
+      expect(isValidMultiplayerAction({ type: 'draw_cards', playerId: 'p1', pick })).toBe(false);
+    }
+  });
+});

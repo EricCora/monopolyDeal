@@ -111,6 +111,40 @@ final class OnlineIntegrationTests: XCTestCase {
         }
     }
 
+    /// God mode: only the seat whose turn it is can see the deck, and its chosen draw is dealt.
+    func testGodModeSeesTheDeckOnItsTurnAndDrawsItsPick() async throws {
+        let hostSession = try await client.createRoom(playerName: "Host")
+        let guestSession = try await client.joinRoom(code: hostSession.roomCode, playerName: "Guest")
+        let host = RoomConnection(client: client, session: hostSession)
+        let guest = RoomConnection(client: client, session: guestSession)
+        await host.connect()
+        await guest.connect()
+        defer {
+            host.stop()
+            guest.stop()
+        }
+        await guest.refresh()
+        await readyUp(guest)
+        await readyUp(host)
+        try await start(host)
+        await host.refresh()
+        await guest.refresh()
+        let (mover, other) = host.view?.legalActions.contains { $0.action.type == .draw_cards } == true ? (host, guest) : (guest, host)
+        let notTheirTurn = await other.deck()
+        XCTAssertNil(notTheirTurn)
+        let peeked = await mover.deck()
+        let pile = try XCTUnwrap(peeked)
+        XCTAssertEqual(pile.count, mover.view?.gameState?.drawPile.count)
+        let pick = [pile[6], pile[20]]
+        var draw = Action(.draw_cards, playerId: mover.session.playerId)
+        draw.pick = pick
+        let sent = await mover.perform(draw)
+        XCTAssertTrue(sent, String(describing: mover.lastError))
+        await mover.refresh()
+        let hand = try XCTUnwrap(mover.view?.gameState?.players.first { $0.id == mover.session.playerId }?.hand)
+        XCTAssertEqual(Array(hand.suffix(2)), pick)
+    }
+
     func testAppVersusAppClassicFinishes() async throws { try await appVsApp(.classic) }
     func testAppVersusAppNoMercyFinishes() async throws { try await appVsApp(.no_mercy) }
 
