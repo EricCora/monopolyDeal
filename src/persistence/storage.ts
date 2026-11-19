@@ -20,7 +20,7 @@ const GROWTH_METRICS_KEY = 'monopolyDeal.growthMetrics.v1';
 const ACHIEVEMENTS_KEY = 'monopolyDeal.achievements.v1';
 const DAILY_CHALLENGE_KEY = 'monopolyDeal.dailyChallenge.v1';
 const UI_PREFERENCES_KEY = 'monopolyDeal.uiPreferences.v1';
-const MAX_SAVED_GAME_SLOTS = 5;
+export const MAX_SAVED_GAME_SLOTS = 5;
 
 /** Additive state normalization keeps version 1 saves readable as the engine evolves. */
 function normalizeStoredGameState(state: GameState): GameState {
@@ -122,6 +122,11 @@ export function loadActiveGame(): SavedGameV1 | null {
 
 export function clearActiveGame(): void {
   localStorage.removeItem(ACTIVE_GAME_KEY);
+}
+
+/** Puts back a game in progress exactly as it was saved, for Undo after a delete. */
+export function restoreActiveGame(snapshot: SavedGameV1): void {
+  localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify(snapshot));
 }
 
 function defaultSavedGamesCollection(): SavedGamesCollectionV1 {
@@ -235,6 +240,19 @@ export function deleteSavedGameSlot(id: string): SavedGamesCollectionV1 {
     slots: current.slots.filter((slot) => slot.id !== id),
   };
   saveSavedGames(next);
+  return loadSavedGames();
+}
+
+/**
+ * Puts a deleted slot back unchanged at its old position, for Undo. Returns null, and changes
+ * nothing, when all slots have filled up since.
+ */
+export function restoreSavedGameSlot(slot: SavedGameSlotV1, index: number): SavedGamesCollectionV1 | null {
+  const current = loadSavedGames();
+  const others = current.slots.filter((existing) => existing.id !== slot.id);
+  if (others.length >= MAX_SAVED_GAME_SLOTS) return null;
+  const at = Math.min(Math.max(index, 0), others.length);
+  saveSavedGames({ version: 1, slots: [...others.slice(0, at), slot, ...others.slice(at)] });
   return loadSavedGames();
 }
 

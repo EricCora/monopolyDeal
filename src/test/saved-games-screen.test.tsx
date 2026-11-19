@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SavedGamesScreen } from '../ui/screens/SavedGamesScreen';
 
 const noop = () => {};
@@ -16,6 +17,8 @@ const baseProps = {
 };
 
 describe('saved games screen', () => {
+  afterEach(() => vi.useRealTimers());
+
   // Reported from the app: Continue Playing showed a game, but See All opened an empty list.
   it('lists the game in progress, so See All never opens to nothing', () => {
     const onResumeInProgress = vi.fn();
@@ -38,5 +41,56 @@ describe('saved games screen', () => {
     render(<SavedGamesScreen {...baseProps} />);
     expect(screen.queryByRole('region', { name: 'In Progress' })).toBeNull();
     expect(screen.getByText('No saved slots yet.')).toBeTruthy();
+  });
+
+  it('deletes the game in progress straight away, with no dialog', () => {
+    const confirm = vi.spyOn(window, 'confirm');
+    const onDeleteInProgress = vi.fn();
+    render(
+      <SavedGamesScreen
+        {...baseProps}
+        inProgress={{ variant: 'no_mercy', players: ['You', 'Bot 1'], turn: 3 }}
+        onResumeInProgress={noop}
+        onDeleteInProgress={onDeleteInProgress}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete No Mercy Game' }));
+    expect(onDeleteInProgress).toHaveBeenCalledTimes(1);
+    expect(confirm).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it('offers Undo for six seconds after a delete', () => {
+    vi.useFakeTimers();
+    const onUndo = vi.fn();
+    const onDismissUndo = vi.fn();
+    render(
+      <SavedGamesScreen
+        {...baseProps}
+        deletion={{ id: 'd1', label: 'Friday Group' }}
+        onUndoDelete={onUndo}
+        onDismissUndo={onDismissUndo}
+      />,
+    );
+    const bar = screen.getByRole('status');
+    expect(bar.textContent).toContain('Deleted Friday Group');
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(onUndo).toHaveBeenCalledTimes(1);
+
+    act(() => { vi.advanceTimersByTime(5900); });
+    expect(onDismissUndo).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(200); });
+    expect(onDismissUndo).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops the Undo countdown when the screen closes', () => {
+    vi.useFakeTimers();
+    const onDismissUndo = vi.fn();
+    const { unmount } = render(
+      <SavedGamesScreen {...baseProps} deletion={{ id: 'd1', label: 'Friday Group' }} onUndoDelete={noop} onDismissUndo={onDismissUndo} />,
+    );
+    unmount();
+    act(() => { vi.advanceTimersByTime(10000); });
+    expect(onDismissUndo).not.toHaveBeenCalled();
   });
 });

@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  clearActiveGame,
   clearGrowthMetrics,
   clearLifetimeStats,
   clearMatchHistory,
   deleteSavedGameSlot,
+  restoreActiveGame,
+  restoreSavedGameSlot,
   incrementGrowthMetric,
   loadActiveGame,
   loadAchievementState,
@@ -374,6 +377,38 @@ describe('saved game slots storage', () => {
 
     const deleted = deleteSavedGameSlot(slotId);
     expect(deleted.slots).toHaveLength(0);
+  });
+
+  it('puts a deleted slot back exactly where and as it was', () => {
+    upsertSavedGameSlot({ gameState: sampleGame(1), name: 'Oldest' });
+    upsertSavedGameSlot({ gameState: sampleGame(2), name: 'Middle' });
+    const before = upsertSavedGameSlot({ gameState: sampleGame(3), name: 'Newest' }).slots;
+    const index = before.findIndex((slot) => slot.name === 'Middle');
+    const removed = before[index];
+    deleteSavedGameSlot(removed.id);
+
+    const restored = restoreSavedGameSlot(removed, index);
+    expect(restored?.slots).toEqual(before);
+  });
+
+  it('refuses to restore a slot when all five are full again', () => {
+    const first = upsertSavedGameSlot({ gameState: sampleGame(1), name: 'Gone' }).slots[0];
+    deleteSavedGameSlot(first.id);
+    for (let i = 0; i < 5; i += 1) upsertSavedGameSlot({ gameState: sampleGame(10 + i), name: `Slot ${i}` });
+
+    expect(restoreSavedGameSlot(first, 0)).toBeNull();
+    expect(loadSavedGames().slots.map((slot) => slot.name)).not.toContain('Gone');
+  });
+
+  it('puts a deleted game in progress back unchanged', () => {
+    saveActiveGame(sampleGame(4), 'practice');
+    const snapshot = loadActiveGame();
+    expect(snapshot).not.toBeNull();
+    clearActiveGame();
+    expect(loadActiveGame()).toBeNull();
+
+    restoreActiveGame(snapshot!);
+    expect(loadActiveGame()).toEqual(snapshot);
   });
 
   it('persists local match mode in active autosaves and backfills legacy saves', () => {

@@ -1501,3 +1501,49 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+
+/* Saved games: delete, then Undo for a few seconds */
+.saved-game-slot .actions button.saved-game-delete {
+  color: var(--danger);
+}
+
+.saved-games-undo {
+  position: fixed;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(calc(100% - 32px), 420px);
+  padding: 10px 10px 10px 16px;
+  border-radius: 16px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  animation: undo-in 180ms ease-out;
+}
+
+@keyframes undo-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.saved-games-undo span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-games-undo button {
+  min-height: 38px;
+  padding: 0 16px;
+  font-weight: 700;
+  color: var(--gold, #f5c84b);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .saved-games-undo { animation: none; }
+}

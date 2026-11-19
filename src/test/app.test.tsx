@@ -2448,6 +2448,23 @@ describe('App', () => {
     expect(saved.slots).toHaveLength(0);
   });
 
+  it('deletes the game in progress from Saved Games and Undo brings it back', () => {
+    localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify({ version: 1, timestamp: 1, gameState: baseState }));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'See All Saved Games' }));
+    expect(screen.getByRole('region', { name: 'In Progress' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^delete (classic|no mercy) game$/i }));
+    expect(localStorage.getItem(ACTIVE_GAME_KEY)).toBeNull();
+    expect(screen.queryByRole('region', { name: 'In Progress' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(localStorage.getItem(ACTIVE_GAME_KEY)).not.toBeNull();
+    expect(screen.getByRole('region', { name: 'In Progress' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+  });
+
   it('does not carry paused state into a new match', () => {
     render(<App />);
 

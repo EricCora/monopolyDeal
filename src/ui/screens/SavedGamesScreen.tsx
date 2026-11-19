@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { SavedGameSlotV1 } from '../../persistence/storage';
 import { Icon } from '../components/icons';
 
@@ -7,11 +8,24 @@ export interface InProgressGame {
   turn: number;
 }
 
+/** The last delete, which Undo can still put back. */
+export interface PendingDeletion {
+  id: string;
+  label: string;
+}
+
+/** How long Undo stays offered after a delete. */
+export const UNDO_SECONDS = 6;
+
 interface SavedGamesScreenProps {
   slots: SavedGameSlotV1[];
   /** The autosaved game that Continue Playing resumes, when the screen is opened from home. */
   inProgress?: InProgressGame | null;
   onResumeInProgress?: () => void;
+  onDeleteInProgress?: () => void;
+  deletion?: PendingDeletion | null;
+  onUndoDelete?: () => void;
+  onDismissUndo?: () => void;
   canSaveCurrent: boolean;
   error: string | null;
   onSaveCurrentToNewSlot: () => void;
@@ -35,6 +49,10 @@ export function SavedGamesScreen({
   slots,
   inProgress = null,
   onResumeInProgress,
+  onDeleteInProgress,
+  deletion = null,
+  onUndoDelete,
+  onDismissUndo,
   canSaveCurrent,
   error,
   onSaveCurrentToNewSlot,
@@ -46,6 +64,14 @@ export function SavedGamesScreen({
 }: SavedGamesScreenProps) {
   const slotsRemaining = Math.max(5 - slots.length, 0);
   const inProgressTitle = inProgress ? `${inProgress.variant === 'no_mercy' ? 'No Mercy' : 'Classic'} Game` : '';
+  // The countdown waits while the pointer or keyboard focus is on the bar, so Undo can't vanish mid-reach.
+  const [holdingUndo, setHoldingUndo] = useState(false);
+  const deletionId = deletion?.id ?? null;
+  useEffect(() => {
+    if (!deletionId || holdingUndo || !onDismissUndo) return undefined;
+    const handle = window.setTimeout(onDismissUndo, UNDO_SECONDS * 1000);
+    return () => window.clearTimeout(handle);
+  }, [deletionId, holdingUndo, onDismissUndo]);
 
   return (
     <section className="panel saved-games-screen card-enter">
@@ -66,6 +92,11 @@ export function SavedGamesScreen({
             <button type="button" className="cta-primary" onClick={onResumeInProgress} aria-label={`Resume ${inProgressTitle}`}>
               Resume
             </button>
+            {onDeleteInProgress ? (
+              <button type="button" className="saved-game-delete" onClick={onDeleteInProgress} aria-label={`Delete ${inProgressTitle}`}>
+                Delete
+              </button>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -86,7 +117,7 @@ export function SavedGamesScreen({
         {slots.map((slot) => (
           <article key={slot.id} className="saved-game-slot">
             <header>
-              <h3>{slot.name}</h3>
+              <h3 id={`saved-slot-name-${slot.id}`}>{slot.name}</h3>
               <p>Updated: {formatDate(slot.updatedAt)}</p>
               <p>{slotSummary(slot)}</p>
             </header>
@@ -100,7 +131,7 @@ export function SavedGamesScreen({
               <button type="button" onClick={() => onRenameSlot(slot.id)}>
                 Rename
               </button>
-              <button type="button" onClick={() => onDeleteSlot(slot.id)}>
+              <button type="button" className="saved-game-delete" onClick={() => onDeleteSlot(slot.id)} aria-describedby={`saved-slot-name-${slot.id}`}>
                 Delete
               </button>
             </div>
@@ -109,6 +140,20 @@ export function SavedGamesScreen({
       </div>
 
       {error ? <p className="error">{error}</p> : null}
+
+      {deletion ? (
+        <div
+          className="saved-games-undo glass-panel"
+          role="status"
+          onPointerEnter={() => setHoldingUndo(true)}
+          onPointerLeave={() => setHoldingUndo(false)}
+          onFocus={() => setHoldingUndo(true)}
+          onBlur={() => setHoldingUndo(false)}
+        >
+          <span>Deleted {deletion.label}</span>
+          <button type="button" onClick={onUndoDelete}>Undo</button>
+        </div>
+      ) : null}
     </section>
   );
 }

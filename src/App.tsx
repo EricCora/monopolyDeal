@@ -25,6 +25,9 @@ import {
   clearGrowthMetrics,
   clearActiveGame,
   deleteSavedGameSlot,
+  restoreActiveGame,
+  restoreSavedGameSlot,
+  MAX_SAVED_GAME_SLOTS,
   incrementGrowthMetric,
   loadActiveGame,
   loadAchievementState,
@@ -44,6 +47,7 @@ import {
   saveDailyChallenge,
   saveUiPreferences,
   type SavedGameSlotV1,
+  type SavedGameV1,
   type UiPreferencesV1,
 } from './persistence/storage';
 import { findAutoResumeEntry, loadRecoveryEntries } from './persistence/multiplayerRecovery';
@@ -88,7 +92,7 @@ import { loadActiveReplay, loadReplays, saveActiveReplay, saveReplay, type GameR
 import { fetchMultiplayerReplay } from './network/roomFeatures';
 import { HomeScreen } from './ui/screens/HomeScreen';
 import { PostGameScreen } from './ui/screens/PostGameScreen';
-import { SavedGamesScreen } from './ui/screens/SavedGamesScreen';
+import { SavedGamesScreen, type PendingDeletion } from './ui/screens/SavedGamesScreen';
 import { SettingsScreen } from './ui/screens/SettingsScreen';
 import { SetupScreen } from './ui/screens/SetupScreen';
 import { StatsScreen } from './ui/screens/StatsScreen';
@@ -328,6 +332,12 @@ function App() {
   const [dailyChallenge, setDailyChallenge] = useState<DailyChallengeV1>(() => ensureTodayDailyChallenge(loadDailyChallenge()));
   const [recentAchievementUnlocks, setRecentAchievementUnlocks] = useState<AchievementId[]>([]);
   const [savedSlots, setSavedSlots] = useState<SavedGameSlotV1[]>(() => loadSavedGames().slots);
+  // The last save deleted on Saved Games, kept so Undo can put it back unchanged.
+  const [deletedSave, setDeletedSave] = useState<
+    (PendingDeletion & ({ kind: 'slot'; slot: SavedGameSlotV1; index: number } | { kind: 'inProgress'; snapshot: SavedGameV1 })) | null
+  >(null);
+  // Bumped when the game in progress is deleted or restored, so the rows that show it read storage again.
+  const [activeGameRevision, setActiveGameRevision] = useState(0);
   const [chooser, setChooser] = useState<PlayChooserState | null>(null);
   const [localMatch, setLocalMatch] = useState<LocalMatchOptions>(NO_MATCH_OPTIONS);
   const [localClock, setLocalClock] = useState<{ playerId: string; startedAt: number; deadlineMs: number | null } | null>(null);
@@ -461,7 +471,9 @@ function App() {
     if (screen !== 'home' && !(screen === 'saved_games' && savedGamesBackScreen === 'home')) return null;
     const saved = loadActiveGame();
     return saved ? { players: saved.gameState.players.map((player) => player.name), turn: saved.gameState.turnCount, variant: saved.gameState.variant } : null;
-  }, [screen, savedGamesBackScreen]);
+    // activeGameRevision isn't read here: bumping it makes this read storage again after a delete or Undo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, savedGamesBackScreen, activeGameRevision]);
   const currentGameId = game ? gameIdentity(game) : null;
   const isPaused = isRetry ? retryPaused : Boolean(game && uiPreferences.gamePaused && uiPreferences.pausedGameId === currentGameId);
   const reduceCelebrationEffects = uiPreferences.reducedEffects;
@@ -1443,15 +1455,50 @@ function App() {
     setError(null);
   };
 
+  // Deleting is immediate and offers Undo, so there's no "Are you sure?" dialog.
   const removeSavedSlot = (slotId: string) => {
-    if (typeof window !== 'undefined') {
-      const confirmed = window.confirm('Delete this saved slot?');
-      if (!confirmed) return;
-    }
+    const before = loadSavedGames().slots;
+    const index = before.findIndex((slot) => slot.id === slotId);
+    if (index < 0) return;
+    const slot = before[index];
     const next = deleteSavedGameSlot(slotId);
     setSavedSlots(next.slots);
+    setDeletedSave({ kind: 'slot', id: `slot:${slot.id}:${Date.now()}`, label: slot.name, slot, index });
     setError(null);
   };
+
+  const deleteGameInProgress = () => {
+    const snapshot = loadActiveGame();
+    if (!snapshot) return;
+    clearActiveGame();
+    setActiveGameRevision((revision) => revision + 1);
+    const label = `${snapshot.gameState.variant === 'no_mercy' ? 'No Mercy' : 'Classic'} Game`;
+    setDeletedSave({ kind: 'inProgress', id: `active:${snapshot.timestamp}:${Date.now()}`, label, snapshot });
+    setError(null);
+  };
+
+  const undoDelete = () => {
+    if (!deletedSave) return;
+    if (deletedSave.kind === 'inProgress') {
+      restoreActiveGame(deletedSave.snapshot);
+      setActiveGameRevision((revision) => revision + 1);
+    } else {
+      const restored = restoreSavedGameSlot(deletedSave.slot, deletedSave.index);
+      if (!restored) {
+        setError(`All ${MAX_SAVED_GAME_SLOTS} slots are full now, so ${deletedSave.label} can't come back.`);
+        setDeletedSave(null);
+        return;
+      }
+      setSavedSlots(restored.slots);
+    }
+    setDeletedSave(null);
+    setError(null);
+  };
+  const dismissUndo = useCallback(() => setDeletedSave(null), []);
+
+  useEffect(() => {
+    if (screen !== 'saved_games') setDeletedSave(null);
+  }, [screen]);
 
   const finalizeIfGameOver = useCallback((nextState: GameState) => {
     const status = isGameOver(nextState);
@@ -2603,6 +2650,10 @@ function App() {
           slots={savedSlots}
           inProgress={savedGamesBackScreen === 'home' ? homeActiveGame : null}
           onResumeInProgress={resumeGame}
+          onDeleteInProgress={deleteGameInProgress}
+          deletion={deletedSave}
+          onUndoDelete={undoDelete}
+          onDismissUndo={dismissUndo}
           canSaveCurrent={canSaveCurrentGame}
           error={error}
           onSaveCurrentToNewSlot={saveCurrentToNewSlot}
