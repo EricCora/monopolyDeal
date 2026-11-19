@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { SavedGameSlotV1 } from '../../persistence/storage';
 import { Icon } from '../components/icons';
 
@@ -141,7 +142,8 @@ export function SavedGamesScreen({
 
       {error ? <p className="error">{error}</p> : null}
 
-      {deletion ? (
+      {/* In document.body: the panel's backdrop blur would otherwise pin a fixed bar to the panel. */}
+      {deletion && typeof document !== 'undefined' ? createPortal(
         <div
           className="saved-games-undo glass-panel"
           role="status"
@@ -152,7 +154,8 @@ export function SavedGamesScreen({
         >
           <span>Deleted {deletion.label}</span>
           <button type="button" onClick={onUndoDelete}>Undo</button>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </section>
   );

@@ -1503,8 +1503,10 @@
 }
 
 /* Saved games: delete, then Undo for a few seconds */
+/* Lighter than --danger so the label reads at 4.5:1 on dark glass. */
 .saved-game-slot .actions button.saved-game-delete {
-  color: var(--danger);
+  color: color-mix(in srgb, var(--danger) 55%, #fff);
+  font-weight: 600;
 }
 
 .saved-games-undo {
