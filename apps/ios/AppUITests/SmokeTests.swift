@@ -153,7 +153,11 @@ final class GameplayUITests: XCTestCase {
         let resume = app.buttons["saves.inProgress"]
         XCTAssertTrue(resume.waitForExistence(timeout: 5))
         resume.tap()
-        XCTAssertTrue(app.buttons["action.pass"].waitForExistence(timeout: 5))
+        let pass = app.buttons["action.pass"]
+        XCTAssertTrue(pass.waitForExistence(timeout: 5))
+        // The resumed game keeps going: the bots take their turns and play comes back around.
+        pass.tap()
+        XCTAssertTrue(app.buttons["action.draw"].waitForExistence(timeout: 45), "The game froze after resuming from Saved Games")
     }
 
     /// Holding spreads the hand to read it, sliding moves along it, and letting go plays nothing.
