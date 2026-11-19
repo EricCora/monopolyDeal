@@ -137,6 +137,25 @@ final class GameplayUITests: XCTestCase {
         XCTAssertTrue(app.buttons["action.pass"].waitForExistence(timeout: 5))
     }
 
+    /// Reported from the app: Continue Playing showed a game, but See All opened an empty Saved Games list.
+    func testSeeAllListsTheGameInProgress() throws {
+        let folder = "uitest-\(UUID().uuidString)"
+        app.launchArguments = ["-seed", "7", "-storeDirectory", folder]
+        app.launch()
+        startPractice("Classic, Easy")
+        app.buttons["action.draw"].tap()
+        sleep(1)
+        app.terminate()
+        app.launch()
+        let seeAll = app.buttons["home.seeAll"]
+        XCTAssertTrue(seeAll.waitForExistence(timeout: 20))
+        seeAll.tap()
+        let resume = app.buttons["saves.inProgress"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 5))
+        resume.tap()
+        XCTAssertTrue(app.buttons["action.pass"].waitForExistence(timeout: 5))
+    }
+
     /// Holding spreads the hand to read it, sliding moves along it, and letting go plays nothing.
     func testHoldingTheHandDoesNotPlayACard() throws {
         launch(seed: 11)
