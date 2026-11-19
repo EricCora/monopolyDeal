@@ -500,7 +500,7 @@ struct SavedGamesView: View {
         }
         .onAppear {
             app.savedSlots = app.store.savedSlots()
-            app.activeGame = app.store.loadActiveGame()
+            if !duringGame { app.activeGame = app.store.loadActiveGame() }
         }
         .alert("Rename Slot", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newName)
