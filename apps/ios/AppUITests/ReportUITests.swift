@@ -82,4 +82,61 @@ final class ReportUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["action.pass"].waitForExistence(timeout: 20), "The game should reopen without going through Home")
     }
+
+    // MARK: Build notes and fix progress (inbox status handed in, see ReportCenter's DEBUG hooks)
+
+    private static let log: [[String: Any]] = [
+        ["commit": "132fe35", "at": "2026-11-18T13:36:04-08:00", "subject": "Group the deck picker by kind", "app": true],
+        ["commit": "bbbb111", "at": "2026-11-18T13:00:00-08:00", "subject": "Widen the rent chooser", "app": true, "report": "20261118-100000-aaaa"],
+        ["commit": "53115cf", "at": "2026-11-18T12:50:00-08:00", "subject": "Test the lobby", "app": false],
+        ["commit": "6291017", "at": "2026-11-18T12:13:03-08:00", "subject": "Show No change needed", "app": true],
+    ]
+
+    private func base64(_ value: Any) -> String {
+        (try? JSONSerialization.data(withJSONObject: value))?.base64EncodedString() ?? ""
+    }
+
+    private func launch(running commit: String, offering build: String) {
+        let status: [String: Any] = [
+            "reports": [
+                "20261118-235940-rno7": ["state": "fixing", "phase": "checks", "step": "Running npm run quality", "stepAt": ISO8601DateFormatter().string(from: Date())],
+                "20261118-100000-aaaa": ["state": "fixed", "summary": "Gave the chooser more room."],
+            ],
+            "build": ["commit": build, "at": "", "committedAt": "2026-11-18T13:36:04-08:00", "reports": [], "log": Self.log],
+        ]
+        let sent = [["id": "20261118-235940-rno7", "note": "Show All opens saved games"], ["id": "20261118-100000-aaaa", "note": "Rent chooser is cramped"]]
+        app.launchArguments = [
+            "-seed", "7", "-storeDirectory", "uitest-\(UUID().uuidString)", "-report.enabled", "YES", "-report.key", "uitest",
+            "-report.testBuildCommit", commit, "-report.testSent", base64(sent), "-report.testStatus", base64(status),
+        ]
+        app.launch()
+        XCTAssertTrue(app.buttons["home.practice"].waitForExistence(timeout: 20))
+    }
+
+    func testOlderBuildIsNotOfferedAndAFixShowsItsProgress() throws {
+        // The phone on 2026-11-18: built by hand from 132fe35, offered the older 6291017.
+        launch(running: "132fe35", offering: "6291017")
+        sleep(2)
+        XCTAssertFalse(app.buttons["report.buildBanner"].exists, "An older build must not be offered")
+        app.buttons["report.button"].tap()
+        XCTAssertTrue(app.navigationBars["Report a Problem"].waitForExistence(timeout: 5))
+        let progress = app.staticTexts["report.progress"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 5), "A report being fixed shows how far it has got")
+        XCTAssertTrue(progress.label.hasPrefix("Running checks · Running npm run quality · "), progress.label)
+    }
+
+    func testNewerBuildListsWhatItBrings() throws {
+        launch(running: "6291017", offering: "132fe35")
+        let banner = app.buttons["report.buildBanner"]
+        XCTAssertTrue(banner.waitForExistence(timeout: 10))
+        XCTAssertEqual(banner.label, "New build ready (1 fix). Install")
+        banner.tap()
+        XCTAssertTrue(app.navigationBars["New Build"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Rent chooser is cramped"].exists)
+        XCTAssertTrue(app.staticTexts["Gave the chooser more room."].exists)
+        XCTAssertTrue(app.staticTexts["Group the deck picker by kind"].exists)
+        XCTAssertFalse(app.staticTexts["Test the lobby"].exists, "Test-only commits aren't app changes")
+        XCTAssertFalse(app.staticTexts["Widen the rent chooser"].exists, "A fix is listed by its report, not again by its commit")
+    }
 }
+

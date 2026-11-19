@@ -4,6 +4,8 @@
 <dict>
 	<key>DealBuildCommit</key>
 	<string>$(DEAL_BUILD_COMMIT)</string>
+	<key>DealBuildDate</key>
+	<string>$(DEAL_BUILD_DATE)</string>
 	<key>DealReportKey</key>
 	<string>$(DEAL_REPORT_KEY)</string>
 	<key>DealReportAPI</key>

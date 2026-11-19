@@ -12,7 +12,7 @@ Three gaps in the report pipeline from `2026-11-12-report-and-autofix.md`:
 - The banner shows only when the offered build is newer than the running one. A phone on `132fe35` is never offered `6291017`.
 - The New Build sheet lists what's new since the running build, in two groups: **Fixed from your reports** (the report's note and the fix summary) and **Other changes** (commit subjects). Each group shows at most 15 lines, then "and N more".
 - Settings shows "This build: `<short commit>`, `<date>`" and the notes from the last install.
-- While a report is being fixed, its row shows a phase: Starting, Working on it, Running checks, Running iOS checks, Merging, or Building for your phone. It also shows one line on what the agent is doing (for example "Editing HomeView.swift" or "Running npm run quality"), no more than 60 seconds old while the session runs.
+- While a report is being fixed, its row shows a phase: Starting, Working on it, Running checks, Running iOS checks, or Merging. (Building for the phone is already shown by the install banner.) It also shows one line on what the agent is doing (for example "Editing HomeView.swift" or "Running npm run quality"), no more than 60 seconds old while the session runs.
 - While any report is fixing or an install is running, the app checks every 10 seconds instead of 60.
 - All of the above works the same on iOS and web. On web, "Install" stays "Reload".
 - When master gains changes to app code (`src/`, `apps/ios/`) that aren't on the phone, the watcher offers a build without waiting for a fix.
@@ -22,8 +22,8 @@ Three gaps in the report pipeline from `2026-11-12-report-and-autofix.md`:
 - **Confirmed:** `runClaude` blocks today (sync `run`). Streaming steps needs a non-blocking child process, and the watcher must still handle one report at a time.
 - **Confirmed:** the step line carries only a tool name and a short target (file name, or command name). It never carries tool output, file contents or anything from `config.json`.
 - **Confirmed:** builds made outside the watcher (Xcode, `ios:verify` installs) stamp a short hash. The comparison must accept short and full hashes.
-- **Assumed:** `claude -p --output-format stream-json --verbose` emits tool-use events with the session id early enough to save it before the run ends.
-- **Assumed:** the phone's build date can come from the commit date (`git log -1 --format=%cI`) stamped as `DEAL_BUILD_DATE`. Builds with no stamp count as older than any offered build, as today.
+- **Confirmed (2026-11-18 test run):** `claude -p --output-format stream-json --verbose` emits the session id first, then one `tool_use` event per action, then a `result`.
+- **Confirmed:** a date stamp alone can't place builds made by hand (`132fe35` had none). So the inbox also publishes the last 60 master commits, and an app finds its own commit there first, then falls back to its `DEAL_BUILD_DATE` stamp. Only when neither works is the build offered, as before.
 
 ## Non-goals
 - No full live transcript or diff in the app. Use the resume command in the watcher log for that.
@@ -31,8 +31,8 @@ Three gaps in the report pipeline from `2026-11-12-report-and-autofix.md`:
 - No changes to how fixes are made, merged or installed.
 
 ## Approach
-- The watcher stores `build.commit`, `build.committedAt` and `build.notes` (`{ fixes: [{ report, note, summary }], changes: [subject] }`), built from `git log <installed>..<build> --no-merges`.
-- The apps compare `committedAt` against their own stamped date, and fall back to "differs" only when both dates are missing.
+- The watcher stores `build.commit` (the newest app change on master), `build.committedAt` and `build.log`: the last 60 master commits with date, subject, whether they change the app, and the report each fix commit belongs to.
+- Each app places itself in that log (or by date), and works out its own notes from the commits above it. Fixes show with the note Eric wrote.
 - Fix sessions switch to `stream-json`. The watcher reads events as they arrive, keeps the latest step, and writes `phase`, `step` and `stepAt` into the report's status on the 30 s throttle. It writes its own phases at the start of quality, ios:verify, merge and install.
 
 ## Verification

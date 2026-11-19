@@ -1,16 +1,20 @@
 // Problem reports from the web app: the same inbox and flow as the iOS bug button
 // (apps/ios/App/Report). Off unless switched on in Settings with the report key.
+import { buildNotes, isNewerBuild, sameCommit, type InboxBuild } from './buildNotes';
 
 export interface ReportStatus {
   state: 'received' | 'fixing' | 'needs_you' | 'fixed' | 'no_change' | 'failed';
   summary?: string;
   question?: string;
   commit?: string;
+  phase?: string;
+  step?: string;
+  stepAt?: string;
 }
 
 export interface InboxStatus {
   reports: Record<string, ReportStatus>;
-  build: { commit: string; at: string; reports: string[] } | null;
+  build: InboxBuild | null;
   install: { state: string; commit?: string; request?: string; message?: string } | null;
   lastInstallRequest: string | null;
 }
@@ -21,11 +25,12 @@ export interface SentReport {
   sentAt: string;
 }
 
-const KEYS = { enabled: 'report.enabled', key: 'report.key', sent: 'report.sent', dismissed: 'report.dismissedBuild' };
+const KEYS = { enabled: 'report.enabled', key: 'report.key', sent: 'report.sent', dismissed: 'report.dismissedBuild', lastNotes: 'report.lastNotes' };
 const MAX_LOG_LINES = 400;
 const logLines: string[] = [];
 
 export const buildCommit: string = import.meta.env.VITE_BUILD_COMMIT || 'dev';
+const stampedDate: string = import.meta.env.VITE_BUILD_DATE || '';
 const apiBase: string = import.meta.env.VITE_REPORT_API || '/api/feedback';
 
 function readStorage(key: string): string | null {
@@ -165,8 +170,43 @@ export async function captureScreenshot(): Promise<string | null> {
   }
 }
 
-/** The newest build has fixes this page doesn't. */
+/** When this page's commit was made: stamped at build time, or found in the inbox's log. */
+export function ownBuildDate(status: InboxStatus | null): string | null {
+  if (stampedDate) return stampedDate;
+  return status?.build?.log?.find((entry) => sameCommit(entry.commit, buildCommit))?.at ?? null;
+}
+
+/** The newest build, when it's newer than this page. */
 export function buildReady(status: InboxStatus | null): InboxStatus['build'] {
   const build = status?.build ?? null;
-  return build && build.commit !== buildCommit ? build : null;
+  return isNewerBuild(build, buildCommit, ownBuildDate(status)) ? build : null;
+}
+
+/** What the newest build brings: fixes as report notes with their summaries, then other changes. */
+export function whatsNew(status: InboxStatus | null) {
+  const notes = buildNotes(status?.build, buildCommit, ownBuildDate(status));
+  // An inbox written before build logs existed lists only the fixed reports.
+  if (status?.build && !status.build.log) notes.fixes = status.build.reports;
+  const sent = new Map(sentReports().map((report) => [report.id, report.note]));
+  const fixes = notes.fixes.map((id) => ({ id, note: sent.get(id) ?? 'A report', summary: status?.reports[id]?.summary ?? '' }));
+  return { fixes, changes: notes.changes, more: notes.more };
+}
+
+export type WhatsNew = ReturnType<typeof whatsNew>;
+
+/**
+ * Kept when Reload is tapped, so Settings can say what came with the next version. Keyed by the
+ * version it was tapped on, because the one that loads can be newer than the one offered.
+ */
+export function rememberNotes(notes: WhatsNew) {
+  writeStorage(KEYS.lastNotes, JSON.stringify({ from: buildCommit, notes }));
+}
+
+export function lastNotes(): { notes: WhatsNew } | null {
+  try {
+    const parsed = JSON.parse(readStorage(KEYS.lastNotes) ?? 'null') as { from: string; notes: WhatsNew } | null;
+    return parsed && parsed.from !== buildCommit ? parsed : null;
+  } catch {
+    return null;
+  }
 }

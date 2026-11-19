@@ -6,6 +6,8 @@ export default defineConfig({
   define: {
     // The deployed commit, so the bug button can tell when a newer version has fixes.
     'import.meta.env.VITE_BUILD_COMMIT': JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.VITE_BUILD_COMMIT ?? ''),
+    // Optional: Vercel gives no commit date, so the app usually finds its own in the inbox's log.
+    'import.meta.env.VITE_BUILD_DATE': JSON.stringify(process.env.VITE_BUILD_DATE ?? ''),
   },
   server: {
     proxy: {

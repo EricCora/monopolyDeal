@@ -75,6 +75,111 @@ export function failedTestNames(failures) {
   return [...new Set(Object.values(failures ?? {}).flat())];
 }
 
+// MARK: Builds
+
+/** How many master commits the inbox publishes, so a build made by hand can find itself. */
+export const LOG_LENGTH = 60;
+
+/** Code that ships in the app, as opposed to tests, docs and tooling. */
+export function isAppChange(files) {
+  return files.some((file) => (file.startsWith('src/') || file.startsWith('apps/ios/') || file.startsWith('public/') || file === 'index.html')
+    && !file.startsWith('src/test/') && !file.startsWith('apps/ios/AppUITests/') && !file.startsWith('apps/ios/DealKit/Tests/'));
+}
+
+/** Reads `git log --format=%x1e%h%x09%cI%x09%s --name-only`. */
+export function parseGitLog(output) {
+  return output.split('\x1e').filter((chunk) => chunk.trim()).map((chunk) => {
+    const [header, ...rest] = chunk.split('\n');
+    const [commit, at, ...subject] = header.split('\t');
+    return { commit, at, subject: subject.join('\t'), files: rest.map((line) => line.trim()).filter(Boolean) };
+  });
+}
+
+/**
+ * The build to offer: the newest commit that changed the app, plus the recent log the apps use to
+ * place themselves and list what's new. Null when nothing in the log changed the app.
+ */
+export function buildFromLog(entries, reports, pendingReports) {
+  const byCommit = new Map();
+  for (const [id, status] of Object.entries(reports ?? {})) {
+    for (const commit of status.commits ?? []) byCommit.set(commit.slice(0, 7), id);
+  }
+  const log = entries.map((entry) => ({
+    commit: entry.commit,
+    at: entry.at,
+    subject: entry.subject.slice(0, 160),
+    app: isAppChange(entry.files),
+    report: byCommit.get(entry.commit.slice(0, 7)),
+  }));
+  const newest = log.find((entry) => entry.app);
+  if (!newest) return null;
+  return { commit: newest.commit, committedAt: newest.at, reports: pendingReports, log };
+}
+
+// MARK: Live progress
+
+const fileName = (path) => (typeof path === 'string' ? path.split('/').pop() : '') || 'a file';
+
+/** The command a shell line runs, skipping `FOO=bar` and paths. */
+function commandOf(line) {
+  const words = String(line ?? '').trim().split(/\s+/).filter((word) => !/^[A-Z_][A-Z0-9_]*=/.test(word));
+  const name = (words[0] ?? '').split('/').pop();
+  if (name === 'npm' && words[1] === 'run' && /^[\w:.-]+$/.test(words[2] ?? '')) return `Running npm run ${words[2]}`;
+  if ((name === 'npx' && words[1] === 'vitest') || name === 'vitest') return 'Running tests';
+  if (name === 'git') return 'Using git';
+  if (/^[\w.-]+$/.test(name)) return `Running ${name}`;
+  return 'Running a command';
+}
+
+const TOOL_STEPS = {
+  Read: (input) => `Reading ${fileName(input.file_path)}`,
+  Edit: (input) => `Editing ${fileName(input.file_path)}`,
+  MultiEdit: (input) => `Editing ${fileName(input.file_path)}`,
+  Write: (input) => `Writing ${fileName(input.file_path)}`,
+  NotebookEdit: (input) => `Editing ${fileName(input.notebook_path)}`,
+  Bash: (input) => commandOf(input.command),
+  Grep: () => 'Searching the code',
+  Glob: () => 'Searching the code',
+  Task: () => 'Asking a helper agent',
+  Agent: () => 'Asking a helper agent',
+  TodoWrite: () => 'Planning',
+  WebFetch: () => 'Looking something up',
+  WebSearch: () => 'Looking something up',
+};
+
+/**
+ * One line on what the fix session is doing, from a `stream-json` event. Only the action and a
+ * file or command name: never arguments, file contents or output.
+ */
+export function stepFromEvent(event) {
+  if (event?.type !== 'assistant') return null;
+  const uses = (event.message?.content ?? []).filter((part) => part?.type === 'tool_use');
+  const last = uses.at(-1);
+  if (!last) return null;
+  const describe = TOOL_STEPS[last.name];
+  return describe ? describe(last.input ?? {}) : 'Working';
+}
+
+/** Passes on the latest step at most once per interval. `tick` sends one that was held back. */
+export function makeThrottle(write, intervalMs, now = Date.now) {
+  let lastAt = -Infinity;
+  let latest = null;
+  let sent = null;
+  const flush = () => {
+    if (latest === null || latest === sent || now() - lastAt < intervalMs) return;
+    lastAt = now();
+    sent = latest;
+    write(latest);
+  };
+  return {
+    push(step) {
+      latest = step;
+      flush();
+    },
+    tick: flush,
+  };
+}
+
 /** Paths a fix must never commit: copied-in reports hold screenshots, and the repo is public. */
 export function forbiddenPaths(changedFiles) {
   return changedFiles.filter((file) => file === '.feedback' || file.startsWith('.feedback/'));

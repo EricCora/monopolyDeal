@@ -20,13 +20,26 @@ export interface ReportStatus {
   question?: string;
   commit?: string;
   branch?: string;
+  /** The fix's own commits, so build notes can list them under this report. */
+  commits?: string[];
+  /** While fixing: how far it has got, and the session's latest action. */
+  phase?: string;
+  step?: string;
+  stepAt?: string;
   updatedAt?: string;
 }
 
 export interface FeedbackIndex {
   reports: Record<string, ReportStatus>;
-  build: { commit: string; at: string; reports: string[] } | null;
-  install: { state: 'requested' | 'installing' | 'installed' | 'failed'; commit?: string; at: string; message?: string } | null;
+  /** The newest app change on master, with the recent log the apps use to place themselves. */
+  build: {
+    commit: string;
+    at: string;
+    committedAt?: string;
+    reports: string[];
+    log?: { commit: string; at: string; subject: string; app: boolean; report?: string }[];
+  } | null;
+  install: { state: 'requested' | 'installing' | 'installed' | 'failed'; commit?: string; committedAt?: string; at: string; message?: string } | null;
 }
 
 export interface FeedbackRequest {

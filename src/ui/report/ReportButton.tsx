@@ -1,15 +1,22 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { progressLine } from './buildNotes';
 import {
+  buildCommit,
   buildReady,
   captureConsole,
   captureScreenshot,
   fetchStatus,
+  lastNotes,
+  ownBuildDate,
+  rememberNotes,
   reportSettings,
   sendReply,
   sendReport,
   sentReports,
+  whatsNew,
   type InboxStatus,
   type SentReport,
+  type WhatsNew,
 } from './reportClient';
 import './report.css';
 
@@ -47,6 +54,7 @@ export function ReportButton({ getSnapshot }: { getSnapshot: () => ReportSnapsho
   const [dragY, setDragY] = useState<number | null>(null);
   const drag = useRef<{ startY: number; startX: number; moved: boolean } | null>(null);
   const [dismissed, setDismissed] = useState(() => reportSettings.dismissedBuild);
+  const [showNotes, setShowNotes] = useState(false);
 
   useEffect(() => {
     const sync = () => setActive(reportSettings.enabled);
@@ -67,17 +75,19 @@ export function ReportButton({ getSnapshot }: { getSnapshot: () => ReportSnapsho
     }
   }, []);
 
+  // Every 10 seconds while one of these reports is being fixed, otherwise every minute.
+  const fixing = sentReports().some((report) => status?.reports[report.id]?.state === 'fixing');
   useEffect(() => {
     if (!active) return undefined;
     const first = window.setTimeout(() => void refresh(), 0);
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') void refresh();
-    }, 60_000);
+    }, fixing ? 10_000 : 60_000);
     return () => {
       window.clearTimeout(first);
       window.clearInterval(timer);
     };
-  }, [active, refresh]);
+  }, [active, refresh, fixing]);
 
   const [capturing, setCapturing] = useState(false);
   const open = async () => {
@@ -119,18 +129,28 @@ export function ReportButton({ getSnapshot }: { getSnapshot: () => ReportSnapsho
 
   if (!active) return null;
   const build = buildReady(status);
+  const notes = build ? whatsNew(status) : null;
   const needsAnswer = sentReports().some((report) => status?.reports[report.id]?.state === 'needs_you');
 
   return (
     <div data-report-ui="true">
-      {build && build.commit !== dismissed ? (
+      {build && notes && build.commit !== dismissed ? (
         <div className="report-banner" role="status">
-          <span>New version ready{build.reports.length ? ` (${build.reports.length} fix${build.reports.length === 1 ? '' : 'es'})` : ''}.</span>
-          <button type="button" onClick={() => window.location.reload()}>Reload</button>
+          <span>New version ready{notes.fixes.length ? ` (${notes.fixes.length} fix${notes.fixes.length === 1 ? '' : 'es'})` : ''}.</span>
+          <button type="button" className="report-banner-later" aria-expanded={showNotes} onClick={() => setShowNotes((open) => !open)}>What's New</button>
+          <button type="button" onClick={() => {
+            rememberNotes(notes);
+            window.location.reload();
+          }}>Reload</button>
           <button type="button" className="report-banner-later" onClick={() => {
             reportSettings.dismissedBuild = build.commit;
             setDismissed(build.commit);
           }}>Later</button>
+        </div>
+      ) : null}
+      {build && notes && build.commit !== dismissed && showNotes ? (
+        <div className="report-notes-panel" aria-label="What's new">
+          <BuildNotesList notes={notes} />
         </div>
       ) : null}
       <button
@@ -254,6 +274,7 @@ function ReportSheet({ screenshot, status, getSnapshot, onRefresh, onClose }: {
                       <span className="report-note">{report.note}</span>
                       <span className={`report-chip report-chip-${state}`}>{STATE_LABELS[state] ?? state}</span>
                     </div>
+                    {progressLine(reportStatus, Date.now()) ? <p className="report-progress">{progressLine(reportStatus, Date.now())}</p> : null}
                     {reportStatus?.summary ? <p className="report-summary">{reportStatus.summary}</p> : null}
                     {state === 'needs_you' && reportStatus?.question ? (
                       <div className="report-question">
@@ -278,11 +299,60 @@ function ReportSheet({ screenshot, status, getSnapshot, onRefresh, onClose }: {
   );
 }
 
+/** Fixes from Eric's reports, then other changes, as both apps show them. */
+export function BuildNotesList({ notes }: { notes: WhatsNew }) {
+  if (!notes.fixes.length && !notes.changes.length) return <p className="report-notes-empty">No app changes listed.</p>;
+  return (
+    <div className="report-notes">
+      {notes.fixes.length ? (
+        <>
+          <h4>Fixed from your reports</h4>
+          <ul>
+            {notes.fixes.map((fix) => (
+              <li key={fix.id}>
+                <span>{fix.note}</span>
+                {fix.summary ? <small>{fix.summary}</small> : null}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {notes.changes.length ? (
+        <>
+          <h4>Other changes</h4>
+          <ul>
+            {notes.changes.map((change, index) => <li key={`${index}-${change}`}>{change}</li>)}
+            {notes.more ? <li className="report-notes-more">and {notes.more} more</li> : null}
+          </ul>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function formatBuildDate(iso: string | null) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
 /** The developer switch and key, in Settings. */
 export function ReportSettingsSection() {
   const onChange = () => window.dispatchEvent(new Event(SETTINGS_EVENT));
   const [enabled, setEnabled] = useState(() => reportSettings.enabled);
   const [key, setKey] = useState(() => reportSettings.key);
+  const [buildDate, setBuildDate] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enabled || !reportSettings.active) return;
+    let cancelled = false;
+    fetchStatus().then((status) => {
+      if (!cancelled) setBuildDate(ownBuildDate(status));
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+  const previous = lastNotes();
   return (
     <section className="settings-section" aria-label="Developer">
       <h3>Developer</h3>
@@ -312,6 +382,12 @@ export function ReportSettingsSection() {
             }}
           />
         </label>
+      ) : null}
+      {enabled ? (
+        <div className="settings-field report-this-build">
+          <span>This build: <code>{buildCommit.slice(0, 7)}</code>{buildDate ? `, ${formatBuildDate(buildDate)}` : ''}</span>
+          {previous ? <BuildNotesList notes={previous.notes} /> : null}
+        </div>
       ) : null}
       <p className="settings-subtitle settings-footnote">Shows a small bug button on every screen. Drag it to either side. Reports go to Claude, which fixes them and offers a new version here.</p>
     </section>

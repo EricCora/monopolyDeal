@@ -2,12 +2,16 @@
 // Watches the private report inbox, runs a headless Claude Code session per report, checks the
 // result, merges and pushes to master, and installs new builds on Eric's phone when he asks.
 // Runs as a launchd agent: see scripts/feedback/README.md. One step at a time, never two.
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
-import { MAX_ERRORS, failedTestNames, forbiddenPaths, needsIosVerify, newFailures, nextWork, parseIosFailures, readResult } from './plan.mjs';
+import {
+  LOG_LENGTH, MAX_ERRORS, buildFromLog, failedTestNames, forbiddenPaths, makeThrottle, needsIosVerify, newFailures, nextWork, parseGitLog,
+  parseIosFailures, readResult, stepFromEvent,
+} from './plan.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = process.env.FEEDBACK_CONFIG ?? join(homedir(), '.config/monopolydeal-feedback/config.json');
@@ -22,6 +26,10 @@ const config = {
   claude: join(homedir(), '.local/bin/claude'),
   pollSeconds: 30,
   fixTimeoutMinutes: 90,
+  /** Fewest seconds between two progress writes for one report: each is a commit to the inbox. */
+  progressSeconds: 30,
+  /** How often an idle watcher checks master for app changes to offer as a build. */
+  buildCheckMinutes: 5,
   push: true,
   ...JSON.parse(readFileSync(CONFIG_PATH, 'utf8')),
 };
@@ -88,10 +96,19 @@ function updateIndex(change, message) {
   throw new Error('could not push the inbox index');
 }
 
+/** Progress lines only mean something while a report is being fixed. */
+const DONE = { phase: undefined, step: undefined, stepAt: undefined };
+
 function setStatus(id, status) {
+  const progress = status.state && status.state !== 'fixing' ? DONE : {};
   return updateIndex((index) => {
-    index.reports[id] = { ...index.reports[id], ...status, updatedAt: new Date().toISOString() };
-  }, `${id}: ${status.state}`);
+    index.reports[id] = { ...index.reports[id], ...progress, ...status, updatedAt: new Date().toISOString() };
+  }, `${id}: ${status.state ?? status.phase ?? 'progress'}`);
+}
+
+/** Where a fix has got: one of the PHASE_LABELS in src/ui/report/buildNotes.ts. */
+function setPhase(id, phase) {
+  setStatus(id, { phase, step: undefined, stepAt: undefined });
 }
 
 const listDir = (path) => (existsSync(path) ? readdirSync(path).filter((name) => !name.startsWith('.')) : []);
@@ -135,18 +152,66 @@ function prepareWorktree(id) {
   return { path, branch, reportDir };
 }
 
-function runClaude(cwd, prompt, sessionId) {
-  const args = ['-p', prompt, '--permission-mode', 'auto', '--output-format', 'json'];
+/**
+ * Runs the fix session, streaming its events so the app can show what it's doing. Resolves when
+ * the session exits, with its id (known from the first event) and its final reply.
+ */
+function runClaude(id, cwd, prompt, sessionId) {
+  const args = ['-p', prompt, '--permission-mode', 'auto', '--output-format', 'stream-json', '--verbose'];
   if (sessionId) args.push('--resume', sessionId);
   log('claude', sessionId ? `resuming ${sessionId}` : 'starting', 'in', cwd);
-  const result = run(config.claude, args, { cwd, check: false, timeoutMinutes: config.fixTimeoutMinutes });
-  try {
-    const parsed = JSON.parse(result.stdout);
-    return { sessionId: parsed.session_id ?? sessionId, text: parsed.result ?? '' };
-  } catch {
-    log('claude output was not JSON:', result.output.slice(-800));
-    return { sessionId, text: '' };
-  }
+  setPhase(id, 'working');
+  return new Promise((resolve) => {
+    const child = spawn(config.claude, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    let current = sessionId;
+    let text = '';
+    let stderr = '';
+    let savedSession = Boolean(sessionId);
+    const throttle = makeThrottle((step) => {
+      try {
+        setStatus(id, { step, stepAt: new Date().toISOString() });
+      } catch (error) {
+        log(id, 'progress write failed:', error.message);
+      }
+    }, config.progressSeconds * 1000);
+    const ticker = setInterval(() => throttle.tick(), 5000);
+    const timeout = setTimeout(() => {
+      log(id, `claude ran past ${config.fixTimeoutMinutes} minutes, stopping it`);
+      child.kill('SIGTERM');
+    }, config.fixTimeoutMinutes * 60_000);
+    child.stderr.on('data', (chunk) => {
+      stderr = `${stderr}${chunk}`.slice(-4000);
+    });
+    createInterface({ input: child.stdout }).on('line', (line) => {
+      let event;
+      try {
+        event = JSON.parse(line);
+      } catch {
+        return;
+      }
+      if (event.session_id) current = event.session_id;
+      // Saved straight away, so a watcher restart can resume this session.
+      if (current && !savedSession) {
+        savedSession = true;
+        setStatus(id, { sessionId: current });
+      }
+      if (event.type === 'result' && typeof event.result === 'string') text = event.result;
+      const step = stepFromEvent(event);
+      if (step) throttle.push(step);
+    });
+    child.on('close', (code) => {
+      clearInterval(ticker);
+      clearTimeout(timeout);
+      if (code !== 0) log(id, `claude exited ${code}:`, stderr.slice(-800));
+      resolve({ sessionId: current, text });
+    });
+    child.on('error', (error) => {
+      clearInterval(ticker);
+      clearTimeout(timeout);
+      log(id, 'claude failed to start:', error.message);
+      resolve({ sessionId: current, text: '' });
+    });
+  });
 }
 
 function takeResult(reportDir) {
@@ -162,8 +227,11 @@ function takeResult(reportDir) {
   return readResult(parsed);
 }
 
+/** The fix's own commits, recorded before the push so the build notes can list them under the report. */
+let shippedCommits = [];
+
 /** Checks the fix the way CI would, then merges and pushes. Returns null, or what went wrong. */
-function verifyAndShip(path) {
+function verifyAndShip(id, path) {
   git(path, 'fetch', '-q', 'origin', 'master');
   const ahead = git(path, 'rev-list', '--count', 'origin/master..HEAD');
   if (ahead === '0') return 'The session committed no changes.';
@@ -177,11 +245,13 @@ function verifyAndShip(path) {
     const changed = git(path, 'diff', '--name-only', 'origin/master...HEAD').split('\n').filter(Boolean);
     const forbidden = forbiddenPaths(changed);
     if (forbidden.length) return `The branch commits report files, which must never reach the public repo: ${forbidden.join(', ')}. Remove them from the commits.`;
+    setPhase(id, 'checks');
     let quality = run('npm', ['run', 'quality'], { cwd: path, check: false, timeoutMinutes: 30 });
     // Timing tests can fail while the Mac is busy, so one retry before blaming the change.
     if (!quality.ok) quality = run('npm', ['run', 'quality'], { cwd: path, check: false, timeoutMinutes: 30 });
     if (!quality.ok) return `npm run quality failed:\n${quality.output.slice(-3000)}`;
     if (needsIosVerify(changed)) {
+      setPhase(id, 'ios_checks');
       const problem = iosGate(path);
       if (problem) return problem;
     }
@@ -189,6 +259,8 @@ function verifyAndShip(path) {
       log('--no-push: verified, not pushing');
       return null;
     }
+    setPhase(id, 'merging');
+    shippedCommits = git(path, 'rev-list', '--abbrev-commit', 'origin/master..HEAD').split('\n').filter(Boolean);
     if (run('git', ['-C', path, 'push', '-q', 'origin', 'HEAD:master'], { check: false }).ok) return null;
     git(path, 'fetch', '-q', 'origin', 'master');
   }
@@ -234,10 +306,10 @@ function cleanUp(id) {
 }
 
 /** Runs (or resumes) the session until it fixes, asks, or gives up. */
-function driveFix(id, { path, branch, reportDir }, firstPrompt, sessionId) {
+async function driveFix(id, { path, branch, reportDir }, firstPrompt, sessionId) {
   let prompt = firstPrompt;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const session = runClaude(path, prompt, sessionId);
+    const session = await runClaude(id, path, prompt, sessionId);
     sessionId = session.sessionId;
     setStatus(id, { state: 'fixing', sessionId, branch });
     const result = takeResult(reportDir);
@@ -258,16 +330,15 @@ function driveFix(id, { path, branch, reportDir }, firstPrompt, sessionId) {
       notify('Monopoly Deal: fix failed', result.summary);
       return;
     }
-    const problem = verifyAndShip(path);
+    const problem = verifyAndShip(id, path);
     if (!problem) {
       const commit = git(path, 'rev-parse', 'HEAD');
+      const commits = config.push ? shippedCommits : [];
       updateIndex((index) => {
-        index.reports[id] = { ...index.reports[id], state: 'fixed', summary: result.summary, commit, question: undefined, updatedAt: new Date().toISOString() };
-        // A dry run's commit was never pushed, so there's no build to offer.
-        if (!config.push) return;
-        const pending = index.build && index.install?.commit !== index.build.commit ? index.build.reports : [];
-        index.build = { commit, at: new Date().toISOString(), reports: [...pending, id] };
+        index.reports[id] = { ...index.reports[id], ...DONE, state: 'fixed', summary: result.summary, commit, commits, question: undefined, updatedAt: new Date().toISOString() };
       }, `${id}: fixed in ${commit.slice(0, 8)}`);
+      // A dry run's commit was never pushed, so there's no build to offer.
+      if (config.push) refreshBuild();
       log(id, 'fixed and', config.push ? `pushed ${commit.slice(0, 8)}` : 'verified (not pushed)');
       notify('Monopoly Deal: fixed', result.summary);
       if (config.push) cleanUp(id);
@@ -280,30 +351,30 @@ function driveFix(id, { path, branch, reportDir }, firstPrompt, sessionId) {
   notify('Monopoly Deal: fix failed', `Report ${id} kept failing its checks.`);
 }
 
-function handleReport(id, resume) {
+async function handleReport(id, resume) {
   const existing = readIndex().reports[id];
   if (resume && existing?.sessionId && existsSync(worktreeFor(id))) {
     const reportDir = join(worktreeFor(id), '.feedback', id);
-    driveFix(id, { path: worktreeFor(id), branch: branchFor(id), reportDir },
+    await driveFix(id, { path: worktreeFor(id), branch: branchFor(id), reportDir },
       'The watcher restarted while you were working. Carry on from where you were, then write result.json.', existing.sessionId);
     return;
   }
-  setStatus(id, { state: 'fixing' });
+  setStatus(id, { state: 'fixing', phase: 'starting' });
   const place = prepareWorktree(id);
   const prompt = readFileSync(join(HERE, 'fix-prompt.md'), 'utf8')
     .replaceAll('{{REPORT_DIR}}', place.reportDir)
     .replaceAll('{{BRANCH}}', place.branch);
-  driveFix(id, place, prompt, null);
+  await driveFix(id, place, prompt, null);
 }
 
-function handleReply(id, replyNames) {
+async function handleReply(id, replyNames) {
   const status = readIndex().reports[id];
   const texts = replyNames.map((name) => JSON.parse(readFileSync(join(config.inbox, 'reports', id, 'replies', name), 'utf8')).text);
-  setStatus(id, { state: 'fixing', question: undefined, repliesSeen: [...(status.repliesSeen ?? []), ...replyNames] });
+  setStatus(id, { state: 'fixing', phase: 'starting', question: undefined, repliesSeen: [...(status.repliesSeen ?? []), ...replyNames] });
   const path = worktreeFor(id);
   const place = existsSync(path) ? { path, branch: branchFor(id), reportDir: join(path, '.feedback', id) } : prepareWorktree(id);
   const prompt = `Eric answered your question ("${status.question ?? ''}"):\n\n${texts.join('\n\n')}\n\nCarry on with the fix, then write result.json again.`;
-  driveFix(id, place, prompt, status.sessionId);
+  await driveFix(id, place, prompt, status.sessionId);
 }
 
 // MARK: Installing
@@ -336,19 +407,19 @@ function handleInstall(request, retry) {
     if (!existsSync(path)) git(config.repo, 'worktree', 'add', '-q', '--detach', path, 'origin/master');
     else git(path, 'checkout', '-q', '--detach', '-f', 'origin/master');
     const commit = git(path, 'rev-parse', 'HEAD');
+    const committedAt = git(path, 'log', '-1', '--format=%cI');
     run('xcodebuild', [
       '-project', 'MonopolyDeal.xcodeproj', '-scheme', 'MonopolyDeal', '-configuration', 'Release',
       '-destination', 'generic/platform=iOS', '-derivedDataPath', config.derivedData, '-allowProvisioningUpdates', '-quiet', 'build',
-      `DEAL_BUILD_COMMIT=${commit}`, `DEAL_REPORT_KEY=${config.reportKey}`, `DEAL_REPORT_API=${config.apiBase}`,
+      `DEAL_BUILD_COMMIT=${commit}`, `DEAL_BUILD_DATE=${committedAt}`, `DEAL_REPORT_KEY=${config.reportKey}`, `DEAL_REPORT_API=${config.apiBase}`,
     ], { cwd: join(path, 'apps/ios'), timeoutMinutes: 30 });
     const app = join(config.derivedData, 'Build/Products/Release-iphoneos/MonopolyDeal.app');
     run('xcrun', ['devicectl', 'device', 'install', 'app', '--device', config.deviceId, app], { timeoutMinutes: 10 });
     run('xcrun', ['devicectl', 'device', 'process', 'launch', '--device', config.deviceId, config.bundleId], { check: false, timeoutMinutes: 2 });
     updateIndex((next) => {
-      next.install = { state: 'installed', request, commit, at: new Date().toISOString() };
-      // The phone now runs master as of this install, which holds every fix so far.
-      next.build = { commit, at: new Date().toISOString(), reports: [] };
+      next.install = { state: 'installed', request, commit, committedAt, at: new Date().toISOString() };
     }, `installed ${commit.slice(0, 8)}`);
+    refreshBuild();
     notify('Monopoly Deal', 'New build installed on your phone.');
   } catch (error) {
     log('install failed', error.message);
@@ -359,20 +430,64 @@ function handleInstall(request, retry) {
   }
 }
 
+// MARK: Builds
+
+let lastBuildCheck = 0;
+
+/**
+ * Offers the newest app change on master as a build, with the recent log the apps use to place
+ * themselves and list what's new. Writes only when the offered commit or its fixes change.
+ */
+function refreshBuild() {
+  lastBuildCheck = Date.now();
+  // Never lets a failure here undo the fix or install that called it: the next check retries.
+  try {
+    offerBuild();
+  } catch (error) {
+    log('build check failed:', error.message);
+  }
+}
+
+function offerBuild() {
+  git(config.repo, 'fetch', '-q', 'origin', 'master');
+  const raw = git(config.repo, 'log', `-${LOG_LENGTH}`, '--format=%x1e%h%x09%cI%x09%s', '--name-only', 'origin/master');
+  const entries = parseGitLog(raw);
+  const index = readIndex();
+  const installed = index.install?.commit ?? '';
+  // Fixed reports not on the phone yet, for older apps that only count these.
+  const installedAt = entries.findIndex((entry) => installed.startsWith(entry.commit));
+  const newer = new Set((installedAt >= 0 ? entries.slice(0, installedAt) : entries).map((entry) => entry.commit));
+  const pending = Object.entries(index.reports)
+    .filter(([, status]) => status.state === 'fixed' && (status.commits ?? []).some((commit) => newer.has(commit.slice(0, 7))))
+    .map(([id]) => id);
+  const next = buildFromLog(entries, index.reports, pending);
+  if (!next) return;
+  const same = index.build?.commit === next.commit && JSON.stringify(index.build?.reports ?? []) === JSON.stringify(pending)
+    && JSON.stringify(index.build?.log ?? []) === JSON.stringify(next.log);
+  if (same) return;
+  updateIndex((latest) => {
+    latest.build = { ...next, at: new Date().toISOString() };
+  }, `build ${next.commit}`);
+  log('build offered:', next.commit, pending.length ? `with fixes ${pending.join(', ')}` : '');
+}
+
 // MARK: Loop
 
-function step() {
+async function step() {
   pullInbox();
   const work = nextWork(readIndex(), scanInbox());
-  if (!work) return false;
+  if (!work) {
+    if (config.push && Date.now() - lastBuildCheck > config.buildCheckMinutes * 60_000) refreshBuild();
+    return false;
+  }
   log('work:', JSON.stringify(work));
   if (work.kind === 'install') {
     handleInstall(work.request, work.retry);
     return !work.retry;
   }
   try {
-    if (work.kind === 'reply') handleReply(work.id, work.replies);
-    else handleReport(work.id, work.resume);
+    if (work.kind === 'reply') await handleReply(work.id, work.replies);
+    else await handleReport(work.id, work.resume);
   } catch (error) {
     // Without this, a fix that hits the same error would be resumed every 30 seconds forever.
     const errors = (readIndex().reports[work.id]?.errors ?? 0) + 1;
@@ -411,7 +526,7 @@ log('watching', config.inboxRemote, config.push ? '' : '(no push)');
 for (;;) {
   let busy = false;
   try {
-    busy = step();
+    busy = await step();
   } catch (error) {
     log('step failed:', error.message);
   }

@@ -54,4 +54,44 @@ describe('web report button', () => {
     expect(body.meta.screenName).toBe('game');
     expect(await screen.findByText('Rent chooser is cramped')).toBeInTheDocument();
   });
+
+  it('shows how far a fix has got, and what the new version brings', async () => {
+    localStorage.setItem('report.enabled', 'true');
+    localStorage.setItem('report.key', 'secret');
+    localStorage.setItem('report.sent', JSON.stringify([
+      { id: '20261118-235940-rno7', note: 'Show All opens saved games', sentAt: '2026-11-18T23:59:40Z' },
+      { id: '20261118-100000-aaaa', note: 'Rent chooser is cramped', sentAt: '2026-11-18T10:00:00Z' },
+    ]));
+    const stepAt = new Date(Date.now() - 20_000).toISOString();
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({
+      reports: {
+        '20261118-235940-rno7': { state: 'fixing', phase: 'checks', step: 'Running npm run quality', stepAt },
+        '20261118-100000-aaaa': { state: 'fixed', summary: 'Gave the chooser more room.' },
+      },
+      build: {
+        commit: '132fe35', at: '', committedAt: '2026-11-18T13:36:04-08:00', reports: [],
+        log: [
+          { commit: '132fe35', at: '2026-11-18T13:36:04-08:00', subject: 'Group the deck picker by kind', app: true },
+          { commit: 'bbbb111', at: '2026-11-18T13:00:00-08:00', subject: 'Widen the rent chooser', app: true, report: '20261118-100000-aaaa' },
+          { commit: '53115cf', at: '2026-11-18T12:50:00-08:00', subject: 'Test the lobby', app: false },
+        ],
+      },
+      install: null,
+      lastInstallRequest: null,
+    })));
+    render(<ReportButton getSnapshot={snapshot} />);
+    expect(await screen.findByText(/New version ready \(1 fix\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: "What's New" }));
+    expect(screen.getByText('Fixed from your reports')).toBeInTheDocument();
+    expect(screen.getByText('Gave the chooser more room.')).toBeInTheDocument();
+    expect(screen.getByText('Group the deck picker by kind')).toBeInTheDocument();
+    expect(screen.queryByText('Test the lobby')).toBeNull();
+
+    const button = screen.getByTestId('report-button');
+    await act(async () => {
+      fireEvent.pointerDown(button, { clientX: 5, clientY: 100, pointerId: 1 });
+      fireEvent.pointerUp(button, { clientX: 5, clientY: 100, pointerId: 1 });
+    });
+    expect(await screen.findByText(/^Running checks · Running npm run quality · 2\ds ago$/)).toBeInTheDocument();
+  });
 });

@@ -85,7 +85,7 @@ final class ReportOverlay {
             }
         }
         if let build = center.buildReady, center.isActive, build.commit != center.dismissedBuild {
-            let count = build.reports.count
+            let count = center.whatsNew.fixes.count
             return count > 0 ? "New build ready (\(count) fix\(count == 1 ? "" : "es")). Install" : "New build ready. Install"
         }
         return nil
@@ -147,7 +147,7 @@ final class ReportOverlay {
         top.present(ReportSheetHost(rootView: AnyView(InstallSheet())), animated: true)
     }
 
-    /// Checks the inbox every minute, or every 10 seconds while an install is under way.
+    /// Checks the inbox every minute, or every 10 seconds while a fix or an install is under way.
     private func startPolling() {
         pollTask?.cancel()
         pollTask = Task { @MainActor in
@@ -157,7 +157,7 @@ final class ReportOverlay {
                     await center.refresh()
                 }
                 ReportOverlay.shared.update()
-                let seconds: UInt64 = center.installProgress != nil ? 10 : 60
+                let seconds: UInt64 = center.installProgress != nil || center.isFixing ? 10 : 60
                 try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
             }
         }
@@ -362,6 +362,10 @@ struct ReportSheet: View {
                 Spacer()
                 stateChip(status?.state ?? "sending")
             }
+            if let progress = BuildNotes.progressLine(status) {
+                Text(progress).font(.caption).foregroundStyle(.cyan)
+                    .accessibilityIdentifier("report.progress")
+            }
             if let summary = status?.summary, !summary.isEmpty {
                 Text(summary).font(.caption).foregroundStyle(.secondary)
             }
@@ -422,19 +426,7 @@ struct InstallSheet: View {
                     } footer: {
                         Text("Your game is saved first. The app closes, the Mac installs the new build, and it reopens where you were. Your phone needs to be on the same Wi-Fi as the Mac.")
                     }
-                    let fixed = center.sent.filter { build.reports.contains($0.id) }
-                    if !fixed.isEmpty {
-                        Section("In This Build") {
-                            ForEach(fixed) { report in
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(report.note).font(.subheadline).lineLimit(2)
-                                    if let summary = center.status?.reports[report.id]?.summary {
-                                        Text(summary).font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    BuildNotesSections(notes: center.whatsNew)
                 } else {
                     Text("You're on the newest build.")
                 }
@@ -456,6 +448,34 @@ struct InstallSheet: View {
     }
 }
 
+/// Fixes from Eric's reports, then other changes. The web shows the same in BuildNotesList.
+struct BuildNotesSections: View {
+    let notes: BuildNotes.Notes
+
+    var body: some View {
+        if !notes.fixes.isEmpty {
+            Section("Fixed from your reports") {
+                ForEach(notes.fixes, id: \.self) { fix in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(fix.note).font(.subheadline).lineLimit(2)
+                        if !fix.summary.isEmpty { Text(fix.summary).font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
+            }
+        }
+        if !notes.changes.isEmpty {
+            Section("Other changes") {
+                ForEach(Array(notes.changes.enumerated()), id: \.offset) { _, change in
+                    Text(change).font(.subheadline)
+                }
+                if notes.more > 0 {
+                    Text("and \(notes.more) more").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
 /// The developer switch for the bug button, in Settings.
 struct ReportSettingsSection: View {
     @State private var center = ReportCenter.shared
@@ -470,11 +490,21 @@ struct ReportSettingsSection: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
             }
-            LabeledContent("Build", value: String(center.buildCommit.prefix(8)))
+            LabeledContent("This build", value: buildLabel)
+                .accessibilityIdentifier("settings.thisBuild")
         } header: {
             Text("Developer")
         } footer: {
             Text("Shows a small bug button on every screen. Drag it to either side. Reports go to Claude, which fixes them and offers a new build here.")
         }
+        if center.enabled, let notes = center.lastInstallNotes {
+            BuildNotesSections(notes: notes)
+        }
+    }
+
+    private var buildLabel: String {
+        let commit = String(center.buildCommit.prefix(7))
+        guard let date = BuildNotes.date(center.ownBuildDate) else { return commit }
+        return "\(commit), \(date.formatted(.dateTime.month(.abbreviated).day().hour().minute()))"
     }
 }

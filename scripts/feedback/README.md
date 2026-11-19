@@ -28,6 +28,8 @@ flowchart LR
   - A refusal if the branch commits anything under `.feedback/`.
 
   A failed check goes back to the same session, at most three times.
+- **Progress:** sessions run with `--output-format stream-json`. While a report is being fixed, its status carries a `phase` (starting, working, checks, ios_checks, merging) and a `step`, one line on the session's latest action. A step names only the action and a file or command, never arguments or output. Each write is a commit to the inbox, so steps are written at most once per 30 seconds (`progressSeconds`).
+- **Builds:** the watcher offers the newest commit on `master` that changes app code (`src/`, `apps/ios/`, not tests) as `build`, with `build.log`, the last 60 master commits. It checks after each fix, after each install, and every 5 minutes when idle (`buildCheckMinutes`). The apps find their own commit in that log, so a build installed from Xcode is never offered an older one, and they list what's new from the commits above their own. Watcher installs also stamp `DEAL_BUILD_DATE`.
 
 ## One-time setup
 1. **Vercel environment variables** (Project, Settings, Environment Variables, Production):
