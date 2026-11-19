@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error plain JS module without types
 import {
   buildFromLog, failedTestNames, forbiddenPaths, isAppChange, makeThrottle, needsIosVerify, newFailures, nextWork, parseGitLog, parseIosFailures, readResult, stepFromEvent,
+// @ts-expect-error plain JS module without types
 } from '../../scripts/feedback/plan.mjs';
 
 const empty = { reportIds: [], installRequests: [], replies: {}, platforms: {} };
@@ -117,7 +117,7 @@ describe('report watcher build notes', () => {
     const reports = { '20261118-235940-rno7': { state: 'fixed', commits: ['aaaa111'] } };
     const build = buildFromLog(parseGitLog(raw), reports, ['20261118-235940-rno7']);
     expect(build).toMatchObject({ commit: '132fe35', committedAt: '2026-11-18T13:36:04-08:00', reports: ['20261118-235940-rno7'] });
-    expect(build.log.map((entry) => [entry.commit, entry.app, entry.report])).toEqual([
+    expect(build.log.map((entry: { commit: string; app: boolean; report?: string }) => [entry.commit, entry.app, entry.report])).toEqual([
       ['132fe35', true, undefined], ['53115cf', false, undefined], ['aaaa111', true, '20261118-235940-rno7'], ['6291017', false, undefined],
     ]);
     expect(buildFromLog(parseGitLog(raw).slice(3), {}, [])).toBeNull();
@@ -125,7 +125,7 @@ describe('report watcher build notes', () => {
 });
 
 describe('report watcher live progress', () => {
-  const tool = (name, input) => ({ type: 'assistant', message: { content: [{ type: 'tool_use', name, input }] } });
+  const tool = (name: string, input: Record<string, unknown>) => ({ type: 'assistant', message: { content: [{ type: 'tool_use', name, input }] } });
 
   it('turns agent tool calls into short steps, without paths, arguments or output', () => {
     expect(stepFromEvent(tool('Edit', { file_path: '/Users/x/fix/apps/ios/App/Views/HomeView.swift', old_string: 'secret' }))).toBe('Editing HomeView.swift');
@@ -141,8 +141,8 @@ describe('report watcher live progress', () => {
 
   it('writes at most once per interval, and always the latest step', () => {
     let clock = 0;
-    const written = [];
-    const throttle = makeThrottle((step) => written.push(step), 30_000, () => clock);
+    const written: string[] = [];
+    const throttle = makeThrottle((step: string) => written.push(step), 30_000, () => clock);
     throttle.push('Reading a.ts');
     clock = 5_000;
     throttle.push('Editing a.ts');
