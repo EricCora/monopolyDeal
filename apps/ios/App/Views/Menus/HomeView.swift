@@ -230,6 +230,7 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("See All Saved Games")
+                .accessibilityIdentifier("home.seeAll")
             }
 
             Button {
@@ -476,7 +477,10 @@ struct SavedGamesView: View {
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(SoftWhite(0.85))
                     }
-                    if app.savedSlots.isEmpty {
+                    if !duringGame, let active = app.activeGame {
+                        inProgressRow(active)
+                    }
+                    if app.savedSlots.isEmpty && (duringGame || app.activeGame == nil) {
                         ContentUnavailableView("No Saved Games", systemImage: "square.stack", description: Text("Save a game from the table menu to keep up to 5 at once."))
                             .padding(.top, 50)
                     }
@@ -494,7 +498,10 @@ struct SavedGamesView: View {
                 ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
             }
         }
-        .onAppear { app.savedSlots = app.store.savedSlots() }
+        .onAppear {
+            app.savedSlots = app.store.savedSlots()
+            app.activeGame = app.store.loadActiveGame()
+        }
         .alert("Rename Slot", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newName)
             Button("Rename") { if let renaming { app.renameSlot(renaming, name: newName) } }
@@ -512,6 +519,37 @@ struct SavedGamesView: View {
         } message: { slot in
             Text("\(slot.name) will be replaced with the current game.")
         }
+    }
+
+    /// The autosaved game Continue Playing resumes, so See All never opens to an empty list.
+    private func inProgressRow(_ active: ActiveGame) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("In Progress")
+                    .font(.caption2.weight(.bold))
+                    .textCase(.uppercase)
+                    .foregroundStyle(Palette.gold)
+                Text("\(active.gameState.resolvedVariant.label) Game")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text("\(active.gameState.players.count) players · Turn \(active.gameState.turnCount)")
+                    .font(.caption)
+                    .foregroundStyle(SoftWhite(0.65))
+            }
+            Spacer(minLength: 6)
+            Button {
+                app.resumeActive()
+            } label: {
+                Label("Resume", systemImage: "play.fill")
+            }
+            .buttonStyle(.glass)
+            .accessibilityLabel("Resume \(active.gameState.resolvedVariant.label) Game")
+            .accessibilityIdentifier("saves.inProgress")
+        }
+        .padding(12)
+        .glassPanel(cornerRadius: 16)
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.gold.opacity(0.45), lineWidth: 1))
     }
 
     private func slotRow(_ slot: SavedSlot) -> some View {

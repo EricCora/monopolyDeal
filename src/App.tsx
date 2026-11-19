@@ -458,10 +458,10 @@ function App() {
 
   const prompt = useMemo(() => (game ? getNextPrompt(game) : null), [game]);
   const homeActiveGame = useMemo(() => {
-    if (screen !== 'home') return null;
+    if (screen !== 'home' && !(screen === 'saved_games' && savedGamesBackScreen === 'home')) return null;
     const saved = loadActiveGame();
     return saved ? { players: saved.gameState.players.map((player) => player.name), turn: saved.gameState.turnCount, variant: saved.gameState.variant } : null;
-  }, [screen]);
+  }, [screen, savedGamesBackScreen]);
   const currentGameId = game ? gameIdentity(game) : null;
   const isPaused = isRetry ? retryPaused : Boolean(game && uiPreferences.gamePaused && uiPreferences.pausedGameId === currentGameId);
   const reduceCelebrationEffects = uiPreferences.reducedEffects;
@@ -2601,6 +2601,8 @@ function App() {
       {screen === 'saved_games' ? (
         <SavedGamesScreen
           slots={savedSlots}
+          inProgress={savedGamesBackScreen === 'home' ? homeActiveGame : null}
+          onResumeInProgress={resumeGame}
           canSaveCurrent={canSaveCurrentGame}
           error={error}
           onSaveCurrentToNewSlot={saveCurrentToNewSlot}

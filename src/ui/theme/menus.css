@@ -1489,3 +1489,15 @@
 .action-confirm-cancel {
   min-height: 44px;
 }
+
+/* Saved games: the autosaved game in progress */
+.saved-game-in-progress {
+  box-shadow: inset 0 0 0 1px var(--glass-edge), inset 3px 0 0 var(--gold, #f5c84b);
+}
+
+.saved-game-kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
