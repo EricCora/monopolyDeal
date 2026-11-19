@@ -454,7 +454,7 @@ struct SavedGamesView: View {
 
     @State private var renaming: SavedSlot?
     @State private var newName = ""
-    @State private var deleting: SavedSlot?
+    @State private var deleted: DeletedSave?
     @State private var overwriting: SavedSlot?
     @State private var message: String?
 
@@ -490,6 +490,18 @@ struct SavedGamesView: View {
                 .frame(maxWidth: 560)
                 .frame(maxWidth: .infinity)
             }
+            .swipeActionsContainer()
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let deleted { undoBar(deleted) }
+        }
+        .animation(.snappy(duration: 0.2), value: deleted?.id)
+        .task(id: deleted?.id) {
+            // Undo stays for a few seconds. VoiceOver users keep it until they leave the screen,
+            // since a timed control is hard to reach by swiping.
+            guard deleted != nil, !UIAccessibility.isVoiceOverRunning else { return }
+            try? await Task.sleep(for: .seconds(6))
+            if !Task.isCancelled { deleted = nil }
         }
         .navigationTitle("Saved Games")
         .navigationBarTitleDisplayMode(.inline)
@@ -506,12 +518,6 @@ struct SavedGamesView: View {
             TextField("Name", text: $newName)
             Button("Rename") { if let renaming { app.renameSlot(renaming, name: newName) } }
             Button("Cancel", role: .cancel) {}
-        }
-        .alert("Delete This Save?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), presenting: deleting) { slot in
-            Button("Delete", role: .destructive) { app.deleteSlot(slot) }
-            Button("Cancel", role: .cancel) {}
-        } message: { slot in
-            Text("\(slot.name) will be gone for good.")
         }
         .alert("Overwrite This Save?", isPresented: Binding(get: { overwriting != nil }, set: { if !$0 { overwriting = nil } }), presenting: overwriting) { slot in
             Button("Overwrite", role: .destructive) { app.overwriteSlot(slot) }
@@ -546,10 +552,25 @@ struct SavedGamesView: View {
             .buttonStyle(.glass)
             .accessibilityLabel("Resume \(active.gameState.resolvedVariant.label) Game")
             .accessibilityIdentifier("saves.inProgress")
+            Menu {
+                Button("Delete", systemImage: "trash", role: .destructive) { deleteActive() }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3)
+                    .foregroundStyle(SoftWhite(0.85))
+                    .frame(width: 40, height: 40)
+            }
+            .accessibilityLabel("More for \(active.gameState.resolvedVariant.label) Game")
+            .accessibilityIdentifier("saves.inProgress.more")
         }
         .padding(12)
         .glassPanel(cornerRadius: 16)
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.gold.opacity(0.45), lineWidth: 1))
+        .swipeActions {
+            Button("Delete", systemImage: "trash", role: .destructive) { deleteActive() }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("saves.inProgressRow")
     }
 
     private func slotRow(_ slot: SavedSlot) -> some View {
@@ -579,7 +600,7 @@ struct SavedGamesView: View {
                     newName = slot.name
                     renaming = slot
                 }
-                Button("Delete", systemImage: "trash", role: .destructive) { deleting = slot }
+                Button("Delete", systemImage: "trash", role: .destructive) { delete(slot) }
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.title3)
@@ -590,6 +611,73 @@ struct SavedGamesView: View {
         }
         .padding(12)
         .glassPanel(cornerRadius: 16)
+        .swipeActions {
+            Button("Delete", systemImage: "trash", role: .destructive) { delete(slot) }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("saves.slot")
+    }
+
+    // MARK: Delete and Undo
+
+    /// The last save deleted here. Deleting is immediate and Undo puts it back, so there's no dialog.
+    struct DeletedSave: Identifiable {
+        enum Kind { case slot(SavedSlot, index: Int), active(ActiveGame) }
+        let id = UUID()
+        let kind: Kind
+        let label: String
+    }
+
+    private func delete(_ slot: SavedSlot) {
+        let index = app.deleteSlot(slot)
+        show(DeletedSave(kind: .slot(slot, index: index), label: slot.name))
+    }
+
+    private func deleteActive() {
+        guard let game = app.deleteActiveGame() else { return }
+        show(DeletedSave(kind: .active(game), label: "\(game.gameState.resolvedVariant.label) Game"))
+    }
+
+    private func show(_ deletion: DeletedSave) {
+        message = nil
+        deleted = deletion
+        AccessibilityNotification.Announcement("Deleted \(deletion.label). Undo is available.").post()
+    }
+
+    private func undo(_ deletion: DeletedSave) {
+        switch deletion.kind {
+        case .slot(let slot, let index):
+            if !app.restoreSlot(slot, at: index) {
+                message = "All \(DealStore.maxSavedSlots) slots are full now, so \(slot.name) can't come back."
+            }
+        case .active(let game):
+            app.restoreActiveGame(game)
+        }
+        deleted = nil
+    }
+
+    private func undoBar(_ deletion: DeletedSave) -> some View {
+        HStack(spacing: 12) {
+            Text("Deleted \(deletion.label)")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            Button("Undo") { undo(deletion) }
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(Palette.gold)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+                .accessibilityIdentifier("saves.undo")
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 8)
+        .padding(.vertical, 8)
+        .glassPanel(cornerRadius: 16)
+        .frame(maxWidth: 520)
+        .padding(.horizontal, 18)
+        .padding(.bottom, 8)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }
 

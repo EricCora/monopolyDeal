@@ -172,6 +172,53 @@ final class GameplayUITests: XCTestCase {
         XCTAssertTrue(yourMove.waitForExistence(timeout: 45), "The game froze after resuming from Saved Games")
     }
 
+    /// Saves delete straight away with a swipe or the row menu, and Undo puts them back.
+    func testDeletingSavesNeedsNoDialogAndUndoBringsThemBack() throws {
+        let folder = "uitest-\(UUID().uuidString)"
+        app.launchArguments = ["-seed", "11", "-botDelayMs", "60", "-storeDirectory", folder]
+        app.launch()
+        startPractice("Classic, Easy")
+        // A move makes the app autosave, so there's a game in progress to delete as well.
+        app.buttons["action.draw"].tap()
+        XCTAssertTrue(app.buttons["action.pass"].waitForExistence(timeout: 5))
+        app.buttons["table.menu"].tap()
+        app.buttons["Save Game"].tap()
+        let saveNew = app.buttons["saves.new"]
+        XCTAssertTrue(saveNew.waitForExistence(timeout: 5))
+        saveNew.tap()
+        app.buttons["Done"].tap()
+        sleep(1)
+        app.terminate()
+        app.launch()
+
+        let seeAll = app.buttons["home.seeAll"]
+        XCTAssertTrue(seeAll.waitForExistence(timeout: 20))
+        seeAll.tap()
+        let slot = app.descendants(matching: .any)["saves.slot"].firstMatch
+        XCTAssertTrue(slot.waitForExistence(timeout: 5))
+
+        // A full swipe deletes; a shorter one reveals Delete to tap.
+        slot.swipeLeft(velocity: .fast)
+        if slot.exists, app.buttons["Delete"].firstMatch.waitForExistence(timeout: 2) {
+            app.buttons["Delete"].firstMatch.tap()
+        }
+        let undo = app.buttons["saves.undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5), "Deleting should offer Undo")
+        XCTAssertFalse(app.alerts.firstMatch.exists, "Deleting should not ask first")
+        XCTAssertFalse(slot.exists)
+        undo.tap()
+        XCTAssertTrue(slot.waitForExistence(timeout: 5), "Undo should bring the slot back")
+
+        // The game in progress deletes from its menu, and Continue Playing goes with it.
+        app.buttons["saves.inProgress.more"].tap()
+        app.buttons["Delete"].firstMatch.tap()
+        XCTAssertTrue(undo.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["saves.inProgressRow"].exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["home.practice"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["home.continue"].exists, "Continue Playing should go with the deleted game")
+    }
+
     /// Holding spreads the hand to read it, sliding moves along it, and letting go plays nothing.
     func testHoldingTheHandDoesNotPlayACard() throws {
         launch(seed: 11)

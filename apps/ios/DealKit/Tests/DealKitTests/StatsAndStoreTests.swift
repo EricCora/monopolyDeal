@@ -51,6 +51,35 @@ final class StatsAndStoreTests: XCTestCase {
         XCTAssertEqual(store.savedSlots().count, 4)
     }
 
+    func testADeletedSlotComesBackUnchanged() throws {
+        let game = Engine.createGame(GameConfig(players: [PlayerConfig(id: "a", name: "Ann"), PlayerConfig(id: "b", name: "Bo")], seed: 3))
+        for index in 0..<3 { try store.upsertSlot(name: "Slot \(index)", state: game, mode: .practice) }
+        let before = store.savedSlots()
+        let removed = before[1]
+        store.deleteSlot(id: removed.id)
+        XCTAssertEqual(store.restoreSlot(removed, at: 1), before)
+        XCTAssertEqual(store.savedSlots(), before)
+    }
+
+    func testARestoreIsRefusedOnceAllFiveSlotsAreFullAgain() throws {
+        let game = Engine.createGame(GameConfig(players: [PlayerConfig(id: "a", name: "Ann"), PlayerConfig(id: "b", name: "Bo")], seed: 3))
+        try store.upsertSlot(name: "Gone", state: game, mode: .practice)
+        let gone = store.savedSlots()[0]
+        store.deleteSlot(id: gone.id)
+        for index in 0..<5 { try store.upsertSlot(name: "Slot \(index)", state: game, mode: .practice) }
+        XCTAssertNil(store.restoreSlot(gone, at: 0))
+        XCTAssertFalse(store.savedSlots().contains { $0.id == gone.id })
+    }
+
+    func testADeletedGameInProgressComesBackUnchanged() throws {
+        let game = Engine.createGame(GameConfig(players: [PlayerConfig(id: "a", name: "Ann"), PlayerConfig(id: "b", name: "Bo")], seed: 3))
+        store.saveActiveGame(game, mode: .practice)
+        let saved = try XCTUnwrap(store.loadActiveGame())
+        store.clearActiveGame()
+        store.restoreActiveGame(saved)
+        XCTAssertEqual(store.loadActiveGame(), saved)
+    }
+
     func testCorruptFilesAreTreatedAsEmpty() throws {
         try Data("not json".utf8).write(to: directory.appendingPathComponent("matchHistory.v1.json"))
         try Data("not json".utf8).write(to: directory.appendingPathComponent("activeGame.v1.json"))

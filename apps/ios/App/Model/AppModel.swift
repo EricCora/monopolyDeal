@@ -311,8 +311,32 @@ final class AppModel {
         savedSlots = store.renameSlot(id: slot.id, name: name)
     }
 
-    func deleteSlot(_ slot: SavedSlot) {
+    /// Deletes a slot and returns where it was, so Undo can put it back there.
+    @discardableResult
+    func deleteSlot(_ slot: SavedSlot) -> Int {
+        let index = savedSlots.firstIndex { $0.id == slot.id } ?? 0
         savedSlots = store.deleteSlot(id: slot.id)
+        return index
+    }
+
+    /// Puts a deleted slot back unchanged. False when all slots have filled up since.
+    func restoreSlot(_ slot: SavedSlot, at index: Int) -> Bool {
+        guard let slots = store.restoreSlot(slot, at: index) else { return false }
+        savedSlots = slots
+        return true
+    }
+
+    /// Deletes the autosaved game in progress, so Continue Playing goes away. Returns it for Undo.
+    func deleteActiveGame() -> ActiveGame? {
+        let deleted = store.loadActiveGame()
+        store.clearActiveGame()
+        activeGame = nil
+        return deleted
+    }
+
+    func restoreActiveGame(_ game: ActiveGame) {
+        store.restoreActiveGame(game)
+        activeGame = game
     }
 
     func clearStats() {

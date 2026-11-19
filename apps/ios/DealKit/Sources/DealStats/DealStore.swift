@@ -128,6 +128,9 @@ public final class DealStore: @unchecked Sendable {
 
     public func clearActiveGame() { remove("activeGame") }
 
+    /// Puts back a game in progress exactly as it was saved, for Undo after a delete.
+    public func restoreActiveGame(_ active: ActiveGame) { save(active, "activeGame") }
+
     // MARK: Save slots
 
     public func savedSlots() -> [SavedSlot] {
@@ -176,6 +179,17 @@ public final class DealStore: @unchecked Sendable {
         let slots = savedSlots().filter { $0.id != id }
         save(slots, "savedGames")
         return slots
+    }
+
+    /// Puts a deleted slot back unchanged at its old position, for Undo. Returns nil, and changes
+    /// nothing, when all slots have filled up since.
+    @discardableResult
+    public func restoreSlot(_ slot: SavedSlot, at index: Int) -> [SavedSlot]? {
+        var slots = savedSlots().filter { $0.id != slot.id }
+        if slots.count >= Self.maxSavedSlots { return nil }
+        slots.insert(slot, at: min(max(index, 0), slots.count))
+        save(slots, "savedGames")
+        return savedSlots()
     }
 
     // MARK: Stats
