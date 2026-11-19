@@ -92,6 +92,16 @@ final class GameplayUITests: XCTestCase {
         XCTAssertLessThanOrEqual(hidden, card.height * 0.13, "\(Int(hidden)) of the card's \(Int(card.height)) points are below the screen, which hides its name")
     }
 
+    /// The iPhone table opens upright and then turns sideways. The old upright layout must not
+    /// show while it turns. Debug builds mark the table if it did, since the flash is too quick to
+    /// catch by reading the screen.
+    func testPhoneTableNeverShowsTheUprightLayoutWhileTurning() throws {
+        guard UIDevice.current.userInterfaceIdiom == .phone else { throw XCTSkip("Only the iPhone table turns sideways") }
+        launch(seed: 11)
+        startPractice("Classic, Easy")
+        XCTAssertFalse(app.descendants(matching: .any)["debug.uprightBeforeTurn"].exists, "The upright table showed before the phone turned sideways")
+    }
+
     func testClassicGamePlaysToAWinner() throws {
         launch(seed: 11, winSets: 2)
         startPractice("Classic, Easy")

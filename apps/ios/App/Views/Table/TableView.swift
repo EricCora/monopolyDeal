@@ -16,6 +16,11 @@ struct TableView: View {
     @AppStorage(GodMode.storageKey) private var godMode = false
     @AppStorage(GodMode.ownerKey) private var godModeOwner = ""
     @Namespace private var cardSpace
+    #if DEBUG
+    /// For the UI tests: whether the upright layout showed on a phone before the table turned sideways.
+    @State private var turnedSideways = false
+    @State private var uprightBeforeTurn = false
+    #endif
 
     private var isRetry: Bool { (session as? LocalMatch)?.isRetry == true }
 
@@ -42,8 +47,10 @@ struct TableView: View {
 
                 if landscape {
                     landscapeTable
+                        .onAppear(perform: noteTurnedSideways)
                 } else {
                     portraitTable(wide: wide, handWidth: min(118, geometry.size.width * 0.27))
+                        .onAppear(perform: noteUprightLayout)
                 }
 
                 if !session.isReplay {
@@ -53,6 +60,14 @@ struct TableView: View {
                 toast
 
                 tableMoments(wide: wide, height: geometry.size.height)
+
+                #if DEBUG
+                if uprightBeforeTurn {
+                    Color.clear.frame(width: 1, height: 1)
+                        .accessibilityElement()
+                        .accessibilityIdentifier("debug.uprightBeforeTurn")
+                }
+                #endif
             }
             // Holding the table still for five seconds switches god mode. See `TableHoldDetector`.
             .background { TableHoldDetector { toggleGodMode() } }
@@ -162,6 +177,20 @@ struct TableView: View {
     }
 
     // MARK: Layouts
+
+    private func noteTurnedSideways() {
+        #if DEBUG
+        turnedSideways = true
+        #endif
+    }
+
+    private func noteUprightLayout() {
+        #if DEBUG
+        if UIDevice.current.userInterfaceIdiom == .phone && app.preferences.landscapeTable && !turnedSideways {
+            uprightBeforeTurn = true
+        }
+        #endif
+    }
 
     /// A phone on its side, unless the Landscape Table setting is off. An iPad in landscape
     /// is tall enough for the oval.
