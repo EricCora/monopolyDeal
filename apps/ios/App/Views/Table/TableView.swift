@@ -16,6 +16,10 @@ struct TableView: View {
     @AppStorage(GodMode.storageKey) private var godMode = false
     @AppStorage(GodMode.ownerKey) private var godModeOwner = ""
     @Namespace private var cardSpace
+    /// The phone opens the table upright and turns it a moment later. Until it has turned, the
+    /// table shows only its felt, so the upright layout never flashes. If the turn never comes,
+    /// this lapses and the upright table shows rather than an empty one.
+    @State private var awaitingTurn = true
     #if DEBUG
     /// For the UI tests: whether the upright layout showed on a phone before the table turned sideways.
     @State private var turnedSideways = false
@@ -45,21 +49,11 @@ struct TableView: View {
             ZStack(alignment: .bottom) {
                 TableBackground(style: app.preferences.tableStyle)
 
-                if landscape {
-                    landscapeTable
-                        .onAppear(perform: noteTurnedSideways)
+                if isTurningSideways(geometry.size) {
+                    Color.clear
                 } else {
-                    portraitTable(wide: wide, handWidth: min(118, geometry.size.width * 0.27))
-                        .onAppear(perform: noteUprightLayout)
+                    tableContent(landscape: landscape, wide: wide, size: geometry.size)
                 }
-
-                if !session.isReplay {
-                    PromptPanel(session: session, actions: actions, ui: ui)
-                }
-
-                toast
-
-                tableMoments(wide: wide, height: geometry.size.height)
 
                 #if DEBUG
                 if uprightBeforeTurn {
@@ -84,6 +78,10 @@ struct TableView: View {
         }
         .overlay { pauseOverlay }
         .onAppear { OrientationLock.tableAppeared(landscape: app.preferences.landscapeTable) }
+        .task {
+            try? await Task.sleep(for: .seconds(1.5))
+            awaitingTurn = false
+        }
         .onDisappear { OrientationLock.tableDisappeared() }
         .onChange(of: app.preferences.landscapeTable) { _, landscape in OrientationLock.setLandscapeTable(landscape) }
         // Every state change animates here, so a bot's or another player's move glides too.
@@ -177,6 +175,31 @@ struct TableView: View {
     }
 
     // MARK: Layouts
+
+    @ViewBuilder
+    private func tableContent(landscape: Bool, wide: Bool, size: CGSize) -> some View {
+        if landscape {
+            landscapeTable
+                .onAppear(perform: noteTurnedSideways)
+        } else {
+            portraitTable(wide: wide, handWidth: min(118, size.width * 0.27))
+                .onAppear(perform: noteUprightLayout)
+        }
+
+        if !session.isReplay {
+            PromptPanel(session: session, actions: actions, ui: ui)
+        }
+
+        toast
+
+        tableMoments(wide: wide, height: size.height)
+    }
+
+    /// A phone that's about to turn the table sideways but is still upright.
+    private func isTurningSideways(_ size: CGSize) -> Bool {
+        awaitingTurn && UIDevice.current.userInterfaceIdiom == .phone
+            && app.preferences.landscapeTable && size.width <= size.height
+    }
 
     private func noteTurnedSideways() {
         #if DEBUG
