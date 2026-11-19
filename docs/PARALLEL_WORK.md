@@ -26,7 +26,7 @@ Keep worktrees outside `~/Desktop` and `~/Documents`. iCloud offloads files ther
 | `npm run quality` and tests | Safe in parallel | Nothing needed |
 | `npm run ios:verify --skip-ui` | Port and build folder are per checkout | `DEAL_VERIFY_PORT` overrides the port |
 | iOS UI tests and simulators | **One agent at a time** | They use named simulators, and the Mac has 8 GB of memory |
-| Installing on Eric's or Anna's iPhone | **One agent at a time** | Only from a commit that's on `master` |
+| Installing on Eric's or Anna's iPhone | **One agent at a time** | Only from a commit that's on `master`. On Eric's phone, only through the report watcher: commit an empty `{}` to `control/install-requests/<time>.json` in the inbox repo. A plain Xcode build has no report key or build number, so the bug button stops sending |
 | Live site, Blob store | Shared | Don't run `npm run verify:turn-live` repeatedly: see Limits |
 
 Only run `npm run ios:verify` in full (with UI tests) if your agent is the only one using simulators.
