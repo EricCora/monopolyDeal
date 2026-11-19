@@ -155,9 +155,11 @@ final class GameplayUITests: XCTestCase {
         resume.tap()
         let pass = app.buttons["action.pass"]
         XCTAssertTrue(pass.waitForExistence(timeout: 5))
-        // The resumed game keeps going: the bots take their turns and play comes back around.
+        // The resumed game keeps going: the bot takes its turn and play comes back to you,
+        // either as your next draw or as a response to the card the bot just played.
         pass.tap()
-        XCTAssertTrue(app.buttons["action.draw"].waitForExistence(timeout: 45), "The game froze after resuming from Saved Games")
+        let yourMove = app.buttons.matching(NSPredicate(format: "identifier IN %@", ["action.draw", "counter.allow"])).firstMatch
+        XCTAssertTrue(yourMove.waitForExistence(timeout: 45), "The game froze after resuming from Saved Games")
     }
 
     /// Holding spreads the hand to read it, sliding moves along it, and letting go plays nothing.
